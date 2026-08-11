@@ -187,15 +187,34 @@ async function applyMigrations(client) {
 async function migrate() {
   let client;
   try {
-    // 0. Instalar extensiones de PostgreSQL (uuid-ossp)
-    await runCommand('node scripts/install-extensions.js', 'Extensiones PG');
-
     client = await pool.connect();
     const exists = await tableExists(client, 'products');
 
-    if (!exists) {
+    if (exists) {
+      // BD ya migrada y con datos: no hace falta volver a migrar/seed/import.
+      const cnt = await client.query(
+        'SELECT count(*)::int AS n FROM products',
+      );
+      if (cnt.rows[0].n > 0) {
+        console.log('✅ BD ya migrada y poblada — omitiendo migración.');
+        client.release();
+        client = null;
+        return; // el finally cierra el pool
+      }
+      // Esquema presente pero vacío (ej: solo drizzle-kit push): aplicar migraciones
+      console.log('♻️ BD existente (vacía). Actualizando esquema...');
+      client.release();
+      client = null;
+      await runCommand('node scripts/install-extensions.js', 'Extensiones PG');
+      client = await pool.connect();
+      await runCommand('yarn db:generate', 'db:generate');
+      await applyMigrations(client);
+    } else {
       console.log('🆕 BD nueva. Ejecutando migración completa...');
-
+      client.release();
+      client = null;
+      await runCommand('node scripts/install-extensions.js', 'Extensiones PG');
+      client = await pool.connect();
       await runCommand('yarn db:generate', 'db:generate');
       await applyMigrations(client);
 
@@ -207,10 +226,6 @@ async function migrate() {
 
       await runCommand('yarn seed:run', 'seed:run');
       await runCommand('yarn import:run', 'import:run');
-    } else {
-      console.log('♻️ BD existente. Actualizando esquema...');
-      await runCommand('yarn db:generate', 'db:generate');
-      await applyMigrations(client);
     }
 
     console.log('✅ Migración completada exitosamente');
