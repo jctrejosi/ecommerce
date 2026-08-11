@@ -17,6 +17,7 @@ import { FiltersModule } from './modules/filters/filters.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { LandingModule } from './modules/landing/landing.module';
 import { FeaturedProductsModule } from './modules/featured-products/featured-products.module';
+import { QrModule } from './modules/qr/qr.module';
 import {
   appConfig,
   databaseConfig,
@@ -58,6 +59,7 @@ import {
     BranchesModule,
     LandingModule,
     FeaturedProductsModule,
+    QrModule,
   ],
   controllers: [AppController],
   providers: [AppService],

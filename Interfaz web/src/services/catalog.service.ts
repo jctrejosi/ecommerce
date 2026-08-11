@@ -87,6 +87,16 @@ export const catalogService = {
     return fetchJson<Product[]>(`${API_BASE_URL}/featured/tabs/${encodeURIComponent(slug)}/products?limit=8`);
   },
 
+  async getPaymentQr(): Promise<{
+    enabled: boolean;
+    url: string | null;
+    format: "image" | "pdf" | null;
+    text: string | null;
+    updatedAt: string | null;
+  }> {
+    return fetchJson(`${API_BASE_URL}/qr/config`);
+  },
+
   async getCatalogData(
     params?: CatalogProductsQuery,
   ): Promise<CatalogDataResponse> {
