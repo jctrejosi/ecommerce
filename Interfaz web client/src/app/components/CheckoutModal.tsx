@@ -52,6 +52,7 @@ interface CheckoutModalProps {
   brebKey?: string;
   brebBank?: string;
   brebQrImageUrl?: string;
+  brebQrMime?: string;
   efectivoEnabled?: boolean;
   checkoutLoading: boolean;
   checkoutError: string | null;
@@ -135,6 +136,7 @@ export function CheckoutModal({
   brebKey = "@davi3148853458",
   brebBank = "Davivienda",
   brebQrImageUrl = "",
+  brebQrMime = "",
   efectivoEnabled = true,
   psePayment,
   nequiPayment,
@@ -196,6 +198,11 @@ export function CheckoutModal({
       setTimeout(() => setCopied(false), 2000);
     });
   };
+
+  // Un QR en PDF no se renderiza en <img>: se muestra en <iframe>
+  const brebQrIsPdf =
+    brebQrMime === "application/pdf" ||
+    brebQrImageUrl.startsWith("data:application/pdf");
 
   // Métodos de pago filtrados según config de Wompi
   const allMethods = [
@@ -911,11 +918,19 @@ export function CheckoutModal({
                   </div>
                   {brebQrImageUrl && (
                     <div className="flex justify-center pt-2">
-                      <img
-                        src={brebQrImageUrl}
-                        alt="QR de pago"
-                        className="w-40 h-40 object-contain rounded-lg border border-border"
-                      />
+                      {brebQrIsPdf ? (
+                        <iframe
+                          src={brebQrImageUrl}
+                          title="QR de pago"
+                          className="w-40 h-40 rounded-lg border border-border bg-white"
+                        />
+                      ) : (
+                        <img
+                          src={brebQrImageUrl}
+                          alt="QR de pago"
+                          className="w-40 h-40 object-contain rounded-lg border border-border"
+                        />
+                      )}
                     </div>
                   )}
                 </div>
@@ -1033,11 +1048,19 @@ export function CheckoutModal({
                       </div>
                       {brebQrImageUrl && (
                         <div className="flex justify-center pt-2">
-                          <img
-                            src={brebQrImageUrl}
-                            alt="QR de pago"
-                            className="w-36 h-36 object-contain rounded-lg border border-amber-200"
-                          />
+                          {brebQrIsPdf ? (
+                            <iframe
+                              src={brebQrImageUrl}
+                              title="QR de pago"
+                              className="w-36 h-36 rounded-lg border border-amber-200 bg-white"
+                            />
+                          ) : (
+                            <img
+                              src={brebQrImageUrl}
+                              alt="QR de pago"
+                              className="w-36 h-36 object-contain rounded-lg border border-amber-200"
+                            />
+                          )}
                         </div>
                       )}
                     </div>

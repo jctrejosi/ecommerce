@@ -118,7 +118,6 @@ export class QrService {
 
   async decodeFile(buffer: Buffer, filename: string, mimetype: string) {
     const form = new FormData();
-    // Buffer no es directamente un BlobPart en los tipos de TS: se copia a Uint8Array
     form.append(
       'file',
       new Blob([Uint8Array.from(buffer)], { type: mimetype }),
@@ -126,6 +125,32 @@ export class QrService {
     );
     return this.request<Record<string, unknown>>(
       '/decode',
+      { method: 'POST', body: form },
+      30000,
+    );
+  }
+
+  async processFile(
+    buffer: Buffer,
+    filename: string,
+    mimetype: string,
+    generateFormat = 'png',
+    generateSize = 400,
+    generateEcc = 'M',
+    generateBorder = 4,
+  ) {
+    const form = new FormData();
+    form.append(
+      'file',
+      new Blob([Uint8Array.from(buffer)], { type: mimetype }),
+      filename,
+    );
+    form.append('generate_format', generateFormat);
+    form.append('generate_size', String(generateSize));
+    form.append('generate_ecc', generateEcc);
+    form.append('generate_border', String(generateBorder));
+    return this.request<Record<string, unknown>>(
+      '/process',
       { method: 'POST', body: form },
       30000,
     );

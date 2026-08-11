@@ -7,8 +7,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 echo "🌱 Levantando los 3 servicios de MercAldas..."
 echo "   • backend        → http://localhost:3000  (yarn dev)"
-echo "   • Interfaz web   → http://localhost:5173  (yarn dev)"
-echo "   • Interfaz admin → http://localhost:8443  (yarn dev)"
+echo "   • Interfaz web client → http://localhost:5173  (yarn dev)"
+echo "   • Interfaz web admin  → http://localhost:8443  (yarn dev)"
 echo "Pulsa Ctrl+C para detener todos."
 
 if ! command -v concurrently >/dev/null 2>&1 && ! npx --no-install concurrently --version >/dev/null 2>&1; then
@@ -16,8 +16,8 @@ if ! command -v concurrently >/dev/null 2>&1 && ! npx --no-install concurrently 
   echo "⚠️  'concurrently' no está instalado; usando modo básico (procesos en paralelo)."
   echo "    Para salida con prefijos por servicio: yarn add -D -W concurrently en la raíz."
   (cd "$ROOT/backend" && yarn dev) &
-  (cd "$ROOT/Interfaz web" && yarn dev) &
-  (cd "$ROOT/Interfaz admin web" && yarn dev) &
+  (cd "$ROOT/Interfaz web client" && yarn dev) &
+  (cd "$ROOT/Interfaz web admin" && yarn dev) &
   trap 'echo "⏹  Deteniendo servicios..."; kill 0 2>/dev/null' INT TERM EXIT
   wait
   exit 0
@@ -25,5 +25,5 @@ fi
 
 npx --yes concurrently -k -n BACKEND,WEB,ADMIN -c red,green,blue \
   "cd \"$ROOT/backend\" && yarn dev" \
-  "cd \"$ROOT/Interfaz web\" && yarn dev" \
-  "cd \"$ROOT/Interfaz admin web\" && yarn dev"
+  "cd \"$ROOT/Interfaz web client\" && yarn dev" \
+  "cd \"$ROOT/Interfaz web admin\" && yarn dev"
