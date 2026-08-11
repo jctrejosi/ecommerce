@@ -7,7 +7,13 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: DATABASE_URL, max: 1 });
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 1,
+  // Supabase/Neon/Render exigen SSL. DB_SSL=true activa TLS sin verificar cadena.
+  ssl:
+    process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+});
 
 async function installExtensions() {
   console.log('🔧 Instalando extensiones de PostgreSQL...');

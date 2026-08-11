@@ -11,7 +11,13 @@ if (!DATABASE_URL) {
   process.exit(1);
 }
 
-const pool = new Pool({ connectionString: DATABASE_URL, max: 2 });
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  max: 2,
+  // Supabase/Neon/Render exigen SSL. DB_SSL=true activa TLS sin verificar cadena.
+  ssl:
+    process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+});
 
 function runCommand(command, label) {
   return new Promise((resolve, reject) => {
