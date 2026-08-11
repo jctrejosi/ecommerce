@@ -50,19 +50,38 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
   }
 
   async onModuleInit() {
-    // Verificar conexión al iniciar el módulo
-    try {
-      await this.pool.query('SELECT 1');
-      console.log('✅ Database connected successfully');
-    } catch (error) {
-      console.error(
-        '❌ Database connection failed:',
-        error,
-        '\n   ⚠️  En Render, verifica que la variable DATABASE_URL use la URL externa ' +
-          'con ?sslmode=require (o define DB_SSL=true).',
-      );
-      throw error;
+    // Verificar conexión al iniciar el módulo, con reintentos (los pools
+    // gestionados tipo Supabase/Neon pueden tardar en despertar).
+    const host =
+      this.pool.options.host ||
+      (this.pool.options.connectionString || '').split('@').pop() ||
+      'desconocido';
+    let lastError: unknown;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        await this.pool.query('SELECT 1');
+        console.log(`✅ Database connected successfully (${host})`);
+        return;
+      } catch (error) {
+        lastError = error;
+        console.error(
+          `❌ Intento ${attempt}/3 de conexión a ${host} falló:`,
+          error,
+        );
+        if (attempt < 3) {
+          await new Promise((r) => setTimeout(r, 2000));
+        }
+      }
     }
+    console.error(
+      '\n   ⚠️  Verifica DATABASE_URL en Render:' +
+        '\n      - Host: usa el POOLER de Supabase (aws-0-<region>.pooler.supabase.com),' +
+        '        NO el host directo db.<ref>.supabase.co (solo IPv6, inalcanzable).' +
+        '\n      - Usuario: postgres.<project-ref> (ej: postgres.idiypzqlbjeqgphjlabz).' +
+        '\n      - Define DB_SSL=true (Supabase exige TLS; no uses ?sslmode=require en la URL' +
+        '        porque node-postgres lo trata como verify-full y falla con certificados propios).',
+    );
+    throw lastError;
   }
 
   async onModuleDestroy() {
