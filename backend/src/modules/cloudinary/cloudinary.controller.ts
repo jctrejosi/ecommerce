@@ -22,10 +22,15 @@ export class CloudinaryController {
   async uploadImage(
     @UploadedFile() file: any,
     @Body('code') code?: string,
+    @Body('trim') trim?: string,
+    @Body('removeBg') removeBg?: string,
   ) {
     if (!file) throw new BadRequestException('Archivo requerido');
     const folderCode = code || `img_${Date.now().toString(36)}`;
-    const url = await this.cloudinaryService.uploadImage(file, folderCode);
-    return { url };
+    const result = await this.cloudinaryService.uploadImage(file, folderCode, {
+      trim: trim === 'true',
+      removeBg: removeBg === 'true',
+    });
+    return result;
   }
 }

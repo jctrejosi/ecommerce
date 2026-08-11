@@ -2,6 +2,8 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { v2 as cloudinary, UploadApiResponse } from 'cloudinary';
 import { Readable } from 'stream';
+import sharp from 'sharp';
+import { removeBackground } from '@imgly/background-removal-node';
 
 @Injectable()
 export class CloudinaryService {
@@ -29,11 +31,43 @@ export class CloudinaryService {
   async uploadImage(
     file: any,
     productCode: string,
-  ): Promise<string> {
+    options?: { trim?: boolean; removeBg?: boolean },
+  ): Promise<{ url: string; mediaType: string }> {
     try {
       if (!cloudinary.config().cloud_name) {
         throw new Error('Cloudinary no configurado');
       }
+
+      let buffer: Buffer = file.buffer;
+
+      // 1. Quitar fondo (removeBg)
+      if (options?.removeBg) {
+        this.logger.log(`Quitando fondo de: ${file.originalname}`);
+        const blob = await removeBackground(buffer, {
+          model: 'medium',
+          output: { format: 'image/png' },
+        });
+        buffer = Buffer.from(await blob.arrayBuffer());
+        this.logger.log(`Fondo eliminado: ${file.originalname}`);
+      }
+
+      // 2. Auto-recortar (trim)
+      if (options?.trim) {
+        this.logger.log(`Recortando: ${file.originalname}`);
+        buffer = await sharp(buffer)
+          .trim({ threshold: 10 })
+          .toBuffer();
+        this.logger.log(`Imagen recortada: ${file.originalname}`);
+      }
+
+      // 3. Convertir a WebP sin pérdida de calidad
+      const webpBuffer = await sharp(buffer)
+        .webp({ lossless: true })
+        .toBuffer();
+
+      this.logger.log(
+        `Imagen convertida a WebP: ${file.originalname} (${file.buffer.length} → ${webpBuffer.length} bytes)`,
+      );
 
       const result = await new Promise<UploadApiResponse>((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
@@ -42,10 +76,9 @@ export class CloudinaryService {
             public_id: `${productCode}_${Date.now()}`,
             use_filename: true,
             unique_filename: false,
-            transformation: [
-              { quality: 'auto:good' },
-              { fetch_format: 'auto' },
-            ],
+            resource_type: 'image',
+            format: 'webp',
+            transformation: [{ quality: 'auto:good' }],
           },
           (error, result) => {
             if (error) {
@@ -60,13 +93,13 @@ export class CloudinaryService {
           },
         );
 
-        const stream = Readable.from(file.buffer);
+        const stream = Readable.from(webpBuffer);
         stream.pipe(uploadStream);
       });
 
       const secureUrl = result.secure_url;
-      this.logger.log(`Imagen subida a Cloudinary: ${secureUrl}`);
-      return secureUrl;
+      this.logger.log(`Imagen WebP subida a Cloudinary: ${secureUrl}`);
+      return { url: secureUrl, mediaType: 'image/webp' };
     } catch (error) {
       this.logger.error('Error subiendo a Cloudinary:', error);
       const message = error instanceof Error ? error.message : String(error);

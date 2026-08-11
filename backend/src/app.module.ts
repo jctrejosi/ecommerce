@@ -18,6 +18,11 @@ import { BranchesModule } from './modules/branches/branches.module';
 import { LandingModule } from './modules/landing/landing.module';
 import { FeaturedProductsModule } from './modules/featured-products/featured-products.module';
 import { QrModule } from './modules/qr/qr.module';
+import { PopupsModule } from './modules/popups/popups.module';
+import { NewsletterModule } from './modules/newsletter/newsletter.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
+import { InventoryModule } from './modules/inventory/inventory.module';
+import { SettingsController } from './modules/settings/settings.controller';
 import {
   appConfig,
   databaseConfig,
@@ -27,6 +32,7 @@ import {
   cloudinaryConfig,
   wompiConfig,
   epaycoConfig,
+  resendConfig,
 } from './config';
 
 @Module({
@@ -41,6 +47,7 @@ import {
         cloudinaryConfig,
         wompiConfig,
         epaycoConfig,
+        resendConfig,
       ],
       isGlobal: true,
     }),
@@ -60,8 +67,12 @@ import {
     LandingModule,
     FeaturedProductsModule,
     QrModule,
+    PopupsModule,
+    NewsletterModule,
+    DashboardModule,
+    InventoryModule,
   ],
-  controllers: [AppController],
+  controllers: [AppController, SettingsController],
   providers: [AppService],
 })
 export class AppModule {}
