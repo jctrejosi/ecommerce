@@ -51,24 +51,42 @@ export default function QrConfigPanel() {
 
   const load = useCallback(async () => {
     setLoadingStatus(true);
-    try {
-      const [status, config] = await Promise.all([
-        qrAdminService.status(),
-        qrAdminService.getConfig(),
-      ]);
-      setServiceStatus(status);
+
+    // El estado del servicio y la configuración son independientes:
+    // si uno falla, el otro no debe bloquear el panel.
+    const [statusRes, configRes] = await Promise.allSettled([
+      qrAdminService.status(),
+      qrAdminService.getConfig(),
+    ]);
+
+    if (statusRes.status === "fulfilled") {
+      setServiceStatus(statusRes.value);
+    } else {
+      setServiceStatus({
+        available: false,
+        detail: statusRes.reason instanceof Error ? statusRes.reason.message : String(statusRes.reason),
+      });
+    }
+
+    if (configRes.status === "fulfilled") {
+      const config = configRes.value;
       setSavedConfig(config);
       if (config?.text) setText(String(config.text));
       const gen = (config?.generation ?? {}) as Record<string, unknown>;
       if (gen.format === "pdf") setFormat("pdf");
       if (typeof gen.size === "number") setSize(gen.size);
-      if (typeof gen.errorCorrection === "string") setErrorCorrection(gen.errorCorrection as "L" | "M" | "Q" | "H");
+      if (typeof gen.errorCorrection === "string")
+        setErrorCorrection(gen.errorCorrection as "L" | "M" | "Q" | "H");
       if (typeof gen.border === "number") setBorder(gen.border);
-    } catch (e: any) {
-      setError(e.message || "Error al cargar configuración");
-    } finally {
-      setLoadingStatus(false);
+    } else {
+      setError(
+        configRes.reason instanceof Error
+          ? configRes.reason.message
+          : String(configRes.reason),
+      );
     }
+
+    setLoadingStatus(false);
   }, []);
 
   useEffect(() => {
