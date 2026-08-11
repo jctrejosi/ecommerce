@@ -7,6 +7,11 @@ export default defineConfig({
   out: './drizzle/migrate',
   dbCredentials: {
     url: process.env.DATABASE_URL!,
+    // Proveedores gestionados (Supabase, Neon, Render) exigen SSL.
+    // DB_SSL=true activa TLS sin verificación de cadena (certificados propios).
+    ...(process.env.DB_SSL === 'true'
+      ? { ssl: { rejectUnauthorized: false } }
+      : {}),
   },
   tablesFilter: ['!spatial_ref_sys', '!geography_columns', '!geometry_columns'],
   verbose: true,

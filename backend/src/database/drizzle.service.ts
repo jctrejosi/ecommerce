@@ -21,14 +21,26 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
+    // SSL automático:
+    // - Render (y la mayoría de Postgres gestionados) exige SSL para conexiones
+    //   externas; sin SSL el servidor corta la conexión con ECONNRESET.
+    // - Se activa si: DB_SSL=true, o la URL trae ssl/sslmode=require,
+    //   o estamos en producción (Render). DB_SSL=false fuerza a desactivarlo.
+    const hasSslInUrl =
+      /[?&](sslmode=(require|verify-ca|verify-full)|ssl=(true|require))([&#]|$)/i.test(
+        databaseUrl,
+      );
+    const sslEnabled =
+      process.env.DB_SSL === 'true' ||
+      (process.env.DB_SSL !== 'false' &&
+        (hasSslInUrl || process.env.NODE_ENV === 'production'));
+
     this.pool = new Pool({
       connectionString: databaseUrl,
       max: 20, // Máximo de conexiones en el pool
       idleTimeoutMillis: 30000, // Tiempo de inactividad antes de cerrar conexión
-      connectionTimeoutMillis: 2000, // Timeout de conexión
-      // Opciones adicionales para PostgreSQL
-      ssl:
-        process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+      connectionTimeoutMillis: 10000, // Timeout de conexión (Render free tier despierta la DB)
+      ssl: sslEnabled ? { rejectUnauthorized: false } : false,
     });
 
     this.db = drizzle(this.pool, {
@@ -43,7 +55,12 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
       await this.pool.query('SELECT 1');
       console.log('✅ Database connected successfully');
     } catch (error) {
-      console.error('❌ Database connection failed:', error);
+      console.error(
+        '❌ Database connection failed:',
+        error,
+        '\n   ⚠️  En Render, verifica que la variable DATABASE_URL use la URL externa ' +
+          'con ?sslmode=require (o define DB_SSL=true).',
+      );
       throw error;
     }
   }

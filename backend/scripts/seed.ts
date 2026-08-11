@@ -14,6 +14,12 @@ if (!DATABASE_URL) {
 
 const pool = new Pool({
   connectionString: DATABASE_URL,
+  // Proveedores gestionados (Supabase, Neon, Render) exigen SSL.
+  // DB_SSL=true activa TLS sin verificación de cadena (certificados propios).
+  ssl:
+    process.env.DB_SSL === 'true'
+      ? { rejectUnauthorized: false }
+      : false,
 });
 
 const db = drizzle(pool);

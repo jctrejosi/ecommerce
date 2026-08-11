@@ -11,6 +11,7 @@
  *   LOCAL_DB_CONTAINER Nombre del contenedor Docker local (default: ecommerce_postgres)
  *   LOCAL_DB_NAME      Nombre de la BD local (default: ecommerce)
  *   PROD_PG_IMAGE      Imagen con cliente pg para producción (default: postgres:18)
+ *   PROD_PG_SSLMODE    SSL para producción (default: require; Supabase/Neon/Render lo exigen)
  *   MIGRATE_IGNORE_ERRORS=1  no abortar si el restore devuelve errores (extensiones postgis, etc.)
  */
 import { spawnSync } from "node:child_process";
@@ -25,6 +26,7 @@ const PROD_URL = process.env.PROD_DATABASE_URL || "";
 const LOCAL_CONTAINER = process.env.LOCAL_DB_CONTAINER || "ecommerce_postgres";
 const LOCAL_DB = process.env.LOCAL_DB_NAME || "ecommerce";
 const PROD_PG_IMAGE = process.env.PROD_PG_IMAGE || "postgres:18";
+const PROD_PG_SSLMODE = process.env.PROD_PG_SSLMODE || "require";
 const IGNORE_ERRORS = process.env.MIGRATE_IGNORE_ERRORS === "1";
 const CONFIRM = !process.argv.includes("--yes");
 
@@ -103,6 +105,7 @@ async function main() {
   dumpTo(prodFile, "docker", [
     "run", "--rm",
     "-e", `PGPASSWORD=${PROD_PASSWORD}`,
+    "-e", `PGSSLMODE=${PROD_PG_SSLMODE}`,
     PROD_PG_IMAGE,
     "pg_dump", "-U", PROD_USER, "-h", PROD_HOST, "-p", PROD_PORT, "-d", PROD_DB,
     "--no-owner", "--no-privileges", "-F", "c",
@@ -116,8 +119,8 @@ async function main() {
   console.log("\n[3/4] Restaurando backup local en PRODUCCIÓN...");
   run(
     "docker",
-    ["run", "--rm", "-i", "-e", `PGPASSWORD=${PROD_PASSWORD}`, PROD_PG_IMAGE, "pg_restore", "-U", PROD_USER, "-h", PROD_HOST, "-p", PROD_PORT, "-d", PROD_DB, "--clean", "--if-exists", "--no-owner", "--no-privileges"],
-    { inputFile: localFile, env: { PGPASSWORD: PROD_PASSWORD } },
+    ["run", "--rm", "-i", "-e", `PGPASSWORD=${PROD_PASSWORD}`, "-e", `PGSSLMODE=${PROD_PG_SSLMODE}`, PROD_PG_IMAGE, "pg_restore", "-U", PROD_USER, "-h", PROD_HOST, "-p", PROD_PORT, "-d", PROD_DB, "--clean", "--if-exists", "--no-owner", "--no-privileges"],
+    { inputFile: localFile, env: { PGPASSWORD: PROD_PASSWORD, PGSSLMODE: PROD_PG_SSLMODE } },
   );
 
   // 4. Verificación de conteos
@@ -128,7 +131,7 @@ async function main() {
   ];
   const q = tables.map((t) => `SELECT '${t}', count(*) FROM ${t}`).join(" UNION ALL ");
   const localOut = spawnSync("docker", ["exec", LOCAL_CONTAINER, "psql", "-U", "postgres", "-d", LOCAL_DB, "-t", "-c", q], { encoding: "utf8" });
-  const prodOut = spawnSync("docker", ["run", "--rm", "-e", `PGPASSWORD=${PROD_PASSWORD}`, PROD_PG_IMAGE, "psql", "-U", PROD_USER, "-h", PROD_HOST, "-p", PROD_PORT, "-d", PROD_DB, "-t", "-c", q], { encoding: "utf8" });
+  const prodOut = spawnSync("docker", ["run", "--rm", "-e", `PGPASSWORD=${PROD_PASSWORD}`, "-e", `PGSSLMODE=${PROD_PG_SSLMODE}`, PROD_PG_IMAGE, "psql", "-U", PROD_USER, "-h", PROD_HOST, "-p", PROD_PORT, "-d", PROD_DB, "-t", "-c", q], { encoding: "utf8" });
 
   const parse = (out) => new Map((out.stdout || "").split("\n").filter(Boolean).map((l) => {
     const [t, c] = l.split("|").map((s) => s.trim());
