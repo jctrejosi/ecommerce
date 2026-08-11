@@ -110,6 +110,7 @@ export class SettingsController {
         key: value?.breb?.key ?? '@davi3148853458',
         bank: value?.breb?.bank ?? 'Davivienda',
         qrImageUrl: value?.breb?.qrImageUrl ?? '',
+        qrImageMime: value?.breb?.qrImageMime ?? null,
       },
     };
   }

@@ -94,21 +94,36 @@ export class AdminQrController {
       );
     }
 
-    // 1) Decodificar con el servicio (para extraer la info con /decode)
-    const decoded = await this.qrService.decodeFile(
+    // 1) Decodificar + regenerar en una sola llamada a QR Analyzer
+    const processed = await this.qrService.processFile(
       file.buffer,
       file.originalname,
       file.mimetype,
+      'png',
+      400,
+      'M',
+      4,
     );
 
-    // 2) Guardar el archivo cargado
+    const decoded: any = processed?.['decoded'];
+    const generated: any = processed?.['generated'];
+
+    const items: any[] = decoded?.['items'] ?? [];
+    if (!items.length) {
+      throw new BadRequestException(
+        'No se detectó ningún código QR en el archivo.',
+      );
+    }
+
+    // 2) Guardar el QR regenerado (PNG)
+    const pngBuffer = Buffer.from(String(generated?.content_base64), 'base64');
     const saved = await this.qrService.saveQrFile(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
+      pngBuffer,
+      'qr-pago.png',
+      'image/png',
     );
 
-    return { ...saved, decoded };
+    return { ...saved, decoded, generated: true };
   }
 
   @Get('config')

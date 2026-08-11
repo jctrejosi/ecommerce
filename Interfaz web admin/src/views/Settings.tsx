@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Save, Globe, CreditCard, Loader2, CheckCircle, Upload } from "lucide-react";
+import { Save, Globe, CreditCard, Loader2, CheckCircle, Upload, QrCode, AlertTriangle } from "lucide-react";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -47,6 +47,10 @@ export default function SettingsView() {
   const [payMethods, setPayMethods] = useState<any>(null);
   const [payLoading, setPayLoading] = useState(false);
   const [qrUploading, setQrUploading] = useState(false);
+  const [qrGenerating, setQrGenerating] = useState(false);
+  // null = sin verificar, true = disponible, false = caído
+  const [qrServiceAvailable, setQrServiceAvailable] = useState<boolean | null>(null);
+  const [qrError, setQrError] = useState("");
   const qrFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -98,7 +102,20 @@ export default function SettingsView() {
       .finally(() => setPayLoading(false));
   };
 
-  useEffect(() => { if (tab === "payments") loadPaymentMethods(); }, [tab]);
+  useEffect(() => {
+    if (tab === "payments") {
+      loadPaymentMethods();
+      checkQrService();
+    }
+  }, [tab]);
+
+  // Consulta al backend si el servicio QR Analyzer está disponible
+  const checkQrService = () => {
+    fetch(`${API_BASE}/admin/qr/status`, { credentials: "include" })
+      .then((r) => r.json())
+      .then((d) => setQrServiceAvailable(d?.available === true))
+      .catch(() => setQrServiceAvailable(false));
+  };
 
   const toggleWompi = () => {
     if (!payMethods) return;
@@ -125,35 +142,110 @@ export default function SettingsView() {
   };
 
   const updateBrebField = (field: string, value: string) => {
-    if (!payMethods) return;
-    const updated = {
-      ...payMethods,
-      breb: { ...payMethods.breb, [field]: value },
-    };
-    setPayMethods(updated);
-    fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+    saveBrebFields({ [field]: value });
+  };
+
+  // Actualiza campos de Bre-B en una SOLA operación (estado + DB).
+  // Evita el bug de llamadas consecutivas con el estado obsoleto, donde
+  // la última PUT borraba qrImageUrl/qrImageMime y el cuadro quedaba en blanco.
+  const saveBrebFields = (fields: Record<string, unknown>) => {
+    setPayMethods((prev: any) => {
+      if (!prev) return prev;
+      const updated = {
+        ...prev,
+        breb: { ...prev.breb, ...fields },
+      };
+      fetch(`${API_BASE}/admin/settings/payment-methods`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      return updated;
+    });
   };
 
   const handleQrFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     setQrUploading(true);
+    setQrError("");
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("code", `breb_qr_${Date.now()}`);
-      const res = await fetch(`${API_BASE}/upload/image`, {
+
+      // Guardar el archivo + decodificarlo + regenerarlo vía QR Analyzer (backend proxy)
+      const res = await fetch(`${API_BASE}/admin/qr/upload`, {
         method: "POST",
+        credentials: "include",
         body: fd,
       });
-      if (!res.ok) throw new Error("Error al subir imagen");
-      const data = await res.json();
-      if (data.url) updateBrebField("qrImageUrl", data.url);
+
+      if (res.ok) {
+        const data = await res.json();
+        // Guardar URL, MIME y lo extraído por /decode en una sola PUT
+        const patch: Record<string, unknown> = {};
+        if (data.url) patch.qrImageUrl = data.url;
+        if (data.mimeType) patch.qrImageMime = data.mimeType;
+        if (data.decoded) patch.qrDecoded = data.decoded;
+        if (Object.keys(patch).length) saveBrebFields(patch);
+        setQrServiceAvailable(true);
+        return;
+      }
+
+      // El servicio QR Analyzer no está disponible: solo avisar, el QR actual se mantiene
+      setQrServiceAvailable(false);
+      setQrError(
+        "El servicio QR Analyzer no está disponible temporalmente. " +
+          "No se pudo procesar el QR. El QR actual se mantiene guardado.",
+      );
     } catch (err) {
       console.error("Error subiendo QR:", err);
+      setQrServiceAvailable(false);
+      setQrError(
+        "No se pudo contactar el servicio QR Analyzer. Verifica que esté levantado e inténtalo de nuevo.",
+      );
     } finally {
       setQrUploading(false);
       if (qrFileInputRef.current) qrFileInputRef.current.value = "";
+    }
+  };
+
+  const handleQrGenerate = async () => {
+    const key = payMethods?.breb?.key;
+    if (!key) return;
+    setQrGenerating(true);
+    setQrError("");
+    try {
+      const text = `Breb-${key}-${payMethods?.breb?.bank ?? ""}`;
+      const res = await fetch(`${API_BASE}/admin/qr/generate`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, format: "png", size: 400, error_correction: "M", border: 4 }),
+      });
+      if (!res.ok) {
+        setQrServiceAvailable(false);
+        setQrError(
+          "El servicio QR Analyzer no está disponible temporalmente. " +
+            "No se pudo generar el QR. El QR actual se mantiene guardado.",
+        );
+        return;
+      }
+      const data = await res.json();
+      if (data.content_base64) {
+        const dataUri = `data:image/png;base64,${data.content_base64}`;
+        saveBrebFields({ qrImageUrl: dataUri, qrImageMime: "image/png" });
+        setQrServiceAvailable(true);
+      }
+    } catch (err) {
+      console.error("Error generando QR:", err);
+      setQrServiceAvailable(false);
+      setQrError(
+        "No se pudo contactar el servicio QR Analyzer. Verifica que esté levantado e inténtalo de nuevo.",
+      );
+    } finally {
+      setQrGenerating(false);
     }
   };
 
@@ -238,6 +330,28 @@ export default function SettingsView() {
             {tab === "payments" && (
               <div>
                 <h2 className="font-bold text-gray-900 mb-5">Medios de Pago</h2>
+                {qrServiceAvailable === false && (
+                  <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-amber-800">
+                        Servicio QR Analyzer no disponible temporalmente
+                      </p>
+                      <p className="text-xs text-amber-700 mt-0.5">
+                        No se pueden subir ni generar nuevos QRs hasta que el servicio
+                        vuelva a estar en línea. El QR actual guardado se sigue mostrando
+                        en la tienda sin cambios.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={checkQrService}
+                        className="mt-2 text-xs font-semibold text-amber-800 underline hover:text-amber-900"
+                      >
+                        Reintentar conexión
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {!payMethods && payLoading ? (
                   <div className="flex items-center justify-center py-12"><Loader2 size={24} className="animate-spin text-amber-500" /></div>
                 ) : (
@@ -303,6 +417,12 @@ export default function SettingsView() {
                       </div>
                       {payMethods?.breb?.enabled && (
                         <div className="space-y-3 pl-2 border-t border-gray-100 pt-3">
+                          {qrError && (
+                            <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2.5">
+                              <AlertTriangle size={14} className="text-red-500 mt-0.5 shrink-0" />
+                              <p className="text-xs text-red-700">{qrError}</p>
+                            </div>
+                          )}
                           <div>
                             <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
                               Llave
@@ -329,15 +449,28 @@ export default function SettingsView() {
                             <label className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
                               Imagen del QR
                             </label>
-                            {payMethods?.breb?.qrImageUrl && (
-                              <div className="mb-2">
-                                <img
-                                  src={payMethods.breb.qrImageUrl}
-                                  alt="QR actual"
-                                  className="w-32 h-32 object-contain rounded-lg border border-gray-200 bg-white"
-                                />
+                            {(qrUploading || qrGenerating) ? (
+                              <div className="mb-2 w-32 h-32 rounded-lg bg-gray-200 animate-pulse flex items-center justify-center">
+                                <Loader2 size={22} className="text-gray-400 animate-spin" />
                               </div>
-                            )}
+                            ) : payMethods?.breb?.qrImageUrl ? (
+                              <div className="mb-2">
+                                {payMethods.breb.qrImageMime === "application/pdf" ||
+                                payMethods.breb.qrImageUrl.startsWith("data:application/pdf") ? (
+                                  <iframe
+                                    src={payMethods.breb.qrImageUrl}
+                                    title="QR de pago (PDF)"
+                                    className="w-40 h-40 rounded-lg border border-gray-200 bg-white"
+                                  />
+                                ) : (
+                                  <img
+                                    src={payMethods.breb.qrImageUrl}
+                                    alt="QR actual"
+                                    className="w-32 h-32 object-contain rounded-lg border border-gray-200 bg-white"
+                                  />
+                                )}
+                              </div>
+                            ) : null}
                             <div className="flex items-center gap-2">
                               <button
                                 type="button"
@@ -346,12 +479,21 @@ export default function SettingsView() {
                                 className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
                               >
                                 <Upload size={13} />
-                                {qrUploading ? "Subiendo..." : "Subir imagen"}
+                                {qrUploading ? "Subiendo..." : "Subir QR (imagen/PDF)"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleQrGenerate}
+                                disabled={qrGenerating || !payMethods?.breb?.key}
+                                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold bg-purple-500 text-white rounded-lg hover:bg-purple-600 disabled:opacity-50 transition-colors"
+                              >
+                                <QrCode size={13} />
+                                {qrGenerating ? "Generando..." : "Generar QR"}
                               </button>
                               <input
                                 ref={qrFileInputRef}
                                 type="file"
-                                accept="image/*"
+                                accept="image/png,image/jpeg,image/webp,application/pdf,.png,.jpg,.jpeg,.webp,.pdf"
                                 onChange={handleQrFileSelect}
                                 className="hidden"
                               />
