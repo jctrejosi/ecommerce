@@ -10,7 +10,10 @@ import { media, settings } from '../../../drizzle/schema';
 import { GenerateQrDto, SaveQrConfigDto } from './qr.dto';
 
 const QR_CONFIG_KEY = 'payment_qr_config';
-const DEFAULT_QR_ANALYZER_URL = 'http://localhost:8000';
+// El servicio ESCUCHA en 0.0.0.0:8000 (todas las interfaces), pero como cliente
+// local se conecta a 127.0.0.1:8000. Si el backend corre en otro host/container,
+// definir QR_ANALYZER_URL con la IP correcta.
+const DEFAULT_QR_ANALYZER_URL = 'http://127.0.0.1:8000';
 
 @Injectable()
 export class QrService {
@@ -44,15 +47,34 @@ export class QrService {
         signal: controller.signal,
       });
 
+      // Leer el body como texto primero: evita el error críptico
+      // "Unexpected end of JSON input" cuando el body llega vacío.
+      const text = await res.text().catch(() => '');
+
       if (!res.ok) {
-        const body = await res.text().catch(() => '');
         throw new ServiceUnavailableException(
-          `El servicio QR Analyzer respondió ${res.status}: ${body.slice(0, 300)}`,
+          `El servicio QR Analyzer respondió ${res.status}: ${text.slice(0, 300)}`,
         );
       }
-      return (await res.json()) as T;
+      if (!text.trim()) {
+        throw new ServiceUnavailableException(
+          `El servicio QR Analyzer respondió con un cuerpo vacío (${this.qrAnalyzerUrl}${path}).`,
+        );
+      }
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw new ServiceUnavailableException(
+          `El servicio QR Analyzer devolvió JSON inválido: ${text.slice(0, 300)}`,
+        );
+      }
     } catch (err) {
       if (err instanceof ServiceUnavailableException) throw err;
+      if (controller.signal.aborted) {
+        throw new ServiceUnavailableException(
+          `El servicio QR Analyzer no respondió a tiempo (${timeoutMs}ms).`,
+        );
+      }
       const message = err instanceof Error ? err.message : String(err);
       throw new ServiceUnavailableException(
         `No se pudo contactar el servicio QR Analyzer (${this.qrAnalyzerUrl}): ${message}`,
