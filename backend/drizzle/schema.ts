@@ -154,6 +154,7 @@ export const paymentMethodEnum = pgEnum('payment_method_enum', [
   'BANK_TRANSFER',
   'NEQUI',
   'DAVIPLATA',
+  'BREB',
 ]);
 export const paymentStatusEnum = pgEnum('payment_status_enum', [
   'PENDING',
@@ -379,6 +380,7 @@ export const store = pgTable(
     invoiceResolution: varchar('invoice_resolution', { length: 50 }),
     email: varchar({ length: 255 }).notNull(),
     phone: varchar({ length: 50 }).notNull(),
+    whatsapp: varchar({ length: 50 }),
     primaryDomain: varchar('primary_domain', { length: 255 }).notNull(),
     secondaryDomains: jsonb('secondary_domains'),
     address: text().notNull(),
@@ -432,6 +434,7 @@ export const branches = pgTable(
       .default('5.0')
       .notNull(),
     schedule: jsonb(),
+    imageMediaId: bigint('image_media_id', { mode: 'number' }),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
@@ -451,6 +454,11 @@ export const branches = pgTable(
       foreignColumns: [store.id],
       name: 'branches_store_id_fkey',
     }),
+    foreignKey({
+      columns: [table.imageMediaId],
+      foreignColumns: [media.id],
+      name: 'branches_image_media_id_fkey',
+    }).onDelete('set null'),
     unique('branches_code_key').on(table.code),
     check(
       'branches_delivery_radius_km_check',
@@ -3195,6 +3203,7 @@ export const productTypes = pgTable(
     code: varchar({ length: 10 }).notNull(),
     name: varchar({ length: 100 }).notNull(),
     description: text(),
+    imageMediaId: bigint('image_media_id', { mode: 'number' }),
     isActive: boolean('is_active').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
@@ -3203,7 +3212,14 @@ export const productTypes = pgTable(
       .defaultNow()
       .notNull(),
   },
-  (table) => [unique('product_types_code_key').on(table.code)],
+  (table) => [
+    unique('product_types_code_key').on(table.code),
+    foreignKey({
+      columns: [table.imageMediaId],
+      foreignColumns: [media.id],
+      name: 'product_types_image_media_id_fkey',
+    }).onDelete('set null'),
+  ],
 );
 
 export const productTypeAssignments = pgTable(
@@ -3459,5 +3475,165 @@ export const featuredProductAssignments = pgTable(
       foreignColumns: [products.id],
       name: 'featured_assignments_product_id_fkey',
     }).onDelete('cascade'),
+  ],
+);
+
+export const customerPaymentMethodTypeEnum = pgEnum(
+  'customer_payment_method_type_enum',
+  ['CARD', 'NEQUI'],
+);
+
+export const customerPaymentMethods = pgTable(
+  'customer_payment_methods',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    customerId: bigint('customer_id', { mode: 'number' }).notNull(),
+    methodType: customerPaymentMethodTypeEnum('method_type').notNull(),
+    label: varchar({ length: 50 }),
+    brand: varchar({ length: 50 }),
+    last4: varchar({ length: 4 }),
+    cardholderName: varchar('cardholder_name', { length: 100 }),
+    // Token del proveedor (Wompi/ePayco) para cobros futuros
+    token: varchar({ length: 255 }),
+    // Para billeteras digitales (Nequi)
+    phone: varchar({ length: 20 }),
+    isDefault: boolean('is_default').default(false).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_customer_payment_methods_customer').using(
+      'btree',
+      table.customerId.asc().nullsLast().op('int8_ops'),
+    ),
+    uniqueIndex('idx_customer_default_payment_method')
+      .using('btree', table.customerId.asc().nullsLast().op('int8_ops'))
+      .where(sql`(is_default = true)`),
+    foreignKey({
+      columns: [table.customerId],
+      foreignColumns: [customers.id],
+      name: 'customer_payment_methods_customer_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const popupPositionEnum = pgEnum('popup_position_enum', [
+  'header',
+  'footer',
+  'left',
+  'right',
+]);
+
+export const popups = pgTable(
+  'popups',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    title: varchar({ length: 200 }).notNull(),
+    imageMediaId: bigint('image_media_id', { mode: 'number' }).notNull(),
+    position: popupPositionEnum('position').default('header').notNull(),
+    filterConfig: jsonb('filter_config').default({}),
+    durationMs: integer('duration_ms').default(7000).notNull(),
+    delayMs: integer('delay_ms').default(1500).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    startDate: timestamp('start_date', { withTimezone: true, mode: 'string' }),
+    endDate: timestamp('end_date', { withTimezone: true, mode: 'string' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.imageMediaId],
+      foreignColumns: [media.id],
+      name: 'popups_image_media_id_fkey',
+    }).onDelete('cascade'),
+    index('idx_popups_position').using(
+      'btree',
+      table.position.asc().nullsLast().op('enum_ops'),
+    ),
+    index('idx_popups_active').using(
+      'btree',
+      table.isActive.asc().nullsLast().op('bool_ops'),
+    ),
+  ],
+);
+
+export const newsletterCampaignStatusEnum = pgEnum(
+  'newsletter_campaign_status_enum',
+  ['borrador', 'programada', 'enviando', 'enviada', 'fallida', 'cancelada'],
+);
+
+export const newsletterSubscribers = pgTable(
+  'newsletter_subscribers',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    email: varchar({ length: 255 }).notNull(),
+    name: varchar({ length: 120 }),
+    acceptedTerms: boolean('accepted_terms').default(false).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    source: varchar({ length: 50 }).default('landing'),
+    subscribedAt: timestamp('subscribed_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    unsubscribedAt: timestamp('unsubscribed_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    unique('newsletter_subscribers_email_unique').on(table.email),
+    index('idx_newsletter_subs_active').using(
+      'btree',
+      table.isActive.asc().nullsLast().op('bool_ops'),
+    ),
+  ],
+);
+
+export const newsletterCampaigns = pgTable(
+  'newsletter_campaigns',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    title: varchar({ length: 200 }).notNull(),
+    subject: varchar({ length: 200 }).notNull(),
+    content: text('content').notNull(),
+    imageUrl: varchar({ length: 500 }),
+    status: newsletterCampaignStatusEnum('status')
+      .default('borrador')
+      .notNull(),
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true, mode: 'string' }),
+    sentAt: timestamp('sent_at', { withTimezone: true, mode: 'string' }),
+    sentCount: integer('sent_count').default(0),
+    failedCount: integer('failed_count').default(0),
+    errorMessage: text('error_message'),
+    createdBy: bigint('created_by', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_newsletter_campaigns_status').using(
+      'btree',
+      table.status.asc().nullsLast().op('enum_ops'),
+    ),
   ],
 );

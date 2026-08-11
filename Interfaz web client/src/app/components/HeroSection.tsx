@@ -1,0 +1,338 @@
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
+import { useEffect, useRef, useState, useCallback } from "react";
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+interface HeroSlide {
+  id: number;
+  title: string;
+  slogan: string;
+  description: string;
+  cta: string;
+  ctaText: string;
+  image: string;
+  mobileImage: string;
+  bg: string;
+  accent: string;
+  filter?: {
+    categoryIds?: number[];
+    brandId?: number | null;
+    productTypeCode?: string;
+    onSale?: boolean;
+    search?: string;
+    sort?: string;
+    priceMin?: number;
+    priceMax?: number;
+  } | null;
+}
+
+async function fetchHeroSlides(): Promise<HeroSlide[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/banners?bannerType=hero`);
+    if (!res.ok) return [];
+    const banners = await res.json();
+    return banners.map((b: any) => ({
+      id: b.id,
+      title: (b.title || "").replace(/\\n/g, "\n"),
+      slogan: (b.subtitle || "").replace(/\\n/g, "\n"),
+      description: (b.description || "").replace(/\\n/g, "\n"),
+      cta: b.linkUrl || "",
+      ctaText: b.ctaText || "",
+      image: b.image || "",
+      mobileImage: b.mobileImage || b.image || "",
+      bg: b.bgColor || "#1A1A2E",
+      accent: b.accentColor || "#FFF200",
+      filter: b.filter || null,
+    }));
+  } catch {
+    return [];
+  }
+}
+
+const FALLBACK_SLIDES: HeroSlide[] = [
+  {
+    id: 0,
+    title: "Configura tus slides\ndesde el panel admin",
+    slogan: "Mercaldas · Manizales",
+    description:
+      "Ve a Contenido → Home en el panel de administración para añadir banners hero con imágenes, textos y colores personalizados.",
+    cta: "",
+    ctaText: "Ir al panel admin",
+    image: "",
+    mobileImage: "",
+    bg: "#374151",
+    accent: "#9CA3AF",
+  },
+];
+
+const ANIM_STYLES = `
+@keyframes heroFadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes heroFadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
+@keyframes heroImageIn {
+  from { opacity: 0; transform: scale(1.05); }
+  to   { opacity: 0.45; transform: scale(1); }
+}
+@keyframes heroImageOut {
+  from { opacity: 0.45; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.98); }
+}
+@keyframes heroBgShift {
+  from { opacity: 0.6; }
+  to   { opacity: 1; }
+}
+@keyframes heroBgFade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+`;
+
+// Duración del fade-out del slide actual (ms)
+const FADE_OUT_MS = 450;
+
+export function HeroSection({
+  onApplyFilter,
+}: {
+  onApplyFilter?: (f: NonNullable<HeroSlide["filter"]>) => void;
+}) {
+  const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK_SLIDES);
+  const [currentIndex, setCurrentIndex] = useState(0);
+  const [animKey, setAnimKey] = useState(0);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isManualRef = useRef(false);
+  const leavingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    fetchHeroSlides().then((data) => {
+      if (data.length > 0) setSlides(data);
+    });
+  }, []);
+
+  const goTo = useCallback(
+    (idx: number) => {
+      // Si ya hay una transición en curso, ignorar el cambio
+      if (leavingTimerRef.current) return;
+
+      // 1) Desvanecer el item actual
+      setIsLeaving(true);
+
+      // 2) Después del fade-out, cambiar de item y disparar el fade-in
+      leavingTimerRef.current = setTimeout(() => {
+        setCurrentIndex(idx);
+        setAnimKey((k) => k + 1);
+        setIsLeaving(false);
+        leavingTimerRef.current = null;
+      }, FADE_OUT_MS);
+    },
+    [],
+  );
+
+  const advance = useCallback(() => {
+    goTo((currentIndex + 1) % slides.length);
+  }, [currentIndex, slides.length, goTo]);
+
+  const startTimer = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (slides.length <= 1) return;
+    intervalRef.current = setInterval(advance, 5000);
+  }, [advance, slides.length]);
+
+  useEffect(() => {
+    startTimer();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (leavingTimerRef.current) clearTimeout(leavingTimerRef.current);
+    };
+  }, [startTimer]);
+
+  const goSlide = (dir: number) => {
+    isManualRef.current = true;
+    goTo((currentIndex + dir + slides.length) % slides.length);
+    // Restart auto-timer after manual interaction
+    setTimeout(() => {
+      isManualRef.current = false;
+      startTimer();
+    }, 50);
+  };
+
+  if (slides.length === 0) return null;
+
+  const slide = slides[currentIndex];
+  const hasText = !!(slide.slogan || slide.title || slide.description || slide.ctaText);
+
+  return (
+    <section className="relative overflow-hidden" style={{ background: slide.bg, transition: "background 0.6s ease" }}>
+      <style>{ANIM_STYLES}</style>
+
+      <div className="max-w-7xl mx-auto px-4">
+        <div
+          className="relative flex items-center h-[340px] md:h-[420px]"
+          style={
+            isLeaving
+              ? { animation: "heroBgFade 0.45s ease both" }
+              : undefined
+          }
+        >
+          {/* Full-bleed image when there is no text content */}
+          {!hasText && slide.image && (
+            <div className="absolute inset-0">
+              <img
+                key={`full-${currentIndex}`}
+                src={slide.image}
+                alt=""
+                className="w-full h-full object-contain"
+                style={{
+                  animation: isLeaving
+                    ? "heroImageOut 0.45s ease both"
+                    : "heroBgShift 0.7s ease both",
+                }}
+              />
+              <div className="absolute inset-0" style={{ background: "rgba(26,26,46,0.35)" }} />
+            </div>
+          )}
+
+          {/* Content */}
+          {hasText && (
+          <div
+            key={animKey}
+            className="relative z-10 flex-1 py-8 max-w-xl"
+            style={
+              isLeaving
+                ? { animation: "heroFadeOut 0.45s ease both" }
+                : undefined
+            }
+          >
+            {slide.slogan && (
+              <div
+                className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-5"
+                style={{
+                  background: slide.accent,
+                  color: "#1A1A2E",
+                  animation: isLeaving
+                    ? "heroFadeOut 0.45s ease both"
+                    : "heroFadeIn 0.5s ease both",
+                  animationDelay: isLeaving ? "0ms" : "0ms",
+                }}
+              >
+                <Sparkles className="w-3 h-3" />
+                {slide.slogan}
+              </div>
+            )}
+            {slide.title && (
+              <h1
+                className="font-black text-3xl md:text-5xl leading-[1.1] mb-4 text-white whitespace-pre-line"
+                style={{
+                  fontFamily: "'Bricolage Grotesque', sans-serif",
+                  animation: "heroFadeIn 0.5s ease both",
+                  animationDelay: "100ms",
+                }}
+              >
+                {slide.title}
+              </h1>
+            )}
+            {slide.description && (
+              <p
+                className="text-sm md:text-base mb-7 max-w-sm line-clamp-2"
+                style={{
+                  color: "rgba(255,255,255,0.75)",
+                  animation: "heroFadeIn 0.5s ease both",
+                  animationDelay: "200ms",
+                }}
+              >
+                {slide.description}
+              </p>
+            )}
+            {slide.ctaText && (
+              <button
+                onClick={() => {
+                  if (slide.filter && onApplyFilter) onApplyFilter(slide.filter);
+                }}
+                className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
+                style={{
+                  background: slide.accent,
+                  color: "#1A1A2E",
+                  animation: "heroFadeIn 0.5s ease both",
+                  animationDelay: "300ms",
+                }}
+              >
+                {slide.ctaText}
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+          )}
+
+          {/* Background image with crossfade */}
+          {hasText && slide.image && (
+            <div className="absolute right-0 top-0 h-full w-1/2 md:w-5/12">
+              <img
+                key={`img-${currentIndex}`}
+                src={slide.image}
+                alt={slide.title}
+                className="w-full h-full object-contain"
+                style={{
+                  opacity: 0.45,
+                  animation: isLeaving
+                    ? "heroImageOut 0.45s ease both"
+                    : "heroImageIn 0.7s ease both",
+                }}
+              />
+              <div
+                className="absolute inset-0"
+                style={{
+                  background: `linear-gradient(to right, ${slide.bg} 10%, transparent 60%)`,
+                }}
+              />
+            </div>
+          )}
+
+          {/* Arrows */}
+          {slides.length > 1 && (
+            <>
+              <button
+                onClick={() => goSlide(-1)}
+                className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
+                style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(4px)" }}
+              >
+                <ChevronLeft className="w-4 h-4 text-white" />
+              </button>
+              <button
+                onClick={() => goSlide(1)}
+                className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 ${hasText ? "md:right-[42%]" : ""}`}
+                style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(4px)" }}
+              >
+                <ChevronRight className="w-4 h-4 text-white" />
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Dots */}
+      {slides.length > 1 && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2 z-20">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => {
+                goTo(i);
+                startTimer();
+              }}
+              className="h-1.5 rounded-full transition-all duration-300"
+              style={{
+                width: i === currentIndex ? "24px" : "6px",
+                background: i === currentIndex ? "#FFF200" : "rgba(255,255,255,0.4)",
+              }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
