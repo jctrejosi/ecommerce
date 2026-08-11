@@ -1,9 +1,11 @@
 import { useState } from "react";
-import { Save, Globe, CreditCard, Truck, Percent, Bell, Mail, Zap, Clock } from "lucide-react";
+import { Save, Globe, CreditCard, Truck, Percent, Bell, Mail, Zap, Clock, QrCode } from "lucide-react";
+import QrConfigPanel from "./QrConfigPanel";
 
 const TABS = [
   { id: "general", label: "General", icon: Globe },
   { id: "payments", label: "Medios de pago", icon: CreditCard },
+  { id: "qr", label: "QR / Bre-b", icon: QrCode },
   { id: "shipping", label: "Envíos", icon: Truck },
   { id: "taxes", label: "Impuestos", icon: Percent },
   { id: "notifications", label: "Notificaciones", icon: Bell },
@@ -112,6 +114,8 @@ export default function SettingsView() {
               </div>
             )}
 
+            {tab === "qr" && <QrConfigPanel />}
+
             {tab === "notifications" && (
               <div>
                 <h2 className="font-bold text-gray-900 mb-5">Notificaciones</h2>
@@ -162,9 +166,11 @@ export default function SettingsView() {
             )}
 
             <div className="flex justify-end mt-6 pt-6 border-t border-gray-100">
-              <button className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors">
-                <Save size={14} /> Guardar cambios
-              </button>
+              {tab !== "qr" && (
+                <button className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors">
+                  <Save size={14} /> Guardar cambios
+                </button>
+              )}
             </div>
           </div>
         </div>
