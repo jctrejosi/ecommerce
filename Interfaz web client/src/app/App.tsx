@@ -9,6 +9,9 @@ import {
 } from "../services/customer-auth.service";
 import { useOrderSocket } from "../hooks/useOrderSocket";
 import { useNotifications } from "../hooks/useNotifications";
+import { useBackendStatus } from "../hooks/useBackendStatus";
+import { ChatbotWidget } from "../components/ChatbotWidget";
+import type { BotCart } from "../services/chatbot.service";
 import { cartService } from "../services/cart.service";
 import { apiStatusService } from "../services/api-status.service";
 import type {
@@ -73,7 +76,11 @@ export default function App() {
     else if (location.pathname.startsWith("/account"))
       setCurrentView("account");
     else if (location.pathname === "/") setCurrentView("home");
-  }, [location.pathname]);
+    else {
+      // Ruta inexistente → redirigir al home (reemplaza la URL)
+      navigate("/", { replace: true });
+    }
+  }, [location.pathname, navigate]);
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
@@ -264,6 +271,27 @@ export default function App() {
       navigate("/", { replace: true });
     }
   }, [location.pathname, customer, customerLoading]);
+
+  // ── Monitor de disponibilidad del backend ────────────────
+  // Vía WebSocket (`/status`): socket.io reconecta solo cuando el backend
+  // vuelve a estar disponible y el servidor emite `backend:online`.
+  // Si estaba caído y vuelve, avisa al usuario y recarga el sitio.
+  const { online } = useBackendStatus();
+  const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
+  const [reloadingSite, setReloadingSite] = useState(false);
+
+  useEffect(() => {
+    if (online === null) return;
+
+    setBackendOnline((prev) => {
+      // Transición caído → disponible: alerta + recarga
+      if (prev === false && online === true) {
+        setReloadingSite(true);
+        setTimeout(() => window.location.reload(), 1500);
+      }
+      return online;
+    });
+  }, [online]);
 
   useEffect(() => {
     if (initialDataLoaded) return;
@@ -465,6 +493,20 @@ export default function App() {
       quantity: number;
     }>,
   ) => setCartItems(items.map((i) => ({ ...i, quantity: i.quantity })));
+
+  // Carrito armado por el chatbot → lo carga en el carrito del sitio y lo abre.
+  const applyBotCart = (cart: BotCart) => {
+    replaceCart(
+      cart.items.map((it) => ({
+        id: it.product_id,
+        name: it.name,
+        price: it.price,
+        image: it.image ?? undefined,
+        quantity: it.quantity,
+      })),
+    );
+    setCartOpen(true);
+  };
 
   const openCatalog = (categoryId?: number) => {
     setCurrentView("catalog");
@@ -962,6 +1004,32 @@ export default function App() {
         onGoToCatalog={openCatalog}
         fmt={fmt}
       />
+
+      {/* Chatbot de compras (parte inferior derecha) */}
+      <ChatbotWidget onAddProduct={addToCart} onApplyCart={applyBotCart} />
+
+      {/* Aviso de backend caído */}
+      {backendOnline === false && !reloadingSite && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-[#1A1A2E] text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          Sin conexión con el servidor — reintentando...
+        </div>
+      )}
+
+      {/* Alerta de reconexión → recarga del sitio */}
+      {reloadingSite && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/60">
+          <div className="bg-white rounded-2xl shadow-2xl px-8 py-6 text-center max-w-sm mx-4">
+            <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+              <span className="w-5 h-5 rounded-full bg-green-500 animate-ping" />
+            </div>
+            <p className="font-bold text-foreground">Servidor disponible</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              La conexión se restableció. Recargando el sitio...
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

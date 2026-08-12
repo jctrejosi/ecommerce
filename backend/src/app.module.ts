@@ -22,6 +22,7 @@ import { PopupsModule } from './modules/popups/popups.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { StatusGateway } from './modules/status/status.gateway';
 import { SettingsController } from './modules/settings/settings.controller';
 import {
   appConfig,
@@ -73,6 +74,6 @@ import {
     InventoryModule,
   ],
   controllers: [AppController, SettingsController],
-  providers: [AppService],
+  providers: [AppService, StatusGateway],
 })
 export class AppModule {}

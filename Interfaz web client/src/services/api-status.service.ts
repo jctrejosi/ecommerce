@@ -10,4 +10,17 @@ export const apiStatusService = {
       throw new Error("Backend no disponible");
     }
   },
+
+  /** Devuelve true si el backend responde correctamente (sin lanzar). */
+  async checkStatus(): Promise<boolean> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api-status`, {
+        credentials: "include",
+        cache: "no-store", // evita respuestas cacheadas en el chequeo
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  },
 };

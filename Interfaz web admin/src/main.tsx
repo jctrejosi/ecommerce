@@ -1,5 +1,6 @@
 import ReactDOM from 'react-dom/client'
 import { useState, useEffect } from 'react'
+import { io } from 'socket.io-client'
 import App from './App'
 import './index.css'
 
@@ -20,7 +21,25 @@ function BootScreen({ onReady }: { onReady: () => void }) {
         clearTimeout(timeout)
         setStatus('error')
       })
-    return () => { clearTimeout(timeout); ctrl.abort() }
+
+    // Auto-recuperación: si el backend está caído, escuchar el namespace
+    // `/status` y continuar en cuanto vuelva a estar disponible (socket.io
+    // reconecta solo y el servidor emite `backend:online`).
+    const socket = io(`${API_URL}/status`, {
+      transports: ['websocket', 'polling'],
+    })
+    const onBackendOnline = () => {
+      onReady()
+      socket.disconnect()
+    }
+    socket.on('backend:online', onBackendOnline)
+
+    return () => {
+      clearTimeout(timeout)
+      ctrl.abort()
+      socket.off('backend:online', onBackendOnline)
+      socket.disconnect()
+    }
   }, [])
 
   if (status === 'error') {

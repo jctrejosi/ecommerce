@@ -1,11 +1,15 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { DrizzleService } from './database/drizzle.service';
+import { StatusGateway } from './modules/status/status.gateway';
 
 @Injectable()
 export class AppService implements OnModuleInit {
   private readonly logger = new Logger(AppService.name);
 
-  constructor(private readonly drizzle: DrizzleService) {}
+  constructor(
+    private readonly drizzle: DrizzleService,
+    private readonly statusGateway: StatusGateway,
+  ) {}
 
   /**
    * Validar conexión a la base de datos al iniciar
@@ -31,6 +35,10 @@ export class AppService implements OnModuleInit {
       this.logger.log(
         `📊 PostgreSQL version: ${result[0]?.pg_version?.split(',')[0] || 'unknown'}`,
       );
+
+      // Avisar a los clientes conectados (web client / admin) que el backend
+      // está disponible, por si estaban esperando su restauración.
+      this.statusGateway.notifyBackendOnline();
 
       return {
         status: 'connected',
