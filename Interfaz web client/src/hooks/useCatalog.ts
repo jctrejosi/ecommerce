@@ -27,7 +27,6 @@ export function useCatalog(
 
   // Load products when filters change
   useEffect(() => {
-    console.log("[useCatalog] Effect firing with brandId:", filters?.brandId);
     let mounted = true;
 
     const loadProducts = async () => {
@@ -66,6 +65,7 @@ export function useCatalog(
     filters?.search,
     filters?.brandId,
     filters?.limit,
+    filters?.offset, // el scroll infinito depende del offset; sin esto se repite la página 1
   ]);
 
   return {

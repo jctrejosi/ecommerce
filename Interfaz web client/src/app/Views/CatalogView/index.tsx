@@ -93,6 +93,8 @@ export function CatalogPage({
       productTypeCode: catalogSearch
         ? undefined
         : catalogProductType || undefined,
+      limit: PAGE_SIZE,
+      offset,
     },
     catalogCategories,
   );
@@ -131,12 +133,16 @@ export function CatalogPage({
     setSearchInput(catalogSearch);
   }, [catalogSearch]);
 
-  // Accumulate products when new ones arrive
+  // Accumulate products when new ones arrive (con dedupe por id por seguridad)
   useEffect(() => {
     if (offset === 0) {
       setAllProducts(products);
     } else {
-      setAllProducts((prev) => [...prev, ...products]);
+      setAllProducts((prev) => {
+        const seen = new Set(prev.map((p) => p.id));
+        const fresh = products.filter((p) => !seen.has(p.id));
+        return [...prev, ...fresh];
+      });
     }
     setHasMore(products.length === PAGE_SIZE);
     setLoadingMore(false);
