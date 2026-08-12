@@ -26,6 +26,15 @@ async def lifespan(app: FastAPI):
     try:
         ok = await database.ping()
         log.info("Conexión a la BD: %s", "OK" if ok else "FALLÓ")
+        if ok:
+            # Sesiones/carritos viejos de chats anteriores (cada apertura del
+            # chat crea una sesión nueva; esto evita acumular basura en la BD).
+            try:
+                carts, sessions = await cart.cleanup_expired()
+                if carts or sessions:
+                    log.info("Limpieza: %s carritos y %s sesiones expiradas borradas", carts, sessions)
+            except Exception:  # noqa: BLE001
+                log.warning("No se pudo limpiar sesiones expiradas", exc_info=True)
     except Exception as exc:  # noqa: BLE001 - no impedir el arranque
         log.warning("No se pudo validar la BD al arrancar: %s", exc)
     yield

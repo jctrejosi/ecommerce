@@ -181,6 +181,19 @@ async def suggest_cart(
     return {"cart": await get_cart(session_id), "products": suggested}
 
 
+async def cleanup_expired() -> tuple[int, int]:
+    """Borra carritos y sesiones invitado expirados. Devuelve (carts, sesiones)."""
+    pool = await database.get_pool()
+    async with pool.acquire() as conn:
+        carts = await conn.fetchval(
+            "WITH del AS (DELETE FROM carts WHERE expires_at < now() RETURNING id) SELECT count(*) FROM del"
+        )
+        sessions = await conn.fetchval(
+            "WITH del AS (DELETE FROM guest_sessions WHERE expires_at < now() RETURNING id) SELECT count(*) FROM del"
+        )
+    return int(carts or 0), int(sessions or 0)
+
+
 async def get_cart(session_id: str) -> dict:
     """Carrito activo con ítems (producto, imagen, precios) y totales."""
     gs_id = await ensure_guest_session(session_id)

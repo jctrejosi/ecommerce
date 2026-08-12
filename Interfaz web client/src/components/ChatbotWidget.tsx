@@ -14,22 +14,15 @@ type ChatMessage = {
   payload?: BotPayload;
 };
 
-const SESSION_KEY = "mercaldas_bot_session";
-
+/**
+ * Sesión nueva por apertura: el bot siempre empieza limpio.
+ * (No se persiste en localStorage; cada visita/apertura es una sesión fresca
+ *  con carrito y conversación nuevos.)
+ */
 function getSessionId(): string {
-  try {
-    let id = localStorage.getItem(SESSION_KEY);
-    if (!id) {
-      id =
-        typeof crypto !== "undefined" && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-      localStorage.setItem(SESSION_KEY, id);
-    }
-    return id;
-  } catch {
-    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  }
+  return typeof crypto !== "undefined" && crypto.randomUUID
+    ? crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 }
 
 const fmtPrice = (n: number) =>
@@ -81,7 +74,6 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
   const listRef = useRef<HTMLDivElement>(null);
   const sessionRef = useRef<string>(getSessionId());
   const historyRef = useRef<BotHistoryMessage[]>([]);
-  const suggestedRef = useRef(false);
   const hasSentRef = useRef(false);
 
   // Modal del carrito
@@ -127,30 +119,22 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
     [refreshCart],
   );
 
-  // Al abrir el chat por primera vez, el bot arma una lista sugerida de base
-  // (la deja en el carrito si estaba vacío) y abre el modal con el carrito
-  // poblado + opciones seleccionables.
-  useEffect(() => {
-    if (!open || suggestedRef.current) return;
-    suggestedRef.current = true;
-    void (async () => {
-      try {
-        const suggested = await chatbotService.suggestCart(sessionRef.current, 6);
-        if (suggested.cart.items.length === 0 && suggested.products.length === 0) return;
-        const welcome = suggested.cart.items.length
-          ? "¡Hola! 👋 Te armé una lista sugerida de base. Revisa tu carrito, agrega o quita lo que quieras. 🛒"
-          : "¡Hola! 👋 Te preparé una lista sugerida de productos. Agrega los que quieras y yo armo tu carrito. 🛒";
-        setMessages((prev) => [...prev, { role: "assistant", content: welcome }]);
-        historyRef.current.push({ role: "assistant", content: welcome });
-        openCartModal({
-          cart: suggested.cart,
-          products: suggested.products,
-        });
-      } catch {
-        /* el bot no está disponible; se muestran solo las opciones rápidas */
-      }
-    })();
-  }, [open, openCartModal]);
+  // Al abrir el chat el bot empieza SIEMPRE limpio: sesión nueva (carrito
+  // nuevo en el bot), conversación vacía y sin estado previo. NO arma nada
+  // automáticamente: el usuario primero interactúa y la lista sugerida se
+  // arma cuando el bot la construye en la conversación.
+  const openWidget = useCallback(() => {
+    sessionRef.current = getSessionId();
+    historyRef.current = [];
+    hasSentRef.current = false;
+    setMessages([]);
+    setCart(null);
+    setProducts([]);
+    setCheckout(false);
+    setCartModalOpen(false);
+    setModalError(null);
+    setOpen(true);
+  }, []);
 
   const send = useCallback(
     async (raw: string) => {
@@ -235,7 +219,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
     <>
       {/* Botón flotante — círculo blanco con borde, visible sobre cualquier fondo */}
       <button
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Asistente de compras"
         className="fixed bottom-5 right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
       >
