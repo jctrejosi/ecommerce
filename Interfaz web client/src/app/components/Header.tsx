@@ -300,7 +300,7 @@ export function Header({
                 {Icon ? <Icon className="w-3 h-3" /> : cat.name.charAt(0)}
               </div>
               <div className="flex-1 min-w-0 leading-tight">
-                <p className="text-xs font-semibold text-foreground uppercase tracking-wide whitespace-normal">
+                <p className="text-xs font-medium text-foreground uppercase tracking-wide whitespace-normal">
                   {cat.name}
                 </p>
               </div>
