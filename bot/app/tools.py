@@ -17,6 +17,79 @@ async def _payload(ctx: dict) -> dict:
 
 # ─── Handlers ─────────────────────────────────────────────────────
 
+async def armar_carrito(args: dict, ctx: dict) -> dict:
+    """Arma el carrito con una lista de productos: la MEJOR coincidencia de
+    cada uno, UNO por ítem, agregada directamente (sin preguntar)."""
+    raw_items = args.get("productos") or []
+    # Normalizar y deduplicar por término ("arroz, arroz" → una sola vez)
+    vistos: set[str] = set()
+    items: list[dict] = []
+    for it in raw_items:
+        nombre = str(it.get("nombre") or "").strip()
+        if not nombre:
+            continue
+        clave = nombre.casefold()
+        if clave in vistos:
+            continue
+        vistos.add(clave)
+        items.append({"nombre": nombre, "cantidad": max(1, int(it.get("cantidad") or 1))})
+
+    agregados: list[dict] = []
+    no_encontrados: list[str] = []
+    agotados: list[str] = []
+
+    for it in items:
+        resultados = await database.search_products(
+            query=it["nombre"],
+            limit=5,
+            branch_id=ctx.get("branch_id"),
+        )
+        if not resultados:
+            no_encontrados.append(it["nombre"])
+            continue
+        # Mejor coincidencia con stock (si no hay inventario registrado, stock es None → disponible)
+        mejor = None
+        for candidato in resultados:
+            stock = await database.get_stock(candidato["variant_id"], ctx.get("branch_id"))
+            if stock is None or stock > 0:
+                mejor = candidato
+                break
+        if mejor is None:
+            agotados.append(it["nombre"])
+            continue
+        await cart.add_item(
+            session_id=ctx["session_id"],
+            variant_id=mejor["variant_id"],
+            quantity=it["cantidad"],
+            unit_price=float(mejor["price"] or 0),
+            branch_id=ctx.get("branch_id"),
+        )
+        agregados.append({**mejor, "cantidad": it["cantidad"]})
+
+    cart_state = await cart.get_cart(ctx["session_id"])
+    payload = await _payload(ctx)
+    payload["cart"] = cart_state
+    (await _payload(ctx)).setdefault("products", []).extend(agregados)
+
+    partes = [f"Agregué {len(agregados)} producto(s) al carrito."]
+    if agregados:
+        detalle = ", ".join(f"{a['name']} x{a['cantidad']}" for a in agregados)
+        partes.append(f"Carrito: {detalle} (total ${cart_state['total']:,.0f}).")
+    if no_encontrados:
+        partes.append(f"No encontré: {', '.join(no_encontrados)}.")
+    if agotados:
+        partes.append(f"Estaban agotados: {', '.join(agotados)}.")
+    partes.append("Confirma el carrito con el cliente y pregunta si quiere ajustar algo.")
+    return {
+        "ok": True,
+        "agregados": agregados,
+        "no_encontrados": no_encontrados,
+        "agotados": agotados,
+        "carrito": cart_state,
+        "mensaje": " ".join(partes),
+    }
+
+
 async def armar_lista_sugerida(args: dict, ctx: dict) -> dict:
     """Arma una lista sugerida de BASE: agrega productos sugeridos al carrito
     (si está vacío) y devuelve el carrito + las opciones extra."""
@@ -227,6 +300,44 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "armar_carrito",
+            "description": (
+                "Arma el carrito con la lista de productos que pide el cliente: "
+                "busca la MEJOR coincidencia de cada producto y agrega UNO por "
+                "ítem directamente, sin preguntar cuál elegir. Úsala cuando el "
+                "cliente diga que necesita/quiero/compra varios productos "
+                "(ej: 'necesito arroz, fríjoles y lentejas'). Extrae cada "
+                "producto y su cantidad (si la menciona) en el arreglo 'productos'."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "productos": {
+                        "type": "array",
+                        "description": "Los productos que pidió el cliente (uno por ítem).",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "nombre": {
+                                    "type": "string",
+                                    "description": "Nombre o término del producto (ej: 'arroz').",
+                                },
+                                "cantidad": {
+                                    "type": "integer",
+                                    "description": "Cantidad de unidades (por defecto 1).",
+                                },
+                            },
+                            "required": ["nombre"],
+                        },
+                    },
+                },
+                "required": ["productos"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "armar_lista_sugerida",
             "description": (
                 "Arma una lista sugerida de compras de BASE: si el carrito está "
@@ -388,6 +499,7 @@ TOOLS = [
 ]
 
 FUNCTION_MAP = {
+    "armar_carrito": armar_carrito,
     "armar_lista_sugerida": armar_lista_sugerida,
     "buscar_productos": buscar_productos,
     "ver_producto": ver_producto,

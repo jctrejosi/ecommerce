@@ -77,7 +77,9 @@ WHERE p.is_active = true
   AND p.deleted_at IS NULL
   AND p.is_public = true
   AND ($1 = '' OR p.name ILIKE '%' || $1 || '%'
+       OR translate(lower(p.name), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower($1), 'áéíóúüñ', 'aeiouun') || '%'
        OR p.description ILIKE '%' || $1 || '%'
+       OR translate(lower(p.description), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower($1), 'áéíóúüñ', 'aeiouun') || '%'
        OR p.plu ILIKE '%' || $1 || '%'
        OR pv.barcode ILIKE '%' || $1 || '%'
        OR p.external_id ILIKE '%' || $1 || '%'
@@ -85,12 +87,33 @@ WHERE p.is_active = true
   AND ($2 = '' OR c.name ILIKE '%' || $2 || '%' OR c.slug ILIKE '%' || $2 || '%')
   AND ($3 = '' OR b.name ILIKE '%' || $3 || '%' OR b.slug ILIKE '%' || $3 || '%')
 GROUP BY p.id, pv.id
-ORDER BY (p.name ILIKE '%' || $1 || '%') DESC, p.name ASC
+ORDER BY
+  (p.name ILIKE $1) DESC,
+  (translate(lower(p.name), 'áéíóúüñ', 'aeiouun') = translate(lower($1), 'áéíóúüñ', 'aeiouun')) DESC,
+  (translate(lower(p.name), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower($1), 'áéíóúüñ', 'aeiouun') || '%') DESC,
+  p.name ASC
 LIMIT $4
 """
 
 
-async def search_products(
+def _search_variants(term: str) -> list[str]:
+    """Variantes del término para tolerar singular/plural: [original, sin 's',
+    sin 'es'/'os'/'as']. Ej: 'fríjoles' → 'fríjol', 'lentejas' → 'lenteja'."""
+    variants = [term]
+    t = term
+    if len(t) > 3 and t.endswith("s"):
+        variants.append(t[:-1])
+        variants.append(t[:-2])
+    seen: set[str] = set()
+    out: list[str] = []
+    for v in variants:
+        if v and v not in seen:
+            seen.add(v)
+            out.append(v)
+    return out
+
+
+async def _search_once(
     query: str = "",
     category: str = "",
     brand: str = "",
@@ -106,6 +129,22 @@ async def search_products(
     async with pool.acquire() as conn:
         rows = await conn.fetch(sql, *params)
     return [_product(row) for row in rows]
+
+
+async def search_products(
+    query: str = "",
+    category: str = "",
+    brand: str = "",
+    limit: int = 8,
+    branch_id: int | None = None,
+) -> list[dict]:
+    """Busca productos; si el término no da resultados, reintenta con la
+    variante singular (tolera 'fríjoles' ↔ 'frijol', 'lentejas' ↔ 'lenteja')."""
+    for term in _search_variants(query or ""):
+        results = await _search_once(term, category, brand, limit, branch_id)
+        if results:
+            return results
+    return []
 
 
 _PRODUCT_SQL = """
@@ -136,7 +175,9 @@ LEFT JOIN brands b ON b.id = p.brand_id
 LEFT JOIN inventory i ON i.product_variant_id = pv.id {branch_filter}
 WHERE p.is_active = true AND p.deleted_at IS NULL AND p.is_public = true
   AND ($1 = 0 OR p.id = $1)
-  AND ($2 = '' OR p.name ILIKE '%' || $2 || '%' OR p.plu ILIKE '%' || $2 || '%')
+  AND ($2 = '' OR p.name ILIKE '%' || $2 || '%'
+       OR translate(lower(p.name), 'áéíóúüñ', 'aeiouun') LIKE '%' || translate(lower($2), 'áéíóúüñ', 'aeiouun') || '%'
+       OR p.plu ILIKE '%' || $2 || '%')
 GROUP BY p.id, pv.id, c.name, b.name
 ORDER BY p.name ASC
 LIMIT 1

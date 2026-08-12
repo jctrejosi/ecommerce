@@ -221,7 +221,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
       <button
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Asistente de compras"
-        className="fixed bottom-5 right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
+        className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
       >
         {open ? (
           <svg
@@ -240,9 +240,9 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
         )}
       </button>
 
-      {/* Panel */}
+      {/* Panel — en móvil es un bottom sheet casi a pantalla completa */}
       {open && (
-        <div className="fixed bottom-24 right-5 z-[95] w-[92vw] max-w-sm h-[560px] max-h-[75vh] rounded-2xl bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden">
+        <div className="fixed inset-x-0 bottom-0 z-[95] h-[88dvh] rounded-t-2xl bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl">
           {/* Header */}
           <div className="bg-[#1A1A2E] text-white px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
@@ -440,11 +440,11 @@ function BotCartModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50"
+      className="fixed inset-0 z-[110] flex items-end sm:items-center justify-center bg-black/50"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-2xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl"
+        className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[85vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

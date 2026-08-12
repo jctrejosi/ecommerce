@@ -55,6 +55,8 @@ El `payload` de `/chat` es estructurado para el frontend:
 
 | Función | Qué hace |
 |---------|----------|
+| `armar_carrito` | Arma el carrito con una lista de productos: mejor coincidencia de cada uno, **uno por ítem**, agregado directo (ej: "necesito arroz, fríjoles y lentejas") |
+| `armar_lista_sugerida` | Deja una lista sugerida de base en el carrito (ofertas primero) |
 | `buscar_productos` | Busca en el catálogo por nombre/marca/categoría |
 | `ver_producto` | Detalle de un producto (precio, stock, imágenes) |
 | `agregar_al_carrito` | Agrega (o incrementa) un producto al carrito de la sesión |
