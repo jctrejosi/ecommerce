@@ -50,7 +50,9 @@ const PROD_PORT = url.port || "5432";
 const PROD_DB = url.pathname.slice(1);
 const PROD_USER = url.username || "postgres";
 
-const DB_DIR = join(__dirname);
+// Los backups van a subcarpetas: backups/local y backups/prod
+const LOCAL_BACKUP_DIR = join(__dirname, "..", "backups", "local");
+const PROD_BACKUP_DIR = join(__dirname, "..", "backups", "prod");
 
 function run(cmd, args, { stdio = "inherit", env = {}, inputFile } = {}) {
   const opts = { stdio, env: { ...process.env, ...env } };
@@ -90,17 +92,18 @@ async function main() {
   console.log(`Local : ${LOCAL_CONTAINER} / ${LOCAL_DB}`);
   console.log(`Producción: ${PROD_USER}@${PROD_HOST}:${PROD_PORT}/${PROD_DB}`);
 
-  if (!existsSync(DB_DIR)) mkdirSync(DB_DIR, { recursive: true });
+  if (!existsSync(LOCAL_BACKUP_DIR)) mkdirSync(LOCAL_BACKUP_DIR, { recursive: true });
+  if (!existsSync(PROD_BACKUP_DIR)) mkdirSync(PROD_BACKUP_DIR, { recursive: true });
 
   // 1. Dump local
-  const localFile = join(DB_DIR, `ecommerce_local_${TS}.backup`);
+  const localFile = join(LOCAL_BACKUP_DIR, `ecommerce_local_${TS}.backup`);
   console.log("\n[1/4] Volcando base LOCAL...");
   run("docker", ["exec", LOCAL_CONTAINER, "pg_dump", "-U", "postgres", "-d", LOCAL_DB, "--no-owner", "--no-privileges", "-F", "c", "-f", "/tmp/local_migrate.backup"]);
   run("docker", ["cp", `${LOCAL_CONTAINER}:/tmp/local_migrate.backup`, localFile]);
   console.log(`✓ ${localFile} (${(statSync(localFile).size / 1024).toFixed(0)} KB)`);
 
   // 2. Backup de seguridad de producción
-  const prodFile = join(DB_DIR, `ecommerce_prod_before_${TS}.backup`);
+  const prodFile = join(PROD_BACKUP_DIR, `ecommerce_prod_before_${TS}.backup`);
   console.log("\n[2/4] Backup de seguridad de PRODUCCIÓN...");
   dumpTo(prodFile, "docker", [
     "run", "--rm",

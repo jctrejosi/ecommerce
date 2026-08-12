@@ -7,6 +7,8 @@ import {
   IsEnum,
   IsObject,
   MaxLength,
+  Min,
+  Max,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -53,6 +55,16 @@ export class CreatePopupDto {
   @IsOptional()
   @IsInt()
   delayMs?: number;
+
+  @ApiPropertyOptional({
+    description: 'Altura máxima del popup en px (NULL = sin límite)',
+    example: 480,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(4096)
+  maxHeight?: number | null;
 
   @ApiPropertyOptional({ description: 'Activo', default: true })
   @IsOptional()
@@ -101,6 +113,13 @@ export class UpdatePopupDto {
   @IsOptional()
   @IsInt()
   delayMs?: number;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsInt()
+  @Min(50)
+  @Max(4096)
+  maxHeight?: number | null;
 
   @ApiPropertyOptional()
   @IsOptional()

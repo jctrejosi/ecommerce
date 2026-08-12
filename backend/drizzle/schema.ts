@@ -3539,6 +3539,8 @@ export const popups = pgTable(
     filterConfig: jsonb('filter_config').default({}),
     durationMs: integer('duration_ms').default(7000).notNull(),
     delayMs: integer('delay_ms').default(1500).notNull(),
+    // Altura máxima en px del popup (NULL = sin límite, altura natural)
+    maxHeight: integer('max_height'),
     isActive: boolean('is_active').default(true).notNull(),
     startDate: timestamp('start_date', { withTimezone: true, mode: 'string' }),
     endDate: timestamp('end_date', { withTimezone: true, mode: 'string' }),

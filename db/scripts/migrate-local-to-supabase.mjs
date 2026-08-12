@@ -118,7 +118,7 @@ async function backupTarget(client, tables) {
     const rows = await client.query(`SELECT * FROM "${t}"`);
     out[t] = { columns: cols, rows: rows.rows };
   }
-  const file = join(__dirname, `supabase_before_${TS}.json`);
+  const file = join(__dirname, '..', 'backups', 'supabase', `supabase_before_${TS}.json`);
   writeFileSync(file, JSON.stringify(out));
   console.log(`✓ Backup de Supabase: ${file} (${(statSync(file).size / 1024).toFixed(0)} KB)`);
 }

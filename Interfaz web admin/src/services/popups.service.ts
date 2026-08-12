@@ -18,6 +18,7 @@ export type Popup = {
   } | null;
   durationMs: number;
   delayMs: number;
+  maxHeight: number | null;
   isActive: boolean;
   startDate: string | null;
   endDate: string | null;
@@ -33,6 +34,7 @@ export type CreatePopupData = {
   filterConfig?: Record<string, unknown>;
   durationMs?: number;
   delayMs?: number;
+  maxHeight?: number | null;
   isActive?: boolean;
   startDate?: string;
   endDate?: string;

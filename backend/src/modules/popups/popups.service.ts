@@ -12,6 +12,7 @@ export interface PopupResponse {
   filterConfig: Record<string, unknown> | null;
   durationMs: number;
   delayMs: number;
+  maxHeight: number | null;
   isActive: boolean;
   startDate: string | null;
   endDate: string | null;
@@ -68,6 +69,7 @@ export class PopupsService {
       filterConfig: (row.filterConfig as Record<string, unknown>) ?? {},
       durationMs: row.durationMs,
       delayMs: row.delayMs,
+      maxHeight: row.maxHeight ?? null,
       isActive: row.isActive,
       startDate: row.startDate,
       endDate: row.endDate,
@@ -116,6 +118,7 @@ export class PopupsService {
         filterConfig: dto.filterConfig ?? {},
         durationMs: dto.durationMs ?? 7000,
         delayMs: dto.delayMs ?? 1500,
+        maxHeight: dto.maxHeight ?? null,
         isActive: dto.isActive ?? true,
         startDate: dto.startDate ?? null,
         endDate: dto.endDate ?? null,
@@ -138,6 +141,7 @@ export class PopupsService {
       updateData.filterConfig = dto.filterConfig;
     if (dto.durationMs !== undefined) updateData.durationMs = dto.durationMs;
     if (dto.delayMs !== undefined) updateData.delayMs = dto.delayMs;
+    if (dto.maxHeight !== undefined) updateData.maxHeight = dto.maxHeight;
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
     if (dto.startDate !== undefined) updateData.startDate = dto.startDate;
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate;

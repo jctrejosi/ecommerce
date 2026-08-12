@@ -134,6 +134,7 @@ function PopupEditor({
   const [position, setPosition] = useState(popup?.position ?? "header");
   const [durationMs, setDurationMs] = useState(popup?.durationMs?.toString() ?? "7000");
   const [delayMs, setDelayMs] = useState(popup?.delayMs?.toString() ?? "1500");
+  const [maxHeight, setMaxHeight] = useState(popup?.maxHeight?.toString() ?? "");
   const [isActive, setIsActive] = useState(popup?.isActive ?? true);
   const [startDate, setStartDate] = useState(popup?.startDate ? new Date(popup.startDate).toISOString().slice(0, 16) : "");
   const [endDate, setEndDate] = useState(popup?.endDate ? new Date(popup.endDate).toISOString().slice(0, 16) : "");
@@ -192,6 +193,7 @@ function PopupEditor({
         filterConfig,
         durationMs: parseInt(durationMs) || 7000,
         delayMs: parseInt(delayMs) || 1500,
+        maxHeight: maxHeight ? parseInt(maxHeight) : null,
         isActive,
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         endDate: endDate ? new Date(endDate).toISOString() : undefined,
@@ -267,6 +269,21 @@ function PopupEditor({
                 <label className="block text-xs font-semibold text-gray-600 mb-1.5">Delay inicial (ms)</label>
                 <input type="number" value={delayMs} onChange={(e) => setDelayMs(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" />
               </div>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Altura máxima (px)</label>
+              <input
+                type="number"
+                min={50}
+                max={4096}
+                value={maxHeight}
+                onChange={(e) => setMaxHeight(e.target.value)}
+                placeholder="Vacío = sin límite"
+                className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Limita la altura del popup en la tienda (paneles laterales y barras).
+              </p>
             </div>
           </div>
 

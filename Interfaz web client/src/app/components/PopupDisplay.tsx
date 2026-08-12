@@ -18,6 +18,7 @@ interface PopupData {
   } | null;
   durationMs: number;
   delayMs: number;
+  maxHeight?: number | null;
 }
 
 interface PopupDisplayProps {
@@ -173,6 +174,16 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
           cardStyles.width = "min(88vw, 380px)";
         }
 
+        // Altura máxima configurable: limita el alto del popup en la web.
+        // En paneles (left/right) el contenido se hace desplazable; en barras
+        // (header/footer) la barra se recorta al máximo configurado.
+        const maxH = p.maxHeight && p.maxHeight > 0 ? `${p.maxHeight}px` : undefined;
+        if (isPanel && maxH) {
+          cardStyles.maxHeight = maxH;
+          cardStyles.overflowY = "auto";
+        }
+        const barMaxH = isHorizontal && maxH ? ({ maxHeight: maxH } as const) : undefined;
+
         // Header: por encima del navbar (z-50); footer: sobre el contenido
         const isClosing = closingIds.has(p.id);
         const exitClass =
@@ -208,7 +219,10 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
             >
               {/* Image */}
               {isHorizontal ? (
-                <div className="w-full h-[60px] sm:h-[80px] overflow-hidden">
+                <div
+                  className="w-full h-[60px] sm:h-[80px] overflow-hidden"
+                  style={barMaxH}
+                >
                   <img
                     src={p.image!}
                     alt={p.title}
