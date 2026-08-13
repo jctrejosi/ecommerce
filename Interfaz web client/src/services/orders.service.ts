@@ -138,8 +138,12 @@ export const ordersService = {
     expYear: string;
     cardHolder: string;
   }): Promise<{ id: string; brand: string; last_four: string }> {
+    // El endpoint depende del ambiente de la llave: pub_stag_ = sandbox, pub_prod_ = producción.
+    const wompiApi = input.publicKey.startsWith("pub_stag_")
+      ? "https://sandbox.wompi.co/v1"
+      : "https://api.wompi.co/v1";
     const response = await fetchJson<{ data: { id: string; brand: string; last_four: string } }>(
-      "https://sandbox.wompi.co/v1/tokens/cards",
+      `${wompiApi}/tokens/cards`,
       {
         method: "POST",
         headers: {
