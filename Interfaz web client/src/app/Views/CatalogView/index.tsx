@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Search, X } from "lucide-react";
+import { Search, X, ChevronRight } from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
 import { catalogService } from "../../../services/catalog.service";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
@@ -65,6 +65,14 @@ export function CatalogPage({
     { id: number; code: string; name: string; count: number }[]
   >([]);
   const [brandSearch, setBrandSearch] = useState("");
+
+  // ── Expansión del árbol de categorías (hover en desktop, chevron en móvil) ──
+  const [hoverCat, setHoverCat] = useState<number | null>(null);
+  const [pinCat, setPinCat] = useState<number | null>(null);
+  const [hoverChild, setHoverChild] = useState<number | null>(null);
+  const [pinChild, setPinChild] = useState<number | null>(null);
+  const openCat = hoverCat ?? pinCat;
+  const openChild = hoverChild ?? pinChild;
 
   useEffect(() => {
     catalogService
@@ -226,15 +234,28 @@ export function CatalogPage({
       {/* Categories */}
       <div>
         <h3 className="font-bold text-sm text-foreground mb-3">Categorías</h3>
-        <div className="space-y-1.5">
+        <div className="space-y-0.5">
           {rootCategories.map((cat) => {
             const Icon = cat.icon;
             const childCategories = getChildCategories(cat.id);
             const checked = catalogCategory.includes(cat.id);
+            const isOpen = openCat === cat.id;
 
             return (
-              <div key={cat.id} className="space-y-1">
-                <label className="flex items-center gap-2.5 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors group">
+              <div
+                key={cat.id}
+                className="relative"
+                onMouseEnter={() => {
+                  setHoverCat(cat.id);
+                  setHoverChild(null);
+                }}
+                onMouseLeave={() => setHoverCat(null)}
+              >
+                <label
+                  className={`flex items-center gap-2.5 py-1.5 px-2 rounded-lg cursor-pointer transition-colors ${
+                    isOpen ? "bg-muted" : "hover:bg-muted"
+                  }`}
+                >
                   <div
                     className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
                     style={{
@@ -267,7 +288,7 @@ export function CatalogPage({
                     ) : null}
                   </div>
                   <span
-                    className="text-sm flex-1 transition-colors"
+                    className="text-sm flex-1 truncate transition-colors"
                     style={{
                       color: checked ? "#1A1A2E" : "#6B7280",
                       fontWeight: checked ? 600 : 400,
@@ -276,17 +297,43 @@ export function CatalogPage({
                   >
                     {cat.name}
                   </span>
+                  {childCategories.length > 0 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPinCat(isOpen ? null : cat.id);
+                      }}
+                      className={`p-0.5 rounded transition-all ${
+                        isOpen
+                          ? "text-foreground rotate-90"
+                          : "text-gray-300 hover:text-gray-500"
+                      }`}
+                      title={isOpen ? "Contraer" : "Expandir"}
+                    >
+                      <ChevronRight size={14} />
+                    </button>
+                  )}
                 </label>
 
-                {checked && childCategories.length > 0 && (
-                  <div className="ml-7 space-y-1 border-l border-border pl-2">
+                {isOpen && childCategories.length > 0 && (
+                  <div className="mt-1 ml-7 space-y-0.5 border-l border-border pl-2 pb-1">
                     {childCategories.map((child) => {
                       const grandChildCategories = getChildCategories(child.id);
                       const childChecked = catalogCategory.includes(child.id);
+                      const childOpen = openChild === child.id;
 
                       return (
-                        <div key={child.id} className="space-y-1">
-                          <label className="flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors">
+                        <div
+                          key={child.id}
+                          className="relative"
+                          onMouseEnter={() => setHoverChild(child.id)}
+                          onMouseLeave={() => setHoverChild(null)}
+                        >
+                          <label
+                            className={`flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer transition-colors ${
+                              childOpen ? "bg-muted" : "hover:bg-muted"
+                            }`}
+                          >
                             <div
                               className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
                               style={{
@@ -315,7 +362,7 @@ export function CatalogPage({
                               )}
                             </div>
                             <span
-                              className="text-xs flex-1"
+                              className="text-xs flex-1 truncate"
                               style={{
                                 color: childChecked ? "#1A1A2E" : "#6B7280",
                                 fontWeight: childChecked ? 600 : 400,
@@ -324,10 +371,26 @@ export function CatalogPage({
                             >
                               {child.name}
                             </span>
+                            {grandChildCategories.length > 0 && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setPinChild(childOpen ? null : child.id);
+                                }}
+                                className={`p-0.5 rounded transition-all ${
+                                  childOpen
+                                    ? "text-foreground rotate-90"
+                                    : "text-gray-300 hover:text-gray-500"
+                                }`}
+                                title={childOpen ? "Contraer" : "Expandir"}
+                              >
+                                <ChevronRight size={13} />
+                              </button>
+                            )}
                           </label>
 
-                          {childChecked && grandChildCategories.length > 0 && (
-                            <div className="ml-6 space-y-1 border-l border-border pl-2">
+                          {childOpen && grandChildCategories.length > 0 && (
+                            <div className="mt-1 ml-6 space-y-0.5 border-l border-border pl-2 pb-1">
                               {grandChildCategories.map((grandChild) => {
                                 const grandChildChecked =
                                   catalogCategory.includes(grandChild.id);
@@ -369,7 +432,7 @@ export function CatalogPage({
                                       )}
                                     </div>
                                     <span
-                                      className="text-xs flex-1"
+                                      className="text-xs flex-1 truncate"
                                       style={{
                                         color: grandChildChecked
                                           ? "#1A1A2E"
