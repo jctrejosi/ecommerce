@@ -511,6 +511,8 @@ FUNCTION_MAP = {
 }
 
 # Opciones rápidas que ve el cliente al abrir el chat.
+# SOLO opciones programadas: cada una corresponde a una herramienta con su
+# propia function calling. (Sin opciones de chat libre.)
 QUICK_OPTIONS = [
     {
         "id": "armar_carrito",
@@ -518,14 +520,14 @@ QUICK_OPTIONS = [
         "message": "Quiero armar mi carrito de compras.",
     },
     {
-        "id": "sugerencias",
+        "id": "armar_lista_sugerida",
         "label": "✨ Sugerirme una lista",
-        "message": "¿Qué me sugieres?",
+        "message": "Sugiéreme una lista de compras.",
     },
     {
-        "id": "buscar_producto",
+        "id": "buscar_productos",
         "label": "🔍 Buscar un producto",
-        "message": "Busca un producto para mí.",
+        "message": "Quiero buscar un producto.",
     },
     {
         "id": "ver_carrito",
@@ -533,8 +535,8 @@ QUICK_OPTIONS = [
         "message": "¿Qué tengo en mi carrito?",
     },
     {
-        "id": "ayuda",
-        "label": "💬 Otra consulta",
-        "message": "Necesito ayuda con otra cosa.",
+        "id": "finalizar_compra",
+        "label": "🛒 Finalizar mi compra",
+        "message": "Quiero finalizar mi compra.",
     },
 ]

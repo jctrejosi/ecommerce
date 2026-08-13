@@ -34,6 +34,9 @@ export default function Brands() {
   const [brands, setBrands] = useState<AdminBrand[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "todas" | "activas" | "inactivas"
+  >("todas");
 
   const [editing, setEditing] = useState<AdminBrand | null>(null);
   const [creating, setCreating] = useState(false);
@@ -182,9 +185,16 @@ export default function Brands() {
     return () => clearTimeout(timer);
   }, [search]);
 
-  const filtered = brands.filter((b) =>
-    b.name.toLowerCase().includes(debouncedSearch.toLowerCase()),
-  );
+  const filtered = brands.filter((b) => {
+    const matchesSearch = b.name
+      .toLowerCase()
+      .includes(debouncedSearch.toLowerCase());
+    const matchesStatus =
+      statusFilter === "todas" ||
+      (statusFilter === "activas" && b.isActive) ||
+      (statusFilter === "inactivas" && !b.isActive);
+    return matchesSearch && matchesStatus;
+  });
 
   // ── Form helpers ──
 
@@ -458,18 +468,31 @@ export default function Brands() {
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search
-          size={14}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-        />
-        <input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Buscar marca..."
-          className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-        />
+      {/* Search + filtro de estado */}
+      <div className="flex items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar marca..."
+            className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+          />
+        </div>
+        <select
+          value={statusFilter}
+          onChange={(e) =>
+            setStatusFilter(e.target.value as "todas" | "activas" | "inactivas")
+          }
+          className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white cursor-pointer shrink-0"
+        >
+          <option value="todas">Todas</option>
+          <option value="activas">Activas</option>
+          <option value="inactivas">Inactivas</option>
+        </select>
       </div>
 
       {/* Brand Grid */}
