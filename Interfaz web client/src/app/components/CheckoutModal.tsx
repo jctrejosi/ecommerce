@@ -708,46 +708,31 @@ export function CheckoutModal({
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                   />
                 </div>
-                <div className="grid grid-cols-3 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="text-xs font-semibold block mb-1">
-                      MM
+                      Vencimiento (MM/AA)
                     </label>
                     <input
                       type="text"
                       inputMode="numeric"
-                      maxLength={2}
-                      value={cardPayment.expiryMonth}
-                      onChange={(e) =>
+                      maxLength={5}
+                      value={
+                        cardPayment.expiryYear
+                          ? `${cardPayment.expiryMonth}/${cardPayment.expiryYear}`
+                          : cardPayment.expiryMonth
+                      }
+                      onChange={(e) => {
+                        const digits = e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 4);
                         onSetCardPayment((prev) => ({
                           ...prev,
-                          expiryMonth: e.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 2),
-                        }))
-                      }
-                      placeholder="08"
-                      className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold block mb-1">
-                      AA
-                    </label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      maxLength={2}
-                      value={cardPayment.expiryYear}
-                      onChange={(e) =>
-                        onSetCardPayment((prev) => ({
-                          ...prev,
-                          expiryYear: e.target.value
-                            .replace(/\D/g, "")
-                            .slice(0, 2),
-                        }))
-                      }
-                      placeholder="29"
+                          expiryMonth: digits.slice(0, 2),
+                          expiryYear: digits.slice(2),
+                        }));
+                      }}
+                      placeholder="08/29"
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                     />
                   </div>

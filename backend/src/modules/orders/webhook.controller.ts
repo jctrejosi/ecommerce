@@ -47,6 +47,47 @@ export class WebhookController {
 
     this.logger.log(`Webhook received: ${event} for ${transaction.reference}`);
 
+    // ── Validar la firma del evento ──
+    // El checksum es un sha256 de los valores de las propiedades firmadas
+    // combinados con la llave de integridad. Si la firma no coincide, el
+    // evento no proviene de Wompi y se ignora.
+    const signature = body?.signature;
+    const signedProperties: string[] = Array.isArray(signature?.properties)
+      ? signature.properties
+      : [];
+    const providedChecksum = checksum || signature?.checksum;
+    if (integrityKey && signedProperties.length && providedChecksum) {
+      // Las propiedades firmadas (p. ej. "transaction.id") se resuelven
+      // contra el objeto `data` del evento de Wompi.
+      const values = signedProperties
+        .map((prop: string) =>
+          prop
+            .split('.')
+            .reduce((acc: any, key: string) => acc?.[key], body?.data),
+        )
+        .join('');
+      const expectedA = createHash('sha256')
+        .update(`${integrityKey}${values}`)
+        .digest('hex');
+      const expectedB = createHash('sha256')
+        .update(`${values}${integrityKey}`)
+        .digest('hex');
+      const valid =
+        String(providedChecksum).toLowerCase() === expectedA.toLowerCase() ||
+        String(providedChecksum).toLowerCase() === expectedB.toLowerCase();
+      if (!valid) {
+        this.logger.warn(
+          `Checksum inválido en webhook para ${transaction.reference}: ignorado`,
+        );
+        return { ok: true };
+      }
+      this.logger.log('Webhook firmado correctamente (checksum válido)');
+    } else {
+      this.logger.warn(
+        'Webhook sin firma verificable (falta integrity key o signature) — procesando igual',
+      );
+    }
+
     if (event === 'transaction.updated') {
       const status = transaction.status;
       const reference = transaction.reference;
@@ -73,7 +114,7 @@ export class WebhookController {
           .where(eq(orders.id, BigInt(orderId)));
         this.ordersGateway.notifyOrderStatus(String(orderId), 'preparando');
         await this.drizzleService.db.insert(orderStatusHistory).values({
-          orderId, status: 'paid', note: 'Pago confirmado por Wompi (webhook)', createdBy: customerId ?? 0,
+          orderId, status: 'paid', note: 'Pago confirmado por Wompi (webhook)', createdBy: customerId ?? null,
         });
         if (customerId) {
           await this.notificationsService.create({
@@ -94,7 +135,7 @@ export class WebhookController {
           .where(eq(orders.id, BigInt(orderId)));
         this.ordersGateway.notifyOrderStatus(String(orderId), 'cancelado', statusMessage);
         await this.drizzleService.db.insert(orderStatusHistory).values({
-          orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? 0,
+          orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? null,
         });
         if (customerId) {
           await this.notificationsService.create({

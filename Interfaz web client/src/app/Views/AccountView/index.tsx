@@ -575,7 +575,9 @@ const MOCK_ACCT_ORDERS = [
     deliveredAt: "",
   },
 ];
-type AcctOrder = (typeof MOCK_ACCT_ORDERS)[number];
+type AcctOrder = Omit<(typeof MOCK_ACCT_ORDERS)[number], "status"> & {
+  status: "pendiente" | "preparando" | "en camino" | "entregado" | "cancelado";
+};
 
 const INIT_FAVORITES = MOCK_PRODUCTS.filter((p) =>
   [1, 5, 9, 12, 14, 18].includes(p.id),
@@ -852,6 +854,7 @@ function StarRating({
 
 function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
+    pendiente: { label: "Pendiente de pago", bg: "#E2E8F0", color: "#475569" },
     preparando: { label: "Preparando", bg: "#FFF3CD", color: "#856404" },
     "en camino": { label: "En camino", bg: "#CCE5FF", color: "#004085" },
     entregado: { label: "Entregado", bg: "#D4EDDA", color: "#155724" },
@@ -866,6 +869,62 @@ function StatusBadge({ status }: { status: string }) {
       {s.label}
     </span>
   );
+}
+
+type TimelineStepState = "done" | "current" | "rejected";
+
+interface TimelineStep {
+  label: string;
+  state: TimelineStepState;
+}
+
+/**
+ * Pasos del pedido según su estado REAL: el timeline solo muestra los pasos
+ * hasta donde llegó la orden.
+ *  - "done"     → completado (✓)
+ *  - "current"  → etapa actual en curso (indicador pulsante)
+ *  - "rejected" → etapa fallida, p. ej. pago rechazado (✗)
+ */
+function buildTimeline(status: string): TimelineStep[] {
+  const step = (label: string, state: TimelineStepState): TimelineStep => ({
+    label,
+    state,
+  });
+  switch (status) {
+    case "pendiente":
+      return [
+        step("Pedido recibido", "done"),
+        step("Pago confirmado", "current"),
+      ];
+    case "preparando":
+      return [
+        step("Pedido recibido", "done"),
+        step("Pago confirmado", "done"),
+        step("Preparando pedido", "current"),
+      ];
+    case "en camino":
+      return [
+        step("Pedido recibido", "done"),
+        step("Pago confirmado", "done"),
+        step("Preparando pedido", "done"),
+        step("En camino", "current"),
+      ];
+    case "entregado":
+      return [
+        step("Pedido recibido", "done"),
+        step("Pago confirmado", "done"),
+        step("Preparando pedido", "done"),
+        step("En camino", "done"),
+        step("Entregado", "done"),
+      ];
+    case "cancelado":
+      return [
+        step("Pedido recibido", "done"),
+        step("Pago confirmado", "rejected"),
+      ];
+    default:
+      return [step("Pedido recibido", "done")];
+  }
 }
 
 function EmptyState({
@@ -1159,11 +1218,6 @@ export function UserAdminView({
       })),
       ...appOrders.map((o) => ({
         ...o,
-        status: (o.status === "en camino"
-          ? "en camino"
-          : o.status === "preparando"
-            ? "preparando"
-            : "entregado") as AcctOrder["status"],
         estimatedDelivery: "",
         deliveredAt: o.status === "entregado" ? o.date : "",
       })),
@@ -1551,19 +1605,7 @@ export function UserAdminView({
       },
     ];
 
-    const timelineSteps = [
-      { label: "Pedido recibido", done: true },
-      { label: "Pago confirmado", done: true },
-      {
-        label: "Preparando pedido",
-        done: order.status !== "preparando" || order.status === "entregado",
-      },
-      {
-        label: "En camino",
-        done: order.status === "entregado" || order.status === "en camino",
-      },
-      { label: "Entregado", done: order.status === "entregado" },
-    ];
+    const timelineSteps = buildTimeline(order.status);
 
     return (
       <div>
@@ -1594,41 +1636,51 @@ export function UserAdminView({
             Estado del pedido
           </p>
           <div className="flex items-start gap-0">
-            {timelineSteps
-              .filter((_, i) => !(order.status === "cancelado" && i > 0))
-              .map((step, idx, arr) => (
-                <div
-                  key={step.label}
-                  className="flex-1 flex flex-col items-center"
-                >
-                  <div className="flex items-center w-full">
-                    <div
-                      className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center z-10 ${idx === 0 ? "ml-auto mr-0" : idx === arr.length - 1 ? "ml-0 mr-auto" : "mx-auto"}`}
-                      style={{ background: step.done ? "#1A1A2E" : "#E5E7EB" }}
-                    >
-                      {step.done ? (
-                        <Check className="w-3.5 h-3.5 text-white" />
-                      ) : (
-                        <div className="w-2.5 h-2.5 rounded-full bg-white" />
-                      )}
-                    </div>
-                    {idx < arr.length - 1 && (
-                      <div
-                        className="flex-1 h-0.5 mx-0"
-                        style={{
-                          background: step.done ? "#FFF200" : "#E5E7EB",
-                        }}
-                      />
+            {timelineSteps.map((step, idx, arr) => (
+              <div
+                key={step.label}
+                className="flex-1 flex flex-col items-center"
+              >
+                <div className="flex items-center w-full">
+                  <div
+                    className={`flex-shrink-0 w-7 h-7 rounded-full flex items-center justify-center z-10 ${idx === 0 ? "ml-auto mr-0" : idx === arr.length - 1 ? "ml-0 mr-auto" : "mx-auto"}`}
+                    style={{
+                      background:
+                        step.state === "done"
+                          ? "#1A1A2E"
+                          : step.state === "rejected"
+                            ? "#EF4444"
+                            : "#E5E7EB",
+                    }}
+                  >
+                    {step.state === "done" && (
+                      <Check className="w-3.5 h-3.5 text-white" />
+                    )}
+                    {step.state === "rejected" && (
+                      <X className="w-3.5 h-3.5 text-white" />
+                    )}
+                    {step.state === "current" && (
+                      <div className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-pulse" />
                     )}
                   </div>
-                  <p
-                    className="text-[10px] font-semibold text-center mt-1.5 px-0.5 leading-snug"
-                    style={{ color: step.done ? "#1A1A2E" : "#9CA3AF" }}
-                  >
-                    {step.label}
-                  </p>
+                  {idx < arr.length - 1 && (
+                    <div
+                      className="flex-1 h-0.5 mx-0"
+                      style={{
+                        background:
+                          step.state === "done" ? "#FFF200" : "#E5E7EB",
+                      }}
+                    />
+                  )}
                 </div>
-              ))}
+                <p
+                  className="text-[10px] font-semibold text-center mt-1.5 px-0.5 leading-snug"
+                  style={{ color: "#1A1A2E" }}
+                >
+                  {step.label}
+                </p>
+              </div>
+            ))}
           </div>
         </AcctCard>
 
@@ -3201,35 +3253,26 @@ export function UserAdminView({
                       }
                       className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
                     />
-                    <div className="grid grid-cols-3 gap-2">
+                    <div className="grid grid-cols-2 gap-2">
                       <input
-                        placeholder="MM"
+                        placeholder="MM/AA"
                         inputMode="numeric"
-                        maxLength={2}
-                        value={form.expiryMonth ?? ""}
-                        onChange={(e) =>
+                        maxLength={5}
+                        value={
+                          form.expiryYear
+                            ? `${form.expiryMonth}/${form.expiryYear}`
+                            : (form.expiryMonth ?? "")
+                        }
+                        onChange={(e) => {
+                          const digits = e.target.value
+                            .replace(/\D/g, "")
+                            .slice(0, 4);
                           setForm((f) => ({
                             ...f,
-                            expiryMonth: e.target.value
-                              .replace(/\D/g, "")
-                              .slice(0, 2),
-                          }))
-                        }
-                        className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
-                      />
-                      <input
-                        placeholder="AA"
-                        inputMode="numeric"
-                        maxLength={2}
-                        value={form.expiryYear ?? ""}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            expiryYear: e.target.value
-                              .replace(/\D/g, "")
-                              .slice(0, 2),
-                          }))
-                        }
+                            expiryMonth: digits.slice(0, 2),
+                            expiryYear: digits.slice(2),
+                          }));
+                        }}
                         className="w-full text-xs border border-border rounded-lg px-3 py-2 focus:outline-none"
                       />
                       <input

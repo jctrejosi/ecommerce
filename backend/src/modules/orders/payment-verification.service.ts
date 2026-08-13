@@ -50,7 +50,7 @@ export class PaymentVerificationService {
             .where(eq(orders.id, BigInt(orderId)));
           this.ordersGateway.notifyOrderStatus(String(orderId), 'preparando');
           await this.drizzleService.db.insert(orderStatusHistory).values({
-            orderId, status: 'paid', note: 'Pago confirmado por Wompi', createdBy: customerId ?? 0,
+            orderId, status: 'paid', note: 'Pago confirmado por Wompi', createdBy: customerId ?? null,
           });
           if (customerId) {
             await this.notificationsService.create({
@@ -75,7 +75,7 @@ export class PaymentVerificationService {
             .where(eq(orders.id, BigInt(orderId)));
           this.ordersGateway.notifyOrderStatus(String(orderId), 'cancelado', statusMessage);
           await this.drizzleService.db.insert(orderStatusHistory).values({
-            orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? 0,
+            orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? null,
           });
           if (customerId) {
             await this.notificationsService.create({

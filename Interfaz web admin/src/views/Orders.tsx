@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import {
   LayoutGrid, List, Search, Download, Eye, Package,
   Clock, CheckCircle, Truck, XCircle, ChevronRight, MoreHorizontal,
-  MapPin, Phone, CreditCard, Printer, RefreshCw, X,
+  MapPin, Phone, CreditCard, Printer, RefreshCw, X, AlertTriangle,
 } from "lucide-react";
 import { ordersService, type Order, type OrderDetail, type OrderStatus } from "../services/orders.service";
 
@@ -56,7 +56,67 @@ function KanbanCard({ order, onClick, onConfirmPayment }: { order: Order; onClic
   );
 }
 
-function OrderDetail({ order: initialOrder, onClose }: { order: Order; onClose: () => void }) {
+function ConfirmStatusDialog({
+  order,
+  toStatus,
+  onConfirm,
+  onCancel,
+}: {
+  order: Order;
+  toStatus: OrderStatus;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const fromCfg = STATUS_CONFIG[order.status];
+  const toCfg = STATUS_CONFIG[toStatus];
+  const danger = toStatus === "cancelado";
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40" onClick={onCancel} />
+      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+        <div className="flex items-center gap-3 mb-4">
+          <div
+            className={`w-10 h-10 rounded-full flex items-center justify-center ${danger ? "bg-red-50" : "bg-amber-50"}`}
+          >
+            <AlertTriangle
+              size={18}
+              className={danger ? "text-red-500" : "text-amber-500"}
+            />
+          </div>
+          <div>
+            <h3 className="font-bold text-sm text-gray-900">
+              Cambiar estado del pedido
+            </h3>
+            <p className="text-xs text-gray-400 font-mono">{order.id}</p>
+          </div>
+        </div>
+        <p className="text-sm text-gray-600 mb-5">
+          ¿Cambiar el estado de{" "}
+          <span className="font-semibold text-gray-800">{order.customer}</span> de{" "}
+          <span className={`font-semibold ${fromCfg.color}`}>{fromCfg.label}</span>{" "}
+          a{" "}
+          <span className={`font-semibold ${toCfg.color}`}>{toCfg.label}</span>?
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500 cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className={`flex-1 py-2.5 rounded-xl text-sm font-bold text-white transition-colors cursor-pointer ${danger ? "bg-red-500 hover:bg-red-600" : "bg-gray-900 hover:bg-gray-800"}`}
+          >
+            Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function OrderDetail({ order: initialOrder, onClose, onStatusChange }: { order: Order; onClose: () => void; onStatusChange: (o: Order, s: OrderStatus) => void }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const cfg = STATUS_CONFIG[initialOrder.status];
@@ -108,6 +168,24 @@ function OrderDetail({ order: initialOrder, onClose }: { order: Order; onClose: 
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>
                 {initialOrder.payment}
               </span>
+            </div>
+            <div className="mt-3">
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                Cambiar estado
+              </label>
+              <select
+                value={initialOrder.status}
+                onChange={(e) =>
+                  onStatusChange(initialOrder, e.target.value as OrderStatus)
+                }
+                className="w-full text-sm border border-gray-200 rounded-lg px-2.5 py-2 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-300"
+              >
+                {STATUSES.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_CONFIG[s].label}
+                  </option>
+                ))}
+              </select>
             </div>
           </div>
 
@@ -171,6 +249,10 @@ export default function Orders() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | "todos">("todos");
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [confirmAction, setConfirmAction] = useState<{
+    order: Order;
+    toStatus: OrderStatus;
+  } | null>(null);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -188,13 +270,36 @@ export default function Orders() {
     }
   }, [statusFilter, search]);
 
-  const handleConfirmPayment = async (o: Order) => {
+  // Cambio de estado manual: primero se pide confirmación (acción administrativa)
+  const requestStatusChange = (o: Order, toStatus: OrderStatus) => {
+    if (o.status === toStatus) return;
+    setConfirmAction({ order: o, toStatus });
+  };
+
+  const applyStatusChange = async () => {
+    if (!confirmAction) return;
+    const { order, toStatus } = confirmAction;
     try {
-      await ordersService.updateStatus(o.orderId.toString(), "confirmado");
+      await ordersService.updateStatus(
+        order.orderId.toString(),
+        toStatus,
+      );
+      // Reflejar el nuevo estado en el detalle abierto
+      setSelected((prev) =>
+        prev && prev.orderId === order.orderId
+          ? { ...prev, status: toStatus }
+          : prev,
+      );
+      setConfirmAction(null);
       fetchOrders();
     } catch (err) {
-      console.error("Error confirming payment:", err);
+      console.error("Error al cambiar estado:", err);
+      setConfirmAction(null);
     }
+  };
+
+  const handleConfirmPayment = (o: Order) => {
+    requestStatusChange(o, "confirmado");
   };
 
   useEffect(() => {
@@ -420,7 +525,21 @@ export default function Orders() {
         )}
       </div>
 
-      {selected && <OrderDetail order={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <OrderDetail
+          order={selected}
+          onClose={() => setSelected(null)}
+          onStatusChange={requestStatusChange}
+        />
+      )}
+      {confirmAction && (
+        <ConfirmStatusDialog
+          order={confirmAction.order}
+          toStatus={confirmAction.toStatus}
+          onConfirm={applyStatusChange}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
     </>
   );
 }
