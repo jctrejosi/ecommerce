@@ -68,12 +68,14 @@ function ProductTypeRow({
             <Layers size={14} className="text-gray-400" />
           )}
         </div>
+        {t.code && (
+          <span className="text-[10px] font-mono font-semibold bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded shrink-0">
+            {t.code}
+          </span>
+        )}
         <span className="flex-1 text-sm font-medium text-gray-700 truncate">
           {t.name}
         </span>
-        {t.code && (
-          <span className="text-[10px] text-gray-400 font-mono">{t.code}</span>
-        )}
         {!t.isActive && (
           <span className="text-[10px] bg-red-50 text-red-500 px-2 py-0.5 rounded-full font-semibold">
             Inactivo
