@@ -509,6 +509,13 @@ export default function App() {
   };
 
   const openCatalog = (categoryId?: number) => {
+    // El dropdown "Nuestros productos" pasa la categoría: aplicarla en el catálogo.
+    if (categoryId) {
+      setCatalogCategory([categoryId]);
+      setCatalogBrand(null);
+      setCatalogProductType("");
+      setCatalogSearch("");
+    }
     setCurrentView("catalog");
     navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });

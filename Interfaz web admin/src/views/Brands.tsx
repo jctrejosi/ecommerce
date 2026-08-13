@@ -482,17 +482,21 @@ export default function Brands() {
             className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) =>
-            setStatusFilter(e.target.value as "todas" | "activas" | "inactivas")
-          }
-          className="px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white cursor-pointer shrink-0"
-        >
-          <option value="todas">Todas</option>
-          <option value="activas">Activas</option>
-          <option value="inactivas">Inactivas</option>
-        </select>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
+          {(["todas", "activas", "inactivas"] as const).map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setStatusFilter(opt)}
+              className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors cursor-pointer ${
+                statusFilter === opt
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {opt === "todas" ? "Todas" : opt === "activas" ? "Activas" : "Inactivas"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Brand Grid */}

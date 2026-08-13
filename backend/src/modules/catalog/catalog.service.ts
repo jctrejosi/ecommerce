@@ -657,6 +657,10 @@ export class CatalogService {
       .innerJoin(products, eq(products.id, productTypeAssignments.productId))
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
       .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
+      .leftJoin(
         productImages,
         and(
           eq(productImages.productId, products.id),

@@ -146,6 +146,11 @@ export default function ProductTypes() {
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<
+    "todas" | "activas" | "inactivas"
+  >("todas");
+
   const loadTypes = useCallback(async () => {
     try {
       const res = await fetch(`${API_BASE_URL}/admin/catalog/product-types`, {
@@ -162,6 +167,24 @@ export default function ProductTypes() {
   useEffect(() => {
     void loadTypes();
   }, [loadTypes]);
+
+  // ── Debounced search del listado ──
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const filtered = types.filter((t) => {
+    const matchesSearch = t.name
+      .toLowerCase()
+      .includes(debouncedSearch.toLowerCase());
+    const matchesStatus =
+      statusFilter === "todas" ||
+      (statusFilter === "activas" && t.isActive) ||
+      (statusFilter === "inactivas" && !t.isActive);
+    return matchesSearch && matchesStatus;
+  });
 
   const openNew = () => {
     setCreating(true);
@@ -405,6 +428,37 @@ export default function ProductTypes() {
         </button>
       </div>
 
+      {/* Buscador + filtro de estado */}
+      <div className="flex items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search
+            size={14}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar tipo de producto..."
+            className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+          />
+        </div>
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
+          {(["todas", "activas", "inactivas"] as const).map((opt) => (
+            <button
+              key={opt}
+              onClick={() => setStatusFilter(opt)}
+              className={`px-3 py-1.5 text-sm font-semibold rounded-lg transition-colors cursor-pointer ${
+                statusFilter === opt
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {opt === "todas" ? "Todos" : opt === "activas" ? "Activos" : "Inactivos"}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
           <div className="flex items-center gap-2">
@@ -414,7 +468,7 @@ export default function ProductTypes() {
             </p>
           </div>
           <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">
-            {types.length}
+            {filtered.length}
           </span>
         </div>
         {loading ? (
@@ -428,9 +482,18 @@ export default function ProductTypes() {
               Crea tu primer tipo de producto
             </p>
           </div>
+        ) : filtered.length === 0 ? (
+          <div className="py-16 text-center">
+            <p className="text-sm text-gray-400">
+              Sin resultados para el filtro
+            </p>
+            <p className="text-xs text-gray-400 mt-1">
+              Ajusta la búsqueda o el filtro de estado
+            </p>
+          </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {types.map((t) => (
+            {filtered.map((t) => (
               <ProductTypeRow
                 key={t.id}
                 t={t}

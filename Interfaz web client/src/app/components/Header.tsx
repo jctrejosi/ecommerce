@@ -12,6 +12,7 @@ import {
   ChevronRight,
   X,
   Plus,
+  Minus,
   Bell,
   Phone,
   MessageCircle,
