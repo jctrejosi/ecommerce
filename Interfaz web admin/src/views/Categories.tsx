@@ -133,7 +133,6 @@ export default function Categories() {
   const [uncatLoading, setUncatLoading] = useState(false);
   const [uncatOffset, setUncatOffset] = useState(0);
   const [uncatHasMore, setUncatHasMore] = useState(true);
-  const [uncatTotal, setUncatTotal] = useState(0);
   const [uncatSearch, setUncatSearch] = useState("");
   const sentinelRef = useRef<HTMLDivElement>(null);
   const [editing, setEditing] = useState<AdminCategory | null>(null);
@@ -205,14 +204,11 @@ export default function Categories() {
     setUncatLoading(true);
     const offset = reset ? 0 : uncatOffset;
     try {
-      const [products, countData] = await Promise.all([
-        catalogService.getUncategorizedProducts(
-          offset,
-          20,
-          uncatSearch || undefined,
-        ),
-        catalogService.getProductsCount(),
-      ]);
+      const products = await catalogService.getUncategorizedProducts(
+        offset,
+        20,
+        uncatSearch || undefined,
+      );
       if (reset) {
         setUncategorized(products);
         setUncatOffset(20);
@@ -221,7 +217,6 @@ export default function Categories() {
         setUncatOffset(offset + 20);
       }
       setUncatHasMore(products.length === 20);
-      setUncatTotal(countData.total);
     } catch {
       if (reset) setUncategorized([]);
     }
@@ -550,7 +545,6 @@ export default function Categories() {
     setUploading(false);
   };
 
-  const parents = categories.filter((c) => !c.parentId);
   const childrenOf = (parentId: number) =>
     categories.filter((c) => c.parentId === parentId);
 
@@ -577,28 +571,6 @@ export default function Categories() {
         >
           <Plus size={14} /> Nueva categoría
         </button>
-      </div>
-
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: "Categorías principales", value: String(parents.length) },
-          {
-            label: "Subcategorías",
-            value: String(categories.filter((c) => c.parentId).length),
-          },
-          {
-            label: "Productos sin clasificar",
-            value: String(uncatTotal),
-          },
-        ].map((s) => (
-          <div
-            key={s.label}
-            className="bg-white rounded-2xl border border-gray-100 p-4 text-center"
-          >
-            <p className="text-2xl font-bold text-gray-900">{s.value}</p>
-            <p className="text-xs text-gray-500 mt-1">{s.label}</p>
-          </div>
-        ))}
       </div>
 
       <div className="flex gap-5">
@@ -1037,9 +1009,6 @@ export default function Categories() {
               Productos sin categoría
             </p>
           </div>
-          <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">
-            {uncatTotal}
-          </span>
         </div>
         <div className="px-4 py-3 border-b border-gray-100">
           <div className="relative">
@@ -1056,10 +1025,10 @@ export default function Categories() {
           <div className="flex items-center justify-center py-12">
             <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
           </div>
-        ) : uncatTotal === 0 ? (
+        ) : uncategorized.length === 0 ? (
           <div className="py-12 text-center">
             <p className="text-sm text-gray-400">
-              Todos los productos están clasificados
+              Todos los productos tienen categoría
             </p>
           </div>
         ) : (
