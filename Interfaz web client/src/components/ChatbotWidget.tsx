@@ -240,9 +240,9 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
         )}
       </button>
 
-      {/* Panel — en móvil es un bottom sheet casi a pantalla completa */}
+      {/* Panel — en móvil ocupa la pantalla entera; en escritorio tarjeta flotante */}
       {open && (
-        <div className="fixed inset-x-0 bottom-0 z-[95] h-[88dvh] rounded-t-2xl bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl">
+        <div className="fixed inset-0 z-[95] h-[100dvh] rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl">
           {/* Header */}
           <div className="bg-[#1A1A2E] text-white px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
@@ -444,7 +444,7 @@ function BotCartModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[92dvh] sm:max-h-[85vh] flex flex-col shadow-2xl"
+        className="bg-white rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[85vh] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}

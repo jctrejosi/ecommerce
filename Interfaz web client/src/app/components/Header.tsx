@@ -714,7 +714,7 @@ export function Header({
 
       {/* Contact strip */}
       {(storePhone || storeWhatsapp) && (
-        <div className="hidden md:flex items-center justify-center gap-6 bg-muted/30 border-b border-border py-1.5 px-4">
+        <div className="hidden md:flex items-center justify-center gap-6 bg-white border-b border-border py-1.5 px-4">
           {storePhone && (
             <a href={`tel:${storePhone}`} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors">
               <Phone className="w-3 h-3" />

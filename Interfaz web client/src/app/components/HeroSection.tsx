@@ -49,22 +49,6 @@ async function fetchHeroSlides(): Promise<HeroSlide[]> {
   }
 }
 
-const FALLBACK_SLIDES: HeroSlide[] = [
-  {
-    id: 0,
-    title: "Configura tus slides\ndesde el panel admin",
-    slogan: "Mercaldas · Manizales",
-    description:
-      "Ve a Contenido → Home en el panel de administración para añadir banners hero con imágenes, textos y colores personalizados.",
-    cta: "",
-    ctaText: "Ir al panel admin",
-    image: "",
-    mobileImage: "",
-    bg: "#374151",
-    accent: "#9CA3AF",
-  },
-];
-
 const ANIM_STYLES = `
 @keyframes heroFadeIn {
   from { opacity: 0; transform: translateY(12px); }
@@ -100,7 +84,7 @@ export function HeroSection({
 }: {
   onApplyFilter?: (f: NonNullable<HeroSlide["filter"]>) => void;
 }) {
-  const [slides, setSlides] = useState<HeroSlide[]>(FALLBACK_SLIDES);
+  const [slides, setSlides] = useState<HeroSlide[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [animKey, setAnimKey] = useState(0);
   const [isLeaving, setIsLeaving] = useState(false);
@@ -161,7 +145,32 @@ export function HeroSection({
     }, 50);
   };
 
-  if (slides.length === 0) return null;
+  // Sin ítems: en vez del texto/botón por defecto, se muestra un esqueleto
+  // con parpadeo para que se vea que el contenido está cargando.
+  if (slides.length === 0) {
+    return (
+      <section
+        className="relative overflow-hidden"
+        style={{ background: "#1A1A2E" }}
+        aria-busy="true"
+        aria-label="Cargando contenido destacado"
+      >
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="relative flex items-center h-[340px] md:h-[420px] animate-pulse">
+            {/* Esqueleto del contenido */}
+            <div className="relative z-10 flex-1 max-w-xl space-y-4">
+              <div className="h-6 w-40 rounded-full bg-white/20" />
+              <div className="h-10 md:h-14 w-3/4 rounded-lg bg-white/20" />
+              <div className="h-4 w-2/3 rounded bg-white/10" />
+              <div className="h-11 w-44 rounded-xl bg-white/20" />
+            </div>
+            {/* Esqueleto de la imagen */}
+            <div className="absolute right-0 top-0 h-full w-1/2 md:w-5/12 bg-white/10" />
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const slide = slides[currentIndex];
   const hasText = !!(slide.slogan || slide.title || slide.description || slide.ctaText);
