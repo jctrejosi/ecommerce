@@ -1808,6 +1808,118 @@ export class CatalogService {
     return Array.from(uniqueProducts.values());
   }
 
+  /**
+   * Productos relacionados con `productId`: mismos por categoría, y si hacen
+   * falta, por la misma marca. El esquema no tiene tabla de "relacionados",
+   * así que se derivan dinámicamente.
+   */
+  async getRelatedProducts(
+    productId: number,
+    limit = 8,
+  ): Promise<CatalogProductResponse[]> {
+    const catRows = await this.drizzleService.db
+      .select({ categoryId: productCategories.categoryId })
+      .from(productCategories)
+      .where(eq(productCategories.productId, productId));
+    const categoryIds = catRows.map((r) => Number(r.categoryId));
+
+    const [prod] = await this.drizzleService.db
+      .select({ brandId: products.brandId })
+      .from(products)
+      .where(eq(products.id, BigInt(productId)))
+      .limit(1);
+    const brandId = prod?.brandId ? Number(prod.brandId) : null;
+
+    const rows = await this.drizzleService.db
+      .select({
+        id: products.id,
+        externalId: products.externalId,
+        slug: products.slug,
+        name: products.name,
+        description: products.description,
+        brandId: products.brandId,
+        brandName: brands.name,
+        price: productVariants.currentPrice,
+        originalPrice: productVariants.currentComparePrice,
+        image: media.path,
+        categoryId: categories.id,
+        categoryName: categories.name,
+        productTypeCode: productTypes.code,
+        productTypeName: productTypes.name,
+        plu: products.plu,
+        barcode: productVariants.barcode,
+      })
+      .from(products)
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(productCategories, eq(productCategories.productId, products.id))
+      .leftJoin(categories, eq(categories.id, productCategories.categoryId))
+      .leftJoin(brands, eq(brands.id, products.brandId))
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(productTypes, eq(productTypes.id, productTypeAssignments.productTypeId))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(
+        and(
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+          ne(products.id, BigInt(productId)),
+          or(
+            categoryIds.length
+              ? inArray(productCategories.categoryId, categoryIds)
+              : undefined,
+            brandId != null ? eq(products.brandId, brandId) : undefined,
+          ),
+        ),
+      )
+      .orderBy(asc(products.name))
+      .limit(Math.max(limit * 2, 12));
+
+    const unique = new Map<number, CatalogProductResponse>();
+    for (const row of rows) {
+      const id = Number(row.id);
+      if (unique.has(id)) continue;
+      unique.set(id, {
+        id,
+        externalId: row.externalId,
+        slug: row.slug,
+        name: row.name,
+        description: row.description,
+        price: Number(row.price ?? 0),
+        ...(row.originalPrice
+          ? { originalPrice: Number(row.originalPrice) }
+          : {}),
+        image: row.image,
+        images: row.image ? [row.image] : [],
+        category: row.categoryName ?? '',
+        categoryId: row.categoryId ? Number(row.categoryId) : 0,
+        brandId: row.brandId ? Number(row.brandId) : null,
+        brandName: row.brandName ?? null,
+        plu: row.plu ?? null,
+        barcode: row.barcode ?? null,
+        productTypeCode: row.productTypeCode,
+        productTypeName: row.productTypeName,
+        isActive: true,
+        isFeatured: false,
+        isPublic: true,
+        stock: 0,
+      });
+      if (unique.size >= limit) break;
+    }
+
+    return Array.from(unique.values());
+  }
+
   async exportProducts(res: Response) {
     const allProducts = await this.drizzleService.db
       .select({

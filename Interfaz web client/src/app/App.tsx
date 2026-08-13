@@ -111,9 +111,9 @@ export default function App() {
       const a = localStorage.getItem("checkout_address");
       return a
         ? JSON.parse(a)
-        : { name: "", phone: "", address: "", city: "Manizales", notes: "" };
+        : { name: "", phone: "", email: "", address: "", city: "Manizales", notes: "" };
     } catch {
-      return { name: "", phone: "", address: "", city: "Manizales", notes: "" };
+      return { name: "", phone: "", email: "", address: "", city: "Manizales", notes: "" };
     }
   });
   const [checkoutShipping, setCheckoutShipping] = useState<
@@ -586,10 +586,6 @@ export default function App() {
   };
 
   const placeOrder = async () => {
-    if (!customer) {
-      setCheckoutError("Debes iniciar sesion");
-      return;
-    }
     try {
       setCheckoutLoading(true);
       setCheckoutError(null);
@@ -624,6 +620,7 @@ export default function App() {
         address: {
           name: checkoutAddress.name,
           phone: checkoutAddress.phone,
+          email: checkoutAddress.email || undefined,
           address: checkoutAddress.address,
           city: checkoutAddress.city,
           notes: checkoutAddress.notes,
@@ -660,7 +657,10 @@ export default function App() {
         return;
       }
 
-      const response = await ordersService.checkout(payload);
+      // Compra sin iniciar sesión: el backend crea la sesión invitado sola.
+      const response = customer
+        ? await ordersService.checkout(payload)
+        : await ordersService.checkoutGuest(payload);
       const o = {
         id: response.referenceCode,
         date: new Date().toLocaleDateString("es-CO", {

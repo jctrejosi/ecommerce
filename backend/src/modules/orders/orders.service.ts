@@ -19,6 +19,7 @@ import {
   branches,
   customerAddresses,
   customers,
+  guestSessions,
   media,
   orderItems,
   orders,
@@ -31,6 +32,7 @@ import {
   shipments,
 } from '../../../drizzle/schema';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { randomUUID } from 'node:crypto';
 import { PaymentVerificationService } from './payment-verification.service';
 import { WompiService } from '../payments/wompi.service';
 import { EpaycoService } from '../payments/epayco.service';
@@ -53,13 +55,69 @@ export class OrdersService {
   }
 
   async checkout(customerId: number, dto: CreateOrderDto) {
+    const customer = await this.getCustomer(customerId);
+    return this.createOrder({
+      dto,
+      customerId,
+      guestSessionId: null,
+      customerEmail: customer.email,
+      customerName: [customer.firstName, customer.lastName]
+        .filter(Boolean)
+        .join(' ')
+        .trim() || null,
+      customerPhone: customer.phone ?? null,
+      saveAddress: true,
+    });
+  }
+
+  /**
+   * Checkout SIN iniciar sesión: crea automáticamente una sesión invitado y
+   * guarda los datos del cliente junto con la venta.
+   */
+  async checkoutGuest(dto: CreateOrderDto) {
+    const token = randomUUID();
+    const [session] = await this.db
+      .insert(guestSessions)
+      .values({ sessionToken: token })
+      .returning({ id: guestSessions.id });
+
+    return this.createOrder({
+      dto,
+      customerId: null,
+      guestSessionId: Number(session.id),
+      customerEmail:
+        dto.address.email ?? `invitado-${token.slice(0, 8)}@mercaldas.com.co`,
+      customerName: dto.address.name,
+      customerPhone: dto.address.phone,
+      saveAddress: false,
+    });
+  }
+
+  private async createOrder(opts: {
+    dto: CreateOrderDto;
+    customerId: number | null;
+    guestSessionId: number | null;
+    customerEmail: string;
+    customerName: string | null;
+    customerPhone: string | null;
+    saveAddress: boolean;
+  }) {
+    const {
+      dto,
+      customerId,
+      guestSessionId,
+      customerEmail,
+      customerName,
+      customerPhone,
+      saveAddress,
+    } = opts;
+
     if (!dto.items.length) {
       throw new BadRequestException('El carrito no puede estar vacío');
     }
 
     this.validatePaymentDetails(dto);
 
-    const customer = await this.getCustomer(customerId);
     const branch = await this.getDefaultBranch();
     const shippingCost = dto.shippingType === 'express' ? 9900 : 4900;
 
@@ -134,7 +192,7 @@ export class OrdersService {
         ? cardProvider === 'wompi'
           ? await this.wompiService.createCardTransaction({
               amountInCents,
-              customerEmail: customer.email,
+              customerEmail,
               reference: referenceCode,
               acceptanceToken: dto.paymentDetails!.card!.acceptanceToken!,
               acceptPersonalAuth: dto.paymentDetails!.card!.acceptPersonalAuth!,
@@ -147,7 +205,7 @@ export class OrdersService {
             })
           : await this.epaycoService.createCardCharge({
               tokenCard: dto.paymentDetails!.card!.cardToken,
-              customerEmail: customer.email,
+              customerEmail,
               amount: grandTotal,
               tax: 0,
               taxBase: grandTotal,
@@ -190,25 +248,30 @@ export class OrdersService {
           : 'PENDING';
 
     const result = await this.drizzleService.transaction(async (tx) => {
-      const insertedAddresses = await tx
-        .insert(customerAddresses)
-        .values({
-          customerId,
-          addressLine1: dto.address.address,
-          city: dto.address.city,
-          country: 'Colombia',
-          reference: dto.address.name,
-          deliveryInstructions: dto.address.notes,
-        })
-        .returning({ id: customerAddresses.id });
-
-      const customerAddressId = Number(insertedAddresses[0].id);
+      // Dirección guardada solo para clientes registrados (customerAddresses
+      // exige customerId). Los invitados guardan sus datos en orders + shipments.
+      let customerAddressId: number | null = null;
+      if (saveAddress && customerId != null) {
+        const insertedAddresses = await tx
+          .insert(customerAddresses)
+          .values({
+            customerId,
+            addressLine1: dto.address.address,
+            city: dto.address.city,
+            country: 'Colombia',
+            reference: dto.address.name,
+            deliveryInstructions: dto.address.notes,
+          })
+          .returning({ id: customerAddresses.id });
+        customerAddressId = Number(insertedAddresses[0].id);
+      }
 
       const insertedOrders = await tx
         .insert(orders)
         .values({
           referenceCode,
           customerId,
+          guestSessionId,
           branchId: Number(branch.id),
           customerAddressId,
           status: orderStatus,
@@ -217,6 +280,9 @@ export class OrdersService {
           shippingCost: String(shippingCost),
           grandTotal: String(grandTotal),
           notes: dto.address.notes,
+          customerName,
+          customerPhone,
+          customerEmail,
         })
         .returning({ id: orders.id, referenceCode: orders.referenceCode });
 
@@ -292,7 +358,7 @@ export class OrdersService {
         orderId,
         status: orderStatus,
         note: `Pedido creado desde ecommerce con pago ${dto.paymentMethod}`,
-        createdBy: customerId,
+        createdBy: customerId ?? null,
       });
 
       return {
@@ -317,22 +383,118 @@ export class OrdersService {
       );
     }
 
-    // Notify customer about order creation
-    await this.notificationsService.create({
-      type: 'ORDER',
-      title:
-        orderStatus === 'payment_pending'
-          ? 'Pedido recibido - Pago pendiente'
-          : 'Pedido confirmado',
-      message:
-        orderStatus === 'payment_pending'
-          ? `Tu pedido ${result.referenceCode} está pendiente de confirmación de pago. Te notificaremos cuando se apruebe.`
-          : `Tu pedido ${result.referenceCode} ha sido registrado y será procesado pronto.`,
-      targetCustomerId: customerId,
-      linkUrl: `/account?tab=orders`,
-    });
+    // Notificar al cliente registrado (los invitados ven el código en pantalla)
+    if (customerId != null) {
+      await this.notificationsService.create({
+        type: 'ORDER',
+        title:
+          orderStatus === 'payment_pending'
+            ? 'Pedido recibido - Pago pendiente'
+            : 'Pedido confirmado',
+        message:
+          orderStatus === 'payment_pending'
+            ? `Tu pedido ${result.referenceCode} está pendiente de confirmación de pago. Te notificaremos cuando se apruebe.`
+            : `Tu pedido ${result.referenceCode} ha sido registrado y será procesado pronto.`,
+        targetCustomerId: customerId,
+        linkUrl: `/account?tab=orders`,
+      });
+    }
 
     return result;
+  }
+
+  /**
+   * Consulta pública de un pedido por su código de referencia (sin sesión).
+   */
+  async trackOrder(referenceCode: string) {
+    const code = (referenceCode || '').trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException('Ingresa el código del pedido');
+    }
+
+    const [row] = await this.db
+      .select({
+        id: orders.id,
+        referenceCode: orders.referenceCode,
+        status: orders.status,
+        shippingCost: orders.shippingCost,
+        grandTotal: orders.grandTotal,
+        createdAt: orders.createdAt,
+        customerName: orders.customerName,
+        customerPhone: orders.customerPhone,
+        paymentMethod: payments.paymentMethod,
+      })
+      .from(orders)
+      .leftJoin(payments, eq(payments.orderId, orders.id))
+      .where(eq(orders.referenceCode, code))
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException(
+        `No encontramos el pedido ${code}. Verifica el código e intenta de nuevo.`,
+      );
+    }
+
+    const [shipment] = await this.db
+      .select({
+        addressLine1: shipments.addressLine1,
+        city: shipments.city,
+        recipientName: shipments.recipientName,
+        recipientPhone: shipments.recipientPhone,
+      })
+      .from(shipments)
+      .where(eq(shipments.orderId, Number(row.id)))
+      .limit(1);
+
+    const itemRows = await this.db
+      .select({
+        productName: orderItems.productName,
+        quantity: orderItems.quantity,
+        unitPrice: orderItems.unitPriceNet,
+        productVariantId: orderItems.productVariantId,
+        image: media.path,
+      })
+      .from(orderItems)
+      .leftJoin(
+        productVariants,
+        eq(productVariants.id, orderItems.productVariantId),
+      )
+      .leftJoin(products, eq(products.id, productVariants.productId))
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(eq(orderItems.orderId, Number(row.id)))
+      .orderBy(asc(orderItems.id));
+
+    const mappedStatus = this.mapOrderStatus(row.status);
+
+    return {
+      id: row.referenceCode,
+      date: row.createdAt ?? '',
+      items: itemRows.map((it) => ({
+        id: it.productName,
+        name: it.productName,
+        image: it.image ?? null,
+        quantity: Number(it.quantity ?? 1),
+        price: Number(it.unitPrice ?? 0),
+        category: '',
+      })),
+      total: Number(row.grandTotal ?? 0),
+      shipping: Number(row.shippingCost ?? 0),
+      address: shipment
+        ? [shipment.addressLine1, shipment.city].filter(Boolean).join(', ')
+        : '',
+      paymentMethod: this.reverseMapPaymentMethod(row.paymentMethod),
+      status:
+        mappedStatus === 'confirmado' ? 'preparando' : mappedStatus,
+      customerName: row.customerName ?? shipment?.recipientName ?? null,
+      customerPhone: row.customerPhone ?? shipment?.recipientPhone ?? null,
+    };
   }
 
   async getOrders(customerId: number) {
@@ -484,6 +646,9 @@ export class OrdersService {
       .select({
         id: customers.id,
         email: customers.email,
+        firstName: customers.firstName,
+        lastName: customers.lastName,
+        phone: customers.phone,
       })
       .from(customers)
       .where(eq(customers.id, BigInt(customerId)))

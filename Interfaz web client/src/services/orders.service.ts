@@ -168,6 +168,61 @@ export const ordersService = {
     });
   },
 
+  /** Checkout sin iniciar sesión: el backend crea la sesión invitado solo. */
+  async checkoutGuest(payload: CheckoutPayload): Promise<CheckoutResponse> {
+    return fetchJson<CheckoutResponse>(`${API_BASE_URL}/orders/guest-checkout`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(payload),
+    });
+  },
+
+  /** Consulta pública de un pedido por su código de referencia. */
+  async trackOrder(referenceCode: string): Promise<Order> {
+    const raw = await fetchJson<{
+      id: string;
+      date: string;
+      items: Array<{
+        id: string | number;
+        name: string;
+        image?: string | null;
+        quantity: number;
+        price: number;
+        category?: string;
+      }>;
+      total: number;
+      shipping: number;
+      address: string;
+      paymentMethod: string;
+      status: Order["status"];
+    }>(`${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}`);
+
+    return {
+      id: raw.id,
+      date: raw.date
+        ? new Date(raw.date).toLocaleDateString("es-CO", {
+            day: "2-digit",
+            month: "long",
+            year: "numeric",
+          })
+        : "",
+      items: (raw.items ?? []).map((i) => ({
+        id: typeof i.id === "number" ? i.id : i.id || i.name,
+        name: i.name,
+        image: i.image ?? undefined,
+        quantity: i.quantity,
+        price: i.price,
+        category: i.category ?? "",
+      })),
+      total: raw.total,
+      shipping: raw.shipping,
+      address: raw.address,
+      paymentMethod: raw.paymentMethod,
+      status: raw.status,
+    };
+  },
+
   async getOrders(): Promise<Order[]> {
     return fetchJson<Order[]>(`${API_BASE_URL}/orders`, {
       credentials: "include",

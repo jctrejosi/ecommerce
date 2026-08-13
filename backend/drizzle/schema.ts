@@ -1824,6 +1824,10 @@ export const orders = pgTable(
     grandTotal: numeric('grand_total', { precision: 12, scale: 2 })
       .default('0')
       .notNull(),
+    // Datos del cliente al momento de la compra (para pedidos de invitados)
+    customerName: varchar('customer_name', { length: 150 }),
+    customerPhone: varchar('customer_phone', { length: 30 }),
+    customerEmail: varchar('customer_email', { length: 255 }),
     customerIp: inet('customer_ip'),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     couponId: bigint('coupon_id', { mode: 'number' }),

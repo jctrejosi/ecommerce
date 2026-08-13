@@ -29,6 +29,7 @@ interface CheckoutModalProps {
   checkoutAddress: {
     name: string;
     phone: string;
+    email?: string;
     address: string;
     city: string;
     notes: string;
@@ -508,6 +509,12 @@ export function CheckoutModal({
                     label: "Celular",
                     placeholder: "300 123 4567",
                     type: "tel",
+                  },
+                  {
+                    key: "email" as const,
+                    label: "Email (opcional)",
+                    placeholder: "correo@ejemplo.com",
+                    type: "email",
                   },
                   {
                     key: "address" as const,

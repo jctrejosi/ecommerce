@@ -7,7 +7,10 @@ import {
   MapPin,
   Wallet,
   Clock,
+  Search,
 } from "lucide-react";
+import { useState } from "react";
+import { ordersService } from "../../services/orders.service";
 import type { Order } from "../types";
 
 interface OrdersPanelProps {
@@ -29,7 +32,29 @@ export function OrdersPanel({
   onGoToCatalog,
   fmt,
 }: OrdersPanelProps) {
+  const [trackCode, setTrackCode] = useState("");
+  const [trackLoading, setTrackLoading] = useState(false);
+  const [trackError, setTrackError] = useState<string | null>(null);
+
   if (!ordersOpen) return null;
+
+  const handleTrack = async () => {
+    const code = trackCode.trim();
+    if (!code || trackLoading) return;
+    setTrackLoading(true);
+    setTrackError(null);
+    try {
+      const order = await ordersService.trackOrder(code);
+      onSelectOrder(order);
+      setTrackCode("");
+    } catch (e) {
+      setTrackError(
+        e instanceof Error ? e.message : "No se pudo consultar el pedido",
+      );
+    } finally {
+      setTrackLoading(false);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[60] flex">
@@ -75,6 +100,42 @@ export function OrdersPanel({
         </div>
 
         <div className="flex-1 overflow-y-auto">
+          {/* Buscador por código de pedido (para compras sin sesión) */}
+          {!selectedOrder && (
+            <div className="p-4 border-b border-border">
+              <p className="text-xs font-semibold text-muted-foreground mb-2">
+                ¿Compraste sin iniciar sesión? Busca tu pedido con su código
+              </p>
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void handleTrack();
+                }}
+                className="flex gap-2"
+              >
+                <input
+                  value={trackCode}
+                  onChange={(e) => setTrackCode(e.target.value)}
+                  placeholder="Ej: MER-12345678"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none uppercase"
+                  style={{ boxShadow: "none" }}
+                />
+                <button
+                  type="submit"
+                  disabled={trackLoading || !trackCode.trim()}
+                  className="px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
+                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                >
+                  <Search size={14} />
+                  {trackLoading ? "..." : "Buscar"}
+                </button>
+              </form>
+              {trackError && (
+                <p className="text-xs text-red-500 mt-1.5">{trackError}</p>
+              )}
+            </div>
+          )}
+
           {!selectedOrder && orders.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center px-6">
               <Package className="w-12 h-12 text-muted-foreground" />

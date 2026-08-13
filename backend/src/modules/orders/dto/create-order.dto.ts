@@ -41,6 +41,10 @@ export class CreateOrderAddressDto {
 
   @IsOptional()
   @IsString()
+  email?: string;
+
+  @IsOptional()
+  @IsString()
   notes?: string;
 }
 

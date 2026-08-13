@@ -152,6 +152,13 @@ export const catalogService = {
     return products.filter((item) => item.id !== product.id);
   },
 
+  /** Relacionados por id (misma categoría o marca, calculado en backend). */
+  async getRelatedProductsById(id: number): Promise<Product[]> {
+    return fetchJson<Product[]>(
+      `${API_BASE_URL}/catalog/products/${id}/related`,
+    );
+  },
+
   // ── Favorites ──
 
   async getFavorites(): Promise<Product[]> {

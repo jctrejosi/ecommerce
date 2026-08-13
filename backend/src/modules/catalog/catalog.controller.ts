@@ -103,6 +103,14 @@ export class CatalogController {
   }
 
   @Public()
+  @Get('products/:id/related')
+  @ApiOperation({ summary: 'Productos relacionados (misma categoría o marca)' })
+  @ApiResponse({ status: 200, description: 'Listado de productos relacionados' })
+  getRelatedProducts(@Param('id') id: string) {
+    return this.catalogService.getRelatedProducts(Number(id));
+  }
+
+  @Public()
   @Get('branches')
   @ApiOperation({ summary: 'Obtener sucursales activas' })
   @ApiResponse({ status: 200, description: 'Listado de sucursales' })
