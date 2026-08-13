@@ -203,20 +203,21 @@ export default function Categories() {
   const loadUncategorized = async (reset = false) => {
     setUncatLoading(true);
     const offset = reset ? 0 : uncatOffset;
+    const pageSize = 10; // se cargan de a 10 (lazy load)
     try {
       const products = await catalogService.getUncategorizedProducts(
         offset,
-        20,
+        pageSize,
         uncatSearch || undefined,
       );
       if (reset) {
         setUncategorized(products);
-        setUncatOffset(20);
+        setUncatOffset(pageSize);
       } else {
         setUncategorized((prev) => [...prev, ...products]);
-        setUncatOffset(offset + 20);
+        setUncatOffset(offset + pageSize);
       }
-      setUncatHasMore(products.length === 20);
+      setUncatHasMore(products.length === pageSize);
     } catch {
       if (reset) setUncategorized([]);
     }
@@ -557,8 +558,8 @@ export default function Categories() {
   }
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
+    <div className="p-6 h-full flex flex-col gap-4 min-h-0">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Categorías</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -573,19 +574,18 @@ export default function Categories() {
         </button>
       </div>
 
-      <div className="flex gap-5">
-        {/* Category tree */}
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden flex-1">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Categoría
-            </p>
-            <div className="flex gap-8 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              <span>Productos</span>
-              <span>Acciones</span>
-            </div>
+      {/* Category tree */}
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 shrink-0">
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Categoría
+          </p>
+          <div className="flex gap-8 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            <span>Productos</span>
+            <span>Acciones</span>
           </div>
-          <div className="px-4 py-3 border-b border-gray-100">
+        </div>
+        <div className="px-4 py-3 border-b border-gray-100 shrink-0">
             <div className="flex items-center gap-3">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
@@ -617,7 +617,7 @@ export default function Categories() {
               </div>
             </div>
           </div>
-          <div className="divide-y divide-gray-50">
+          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
             {(() => {
               const statusFiltered =
                 catTreeFilter === "todas"
@@ -687,7 +687,6 @@ export default function Categories() {
             })()}
           </div>
         </div>
-      </div>
 
       {/* Edit/Create panel - floating overlay */}
       {(editing || creating) && (
@@ -1001,8 +1000,8 @@ export default function Categories() {
       )}
 
       {/* Uncategorized products */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+      <div className="shrink-0 bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 shrink-0">
           <div className="flex items-center gap-2">
             <AlertTriangle size={14} className="text-amber-500" />
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -1010,7 +1009,7 @@ export default function Categories() {
             </p>
           </div>
         </div>
-        <div className="px-4 py-3 border-b border-gray-100">
+        <div className="px-4 py-3 border-b border-gray-100 shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
             <input
@@ -1032,7 +1031,7 @@ export default function Categories() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+          <div className="divide-y divide-gray-50 max-h-[35rem] overflow-y-auto">
             {uncategorized.map((p) => (
               <div
                 key={p.id}

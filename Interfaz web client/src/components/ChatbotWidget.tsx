@@ -297,9 +297,30 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
 
   return (
     <>
+      <style>{`
+        @keyframes botPop {
+          0%   { transform: scale(0); opacity: 0; }
+          60%  { transform: scale(1.15); opacity: 1; }
+          80%  { transform: scale(0.94); }
+          100% { transform: scale(1); opacity: 1; }
+        }
+        @keyframes hintIn {
+          0%   { transform: translateY(16px) scale(0.9); opacity: 0; }
+          60%  { transform: translateY(-4px) scale(1.02); opacity: 1; }
+          100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes panelIn {
+          0%   { transform: translateY(24px) scale(0.96); opacity: 0; }
+          100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+      `}</style>
+
       {/* Burbuja de atención sobre el botón (se oculta sola a los 9s) */}
       {showHint && !open && (
-        <div className="fixed bottom-20 sm:bottom-24 right-4 sm:right-5 z-[91] w-[280px] bg-white border-2 border-[#FFF200] rounded-2xl shadow-xl p-4">
+        <div
+          className="fixed bottom-20 sm:bottom-24 right-4 sm:right-5 z-[91] w-[280px] bg-white border-2 border-[#FFF200] rounded-2xl shadow-xl p-4"
+          style={{ animation: "hintIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
+        >
           <button
             onClick={() => setShowHint(false)}
             aria-label="Cerrar aviso"
@@ -324,6 +345,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
       <button
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Asistente de compras"
+        style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
         className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
       >
         {showHint && !open && (
@@ -348,7 +370,10 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
 
       {/* Panel — en móvil ocupa la pantalla entera; en escritorio tarjeta flotante */}
       {open && (
-        <div className="fixed inset-0 z-[95] h-[100dvh] rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl">
+        <div
+          className="fixed inset-0 z-[95] h-[100dvh] rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl"
+          style={{ animation: "panelIn 0.25s ease-out both" }}
+        >
           {/* Header */}
           <div className="bg-[#1A1A2E] text-white px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
