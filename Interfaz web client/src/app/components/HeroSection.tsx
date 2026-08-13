@@ -1,7 +1,6 @@
 import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, useCallback } from "react";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { fetchBanners } from "../../services/banners.service";
 
 interface HeroSlide {
   id: number;
@@ -27,26 +26,20 @@ interface HeroSlide {
 }
 
 async function fetchHeroSlides(): Promise<HeroSlide[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/banners?bannerType=hero`);
-    if (!res.ok) return [];
-    const banners = await res.json();
-    return banners.map((b: any) => ({
-      id: b.id,
-      title: (b.title || "").replace(/\\n/g, "\n"),
-      slogan: (b.subtitle || "").replace(/\\n/g, "\n"),
-      description: (b.description || "").replace(/\\n/g, "\n"),
-      cta: b.linkUrl || "",
-      ctaText: b.ctaText || "",
-      image: b.image || "",
-      mobileImage: b.mobileImage || b.image || "",
-      bg: b.bgColor || "#1A1A2E",
-      accent: b.accentColor || "#FFF200",
-      filter: b.filter || null,
-    }));
-  } catch {
-    return [];
-  }
+  const banners = await fetchBanners("hero");
+  return banners.map((b: any) => ({
+    id: b.id,
+    title: (b.title || "").replace(/\\n/g, "\n"),
+    slogan: (b.subtitle || "").replace(/\\n/g, "\n"),
+    description: (b.description || "").replace(/\\n/g, "\n"),
+    cta: b.linkUrl || "",
+    ctaText: b.ctaText || "",
+    image: b.image || "",
+    mobileImage: b.mobileImage || b.image || "",
+    bg: b.bgColor || "#1A1A2E",
+    accent: b.accentColor || "#FFF200",
+    filter: b.filter || null,
+  }));
 }
 
 const ANIM_STYLES = `

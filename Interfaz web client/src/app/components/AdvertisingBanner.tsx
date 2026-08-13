@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { fetchBanners } from "../../services/banners.service";
 
 interface AdBanner {
   id: number;
@@ -25,26 +24,20 @@ interface AdBanner {
 }
 
 async function fetchPromoBanners(): Promise<AdBanner[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/banners?bannerType=promo`);
-    if (!res.ok) return [];
-    const data = await res.json();
-    return (Array.isArray(data) ? data : []).map((b: any) => ({
-      id: b.id,
-      title: b.title || "",
-      subtitle: b.subtitle || b.description || "",
-      ctaText: b.ctaText || "",
-      image: b.image || "",
-      badge: b.title ? b.title.split(" ").slice(0, 2).join(" ").toUpperCase() : "OFERTA",
-      bg: b.bgColor
-        ? `linear-gradient(135deg, ${b.bgColor} 0%, ${b.bgColor}dd 100%)`
-        : "linear-gradient(135deg, #1A1A2E 0%, #16213E 60%, #0F3460 100%)",
-      accent: b.accentColor || "#FFF200",
-      filter: b.filter || null,
-    }));
-  } catch {
-    return [];
-  }
+  const data = await fetchBanners("promo");
+  return (Array.isArray(data) ? data : []).map((b: any) => ({
+    id: b.id,
+    title: b.title || "",
+    subtitle: b.subtitle || b.description || "",
+    ctaText: b.ctaText || "",
+    image: b.image || "",
+    badge: b.title ? b.title.split(" ").slice(0, 2).join(" ").toUpperCase() : "OFERTA",
+    bg: b.bgColor
+      ? `linear-gradient(135deg, ${b.bgColor} 0%, ${b.bgColor}dd 100%)`
+      : "linear-gradient(135deg, #1A1A2E 0%, #16213E 60%, #0F3460 100%)",
+    accent: b.accentColor || "#FFF200",
+    filter: b.filter || null,
+  }));
 }
 
 const FALLBACK: AdBanner[] = [

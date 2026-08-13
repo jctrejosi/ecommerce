@@ -1,5 +1,6 @@
 import { io, Socket } from 'socket.io-client';
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { getAuthHeaders } from '../services/customer-auth.service';
 
 const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -43,7 +44,10 @@ export function useNotifications(customerId: number | null) {
   const fetchNotifications = useCallback(async () => {
     try {
       const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-      const res = await fetch(`${API}/notifications`, { credentials: 'include' });
+      const res = await fetch(`${API}/notifications`, {
+        credentials: 'include',
+        headers: getAuthHeaders(),
+      });
       if (res.ok) {
         const data = await res.json();
         setNotifications(data);
@@ -58,7 +62,11 @@ export function useNotifications(customerId: number | null) {
 
   const markAsRead = useCallback(async (id: number) => {
     const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
-    await fetch(`${API}/notifications/${id}/read`, { method: 'POST', credentials: 'include' });
+    await fetch(`${API}/notifications/${id}/read`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: getAuthHeaders(),
+    });
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
     setUnreadCount(prev => Math.max(0, prev - 1));
   }, []);

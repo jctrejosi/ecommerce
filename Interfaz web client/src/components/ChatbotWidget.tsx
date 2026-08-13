@@ -46,8 +46,12 @@ function playNotificationChime(): boolean {
     if (!Ctor) return false;
 
     const ctx = new Ctor();
-    const audible = ctx.state === "running";
-    if (!audible) void ctx.resume();
+    // Si el navegador bloqueó el contexto (autoplay sin gesto), no programar
+    // el sonido ni dejar el contexto abierto: se reintentará en el primer gesto.
+    if (ctx.state !== "running") {
+      void ctx.close().catch(() => {});
+      return false;
+    }
 
     const now = ctx.currentTime;
     const notes: Array<[number, number]> = [
@@ -72,7 +76,7 @@ function playNotificationChime(): boolean {
       void ctx.close().catch(() => {});
     }, 1600);
 
-    return audible;
+    return true;
   } catch {
     return false;
   }
@@ -139,9 +143,8 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
       sounded = playNotificationChime();
     };
 
-    tryPlay(); // intento al cargar (puede estar bloqueado por autoplay)
-
-    // Si el navegador bloqueó el sonido, reintenta una vez al primer gesto.
+    // El navegador bloquea el audio sin gesto del usuario: el sonido se
+    // reproduce en el PRIMER gesto (clic/toque/tecla) sobre la página.
     const onFirstGesture = () => {
       tryPlay();
       window.removeEventListener("pointerdown", onFirstGesture);

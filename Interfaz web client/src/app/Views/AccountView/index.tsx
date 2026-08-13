@@ -3718,7 +3718,7 @@ export function UserAdminView({
     const [error, setError] = useState("");
     const [profile, setProfile] = useState({
       name: customer?.fullName || customer?.firstName || "Cliente",
-      phone: "",
+      phone: customer?.phone ?? "",
       email: customer?.email || "",
       password: "",
     });
@@ -3727,10 +3727,22 @@ export function UserAdminView({
     );
     const [privacyData, setPrivacyData] = useState(true);
 
-    // Reflejar el valor del perfil cuando cambia (login o recarga)
+    // Reflejar el valor del perfil cuando cambia (login, recarga o guardado)
     useEffect(() => {
       setPrivacyPromo(customer?.acceptsMarketing ?? true);
-    }, [customer?.acceptsMarketing]);
+      setProfile((p) => ({
+        ...p,
+        name: customer?.fullName || customer?.firstName || p.name,
+        phone: customer?.phone ?? p.phone,
+        email: customer?.email || p.email,
+      }));
+    }, [
+      customer?.acceptsMarketing,
+      customer?.fullName,
+      customer?.firstName,
+      customer?.phone,
+      customer?.email,
+    ]);
 
     // Confirm modals
     const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);

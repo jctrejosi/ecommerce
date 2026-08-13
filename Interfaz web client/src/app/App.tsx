@@ -241,16 +241,16 @@ export default function App() {
           setSavedAddresses(addrs);
           const suggested =
             addrs.find((a) => a.isDefault) ?? addrs[0] ?? null;
-          if (suggested) {
-            setCheckoutAddress((prev) => ({
-              ...prev,
-              name: prev.name || customer.fullName || "",
-              phone: prev.phone || customer.phone || "",
-              address: prev.address || suggested.addressLine1,
-              city: prev.city || suggested.city,
-              notes: prev.notes || suggested.deliveryInstructions || "",
-            }));
-          }
+          // Prellenar datos de contacto desde el perfil y la dirección sugerida
+          setCheckoutAddress((prev) => ({
+            ...prev,
+            name: prev.name || customer.fullName || "",
+            phone: prev.phone || customer.phone || "",
+            email: prev.email || customer.email || "",
+            address: prev.address || suggested?.addressLine1 || "",
+            city: prev.city || suggested?.city || "",
+            notes: prev.notes || suggested?.deliveryInstructions || "",
+          }));
         })
         .catch(() => setSavedAddresses([]));
     }

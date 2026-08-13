@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Truck, ShieldCheck, Clock, Zap } from "lucide-react";
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { fetchBanners } from "../../services/banners.service";
 
 interface BenefitItem {
   id: number;
@@ -23,21 +22,15 @@ const ICON_MAP: Record<string, React.ElementType> = {
 };
 
 async function fetchBenefits(): Promise<BenefitItem[]> {
-  try {
-    const res = await fetch(`${API_BASE_URL}/banners?bannerType=benefits`);
-    if (!res.ok) return [];
-    const banners = await res.json();
-    return banners
-      .filter((b: any) => b.status === "activo")
-      .sort((a: any, b: any) => a.position - b.position)
-      .map((b: any) => ({
-        id: b.id,
-        icon: b.subtitle || "zap",
-        text: b.title || "",
-      }));
-  } catch {
-    return [];
-  }
+  const banners = await fetchBanners("benefits");
+  return banners
+    .filter((b: any) => b.status === "activo")
+    .sort((a: any, b: any) => a.position - b.position)
+    .map((b: any) => ({
+      id: b.id,
+      icon: b.subtitle || "zap",
+      text: b.title || "",
+    }));
 }
 
 export function PromoBanner() {

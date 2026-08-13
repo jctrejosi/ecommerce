@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, Logger } from '@nestjs/common';
-import { and, eq, desc, sql } from 'drizzle-orm';
+import { and, eq, desc, sql, inArray } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { banners, media, savedFilters } from '../../../drizzle/schema';
 import {
@@ -154,7 +154,78 @@ export class BannersService {
       .where(and(...conditions))
       .orderBy(desc(banners.position), desc(banners.createdAt));
 
-    const result = await Promise.all(rows.map((r) => this.toResponse(r)));
+    if (!rows.length) return [];
+
+    // ── Carga en lote (evita N+1): 1 query para las imágenes y 1 para los filtros ──
+    const mediaIds = new Set<bigint>();
+    const filterIds = new Set<bigint>();
+    for (const r of rows) {
+      if (r.mediaId) mediaIds.add(BigInt(r.mediaId));
+      if (r.mobileImageId) mediaIds.add(BigInt(r.mobileImageId));
+      if (r.filterId) filterIds.add(BigInt(r.filterId));
+    }
+
+    const mediaMap = new Map<string, string>();
+    if (mediaIds.size) {
+      const mediaRows = await this.db
+        .select({ id: media.id, path: media.path })
+        .from(media)
+        .where(inArray(media.id, [...mediaIds]));
+      for (const m of mediaRows) mediaMap.set(m.id.toString(), m.path);
+    }
+
+    const filterMap = new Map<string, BannerResponse['filter']>();
+    if (filterIds.size) {
+      const filterRows = await this.db
+        .select()
+        .from(savedFilters)
+        .where(inArray(savedFilters.id, [...filterIds]));
+      for (const f of filterRows as any[]) {
+        filterMap.set(String(f.id), {
+          id: Number(f.id),
+          name: f.name,
+          categoryIds: (f.categoryIds as number[]) ?? [],
+          brandId: f.brandId,
+          productTypeCode: f.productTypeCode,
+          onSale: f.onSale ?? false,
+          search: f.search,
+          sort: f.sort,
+          priceMin: f.priceMin,
+          priceMax: f.priceMax,
+        });
+      }
+    }
+
+    const result: BannerResponse[] = rows.map((row) => ({
+      id: Number(row.id),
+      title: row.title,
+      subtitle: row.subtitle,
+      description: row.description,
+      image: row.mediaId ? (mediaMap.get(String(row.mediaId)) ?? null) : null,
+      mobileImage: row.mobileImageId
+        ? (mediaMap.get(String(row.mobileImageId)) ?? null)
+        : null,
+      linkUrl: row.linkUrl,
+      linkTarget: row.linkTarget,
+      ctaText: row.ctaText,
+      altText: row.altText,
+      bgColor: row.bgColor,
+      accentColor: row.accentColor,
+      bannerType: row.bannerType,
+      position: row.position ?? 0,
+      isActive: row.isActive,
+      startDate: row.startDate,
+      endDate: row.endDate,
+      filterId: row.filterId ? Number(row.filterId) : null,
+      filter: row.filterId
+        ? (filterMap.get(String(row.filterId)) ?? null)
+        : null,
+      clicks: row.clicks,
+      views: row.views,
+      status: this.computeStatus(row),
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+    }));
 
     if (query.status && query.status !== 'todas') {
       return result.filter((r) => r.status === query.status);

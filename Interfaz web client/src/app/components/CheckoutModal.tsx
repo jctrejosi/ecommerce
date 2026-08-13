@@ -163,6 +163,14 @@ export function CheckoutModal({
   const [usingNewAddress, setUsingNewAddress] = useState(false);
   const totalConEnvio = cartTotal + (checkoutShipping === "express" ? 9900 : 4900);
 
+  // Normaliza el teléfono a dígitos (móvil colombiano 3xx xxx xxxx)
+  const normalizePhone = (raw: string) => {
+    let digits = raw.replace(/\D/g, "");
+    if (digits.startsWith("57") && digits.length === 12) digits = digits.slice(2);
+    return digits.slice(0, 10);
+  };
+  const isValidPhone = (phone: string) => /^3\d{9}$/.test(normalizePhone(phone));
+
   const selectSavedAddress = (id: number) => {
     const addr = savedAddresses.find((a) => a.id === id);
     if (!addr) return;
@@ -484,11 +492,22 @@ export function CheckoutModal({
                       onChange={(e) =>
                         onSetCheckoutAddress((prev) => ({
                           ...prev,
-                          [key]: e.target.value,
+                          [key]:
+                            key === "phone"
+                              ? normalizePhone(e.target.value)
+                              : e.target.value,
                         }))
                       }
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                     />
+                    {key === "phone" &&
+                      checkoutAddress.phone &&
+                      !isValidPhone(checkoutAddress.phone) && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Ingresa un celular válido (10 dígitos, ej: 300 123
+                          4567)
+                        </p>
+                      )}
                   </div>
                 ))}
               </div>
@@ -546,7 +565,10 @@ export function CheckoutModal({
                       onChange={(e) =>
                         onSetCheckoutAddress((prev) => ({
                           ...prev,
-                          [key]: e.target.value,
+                          [key]:
+                            key === "phone"
+                              ? normalizePhone(e.target.value)
+                              : e.target.value,
                         }))
                       }
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
@@ -559,6 +581,14 @@ export function CheckoutModal({
                         e.target.style.borderColor = "";
                       }}
                     />
+                    {key === "phone" &&
+                      checkoutAddress.phone &&
+                      !isValidPhone(checkoutAddress.phone) && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Ingresa un celular válido (10 dígitos, ej: 300 123
+                          4567)
+                        </p>
+                      )}
                   </div>
                 ))}
                 {usingNewAddress && (
@@ -586,7 +616,7 @@ export function CheckoutModal({
               onClick={() => onSetCheckoutStep(3)}
               disabled={
                 !checkoutAddress.name ||
-                !checkoutAddress.phone ||
+                !isValidPhone(checkoutAddress.phone) ||
                 !checkoutAddress.address
               }
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-40"
@@ -884,14 +914,17 @@ export function CheckoutModal({
                     value={nequiPayment.phone}
                     onChange={(e) =>
                       onSetNequiPayment({
-                        phone: e.target.value
-                          .replace(/\D/g, "")
-                          .slice(0, 10),
+                        phone: normalizePhone(e.target.value),
                       })
                     }
                     placeholder="3001234567"
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                   />
+                  {nequiPayment.phone && !isValidPhone(nequiPayment.phone) && (
+                    <p className="text-xs text-red-500 mt-1">
+                      Ingresa un celular válido (10 dígitos, ej: 300 123 4567)
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -983,7 +1016,8 @@ export function CheckoutModal({
                     (!wompiAcceptance.terms ||
                       !wompiAcceptance.personalData))) ||
                 (checkoutPayment === "pse" && !psePayment.bank) ||
-                (checkoutPayment === "nequi" && !nequiPayment.phone)
+                (checkoutPayment === "nequi" &&
+                  !isValidPhone(nequiPayment.phone))
               }
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               style={{ background: "#FFF200", color: "#1A1A2E" }}

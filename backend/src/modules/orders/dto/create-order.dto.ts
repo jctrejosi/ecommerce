@@ -5,6 +5,7 @@ import {
   IsNumber,
   IsOptional,
   IsString,
+  Matches,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -28,7 +29,9 @@ export class CreateOrderAddressDto {
   name!: string;
 
   @IsString()
-  @IsNotEmpty()
+  @Matches(/^3\d{9}$/, {
+    message: 'El teléfono debe ser un celular válido (10 dígitos, ej: 3001234567)',
+  })
   phone!: string;
 
   @IsString()
