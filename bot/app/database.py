@@ -43,6 +43,29 @@ async def ping() -> bool:
         return bool(row and row["ok"] == 1)
 
 
+async def get_bot_functions() -> dict[str, bool]:
+    """Lee la config `bot.functions` de la tabla settings.
+
+    Devuelve `{nombre_funcion: habilitada}`. Si no hay fila (nunca se configuró),
+    devuelve `{}` para que el bot considere todas las funciones habilitadas.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT value FROM settings WHERE key = 'bot.functions' LIMIT 1"
+        )
+    if not row:
+        return {}
+    value = row["value"]
+    if isinstance(value, str):
+        import json
+
+        value = json.loads(value)
+    if not isinstance(value, dict):
+        return {}
+    return {k: bool(v) for k, v in value.items()}
+
+
 # ─── Productos ────────────────────────────────────────────────────
 
 _SEARCH_SQL = """

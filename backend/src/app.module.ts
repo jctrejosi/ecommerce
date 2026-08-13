@@ -24,6 +24,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StatusGateway } from './modules/status/status.gateway';
 import { SettingsController } from './modules/settings/settings.controller';
+import { BotController } from './modules/bot/bot.controller';
 import {
   appConfig,
   databaseConfig,
@@ -73,7 +74,7 @@ import {
     DashboardModule,
     InventoryModule,
   ],
-  controllers: [AppController, SettingsController],
+  controllers: [AppController, SettingsController, BotController],
   providers: [AppService, StatusGateway],
 })
 export class AppModule {}

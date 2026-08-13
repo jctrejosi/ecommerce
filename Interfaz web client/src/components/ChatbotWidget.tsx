@@ -32,6 +32,52 @@ const fmtPrice = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
+/**
+ * Reproduce un "ding" de notificación (dos tonos) con Web Audio API.
+ * Devuelve true si el contexto quedó en estado audible; false si el
+ * navegador lo tiene bloqueado (autoplay) para poder reintentar al primer gesto.
+ */
+function playNotificationChime(): boolean {
+  try {
+    const Ctor =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext })
+        .webkitAudioContext;
+    if (!Ctor) return false;
+
+    const ctx = new Ctor();
+    const audible = ctx.state === "running";
+    if (!audible) void ctx.resume();
+
+    const now = ctx.currentTime;
+    const notes: Array<[number, number]> = [
+      [880, 0], // A5
+      [1174.66, 0.16], // D6
+    ];
+    for (const [freq, at] of notes) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, now + at);
+      gain.gain.setValueAtTime(0.0001, now + at);
+      gain.gain.exponentialRampToValueAtTime(0.35, now + at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.45);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(now + at);
+      osc.stop(now + at + 0.5);
+    }
+
+    setTimeout(() => {
+      void ctx.close().catch(() => {});
+    }, 1600);
+
+    return audible;
+  } catch {
+    return false;
+  }
+}
+
 type Props = {
   onAddProduct: (p: {
     id: number;
@@ -83,6 +129,36 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
   const [checkout, setCheckout] = useState(false);
   const [mutating, setMutating] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+  const [showHint, setShowHint] = useState(true);
+
+  // ── Sonido de notificación + burbuja de atención al cargar ────
+  useEffect(() => {
+    let sounded = false;
+    const tryPlay = () => {
+      if (sounded) return;
+      sounded = playNotificationChime();
+    };
+
+    tryPlay(); // intento al cargar (puede estar bloqueado por autoplay)
+
+    // Si el navegador bloqueó el sonido, reintenta una vez al primer gesto.
+    const onFirstGesture = () => {
+      tryPlay();
+      window.removeEventListener("pointerdown", onFirstGesture);
+      window.removeEventListener("keydown", onFirstGesture);
+    };
+    window.addEventListener("pointerdown", onFirstGesture);
+    window.addEventListener("keydown", onFirstGesture);
+
+    // La burbuja de atención se oculta sola a los 9s.
+    const hintTimer = setTimeout(() => setShowHint(false), 9000);
+
+    return () => {
+      clearTimeout(hintTimer);
+      window.removeEventListener("pointerdown", onFirstGesture);
+      window.removeEventListener("keydown", onFirstGesture);
+    };
+  }, []);
 
   useEffect(() => {
     chatbotService
@@ -133,6 +209,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
     setCheckout(false);
     setCartModalOpen(false);
     setModalError(null);
+    setShowHint(false);
     setOpen(true);
   }, []);
 
@@ -217,12 +294,38 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
 
   return (
     <>
+      {/* Burbuja de atención sobre el botón (se oculta sola a los 9s) */}
+      {showHint && !open && (
+        <div className="fixed bottom-20 sm:bottom-24 right-4 sm:right-5 z-[91] w-[280px] bg-white border-2 border-[#FFF200] rounded-2xl shadow-xl p-4">
+          <button
+            onClick={() => setShowHint(false)}
+            aria-label="Cerrar aviso"
+            className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-[#1A1A2E] hover:bg-gray-100 cursor-pointer"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
+          </button>
+          <p className="text-sm text-[#1A1A2E] font-semibold leading-snug pr-6">
+            ¡Hola! 👋 Estoy aquí para ayudarte.
+          </p>
+          <p className="text-xs text-gray-500 mt-1 pr-6">
+            Chatea conmigo y te armo el carrito de compras 🛒
+          </p>
+          {/* flecha que apunta al botón */}
+          <div className="absolute -bottom-2 right-11 w-4 h-4 bg-white border-r-2 border-b-2 border-[#FFF200] rotate-45" />
+        </div>
+      )}
+
       {/* Botón flotante — círculo blanco con borde, visible sobre cualquier fondo */}
       <button
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Asistente de compras"
         className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
       >
+        {showHint && !open && (
+          <span className="absolute inset-0 rounded-full bg-[#FFF200]/40 animate-ping pointer-events-none" />
+        )}
         {open ? (
           <svg
             width="26"

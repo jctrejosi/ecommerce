@@ -19,7 +19,7 @@ SYSTEM_PROMPT = """Eres "Asistente MercAldas", el asistente de compras del super
 TU ÚNICA FUNCIÓN: ayudar al cliente a ARMAR SU CARRITO DE COMPRAS con los productos que te indique, y responder consultas básicas del catálogo (precios, disponibilidad, categorías, marcas).
 
 REGLAS DE ORO:
-1. SOLO puedes hacer acciones a través de las funciones disponibles (armar_carrito, armar_lista_sugerida, buscar_productos, ver_producto, agregar_al_carrito, ver_carrito, quitar_del_carrito, vaciar_carrito, finalizar_compra). NUNCA inventes que realizaste una acción que no ejecutaste.
+1. SOLO puedes hacer acciones a través de las funciones disponibles ({FUNCIONES}). NUNCA inventes que realizaste una acción que no ejecutaste.
 2. NUNCA inventes productos, precios, descuentos ni disponibilidad. Todo lo que muestres debe venir de los resultados de las funciones (datos reales de la base de datos).
 3. El campo "stock" de un producto puede venir como null: significa que no hay inventario registrado y el producto se considera disponible. NO lo trates como agotado. Solo di que un producto está agotado si la función agregar_al_carrito lo indica explícitamente.
 4. Si el cliente te da un id numérico de producto (product_id), NO lo busques por texto: usa ver_producto o agregar_al_carrito directamente con ese product_id.
@@ -37,7 +37,11 @@ ESTILO:
 - Nunca menciones "función", "tool", "base de datos" ni términos técnicos."""
 
 
-async def _call_chat(messages: list[dict], use_tools: bool = True) -> dict:
+async def _call_chat(
+    messages: list[dict],
+    use_tools: bool = True,
+    tools_list: list[dict] | None = None,
+) -> dict:
     """Una llamada a la API de DeepSeek. Devuelve el JSON de la respuesta."""
     if not config.DEEPSEEK_API_KEY:
         raise RuntimeError("DEEPSEEK_API_KEY no está configurada")
@@ -49,7 +53,7 @@ async def _call_chat(messages: list[dict], use_tools: bool = True) -> dict:
         "max_tokens": config.MAX_TOKENS,
     }
     if use_tools:
-        body["tools"] = tools.TOOLS
+        body["tools"] = tools_list if tools_list is not None else tools.TOOLS
 
     async with httpx.AsyncClient(
         headers={
@@ -79,7 +83,13 @@ async def chat_with_tools(
     """
     ctx: dict = {"session_id": session_id, "branch_id": branch_id, "payload": {}}
 
-    messages: list[dict] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # Funciones habilitadas según la config del admin (panel de bot).
+    enabled_names = await tools.enabled_function_names()
+    enabled_tools = await tools.get_enabled_tools()
+    funciones_str = ", ".join(sorted(enabled_names))
+    system_prompt = SYSTEM_PROMPT.replace("{FUNCIONES}", funciones_str)
+
+    messages: list[dict] = [{"role": "system", "content": system_prompt}]
 
     # Historial acotado (últimos N turnos, alternando user/assistant)
     if history:
@@ -92,7 +102,7 @@ async def chat_with_tools(
     messages.append({"role": "user", "content": user_message})
 
     for _round in range(config.MAX_TOOL_ROUNDS):
-        data = await _call_chat(messages, use_tools=True)
+        data = await _call_chat(messages, use_tools=True, tools_list=enabled_tools)
         msg = data["choices"][0]["message"]
         finish = data["choices"][0].get("finish_reason")
 

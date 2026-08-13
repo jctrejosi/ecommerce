@@ -510,6 +510,32 @@ FUNCTION_MAP = {
     "finalizar_compra": finalizar_compra,
 }
 
+ALL_FUNCTION_NAMES = set(FUNCTION_MAP.keys())
+
+
+async def enabled_function_names() -> set[str]:
+    """Nombres de las funciones habilitadas según la config `bot.functions`.
+
+    Sin config en BD → todas habilitadas. Una función ausente en el JSON se
+    considera habilitada (retrocompatible al agregar funciones nuevas).
+    """
+    cfg = await database.get_bot_functions()
+    if not cfg:
+        return set(ALL_FUNCTION_NAMES)
+    return {name for name in ALL_FUNCTION_NAMES if cfg.get(name, True)}
+
+
+async def get_enabled_tools() -> list[dict]:
+    """Lista de herramientas (schemas) que se envían a DeepSeek, filtradas."""
+    enabled = await enabled_function_names()
+    return [t for t in TOOLS if t["function"]["name"] in enabled]
+
+
+async def get_enabled_quick_options() -> list[dict]:
+    """Opciones rápidas cuyas funciones están habilitadas."""
+    enabled = await enabled_function_names()
+    return [o for o in QUICK_OPTIONS if o["id"] in enabled]
+
 # Opciones rápidas que ve el cliente al abrir el chat.
 # SOLO opciones programadas: cada una corresponde a una herramienta con su
 # propia function calling. (Sin opciones de chat libre.)

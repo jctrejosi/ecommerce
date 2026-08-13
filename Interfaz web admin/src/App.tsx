@@ -36,6 +36,7 @@ import {
   AlertTriangle,
   LayoutTemplate,
   Mail,
+  Bot,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
@@ -60,6 +61,7 @@ import SettingsView from "./views/Settings";
 import Branches from "./views/Branches";
 import Popups from "./views/Popups";
 import Newsletter from "./views/Newsletter";
+import BotAdmin from "./views/BotAdmin";
 
 export type ViewId =
   | "dashboard"
@@ -82,7 +84,8 @@ export type ViewId =
   | "branches"
   | "general"
   | "popups"
-  | "newsletter";
+  | "newsletter"
+  | "bot";
 
 interface NavItem {
   id: ViewId;
@@ -152,6 +155,7 @@ const NAV: NavSection[] = [
     items: [
       { id: "users", label: "Usuarios y Permisos", icon: Shield },
       { id: "settings", label: "Configuración", icon: Settings },
+      { id: "bot", label: "Bot", icon: Bot },
     ],
   },
 ];
@@ -179,6 +183,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   general: "general",
   popups: "popups",
   newsletter: "newsletter",
+  bot: "bot",
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
@@ -203,6 +208,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   general: "general",
   popups: "popups",
   newsletter: "newsletter",
+  bot: "bot",
 };
 
 function useViewFromUrl(): [ViewId, (v: ViewId) => void] {
@@ -254,6 +260,7 @@ const LABELS: Record<ViewId, string> = {
   general: "General",
   popups: "Popups",
   newsletter: "Newsletter",
+  bot: "Bot",
 };
 
 const QUICK_COMMANDS = [
@@ -723,6 +730,8 @@ function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProf
       return <Popups />;
     case "newsletter":
       return <Newsletter />;
+    case "bot":
+      return <BotAdmin />;
     case "reports":
       return <Reports />;
     case "users":

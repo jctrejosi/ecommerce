@@ -91,7 +91,7 @@ async def health():
 
 @app.get("/chat/options")
 async def chat_options():
-    return {"options": tools.QUICK_OPTIONS}
+    return {"options": await tools.get_enabled_quick_options()}
 
 
 class CartItemRequest(BaseModel):
