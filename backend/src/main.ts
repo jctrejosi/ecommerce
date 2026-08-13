@@ -11,6 +11,7 @@ import { CorrelationIdMiddleware } from './common/middleware/correlation-id.midd
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { CorsConfig, HelmetConfig } from './config';
+import { StatusGateway } from './modules/status/status.gateway';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -91,6 +92,15 @@ async function bootstrap() {
 
   const port = configService.get<number>('app.port', 3000);
   await app.listen(port);
+
+  // Aviso explícito al web client/admin: el backend quedó disponible.
+  // (Aunque socket.io re-conecta solo, esto cubre a clientes ya conectados
+  //  cuando se restaura la BD o se reinicia el servicio.)
+  try {
+    app.get(StatusGateway).notifyBackendOnline();
+  } catch (error) {
+    console.warn('⚠️ No se pudo emitir backend:online:', error);
+  }
 
   console.log(`🚀 Server running on http://localhost:${port}`);
   console.log(`📚 Swagger docs: http://localhost:${port}/api/docs`);
