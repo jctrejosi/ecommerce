@@ -58,7 +58,7 @@ export class DashboardService {
       activeBanners,
       activePopups,
     ] = await Promise.all([
-      // Today's revenue
+      // Today's revenue (solo pedidos PAGADOS hoy)
       this.db
         .select({ total: sql<number>`coalesce(sum(${orders.grandTotal}), 0)` })
         .from(orders)
@@ -66,7 +66,7 @@ export class DashboardService {
           and(
             gte(orders.createdAt, todayStart),
             sql`${orders.createdAt} <= ${todayEnd}`,
-            sql`${orders.status} not in ('cancelled')`,
+            eq(orders.status, 'paid'),
           ),
         )
         .then((r) => r[0]?.total ?? 0),
@@ -190,7 +190,7 @@ export class DashboardService {
       .where(
         and(
           gte(orders.createdAt, since.toISOString()),
-          sql`${orders.status} not in ('cancelled')`,
+          eq(orders.status, 'paid'),
         ),
       )
       .groupBy(sql`to_char(${orders.createdAt}, 'YYYY-MM-DD')`)

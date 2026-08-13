@@ -157,7 +157,7 @@ interface DashboardProps {
   onNavigate?: (view: string) => void;
 }
 
-type ModalType = 'todayOrders' | 'customers' | 'lowStock' | 'promotions' | 'banners' | 'orderDetail' | null;
+type ModalType = 'todayOrders' | 'paidToday' | 'customers' | 'lowStock' | 'promotions' | 'banners' | 'orderDetail' | null;
 
 type BreakdownKey = typeof BREAKDOWN_TABS[number]['key'];
 
@@ -339,10 +339,10 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
     }
   }, [fetchJSON]);
 
-  const openOrdersModal = useCallback(() => {
+  const openOrdersModal = useCallback((status?: string) => {
     setModal('todayOrders');
-    setOrderStatusTab('');
-    loadTodayOrders();
+    setOrderStatusTab(status ?? '');
+    loadTodayOrders(status || undefined);
   }, [loadTodayOrders]);
 
   const handleOrderTab = useCallback((s: string) => {
@@ -363,6 +363,9 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
   const openModal = useCallback((type: ModalType) => {
     if (type === 'todayOrders') {
       openOrdersModal();
+    } else if (type === 'paidToday') {
+      // "Ingresos hoy": abrir el modal de pedidos de hoy con el tab Pagado
+      openOrdersModal('paid');
     } else {
       setModal(type);
     }
@@ -392,7 +395,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
 
   const primaryCards = stats
     ? [
-        { label: 'Ingresos hoy', value: fmt(stats.todayRevenue), icon: TrendingUp, accent: 'bg-amber-100 text-amber-600', modal: 'todayOrders' as ModalType },
+        { label: 'Ingresos hoy', value: fmt(stats.todayRevenue), icon: TrendingUp, accent: 'bg-amber-100 text-amber-600', modal: 'paidToday' as ModalType },
         { label: 'Pedidos hoy', value: fmtNum(stats.todayOrders), icon: ShoppingCart, accent: 'bg-blue-100 text-blue-600', modal: 'todayOrders' as ModalType },
         { label: 'Clientes activos', value: fmtNum(stats.activeCustomers), icon: Users, accent: 'bg-green-100 text-green-600', modal: 'customers' as ModalType },
         { label: 'Productos activos', value: fmtNum(stats.activeProducts), icon: Package, accent: 'bg-purple-100 text-purple-600', modal: 'lowStock' as ModalType },
