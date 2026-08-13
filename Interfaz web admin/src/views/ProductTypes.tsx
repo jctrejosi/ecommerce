@@ -412,8 +412,8 @@ export default function ProductTypes() {
   });
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6 h-full flex flex-col gap-4 min-h-0">
+      <div className="flex items-center justify-between shrink-0">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tipos de Producto</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -429,7 +429,7 @@ export default function ProductTypes() {
       </div>
 
       {/* Buscador + filtro de estado */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3 shrink-0">
         <div className="relative max-w-sm flex-1">
           <Search
             size={14}
@@ -459,8 +459,8 @@ export default function ProductTypes() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
+      <div className="flex-1 min-h-0 bg-white rounded-2xl border border-gray-100 overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50 shrink-0">
           <div className="flex items-center gap-2">
             <Layers size={14} className="text-amber-500" />
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -471,42 +471,48 @@ export default function ProductTypes() {
             {filtered.length}
           </span>
         </div>
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
-          </div>
-        ) : types.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-gray-400">Sin tipos de producto aún</p>
-            <p className="text-xs text-gray-400 mt-1">
-              Crea tu primer tipo de producto
-            </p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-sm text-gray-400">
-              Sin resultados para el filtro
-            </p>
-            <p className="text-xs text-gray-400 mt-1">
-              Ajusta la búsqueda o el filtro de estado
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50">
-            {filtered.map((t) => (
-              <ProductTypeRow
-                key={t.id}
-                t={t}
-                onEdit={openEdit}
-                onDelete={(id) => {
-                  const target = types.find((x) => x.id === id);
-                  if (target) confirmDelete(target);
-                }}
-                onToggleActive={toggleActive}
-              />
-            ))}
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="h-full min-h-40 flex items-center justify-center py-12">
+              <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+            </div>
+          ) : types.length === 0 ? (
+            <div className="h-full min-h-40 flex items-center justify-center py-16 text-center">
+              <div>
+                <p className="text-sm text-gray-400">Sin tipos de producto aún</p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Crea tu primer tipo de producto
+                </p>
+              </div>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="h-full min-h-40 flex items-center justify-center py-16 text-center">
+              <div>
+                <p className="text-sm text-gray-400">
+                  Sin resultados para el filtro
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  Ajusta la búsqueda o el filtro de estado
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-50">
+              {filtered.map((t) => (
+                <ProductTypeRow
+                  key={t.id}
+                  t={t}
+                  onEdit={openEdit}
+                  onDelete={(id) => {
+                    const target = types.find((x) => x.id === id);
+                    if (target) confirmDelete(target);
+                  }}
+                  onToggleActive={toggleActive}
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Edit/Create drawer */}
