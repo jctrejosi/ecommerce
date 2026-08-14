@@ -5,8 +5,9 @@ import {
   Plus,
   Trash2,
   Truck,
+  ChevronRight,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { catalogService } from "../../services/catalog.service";
 import type { CartItem, Product } from "../types";
 
@@ -23,7 +24,7 @@ interface CartDrawerProps {
   fmt: (n: number) => string;
 }
 
-/** Carousel horizontal de productos relacionados con un ítem del carrito. */
+/** Recomendación relacionada con un ítem: UN producto que rota con fade. */
 function RelatedCarousel({
   productId,
   onAdd,
@@ -34,9 +35,14 @@ function RelatedCarousel({
   fmt: (n: number) => string;
 }) {
   const [related, setRelated] = useState<Product[]>([]);
+  const [current, setCurrent] = useState(0);
+  const [leaving, setLeaving] = useState(false);
+  const changingRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
+    setCurrent(0);
+    setLeaving(false);
     catalogService
       .getRelatedProductsById(productId)
       .then((p) => {
@@ -48,48 +54,69 @@ function RelatedCarousel({
     };
   }, [productId]);
 
+  const next = useCallback(() => {
+    if (related.length <= 1 || changingRef.current) return;
+    changingRef.current = true;
+    setLeaving(true);
+    // Fade-out lento (0.65s) y luego cambia al siguiente con fade-in
+    setTimeout(() => {
+      setCurrent((c) => (c + 1) % related.length);
+      setLeaving(false);
+      changingRef.current = false;
+    }, 650);
+  }, [related.length]);
+
+  // Auto-avance: cambia de recomendación cada 30s
+  useEffect(() => {
+    if (related.length <= 1) return;
+    const id = setInterval(next, 30000);
+    return () => clearInterval(id);
+  }, [next, related.length]);
+
   if (related.length === 0) return null;
+  const p = related[current];
 
   return (
-    <div className="mt-3 sm:mt-0">
-      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-2">
-        También te puede interesar
-      </p>
-      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
-        {related.map((p) => (
-          <div
-            key={p.id}
-            className="flex-shrink-0 w-[104px] bg-muted/40 rounded-xl p-1.5"
+    <div
+      className="mt-2 sm:mt-0 sm:-translate-x-2"
+      style={{ opacity: leaving ? 0 : 1, transition: "opacity 0.65s ease" }}
+    >
+      <div className="bg-white border border-border rounded-xl shadow-lg p-2.5 flex flex-col gap-1.5">
+        <div className="w-full h-20 rounded-lg bg-muted overflow-hidden">
+          {p.image ? (
+            <img
+              src={p.image}
+              alt={p.name}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">
+              sin foto
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-foreground line-clamp-2 mt-1.5 font-medium">
+          {p.name}
+        </p>
+        <div className="flex items-center justify-between mt-1">
+          <span className="text-xs font-bold">{fmt(p.price)}</span>
+          <button
+            onClick={() => onAdd(p, 1)}
+            aria-label={`Agregar ${p.name}`}
+            className="w-6 h-6 rounded-md flex items-center justify-center text-[#1A1A2E] text-xs font-bold cursor-pointer"
+            style={{ background: "#FFF200" }}
           >
-            <div className="w-full h-14 rounded-lg bg-white overflow-hidden">
-              {p.image ? (
-                <img
-                  src={p.image}
-                  alt={p.name}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">
-                  sin foto
-                </div>
-              )}
-            </div>
-            <p className="text-[10px] text-foreground line-clamp-1 mt-1 font-medium">
-              {p.name}
-            </p>
-            <div className="flex items-center justify-between mt-1">
-              <span className="text-[11px] font-bold">{fmt(p.price)}</span>
-              <button
-                onClick={() => onAdd(p, 1)}
-                aria-label={`Agregar ${p.name}`}
-                className="w-5 h-5 rounded-md flex items-center justify-center text-[#1A1A2E] text-xs font-bold cursor-pointer"
-                style={{ background: "#FFF200" }}
-              >
-                +
-              </button>
-            </div>
-          </div>
-        ))}
+            +
+          </button>
+        </div>
+        {related.length > 1 && (
+          <button
+            onClick={next}
+            className="self-start text-[10px] font-semibold text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors cursor-pointer"
+          >
+            Cambiar
+          </button>
+        )}
       </div>
     </div>
   );
@@ -172,9 +199,20 @@ export function CartDrawer({
                 key={item.id}
                 className="p-3 rounded-xl border border-border"
               >
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {/* Producto (a la derecha en desktop, arriba en móvil) */}
-                  <div className="flex gap-3 sm:w-1/2 sm:order-2">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                  {/* Recomendación flotante (izquierda, como mini modal aparte) */}
+                  <div className="sm:w-[44%] sm:order-1">
+                    <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
+                  </div>
+
+                  {/* Flechas de conexión entre la recomendación y el carrito */}
+                  <div className="hidden sm:flex sm:order-2 items-center justify-center text-muted-foreground/70 shrink-0">
+                    <ChevronRight className="w-5 h-5" />
+                    <ChevronRight className="w-5 h-5 -ml-3" />
+                  </div>
+
+                  {/* Producto del carrito (derecha en desktop, arriba en móvil) */}
+                  <div className="flex gap-3 sm:flex-1 sm:order-3">
                     <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden flex-shrink-0">
                       <img
                         src={item.image}
@@ -218,11 +256,6 @@ export function CartDrawer({
                         </div>
                       </div>
                     </div>
-                  </div>
-
-                  {/* Carousel de relacionados (a la izquierda en desktop, abajo en móvil) */}
-                  <div className="sm:w-1/2 sm:order-1">
-                    <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
                   </div>
                 </div>
               </div>

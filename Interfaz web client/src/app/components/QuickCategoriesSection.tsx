@@ -17,11 +17,24 @@ interface QuickCategoriesSectionProps {
   loading?: boolean;
 }
 
-function ProductTypeButton({ pt, index, onClick }: { pt: ProductType; index: number; onClick: () => void }) {
+function ProductTypeButton({
+  pt,
+  index,
+  onClick,
+  variant = "carousel",
+}: {
+  pt: ProductType;
+  index: number;
+  onClick: () => void;
+  variant?: "carousel" | "grid";
+}) {
   return (
     <button
+      data-carousel-item
       onClick={onClick}
-      className="flex flex-col items-center gap-2 flex-shrink-0 p-3 rounded-xl hover:bg-muted transition-colors min-w-[90px] cursor-pointer"
+      className={`flex flex-col items-center gap-2 p-3 rounded-xl hover:bg-muted transition-colors cursor-pointer ${
+        variant === "grid" ? "w-full" : "flex-shrink-0 min-w-[90px]"
+      }`}
     >
       <div
         className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
@@ -48,21 +61,28 @@ export function QuickCategoriesSection({
   const [searchQuery, setSearchQuery] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll infinito
+  // Carousel móvil: avanza UN ítem a la vez (pausa al hacer hover).
+  // En escritorio (lg+) se muestra una grilla, sin carousel.
+  const pausedRef = useRef(false);
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || productTypes.length === 0 || expanded) return;
-    let animId: number;
+    if (window.matchMedia("(min-width: 1024px)").matches) return;
     const step = () => {
-      if (!el) return;
-      el.scrollLeft += 0.5;
-      if (el.scrollLeft >= el.scrollWidth / 2) {
-        el.scrollLeft = 0;
+      if (pausedRef.current || !el) return;
+      const item = el.querySelector(
+        "[data-carousel-item]",
+      ) as HTMLElement | null;
+      const gap = 16; // gap-4
+      const w = (item?.offsetWidth ?? 120) + gap;
+      if (el.scrollLeft >= el.scrollWidth / 2 - w) {
+        el.scrollLeft = 0; // loop infinito
+      } else {
+        el.scrollLeft += w;
       }
-      animId = requestAnimationFrame(step);
     };
-    animId = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(animId);
+    const id = setInterval(step, 2500);
+    return () => clearInterval(id);
   }, [productTypes.length, expanded]);
 
   const scrollBy = (dir: number) => {
@@ -88,7 +108,7 @@ export function QuickCategoriesSection({
             className="font-black text-lg text-foreground"
             style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
           >
-            Tipo de producto
+            Nuestros productos
           </h2>
           <button
             onClick={() => setExpanded(true)}
@@ -98,8 +118,12 @@ export function QuickCategoriesSection({
           </button>
         </div>
 
-        {/* Carousel with arrows */}
-        <div className="relative group">
+        {/* Móvil / tablet / escritorio pequeño: carousel que avanza de uno en uno */}
+        <div
+          className="relative group lg:hidden"
+          onMouseEnter={() => (pausedRef.current = true)}
+          onMouseLeave={() => (pausedRef.current = false)}
+        >
           <button
             onClick={() => scrollBy(-1)}
             className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted cursor-pointer"
@@ -117,16 +141,29 @@ export function QuickCategoriesSection({
             className="flex gap-4 overflow-x-auto pb-2"
             style={{ scrollbarWidth: "none" }}
           >
-              {/* Duplicamos para el loop infinito: el reset a 0 queda invisible porque el usuario ve la copia */}
-              {[...productTypes, ...productTypes].map((pt, i) => (
-                <ProductTypeButton
-                  key={`${pt.id}-${i >= productTypes.length ? 'b' : 'a'}`}
-                  pt={pt}
-                  index={i % productTypes.length}
-                  onClick={() => onProductTypeClick(pt.code)}
-                />
-              ))}
+            {/* Duplicados para el loop infinito */}
+            {[...productTypes, ...productTypes].map((pt, i) => (
+              <ProductTypeButton
+                key={`${pt.id}-${i >= productTypes.length ? "b" : "a"}`}
+                pt={pt}
+                index={i % productTypes.length}
+                onClick={() => onProductTypeClick(pt.code)}
+              />
+            ))}
           </div>
+        </div>
+
+        {/* Escritorio: filas sin carousel */}
+        <div className="hidden lg:grid lg:grid-cols-4 xl:grid-cols-6 gap-4">
+          {productTypes.map((pt, i) => (
+            <ProductTypeButton
+              key={pt.id}
+              pt={pt}
+              index={i}
+              variant="grid"
+              onClick={() => onProductTypeClick(pt.code)}
+            />
+          ))}
         </div>
       </div>
     </section>
@@ -167,6 +204,7 @@ export function QuickCategoriesSection({
                     key={pt.id}
                     pt={pt}
                     index={i}
+                    variant="grid"
                     onClick={() => { onProductTypeClick(pt.code); setExpanded(false); setSearchQuery(""); }}
                   />
                 ))}

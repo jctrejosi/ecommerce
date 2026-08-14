@@ -509,11 +509,20 @@ export default function App() {
   };
 
   const openCatalog = (categoryId?: number) => {
-    // El dropdown "Nuestros productos" pasa la categoría: aplicarla en el catálogo.
     if (categoryId) {
+      // El dropdown "Nuestros productos" pasa la categoría: aplicarla en el catálogo.
       setCatalogCategory([categoryId]);
       setCatalogBrand(null);
       setCatalogProductType("");
+      setCatalogSearch("");
+    } else {
+      // Vista completa ("Ver catálogo completo" / "Ver todos los productos"):
+      // limpiar TODOS los filtros para que el catálogo no salga vacío.
+      setCatalogCategory([]);
+      setCatalogBrand(null);
+      setCatalogProductType("");
+      setCatalogOnSale(false);
+      setCatalogPriceRange("all");
       setCatalogSearch("");
     }
     setCurrentView("catalog");
