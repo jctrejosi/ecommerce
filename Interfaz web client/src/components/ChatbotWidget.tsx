@@ -7,6 +7,7 @@ import {
   type BotProduct,
   type BotQuickOption,
 } from "../services/chatbot.service";
+import logoBot from "../../assets/logo-bot.png";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -92,28 +93,6 @@ type Props = {
   }) => void;
   onApplyCart: (cart: BotCart) => void;
 };
-
-function BotIcon({ size = 26 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="4" y="8" width="16" height="12" rx="3" />
-      <path d="M12 8V4" />
-      <circle cx="12" cy="3.5" r="1.2" fill="currentColor" stroke="none" />
-      <circle cx="9" cy="13.5" r="1.1" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="13.5" r="1.1" fill="currentColor" stroke="none" />
-      <path d="M9 17.5h6" />
-    </svg>
-  );
-}
 
 export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
   const [open, setOpen] = useState(false);
@@ -331,10 +310,10 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
             </svg>
           </button>
           <p className="text-sm text-[#1A1A2E] font-semibold leading-snug pr-6">
-            ¡Hola! 👋 Estoy aquí para ayudarte.
+            ¡Hola! 👋 Soy Daisy, tu asistente de compras.
           </p>
           <p className="text-xs text-gray-500 mt-1 pr-6">
-            Chatea conmigo y te armo el carrito de compras 🛒
+            Te ayudo a armar tu carrito 🛒
           </p>
           {/* flecha que apunta al botón */}
           <div className="absolute -bottom-2 right-11 w-4 h-4 bg-white border-r-2 border-b-2 border-[#FFF200] rotate-45" />
@@ -344,7 +323,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
       {/* Botón flotante — círculo blanco con borde, visible sobre cualquier fondo */}
       <button
         onClick={() => (open ? setOpen(false) : openWidget())}
-        aria-label="Asistente de compras"
+        aria-label="Daisy"
         style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
         className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
       >
@@ -364,7 +343,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         ) : (
-          <BotIcon size={32} />
+          <img src={logoBot} alt="Daisy" className="w-11 h-11 rounded-full object-cover" />
         )}
       </button>
 
@@ -377,11 +356,11 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
           {/* Header */}
           <div className="bg-[#1A1A2E] text-white px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#FFF200] text-[#1A1A2E] flex items-center justify-center">
-                <BotIcon size={20} />
+              <div className="w-9 h-9 rounded-full bg-[#FFF200] text-[#1A1A2E] flex items-center justify-center overflow-hidden">
+                <img src={logoBot} alt="Daisy" className="w-full h-full object-cover" />
               </div>
               <div>
-                <p className="text-sm font-bold leading-tight">Asistente de compras</p>
+                <p className="text-sm font-bold leading-tight">Daisy</p>
                 <p className="text-[10px] text-white/70 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   Arma tu carrito conmigo 🛒
@@ -403,7 +382,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
           <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-[#F7F7F9]">
             {messages.length === 0 && (
               <div className="text-sm text-gray-600 leading-relaxed">
-                <p>¡Hola! 👋 Soy el asistente de compras de MercAldas.</p>
+                <p>¡Hola! 👋 Soy Daisy, tu asistente de compras de MercAldas.</p>
                 <p className="mt-1">
                   Puedo armar tu carrito con los productos que me indiques:
                   búscalos, te confirmo precios y los agrego por ti.
