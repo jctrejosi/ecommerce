@@ -1,8 +1,8 @@
-import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
+import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
-  ApiResponse,
   ApiOkResponse,
   ApiServiceUnavailableResponse,
 } from '@nestjs/swagger';
@@ -50,9 +50,15 @@ export class AppController {
       },
     },
   })
-  @HttpCode(HttpStatus.OK)
-  async getHealth() {
-    return this.appService.getHealth();
+  async getHealth(@Res() res: Response) {
+    const health = await this.appService.getHealth();
+    // 503 cuando la BD está caída: así el polling de los clientes detecta
+    // el backend degradado (res.ok === false) aunque el proceso siga vivo.
+    res
+      .status(
+        health.status === 'ok' ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE,
+      )
+      .json(health);
   }
 
   @Get('db-status')
@@ -81,8 +87,14 @@ export class AppController {
       },
     },
   })
-  @HttpCode(HttpStatus.OK)
-  async getDbStatus() {
-    return this.appService.checkDatabaseConnection();
+  async getDbStatus(@Res() res: Response) {
+    const dbStatus = await this.appService.checkDatabaseConnection();
+    res
+      .status(
+        dbStatus.status === 'connected'
+          ? HttpStatus.OK
+          : HttpStatus.SERVICE_UNAVAILABLE,
+      )
+      .json(dbStatus);
   }
 }

@@ -43,6 +43,17 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
       ssl: sslEnabled ? { rejectUnauthorized: false } : false,
     });
 
+    // El pool de pg emite 'error' cuando un cliente inactivo falla (p. ej. si
+    // PostgreSQL se reinicia o se cae). Sin listener es un 'error' no escuchado
+    // y Node mata el proceso. Con el pool vivo, el health check puede detectar
+    // la caída y el StatusGateway avisa a los frontends cuando la BD vuelve.
+    this.pool.on('error', (err) => {
+      console.error(
+        '⚠️ PostgreSQL pool error (la BD puede estar caída o reiniciando):',
+        err.message,
+      );
+    });
+
     this.db = drizzle(this.pool, {
       schema,
       // mode: 'default', // No es necesario para PostgreSQL

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
 import { catalogService } from "../services/catalog.service";
@@ -279,18 +279,22 @@ export default function App() {
   const { online } = useBackendStatus();
   const [backendOnline, setBackendOnline] = useState<boolean | null>(null);
   const [reloadingSite, setReloadingSite] = useState(false);
+  const prevOnline = useRef<boolean | null>(null);
 
   useEffect(() => {
     if (online === null) return;
 
-    setBackendOnline((prev) => {
-      // Transición caído → disponible: alerta + recarga
-      if (prev === false && online === true) {
-        setReloadingSite(true);
-        setTimeout(() => window.location.reload(), 1500);
-      }
-      return online;
-    });
+    const wasOffline = prevOnline.current === false;
+    prevOnline.current = online;
+    setBackendOnline(online);
+
+    // Transición caído → disponible: alerta + recarga.
+    // (Los side effects van fuera del updater de estado: un updater debe ser
+    // puro, React puede invocarlo más de una vez.)
+    if (wasOffline && online === true) {
+      setReloadingSite(true);
+      setTimeout(() => window.location.reload(), 1500);
+    }
   }, [online]);
 
   useEffect(() => {
