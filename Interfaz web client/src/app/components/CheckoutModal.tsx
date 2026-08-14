@@ -170,6 +170,8 @@ export function CheckoutModal({
     return digits.slice(0, 10);
   };
   const isValidPhone = (phone: string) => /^3\d{9}$/.test(normalizePhone(phone));
+  const isValidEmail = (email: string) =>
+    /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim());
 
   const selectSavedAddress = (id: number) => {
     const addr = savedAddresses.find((a) => a.id === id);
@@ -461,7 +463,7 @@ export function CheckoutModal({
               </div>
             )}
 
-            {/* Completar nombre/celular cuando se elige una guardada */}
+            {/* Completar nombre/celular/email cuando se elige una guardada */}
             {selectedAddressId !== null && !usingNewAddress && (
               <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
                 <p className="text-xs font-semibold text-muted-foreground">
@@ -479,6 +481,12 @@ export function CheckoutModal({
                     label: "Celular",
                     placeholder: "300 123 4567",
                     type: "tel",
+                  },
+                  {
+                    key: "email" as const,
+                    label: "Email",
+                    placeholder: "correo@ejemplo.com",
+                    type: "email",
                   },
                 ]).map(({ key, label, placeholder, type }) => (
                   <div key={key}>
@@ -508,6 +516,13 @@ export function CheckoutModal({
                           4567)
                         </p>
                       )}
+                    {key === "email" &&
+                      checkoutAddress.email &&
+                      !isValidEmail(checkoutAddress.email) && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Ingresa un email válido
+                        </p>
+                      )}
                   </div>
                 ))}
               </div>
@@ -531,7 +546,7 @@ export function CheckoutModal({
                   },
                   {
                     key: "email" as const,
-                    label: "Email (opcional)",
+                    label: "Email",
                     placeholder: "correo@ejemplo.com",
                     type: "email",
                   },
@@ -589,6 +604,13 @@ export function CheckoutModal({
                           4567)
                         </p>
                       )}
+                    {key === "email" &&
+                      checkoutAddress.email &&
+                      !isValidEmail(checkoutAddress.email) && (
+                        <p className="text-xs text-red-500 mt-1">
+                          Ingresa un email válido
+                        </p>
+                      )}
                   </div>
                 ))}
                 {usingNewAddress && (
@@ -617,6 +639,7 @@ export function CheckoutModal({
               disabled={
                 !checkoutAddress.name ||
                 !isValidPhone(checkoutAddress.phone) ||
+                !isValidEmail(checkoutAddress.email || "") ||
                 !checkoutAddress.address
               }
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-40"

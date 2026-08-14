@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsEmail,
   IsEnum,
   IsNotEmpty,
   IsNumber,
@@ -42,9 +43,8 @@ export class CreateOrderAddressDto {
   @IsNotEmpty()
   city!: string;
 
-  @IsOptional()
-  @IsString()
-  email?: string;
+  @IsEmail({}, { message: 'El email no es válido' })
+  email!: string;
 
   @IsOptional()
   @IsString()

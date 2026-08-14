@@ -127,6 +127,7 @@ export const ordersService = {
   async getWompiConfig(): Promise<WompiConfigResponse> {
     return fetchJson<WompiConfigResponse>(`${API_BASE_URL}/payments/wompi/config`, {
       credentials: "include",
+      cache: "no-store",
     });
   },
 

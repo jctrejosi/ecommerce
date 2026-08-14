@@ -602,8 +602,10 @@ export default function App() {
       let last4 = "";
       let brand = "";
       if (checkoutPayment === "tarjeta") {
-        if (!wompiConfig) {
-          setCheckoutError("Configuración de pago no disponible");
+        if (!wompiConfig || !wompiConfig.publicKey) {
+          setCheckoutError(
+            "El pago con tarjeta no está disponible en este momento. Intenta con otro medio de pago o recarga la página.",
+          );
           setCheckoutLoading(false);
           return;
         }
@@ -724,8 +726,19 @@ export default function App() {
         if (wompiOn) {
           void ordersService
             .getWompiConfig()
-            .then(setWompiConfig)
-            .catch(() => null);
+            .then((cfg) => {
+              if (cfg && cfg.publicKey) {
+                setWompiConfig(cfg);
+              } else {
+                // Sin llave pública no se puede tokenizar ni ofrecer el método
+                setWompiConfig(null);
+                setWompiEnabled(false);
+              }
+            })
+            .catch(() => {
+              setWompiConfig(null);
+              setWompiEnabled(false);
+            });
         }
       })
       .catch(() => {});
@@ -928,12 +941,8 @@ export default function App() {
         onDelete={deleteFromCart}
         onCheckout={() => {
           setCartOpen(false);
-          if (customer) {
-            setCheckoutStep(1);
-            setCheckoutOpen(true);
-            return;
-          }
-          openModal("choice");
+          setCheckoutStep(1);
+          setCheckoutOpen(true);
         }}
         fmt={fmt}
       />

@@ -71,8 +71,8 @@ export class OrdersService {
   }
 
   /**
-   * Checkout SIN iniciar sesión: crea automáticamente una sesión invitado y
-   * guarda los datos del cliente junto con la venta.
+   * Checkout SIN iniciar sesión: crea una sesión invitado y además guarda
+   * (o recupera) el cliente por email, para usar sus datos luego como usuario.
    */
   async checkoutGuest(dto: CreateOrderDto) {
     const token = randomUUID();
@@ -81,12 +81,53 @@ export class OrdersService {
       .values({ sessionToken: token })
       .returning({ id: guestSessions.id });
 
+    // Guardar/recuperar el cliente por email (único) para poder usarlo luego
+    // como usuario: si ya existe se asocia el pedido a su cuenta; si no, se
+    // crea un cliente sin contraseña (provider 'guest').
+    const email = (dto.address.email ?? '').toLowerCase().trim();
+    const nameParts = (dto.address.name ?? '').trim().split(/\s+/);
+    const firstName = nameParts[0] || null;
+    const lastName = nameParts.slice(1).join(' ') || null;
+
+    let customerId: number | null = null;
+    const [existing] = await this.db
+      .select({ id: customers.id })
+      .from(customers)
+      .where(eq(customers.email, email))
+      .limit(1);
+
+    if (existing) {
+      customerId = Number(existing.id);
+    } else {
+      try {
+        const [created] = await this.db
+          .insert(customers)
+          .values({
+            email,
+            firstName,
+            lastName,
+            phone: dto.address.phone,
+            provider: 'guest',
+            acceptsTermsAt: new Date().toISOString(),
+          })
+          .returning({ id: customers.id });
+        customerId = Number(created.id);
+      } catch {
+        // Carrera con un pedido simultáneo del mismo email: re-leer el cliente
+        const [again] = await this.db
+          .select({ id: customers.id })
+          .from(customers)
+          .where(eq(customers.email, email))
+          .limit(1);
+        customerId = again ? Number(again.id) : null;
+      }
+    }
+
     return this.createOrder({
       dto,
-      customerId: null,
+      customerId,
       guestSessionId: Number(session.id),
-      customerEmail:
-        dto.address.email ?? `invitado-${token.slice(0, 8)}@mercaldas.com.co`,
+      customerEmail: email,
       customerName: dto.address.name,
       customerPhone: dto.address.phone,
       saveAddress: false,
