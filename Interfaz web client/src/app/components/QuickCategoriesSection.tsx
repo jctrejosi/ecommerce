@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X, Search } from "lucide-react";
+import { productTypeIcon } from "../productTypeIcons";
 
 interface ProductType {
   id: number;
@@ -16,8 +17,6 @@ interface QuickCategoriesSectionProps {
   loading?: boolean;
 }
 
-const ICONS = ["🥬", "🥩", "🥛", "🥫", "🧹", "💄", "👶", "🍷", "🏠", "💻", "🐾", "🔌"];
-
 function ProductTypeButton({ pt, index, onClick }: { pt: ProductType; index: number; onClick: () => void }) {
   return (
     <button
@@ -28,7 +27,7 @@ function ProductTypeButton({ pt, index, onClick }: { pt: ProductType; index: num
         className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
         style={{ background: "#F4F4F6", color: "#6B7280" }}
       >
-        {ICONS[index % ICONS.length]}
+        {productTypeIcon(pt.code, index)}
       </div>
       <span className="text-xs font-semibold text-center text-foreground leading-tight max-w-[90px]">
         {pt.name}

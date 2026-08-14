@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { Search, X, ChevronRight } from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
 import { catalogService } from "../../../services/catalog.service";
+import { productTypeIcon } from "../../productTypeIcons";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
 import { ProductCard } from "./ProductCard";
 import { SkeletonCard } from "./SkeletonCard";
@@ -613,6 +614,9 @@ export function CatalogPage({
                       </svg>
                     )}
                   </div>
+                  <span className="text-sm leading-none">
+                    {productTypeIcon(pt.code)}
+                  </span>
                   <span
                     className="text-sm flex-1 transition-colors"
                     style={{

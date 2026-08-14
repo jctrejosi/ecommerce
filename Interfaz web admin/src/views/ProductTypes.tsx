@@ -13,6 +13,22 @@ import {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
+// Íconos (emojis) relacionados con el código del tipo de producto
+const TYPE_ICONS: Record<string, string> = {
+  CARNES: "🥩",
+  BEBE: "👶",
+  LACTEOS: "🥛",
+  ELECTRO: "🔌",
+  MASCOTAS: "🐾",
+  FRUTAS: "🥬",
+  LIMPIEZA: "🧹",
+  DESPENSA: "🥫",
+  TECNO: "💻",
+  HOGAR: "🏠",
+  VINOS: "🍷",
+  CUIDADO: "💄",
+};
+
 interface AdminProductType {
   id: number;
   code: string;
@@ -64,6 +80,8 @@ function ProductTypeRow({
               alt={t.name}
               className="w-full h-full object-contain"
             />
+          ) : TYPE_ICONS[t.code] ? (
+            <span className="text-sm leading-none">{TYPE_ICONS[t.code]}</span>
           ) : (
             <Layers size={14} className="text-gray-400" />
           )}
