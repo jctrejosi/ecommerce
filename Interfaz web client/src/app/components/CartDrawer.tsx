@@ -31,11 +31,15 @@ const GAP = 16;
 /** Recomendación relacionada con un ítem: UN producto que rota con fade. */
 function RelatedCarousel({
   productId,
+  quantity,
   onAdd,
+  onSwap,
   fmt,
 }: {
   productId: number;
+  quantity: number;
   onAdd: (product: Product, quantity?: number) => void;
+  onSwap: (recommended: Product, cartItemId: number, quantity: number) => void;
   fmt: (n: number) => string;
 }) {
   const [related, setRelated] = useState<Product[]>([]);
@@ -113,17 +117,15 @@ function RelatedCarousel({
             >
               +
             </button>
-            {related.length > 1 && (
-              <button
-                onClick={next}
-                aria-label="Reemplazar recomendación"
-                title="Reemplazar"
-                className="h-5 px-1 rounded-md flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0 text-[9px] font-semibold"
-              >
-                <RefreshCw className="w-3 h-3" />
-                <span className="hidden sm:inline">reemplazar</span>
-              </button>
-            )}
+            <button
+              onClick={() => onSwap(p, productId, quantity)}
+              aria-label="Intercambiar por este producto"
+              title="Intercambiar"
+              className="h-5 px-1 rounded-md flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0 text-[9px] font-semibold"
+            >
+              <RefreshCw className="w-3 h-3" />
+              <span className="hidden sm:inline">intercambiar</span>
+            </button>
           </div>
         </div>
       </div>
@@ -197,6 +199,15 @@ export function CartDrawer({
 
   const floatingRec = rec !== null;
 
+  // Intercambia un ítem del carrito por el producto recomendado (misma cantidad).
+  const swapItem = useCallback(
+    (recommended: Product, cartItemId: number, quantity: number) => {
+      onDelete(cartItemId);
+      onAdd(recommended, quantity);
+    },
+    [onDelete, onAdd],
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div
@@ -266,7 +277,13 @@ export function CartDrawer({
                 {/* Fallback móvil: recomendación inline debajo del producto */}
                 {!floatingRec && (
                   <div className="mb-2">
-                    <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
+                    <RelatedCarousel
+                      productId={item.id}
+                      quantity={item.quantity}
+                      onAdd={onAdd}
+                      onSwap={swapItem}
+                      fmt={fmt}
+                    />
                   </div>
                 )}
 
@@ -390,7 +407,13 @@ export function CartDrawer({
                   className="absolute left-0 right-0 px-3"
                   style={{ top: pos.top, height: pos.height }}
                 >
-                  <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
+                  <RelatedCarousel
+                    productId={item.id}
+                    quantity={item.quantity}
+                    onAdd={onAdd}
+                    onSwap={swapItem}
+                    fmt={fmt}
+                  />
                 </div>
               );
             })}
