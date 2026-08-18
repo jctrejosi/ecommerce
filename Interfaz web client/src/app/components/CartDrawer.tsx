@@ -7,7 +7,7 @@ import {
   Truck,
   ChevronRight,
 } from "lucide-react";
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import { catalogService } from "../../services/catalog.service";
 import type { CartItem, Product } from "../types";
 
@@ -122,6 +122,11 @@ function RelatedCarousel({
   );
 }
 
+// Dimensiones de la tarjeta flotante de recomendación (para medir espacio).
+const CARD_W = 152;
+const CARD_H = 190;
+const GAP = 14;
+
 export function CartDrawer({
   cartOpen,
   cartItems,
@@ -134,6 +139,46 @@ export function CartDrawer({
   onCheckout,
   fmt,
 }: CartDrawerProps) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+  const [floats, setFloats] = useState<
+    Record<number, { top: number; left: number }>
+  >({});
+
+  // Mide dónde va cada tarjeta flotante: alineada con su ítem, justo a la
+  // izquierda del panel (fuera de "Mi Carrito"). Se descartan las que se
+  // solaparían entre sí o no tengan espacio (→ se muestran inline).
+  const measure = useCallback(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    const panelLeft = panel.getBoundingClientRect().left;
+    const next: Record<number, { top: number; left: number }> = {};
+    let prevCenter: number | null = null;
+    itemRefs.current.forEach((node, id) => {
+      const r = node.getBoundingClientRect();
+      const center = r.top + r.height / 2;
+      if (prevCenter !== null && center - prevCenter < CARD_H + 8) return;
+      const left = panelLeft - CARD_W - GAP;
+      if (left < 8) return;
+      next[id] = { top: center, left };
+      prevCenter = center;
+    });
+    setFloats(next);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!cartOpen) return;
+    measure();
+    const list = listRef.current;
+    list?.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      list?.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+    };
+  }, [cartOpen, measure, cartItems.length]);
+
   if (!cartOpen) return null;
 
   return (
@@ -146,7 +191,10 @@ export function CartDrawer({
         }}
         onClick={onClose}
       />
-      <div className="relative w-full max-w-sm sm:max-w-lg bg-white flex flex-col h-full shadow-2xl">
+      <div
+        ref={panelRef}
+        className="relative w-full max-w-sm sm:max-w-lg bg-white flex flex-col h-full shadow-2xl"
+      >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />
@@ -173,7 +221,10 @@ export function CartDrawer({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
+        >
           {cartItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full gap-3 text-center py-16">
               <div className="w-16 h-16 rounded-2xl bg-muted flex items-center justify-center">
@@ -194,72 +245,84 @@ export function CartDrawer({
               </button>
             </div>
           ) : (
-            cartItems.map((item) => (
-              <div
-                key={item.id}
-                className="p-3 rounded-xl border border-border"
-              >
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-                  {/* Recomendación flotante (izquierda, como mini modal aparte) */}
-                  <div className="sm:w-[44%] sm:order-1">
-                    <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
-                  </div>
-
-                  {/* Flechas de conexión entre la recomendación y el carrito */}
-                  <div className="hidden sm:flex sm:order-2 items-center justify-center text-muted-foreground/70 shrink-0">
-                    <ChevronRight className="w-5 h-5" />
-                    <ChevronRight className="w-5 h-5 -ml-3" />
-                  </div>
-
-                  {/* Producto del carrito (derecha en desktop, arriba en móvil) */}
-                  <div className="flex gap-3 sm:flex-1 sm:order-3">
-                    <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden flex-shrink-0">
-                      <img
-                        src={item.image}
-                        alt={item.name}
-                        className="w-full h-full object-cover"
+            cartItems.map((item) => {
+              const floating = floats[item.id];
+              return (
+                <div key={item.id}>
+                  {/* Recomendación inline (móvil / sin espacio para flotar) */}
+                  {!floating && (
+                    <div className="mb-2">
+                      <RelatedCarousel
+                        productId={item.id}
+                        onAdd={onAdd}
+                        fmt={fmt}
                       />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-semibold text-foreground leading-snug line-clamp-2">
-                        {item.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {item.unit}
-                      </p>
-                      <div className="flex items-center justify-between mt-1.5">
-                        <span className="text-sm font-bold">
-                          {fmt(item.price * item.quantity)}
-                        </span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => onRemove(item.id)}
-                            className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
-                          >
-                            <Minus className="w-3 h-3" />
-                          </button>
-                          <span className="text-xs font-bold w-5 text-center">
-                            {item.quantity}
-                          </span>
-                          <button
-                            onClick={() => onAdd(item)}
-                            className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
-                          >
-                            <Plus className="w-3 h-3" />
-                          </button>
-                          <button
-                            onClick={() => onDelete(item.id)}
-                            className="w-6 h-6 rounded-lg ml-1 flex items-center justify-center hover:bg-red-50 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3 text-accent" />
-                          </button>
+                  )}
+
+                  {/* Producto del carrito */}
+                  <div
+                    ref={(el) => {
+                      if (el) itemRefs.current.set(item.id, el);
+                      else itemRefs.current.delete(item.id);
+                    }}
+                    className="p-3 rounded-xl border border-border"
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* Flecha que conecta la recomendación flotante con el producto */}
+                      {floating && (
+                        <ChevronRight className="w-5 h-5 text-muted-foreground/70 shrink-0" />
+                      )}
+                      <div className="flex gap-3 flex-1 min-w-0">
+                        <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+                          <img
+                            src={item.image}
+                            alt={item.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-foreground leading-snug line-clamp-2">
+                            {item.name}
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {item.unit}
+                          </p>
+                          <div className="flex items-center justify-between mt-1.5">
+                            <span className="text-sm font-bold">
+                              {fmt(item.price * item.quantity)}
+                            </span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => onRemove(item.id)}
+                                className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
+                              >
+                                <Minus className="w-3 h-3" />
+                              </button>
+                              <span className="text-xs font-bold w-5 text-center">
+                                {item.quantity}
+                              </span>
+                              <button
+                                onClick={() => onAdd(item)}
+                                className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
+                              >
+                                <Plus className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => onDelete(item.id)}
+                                className="w-6 h-6 rounded-lg ml-1 flex items-center justify-center hover:bg-red-50 transition-colors"
+                              >
+                                <Trash2 className="w-3 h-3 text-accent" />
+                              </button>
+                            </div>
+                          </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
 
@@ -291,6 +354,23 @@ export function CartDrawer({
           </div>
         )}
       </div>
+
+      {/* Recomendaciones flotantes: fuera del panel, al lado izquierdo de cada producto */}
+      {cartItems.map((item) => {
+        const f = floats[item.id];
+        if (!f) return null;
+        return (
+          <div
+            key={`rec-${item.id}`}
+            className="fixed z-[60] pointer-events-none"
+            style={{ top: f.top, left: f.left, transform: "translateY(-50%)" }}
+          >
+            <div className="pointer-events-auto" style={{ width: CARD_W }}>
+              <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

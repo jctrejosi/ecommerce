@@ -3757,6 +3757,7 @@ export function UserAdminView({
   const ProfileSection = () => {
     const [showPwd, setShowPwd] = useState(false);
     const [saved, setSaved] = useState(false);
+    const [showSavedModal, setShowSavedModal] = useState(false);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
     const [profile, setProfile] = useState({
@@ -3827,6 +3828,9 @@ export function UserAdminView({
         }));
         setSaved(true);
         setTimeout(() => setSaved(false), 2500);
+        // Modal de confirmación: se cierra con el botón/overlay o solo tras 3s.
+        setShowSavedModal(true);
+        setTimeout(() => setShowSavedModal(false), 3000);
       } catch (err: any) {
         setError(err.message || "Error al guardar");
       } finally {
@@ -4161,6 +4165,35 @@ export function UserAdminView({
                   {deleting ? "Eliminando..." : "Eliminar cuenta"}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+        {/* Guardado con éxito Modal */}
+        {showSavedModal && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+            onClick={() => setShowSavedModal(false)}
+          >
+            <div
+              className="bg-background rounded-2xl p-6 max-w-sm w-full mx-4 shadow-xl text-center"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-6 h-6 text-green-600" />
+              </div>
+              <p className="font-bold text-lg text-foreground">
+                Cambios guardados
+              </p>
+              <p className="text-sm text-muted-foreground mt-1 mb-5">
+                Tu información se actualizó correctamente.
+              </p>
+              <button
+                onClick={() => setShowSavedModal(false)}
+                className="w-full py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-95"
+                style={{ background: "#FFF200", color: "#1A1A2E" }}
+              >
+                Entendido
+              </button>
             </div>
           </div>
         )}
