@@ -5,7 +5,7 @@ import {
   Plus,
   Trash2,
   Truck,
-  ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useState, useRef, useCallback } from "react";
 import { catalogService } from "../../services/catalog.service";
@@ -23,6 +23,10 @@ interface CartDrawerProps {
   onCheckout: () => void;
   fmt: (n: number) => string;
 }
+
+// Ancho del panel flotante de recomendaciones y separación con el carrito.
+const REC_W = 264;
+const GAP = 16;
 
 /** Recomendación relacionada con un ítem: UN producto que rota con fade. */
 function RelatedCarousel({
@@ -78,54 +82,54 @@ function RelatedCarousel({
 
   return (
     <div
-      className="mt-2 sm:mt-0 sm:-translate-x-2"
+      className="bg-white border border-border rounded-xl shadow-sm h-full flex items-center gap-1.5 p-1.5 overflow-hidden"
       style={{ opacity: leaving ? 0 : 1, transition: "opacity 0.65s ease" }}
     >
-      <div className="bg-white border border-border rounded-xl shadow-lg p-2.5 flex flex-col gap-1.5">
-        <div className="w-full h-20 rounded-lg bg-muted overflow-hidden">
-          {p.image ? (
-            <img
-              src={p.image}
-              alt={p.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">
-              sin foto
-            </div>
-          )}
-        </div>
-        <p className="text-[11px] text-foreground line-clamp-2 mt-1.5 font-medium">
+      <div className="w-10 h-10 rounded-lg bg-muted overflow-hidden shrink-0 self-center">
+        {p.image ? (
+          <img
+            src={p.image}
+            alt={p.name}
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-gray-300 text-[10px]">
+            sin foto
+          </div>
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-[11px] text-foreground line-clamp-2 font-medium leading-tight">
           {p.name}
         </p>
-        <div className="flex items-center justify-between mt-1">
-          <span className="text-xs font-bold">{fmt(p.price)}</span>
-          <button
-            onClick={() => onAdd(p, 1)}
-            aria-label={`Agregar ${p.name}`}
-            className="w-6 h-6 rounded-md flex items-center justify-center text-[#1A1A2E] text-xs font-bold cursor-pointer"
-            style={{ background: "#FFF200" }}
-          >
-            +
-          </button>
+        <div className="flex items-center justify-between gap-1 mt-0.5">
+          <span className="text-[11px] font-bold">{fmt(p.price)}</span>
+          <div className="flex items-center gap-0.5">
+            <button
+              onClick={() => onAdd(p, 1)}
+              aria-label={`Agregar ${p.name}`}
+              className="w-5 h-5 rounded-md flex items-center justify-center text-[#1A1A2E] text-[11px] font-bold cursor-pointer shrink-0"
+              style={{ background: "#FFF200" }}
+            >
+              +
+            </button>
+            {related.length > 1 && (
+              <button
+                onClick={next}
+                aria-label="Reemplazar recomendación"
+                title="Reemplazar"
+                className="h-5 px-1 rounded-md flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer shrink-0 text-[9px] font-semibold"
+              >
+                <RefreshCw className="w-3 h-3" />
+                <span className="hidden sm:inline">reemplazar</span>
+              </button>
+            )}
+          </div>
         </div>
-        {related.length > 1 && (
-          <button
-            onClick={next}
-            className="self-start text-[10px] font-semibold text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors cursor-pointer"
-          >
-            Cambiar
-          </button>
-        )}
       </div>
     </div>
   );
 }
-
-// Dimensiones de la tarjeta flotante de recomendación (para medir espacio).
-const CARD_W = 152;
-const CARD_H = 190;
-const GAP = 14;
 
 export function CartDrawer({
   cartOpen,
@@ -142,29 +146,39 @@ export function CartDrawer({
   const panelRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const itemRefs = useRef<Map<number, HTMLDivElement>>(new Map());
-  const [floats, setFloats] = useState<
-    Record<number, { top: number; left: number }>
-  >({});
+  const [rec, setRec] = useState<{
+    top: number;
+    left: number;
+    height: number;
+    items: Record<number, { top: number; height: number }>;
+  } | null>(null);
 
-  // Mide dónde va cada tarjeta flotante: alineada con su ítem, justo a la
-  // izquierda del panel (fuera de "Mi Carrito"). Se descartan las que se
-  // solaparían entre sí o no tengan espacio (→ se muestran inline).
+  // Mide el panel del carrito y la posición/alto de cada ítem para alinear
+  // las recomendaciones exactamente al lado de su producto. En móvil (sin
+  // espacio horizontal) no se flota y se muestra inline.
   const measure = useCallback(() => {
     const panel = panelRef.current;
     if (!panel) return;
-    const panelLeft = panel.getBoundingClientRect().left;
-    const next: Record<number, { top: number; left: number }> = {};
-    let prevCenter: number | null = null;
+    const panelRect = panel.getBoundingClientRect();
+    const left = panelRect.left - REC_W - GAP;
+    if (left < 8) {
+      setRec(null);
+      return;
+    }
+
+    // El panel termina donde termina el scroll de los ítems (antes del subtotal).
+    const list = listRef.current;
+    const height = list
+      ? list.getBoundingClientRect().bottom - panelRect.top
+      : panelRect.height;
+
+    const items: Record<number, { top: number; height: number }> = {};
     itemRefs.current.forEach((node, id) => {
       const r = node.getBoundingClientRect();
-      const center = r.top + r.height / 2;
-      if (prevCenter !== null && center - prevCenter < CARD_H + 8) return;
-      const left = panelLeft - CARD_W - GAP;
-      if (left < 8) return;
-      next[id] = { top: center, left };
-      prevCenter = center;
+      items[id] = { top: r.top - panelRect.top, height: r.height };
     });
-    setFloats(next);
+
+    setRec({ top: panelRect.top, left, height, items });
   }, []);
 
   useLayoutEffect(() => {
@@ -177,9 +191,11 @@ export function CartDrawer({
       list?.removeEventListener("scroll", measure);
       window.removeEventListener("resize", measure);
     };
-  }, [cartOpen, measure, cartItems.length]);
+  }, [cartOpen, measure, cartItems]);
 
   if (!cartOpen) return null;
+
+  const floatingRec = rec !== null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -245,84 +261,73 @@ export function CartDrawer({
               </button>
             </div>
           ) : (
-            cartItems.map((item) => {
-              const floating = floats[item.id];
-              return (
-                <div key={item.id}>
-                  {/* Recomendación inline (móvil / sin espacio para flotar) */}
-                  {!floating && (
-                    <div className="mb-2">
-                      <RelatedCarousel
-                        productId={item.id}
-                        onAdd={onAdd}
-                        fmt={fmt}
-                      />
-                    </div>
-                  )}
+            cartItems.map((item) => (
+              <div key={item.id}>
+                {/* Fallback móvil: recomendación inline debajo del producto */}
+                {!floatingRec && (
+                  <div className="mb-2">
+                    <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
+                  </div>
+                )}
 
-                  {/* Producto del carrito */}
-                  <div
-                    ref={(el) => {
-                      if (el) itemRefs.current.set(item.id, el);
-                      else itemRefs.current.delete(item.id);
-                    }}
-                    className="p-3 rounded-xl border border-border"
-                  >
-                    <div className="flex items-center gap-3">
-                      {/* Flecha que conecta la recomendación flotante con el producto */}
-                      {floating && (
-                        <ChevronRight className="w-5 h-5 text-muted-foreground/70 shrink-0" />
-                      )}
-                      <div className="flex gap-3 flex-1 min-w-0">
-                        <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden flex-shrink-0">
-                          <img
-                            src={item.image}
-                            alt={item.name}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-semibold text-foreground leading-snug line-clamp-2">
-                            {item.name}
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {item.unit}
-                          </p>
-                          <div className="flex items-center justify-between mt-1.5">
-                            <span className="text-sm font-bold">
-                              {fmt(item.price * item.quantity)}
+                {/* Producto del carrito */}
+                <div
+                  ref={(el) => {
+                    if (el) itemRefs.current.set(item.id, el);
+                    else itemRefs.current.delete(item.id);
+                  }}
+                  className="p-3 rounded-xl border border-border"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-3 flex-1 min-w-0">
+                      <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden flex-shrink-0">
+                        <img
+                          src={item.image}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-semibold text-foreground leading-snug line-clamp-2">
+                          {item.name}
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {item.unit}
+                        </p>
+                        <div className="flex items-center justify-between mt-1.5">
+                          <span className="text-sm font-bold">
+                            {fmt(item.price * item.quantity)}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => onRemove(item.id)}
+                              className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
+                            >
+                              <Minus className="w-3 h-3" />
+                            </button>
+                            <span className="text-xs font-bold w-5 text-center">
+                              {item.quantity}
                             </span>
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => onRemove(item.id)}
-                                className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
-                              >
-                                <Minus className="w-3 h-3" />
-                              </button>
-                              <span className="text-xs font-bold w-5 text-center">
-                                {item.quantity}
-                              </span>
-                              <button
-                                onClick={() => onAdd(item)}
-                                className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
-                              >
-                                <Plus className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => onDelete(item.id)}
-                                className="w-6 h-6 rounded-lg ml-1 flex items-center justify-center hover:bg-red-50 transition-colors"
-                              >
-                                <Trash2 className="w-3 h-3 text-accent" />
-                              </button>
-                            </div>
+                            <button
+                              onClick={() => onAdd(item)}
+                              className="w-6 h-6 rounded-lg bg-muted flex items-center justify-center hover:bg-border transition-colors"
+                            >
+                              <Plus className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={() => onDelete(item.id)}
+                              className="w-6 h-6 rounded-lg ml-1 flex items-center justify-center hover:bg-red-50 transition-colors"
+                            >
+                              <Trash2 className="w-3 h-3 text-accent" />
+                            </button>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
         </div>
 
@@ -355,22 +360,43 @@ export function CartDrawer({
         )}
       </div>
 
-      {/* Recomendaciones flotantes: fuera del panel, al lado izquierdo de cada producto */}
-      {cartItems.map((item) => {
-        const f = floats[item.id];
-        if (!f) return null;
-        return (
+      {/* Panel flotante "Recomendaciones" (fuera del carrito, a su izquierda) */}
+      {floatingRec && rec && (
+        <div
+          className="fixed z-[60]"
+          style={{ top: rec.top, left: rec.left, height: rec.height }}
+        >
           <div
-            key={`rec-${item.id}`}
-            className="fixed z-[60] pointer-events-none"
-            style={{ top: f.top, left: f.left, transform: "translateY(-50%)" }}
+            className="relative bg-white border border-border rounded-2xl shadow-2xl overflow-hidden"
+            style={{ width: REC_W, height: "100%" }}
           >
-            <div className="pointer-events-auto" style={{ width: CARD_W }}>
-              <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
+            {/* Título alineado con "Mi Carrito" */}
+            <div className="absolute top-0 left-0 right-0 z-10 px-5 py-4 border-b border-border bg-white">
+              <h2
+                className="font-black text-lg whitespace-nowrap"
+                style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}
+              >
+                Recomendaciones
+              </h2>
             </div>
+
+            {/* Cada recomendación alineada con su producto del carrito */}
+            {cartItems.map((item) => {
+              const pos = rec.items[item.id];
+              if (!pos) return null;
+              return (
+                <div
+                  key={item.id}
+                  className="absolute left-0 right-0 px-3"
+                  style={{ top: pos.top, height: pos.height }}
+                >
+                  <RelatedCarousel productId={item.id} onAdd={onAdd} fmt={fmt} />
+                </div>
+              );
+            })}
           </div>
-        );
-      })}
+        </div>
+      )}
     </div>
   );
 }

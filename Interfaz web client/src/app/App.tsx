@@ -1035,7 +1035,11 @@ export default function App() {
       />
 
       {/* Chatbot de compras (parte inferior derecha) */}
-      <ChatbotWidget onAddProduct={addToCart} onApplyCart={applyBotCart} />
+      <ChatbotWidget
+        onAddProduct={addToCart}
+        onApplyCart={applyBotCart}
+        pageCartItems={cartItems}
+      />
 
       {/* Aviso de backend caído */}
       {backendOnline === false && !reloadingSite && (

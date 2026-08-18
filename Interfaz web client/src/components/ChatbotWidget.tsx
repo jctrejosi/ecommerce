@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   chatbotService,
   type BotCart,
@@ -8,6 +8,7 @@ import {
   type BotQuickOption,
 } from "../services/chatbot.service";
 import logoBot from "../../assets/logo-bot.png";
+import type { CartItem } from "../app/types";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -92,9 +93,10 @@ type Props = {
     slug?: string;
   }) => void;
   onApplyCart: (cart: BotCart) => void;
+  pageCartItems: CartItem[];
 };
 
-export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
+export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Props) {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -176,6 +178,49 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
     },
     [refreshCart],
   );
+
+  // Abre el modal con el carrito que se está armando (botón del header).
+  // Si todavía no tenemos el carrito en el estado local, lo refresca del bot.
+  const openCurrentCart = useCallback(() => {
+    setModalError(null);
+    setCartModalOpen(true);
+    if (!cart) void refreshCart();
+  }, [cart, refreshCart]);
+
+  const cartCount = cart?.count ?? 0;
+
+  // Ids de productos que ya están en el carrito de la página (fuente de verdad).
+  const pageProductIds = useMemo(
+    () => new Set(pageCartItems.map((i) => i.id)),
+    [pageCartItems],
+  );
+
+  // El carrito que muestra el modal = carrito de la página + los ítems que
+  // Daisy agregó y que todavía no están en la página (sin duplicar).
+  const mergedCart = useMemo<BotCart>(() => {
+    const items: BotCart["items"][number][] = pageCartItems.map((p) => ({
+      variant_id: p.id,
+      product_id: p.id,
+      name: p.name,
+      slug: p.slug ?? "",
+      price: p.price,
+      quantity: p.quantity,
+      subtotal: p.price * p.quantity,
+      image: p.image ?? null,
+    }));
+
+    for (const it of cart?.items ?? []) {
+      if (pageProductIds.has(it.product_id)) continue;
+      items.push({ ...it });
+    }
+
+    return {
+      session_id: cart?.session_id ?? sessionRef.current,
+      items,
+      count: items.reduce((s, i) => s + i.quantity, 0),
+      total: items.reduce((s, i) => s + i.subtotal, 0),
+    };
+  }, [cart, pageCartItems, pageProductIds]);
 
   // Al abrir el chat el bot empieza SIEMPRE limpio: sesión nueva (carrito
   // nuevo en el bot), conversación vacía y sin estado previo. NO arma nada
@@ -367,15 +412,43 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setOpen(false)}
-              aria-label="Cerrar"
-              className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-1">
+              {/* Botón para abrir el carrito que se está armando */}
+              <button
+                onClick={openCurrentCart}
+                aria-label="Ver carrito de compras"
+                className="relative p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <svg
+                  width="19"
+                  height="19"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <circle cx="9" cy="21" r="1.6" />
+                  <circle cx="19" cy="21" r="1.6" />
+                  <path d="M2.5 3h2l2.6 12.5a2 2 0 0 0 2 1.5h8.7a2 2 0 0 0 2-1.5L22 7H6" />
+                </svg>
+                {cartCount > 0 && (
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#FFF200] text-[#1A1A2E] text-[9px] font-bold flex items-center justify-center">
+                    {cartCount}
+                  </span>
+                )}
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                aria-label="Cerrar"
+                className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
           </div>
 
           {/* Mensajes */}
@@ -474,11 +547,12 @@ export function ChatbotWidget({ onAddProduct, onApplyCart }: Props) {
       {/* Modal del carrito */}
       <BotCartModal
         open={cartModalOpen}
-        cart={cart}
+        cart={mergedCart}
         products={products}
         checkout={checkout}
         mutating={mutating}
         error={modalError}
+        readOnlyProductIds={pageProductIds}
         onClose={() => setCartModalOpen(false)}
         onInc={incItem}
         onDec={decItem}
@@ -500,6 +574,7 @@ function BotCartModal({
   checkout,
   mutating,
   error,
+  readOnlyProductIds,
   onClose,
   onInc,
   onDec,
@@ -507,7 +582,6 @@ function BotCartModal({
   onAddProduct,
   onSearch,
   onApplyCart,
-  onAddToSiteCart,
 }: {
   open: boolean;
   cart: BotCart | null;
@@ -515,6 +589,7 @@ function BotCartModal({
   checkout: boolean;
   mutating: boolean;
   error: string | null;
+  readOnlyProductIds: Set<number>;
   onClose: () => void;
   onInc: (it: BotCart["items"][number]) => void;
   onDec: (it: BotCart["items"][number]) => void;
@@ -602,35 +677,41 @@ function BotCartModal({
                       <p className="text-xs font-medium text-gray-800 line-clamp-1">{it.name}</p>
                       <p className="text-xs font-bold text-[#1A1A2E]">{fmtPrice(it.subtotal)}</p>
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
-                      <button
-                        onClick={() => onDec(it)}
-                        disabled={mutating}
-                        aria-label="Quitar uno"
-                        className="w-6 h-6 rounded-md bg-white border border-black/10 text-[#1A1A2E] text-sm font-bold leading-none hover:bg-gray-100 disabled:opacity-40 cursor-pointer"
-                      >
-                        −
-                      </button>
-                      <span className="w-6 text-center text-xs font-bold text-[#1A1A2E]">{it.quantity}</span>
-                      <button
-                        onClick={() => onInc(it)}
-                        disabled={mutating}
-                        aria-label="Agregar uno"
-                        className="w-6 h-6 rounded-md bg-[#FFF200] text-[#1A1A2E] text-sm font-bold leading-none hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
-                      >
-                        +
-                      </button>
-                      <button
-                        onClick={() => onRemove(it)}
-                        disabled={mutating}
-                        aria-label="Eliminar"
-                        className="ml-0.5 w-6 h-6 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer disabled:opacity-40"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-                        </svg>
-                      </button>
-                    </div>
+                    {readOnlyProductIds.has(it.product_id) ? (
+                      <span className="shrink-0 text-[10px] font-semibold text-gray-400">
+                        en tu carrito
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button
+                          onClick={() => onDec(it)}
+                          disabled={mutating}
+                          aria-label="Quitar uno"
+                          className="w-6 h-6 rounded-md bg-white border border-black/10 text-[#1A1A2E] text-sm font-bold leading-none hover:bg-gray-100 disabled:opacity-40 cursor-pointer"
+                        >
+                          −
+                        </button>
+                        <span className="w-6 text-center text-xs font-bold text-[#1A1A2E]">{it.quantity}</span>
+                        <button
+                          onClick={() => onInc(it)}
+                          disabled={mutating}
+                          aria-label="Agregar uno"
+                          className="w-6 h-6 rounded-md bg-[#FFF200] text-[#1A1A2E] text-sm font-bold leading-none hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
+                        >
+                          +
+                        </button>
+                        <button
+                          onClick={() => onRemove(it)}
+                          disabled={mutating}
+                          aria-label="Eliminar"
+                          className="ml-0.5 w-6 h-6 rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 flex items-center justify-center cursor-pointer disabled:opacity-40"
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                          </svg>
+                        </button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
