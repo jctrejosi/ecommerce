@@ -378,7 +378,7 @@ export function CartDrawer({
       </div>
 
       {/* Panel flotante "Recomendaciones" (fuera del carrito, a su izquierda) */}
-      {floatingRec && rec && (
+      {floatingRec && rec && cartItems.length > 0 && (
         <div
           className="fixed z-[60]"
           style={{ top: rec.top, left: rec.left, height: rec.height }}
