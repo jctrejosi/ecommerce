@@ -195,10 +195,6 @@ export function CartDrawer({
     };
   }, [cartOpen, measure, cartItems]);
 
-  if (!cartOpen) return null;
-
-  const floatingRec = rec !== null;
-
   // Intercambia un ítem del carrito por el producto recomendado (misma cantidad).
   const swapItem = useCallback(
     (recommended: Product, cartItemId: number, quantity: number) => {
@@ -207,6 +203,10 @@ export function CartDrawer({
     },
     [onDelete, onAdd],
   );
+
+  if (!cartOpen) return null;
+
+  const floatingRec = rec !== null;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
