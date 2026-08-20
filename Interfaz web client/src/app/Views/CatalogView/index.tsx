@@ -241,11 +241,16 @@ export function CatalogPage({
   };
 
   const toggleCategory = (categoryId: number) => {
-    setCatalogCategory(
-      catalogCategory.includes(categoryId)
-        ? catalogCategory.filter((id) => id !== categoryId)
-        : [...catalogCategory, categoryId],
-    );
+    const isChecked = catalogCategory.includes(categoryId);
+    if (isChecked) {
+      // Al deseleccionar un padre se deseleccionan también todos sus hijos:
+      // si el padre deja de estar marcado, las subcategorías quedarían
+      // huérfanas (se ven marcadas bajo un padre sin check).
+      const remove = new Set(getDescendantIds(categoryId));
+      setCatalogCategory(catalogCategory.filter((id) => !remove.has(id)));
+    } else {
+      setCatalogCategory([...catalogCategory, categoryId]);
+    }
   };
 
   const catalogProducts = products.length > 0 ? products : EMPTY_PRODUCTS;
