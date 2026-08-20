@@ -18,7 +18,7 @@ cd /app/backend
 MAIN="dist/src/main.js"
 [ -f "$MAIN" ] || MAIN="dist/main.js"
 echo "==> backend: node $MAIN"
-PORT="$BACKEND_PORT" node "$MAIN" &
+BACKEND_PORT="$BACKEND_PORT" node "$MAIN" &
 BACKEND_PID=$!
 
 # ---- Bot FastAPI ----
