@@ -495,6 +495,12 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                           {m.payload.receta.no_encontrados.join(", ")}
                         </p>
                       )}
+                      {m.payload.receta.dudosos.length > 0 && (
+                        <p className="text-xs text-orange-600 mt-1">
+                          Por confirmar (no agregados):{" "}
+                          {m.payload.receta.dudosos.join(", ")}
+                        </p>
+                      )}
                       {m.payload.receta.pasos.length > 0 && (
                         <ol className="mt-2 space-y-1">
                           {m.payload.receta.pasos.map((p, idx) => (

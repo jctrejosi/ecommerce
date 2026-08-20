@@ -7,7 +7,48 @@ web client los renderice (productos, carrito).
 """
 from . import cart, database
 
+import re
+
 MAX_SEARCH = 8
+
+_ACCENT_MAP = str.maketrans("áéíóúüñ", "aeiouun")
+
+# Palabras que delatan productos que NO son ingredientes de comida para una
+# receta (mascotas, cuidado de bebé, aseo personal). Se bloquean como candidatos.
+_BLOCKED_TOKENS = {
+    "perro", "gato", "whiskas", "dogourmet", "pedigree", "fancy", "feast",
+    "mascota", "arrurru", "talco", "panal", "panales", "jabon", "shampoo",
+    "acondicionador", "pantene", "baby", "bebe",
+}
+
+
+def _tokens(text: str) -> list[str]:
+    """Normaliza (minúsculas, sin acentos) y extrae las palabras del texto."""
+    return re.findall(r"[a-z0-9]+", text.casefold().translate(_ACCENT_MAP))
+
+
+def _candidato_bloqueado(nombre_producto: str) -> bool:
+    """True si el producto es de una categoría claramente NO comestible para
+    la receta (comida de mascota, aceite de bebé, aseo personal, etc.)."""
+    tokens = _tokens(nombre_producto)
+    return any(t in _BLOCKED_TOKENS for t in tokens)
+
+
+def _score_coincidencia(nombre_producto: str, ingrediente: str) -> int:
+    """Puntaje de qué tan bien corresponde el producto al ingrediente.
+
+    Regla: el PRIMER token del ingrediente debe ser la PRIMERA palabra del
+    nombre del producto; gana el nombre más corto (producto más 'puro').
+    Ej: 'pollo' NO matchea 'JAMON POLLO PIETRAN' (el término no inicia el
+    nombre) pero 'papa' sí matchea 'PAPA CRIOLLA 1UN'. 0 = no confiable.
+    """
+    name_tokens = _tokens(nombre_producto)
+    ing_tokens = _tokens(ingrediente)
+    if not name_tokens or not ing_tokens:
+        return 0
+    if name_tokens[0] != ing_tokens[0]:
+        return 0
+    return 100 - len(name_tokens)
 
 
 async def _payload(ctx: dict) -> dict:
@@ -137,12 +178,12 @@ async def armar_lista_sugerida(args: dict, ctx: dict) -> dict:
 
 
 async def consultar_receta(args: dict, ctx: dict) -> dict:
-    """Consulta una receta que pide el cliente: agrega al carrito los
-    ingredientes que necesita (mejor coincidencia del catálogo) y devuelve
-    los pasos de preparación para presentarlos."""
+    """Consulta una receta: valida cada ingrediente contra el catálogo y agrega
+    SOLO las coincidencias confiables. Las dudosas NO se agregan: se reportan
+    para que el modelo corrija el término y vuelva a llamar (agregar=true)."""
     nombre = str(args.get("nombre_receta") or "").strip() or "la receta"
     pasos = [str(p).strip() for p in (args.get("pasos") or []) if str(p).strip()]
-
+    agregar = bool(args.get("agregar", True))
     items = _normalize_items(args.get("ingredientes") or [])
     if not items:
         return {
@@ -153,44 +194,158 @@ async def consultar_receta(args: dict, ctx: dict) -> dict:
             ),
         }
 
-    agregados, no_encontrados, agotados = await _add_items_to_cart(items, ctx)
-    cart_state = await cart.get_cart(ctx["session_id"])
+    revisados: list[dict] = []
+    confiables: list[dict] = []
+    dudosos: list[dict] = []
+    no_encontrados: list[str] = []
+    agotados: list[str] = []
+
+    for it in items:
+        resultados = await database.search_products(
+            query=it["nombre"],
+            limit=8,
+            branch_id=ctx.get("branch_id"),
+        )
+        if not resultados:
+            no_encontrados.append(it["nombre"])
+            revisados.append({
+                "ingrediente": it["nombre"],
+                "estado": "no_encontrado",
+                "coincidencia": None,
+                "cantidad": it["cantidad"],
+                "razon": "No hay ningún producto en el catálogo para este término.",
+            })
+            continue
+
+        # Mejor coincidencia por PUNTAJE (ingrediente al inicio del nombre y
+        # nombre corto), saltando productos bloqueados y sin stock.
+        mejor = None
+        mejor_score = 0
+        for candidato in resultados:
+            if _candidato_bloqueado(candidato["name"]):
+                continue
+            score = _score_coincidencia(candidato["name"], it["nombre"])
+            if score <= 0:
+                continue
+            stock = await database.get_stock(candidato["variant_id"], ctx.get("branch_id"))
+            if stock is not None and stock <= 0:
+                continue
+            if score > mejor_score:
+                mejor = candidato
+                mejor_score = score
+
+        if mejor is None:
+            hubo_confiable = any(
+                not _candidato_bloqueado(c["name"])
+                and _score_coincidencia(c["name"], it["nombre"]) > 0
+                for c in resultados
+            )
+            if hubo_confiable:
+                agotados.append(it["nombre"])
+                revisados.append({
+                    "ingrediente": it["nombre"],
+                    "estado": "agotado",
+                    "coincidencia": None,
+                    "cantidad": it["cantidad"],
+                    "razon": "Los productos que coinciden están agotados.",
+                })
+            else:
+                dudosos.append({"nombre": it["nombre"], "candidato": resultados[0]["name"]})
+                revisados.append({
+                    "ingrediente": it["nombre"],
+                    "estado": "dudoso",
+                    "coincidencia": resultados[0]["name"],
+                    "cantidad": it["cantidad"],
+                    "razon": (
+                        "La mejor coincidencia no parece corresponder al ingrediente "
+                        "(el término no aparece al inicio del nombre del producto). "
+                        "Corrige el término por uno más específico que sí exista en el catálogo."
+                    ),
+                })
+            continue
+
+        confiables.append({**mejor, "cantidad": it["cantidad"]})
+        revisados.append({
+            "ingrediente": it["nombre"],
+            "estado": "ok",
+            "coincidencia": mejor["name"],
+            "cantidad": it["cantidad"],
+            "razon": None,
+        })
+
+    # ── Agregar al carrito (solo confiables; sin duplicar los que ya estaban) ──
+    agregados: list[dict] = []
+    ya_en_carrito: list[str] = []
+    cart_state = None
+    if agregar:
+        cart_state = await cart.get_cart(ctx["session_id"])
+        ya = {i["variant_id"] for i in cart_state["items"]}
+        for c in confiables:
+            if c["variant_id"] in ya:
+                ya_en_carrito.append(c["name"])
+                continue
+            await cart.add_item(
+                session_id=ctx["session_id"],
+                variant_id=c["variant_id"],
+                quantity=c["cantidad"],
+                unit_price=float(c["price"] or 0),
+                branch_id=ctx.get("branch_id"),
+            )
+            agregados.append(c)
+        cart_state = await cart.get_cart(ctx["session_id"])
 
     payload = await _payload(ctx)
-    payload["cart"] = cart_state
+    if cart_state:
+        payload["cart"] = cart_state
     payload["receta"] = {
         "nombre": nombre,
         "pasos": pasos,
+        "ingredientes_revisados": revisados,
         "agregados": agregados,
+        "ya_en_carrito": ya_en_carrito,
         "no_encontrados": no_encontrados,
         "agotados": agotados,
+        "dudosos": [d["nombre"] for d in dudosos],
     }
     (await _payload(ctx)).setdefault("products", []).extend(agregados)
 
-    partes = [
-        f"Receta '{nombre}': agregué {len(agregados)} de {len(items)} ingredientes al carrito."
-    ]
+    partes = [f"Receta '{nombre}': revisé {len(items)} ingredientes contra el catálogo."]
     if agregados:
-        detalle = ", ".join(f"{a['name']} x{a['cantidad']}" for a in agregados)
-        partes.append(f"Ingredientes en el carrito: {detalle} (total ${cart_state['total']:,.0f}).")
+        partes.append(
+            "Agregué al carrito: "
+            + ", ".join(f"{a['name']} x{a['cantidad']}" for a in agregados)
+            + f" (total ${cart_state['total']:,.0f})."
+        )
+    if ya_en_carrito:
+        partes.append(f"Ya estaban en el carrito: {', '.join(ya_en_carrito)}.")
+    if dudosos:
+        nombres_dudosos = ", ".join(d['nombre'] for d in dudosos)
+        partes.append(
+            f"Coincidencias DUDOSAS que NO agregué (revisa y corrige el término "
+            f"por uno más específico del catálogo): {nombres_dudosos}."
+        )
     if no_encontrados:
         partes.append(f"No encontré en el catálogo: {', '.join(no_encontrados)}.")
     if agotados:
-        partes.append(f"Estaban agotados: {', '.join(agotados)}.")
+        partes.append(f"Agotados: {', '.join(agotados)}.")
     if pasos:
         partes.append("Pasos de preparación:")
         partes.extend(f"{i}. {p}" for i, p in enumerate(pasos, 1))
     partes.append(
-        "Presenta la receta al cliente: nombre, ingredientes (los que quedaron en el "
-        "carrito), los pasos de preparación y el total. Pregunta si quiere ajustar "
-        "cantidades o quitar algún ingrediente."
+        "Si quedaron ingredientes DUDOSOS o NO ENCONTRADOS, corrige esos términos "
+        "por otros que sí existan en el catálogo y vuelve a llamar consultar_receta "
+        "(con agregar=true) para completar el carrito. Presenta la receta solo cuando "
+        "los ingredientes estén bien: nombre, ingredientes del carrito, pasos y total."
     )
     return {
         "ok": True,
         "nombre_receta": nombre,
+        "ingredientes_revisados": revisados,
         "agregados": agregados,
+        "ya_en_carrito": ya_en_carrito,
         "no_encontrados": no_encontrados,
         "agotados": agotados,
+        "dudosos": [d["nombre"] for d in dudosos],
         "pasos": pasos,
         "carrito": cart_state,
         "mensaje": " ".join(partes),
@@ -573,22 +728,26 @@ TOOLS = [
         "function": {
             "name": "consultar_receta",
             "description": (
-                "Consulta una receta de cocina que pide el cliente: escribe la "
-                "receta (ingredientes con cantidades y pasos de preparación), "
-                "agrega al carrito los productos del catálogo que necesita la "
-                "receta y devuelve los pasos para presentarlos. Úsala cuando el "
-                "cliente pida una receta, algo para preparar/cocinar, o pregunte "
-                "'qué puedo hacer con X'. IMPORTANTE: completa 'ingredientes' con "
-                "los productos reales que requiere la receta (nombre y cantidad, "
-                "ej: 'arroz' 2, 'pollo' 1) y 'pasos' con los pasos numerados de "
-                "preparación."
+                "Consulta una receta de cocina que pide el cliente. PRIMERO escribe "
+                "la receta completa (nombre_receta, ingredientes con cantidades y "
+                "pasos). La herramienta revisa CADA ingrediente contra el catálogo "
+                "y agrega al carrito SOLO las coincidencias confiables; las dudosas "
+                "o no encontradas NO se agregan y se reportan en 'dudosos'/'no_encontrados'. "
+                "REGLAS: (1) escribe ingredientes genéricos que existan en un "
+                "supermercado ('pollo', 'papa', 'cebolla', 'aceite', 'yuca'); "
+                "(2) si el resultado reporta coincidencias DUDOSAS o no encontradas, "
+                "corrige esos términos por otros más específicos y vuelve a llamar "
+                "con agregar=true; (3) repite hasta que todos los ingredientes estén "
+                "bien. Usa la función también cuando el cliente diga 'qué puedo "
+                "hacer con X' o pida algo para preparar/cocinar. NO uses armar_carrito "
+                "para los ingredientes de la receta."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "nombre_receta": {
                         "type": "string",
-                        "description": "Nombre de la receta (ej: 'arroz con pollo').",
+                        "description": "Nombre de la receta (ej: 'sancocho de pollo').",
                     },
                     "ingredientes": {
                         "type": "array",
@@ -598,7 +757,7 @@ TOOLS = [
                             "properties": {
                                 "nombre": {
                                     "type": "string",
-                                    "description": "Nombre o término del ingrediente (ej: 'arroz', 'pollo').",
+                                    "description": "Nombre o término del ingrediente (ej: 'pollo', 'papa').",
                                 },
                                 "cantidad": {
                                     "type": "integer",
@@ -612,6 +771,10 @@ TOOLS = [
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Pasos de preparación de la receta, en orden.",
+                    },
+                    "agregar": {
+                        "type": "boolean",
+                        "description": "Si es true agrega al carrito las coincidencias confiables (por defecto true).",
                     },
                 },
                 "required": ["nombre_receta", "ingredientes", "pasos"],

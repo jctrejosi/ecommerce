@@ -39,8 +39,10 @@ export type BotRecipe = {
   nombre: string;
   pasos: string[];
   agregados: (BotProduct & { cantidad?: number })[];
+  ya_en_carrito?: string[];
   no_encontrados: string[];
   agotados: string[];
+  dudosos: string[];
 };
 
 export type BotPayload = {
