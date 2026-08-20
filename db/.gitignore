@@ -1,1 +1,5 @@
 /ADDT
+
+# servidor ADS en docker: instalador (con licencia) y copia de datos
+/ads/installers/
+/ads/data/

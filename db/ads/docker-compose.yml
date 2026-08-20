@@ -1,0 +1,16 @@
+name: mercaldas-ads
+
+services:
+  ads:
+    build: .
+    container_name: mercaldas_ads
+    restart: unless-stopped
+    ports:
+      - "6262:6262"   # puerto TCP de ADS (LAN_PORT por defecto)
+      - "2000:2000"   # puerto alterno (el que usa el servidor remoto actual)
+    volumes:
+      # Copia primero db/ADDT a db/ads/data (ver README): así el servidor
+      # NO toca los archivos originales de db/ADDT.
+      - ./data:/data
+    environment:
+      - ADS_DATA_DIR=/data
