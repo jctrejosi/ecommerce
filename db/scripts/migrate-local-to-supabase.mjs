@@ -13,6 +13,12 @@
  *   PROD_DATABASE_URL   (obligatoria)
  *   PROD_DB_SSL=1       fuerza SSL { rejectUnauthorized:false } hacia producción
  *   BACKUP_BEFORE=0     omite el backup de seguridad de producción
+ *   TABLES='a,b,c'      copia SOLO esas tablas (útil para sincronizar solo el catálogo
+ *                       sin tocar datos transaccionales de producción)
+ *
+ * Flags:
+ *   --yes       no pedir confirmación
+ *   --dry-run   NO modifica nada: solo compara conteos Local vs Supabase
  */
 import { createRequire } from "node:module";
 import { writeFileSync, statSync } from "node:fs";
@@ -33,6 +39,14 @@ const PROD_URL = process.env.PROD_DATABASE_URL || "";
 const PROD_SSL = process.env.PROD_DB_SSL === "1" || true; // Supabase siempre requiere SSL
 const BACKUP_BEFORE = process.env.BACKUP_BEFORE !== "0";
 const CONFIRM = !process.argv.includes("--yes");
+const DRY_RUN = process.argv.includes("--dry-run");
+const TABLE_FILTER = process.env.TABLES
+  ? new Set(
+      process.env.TABLES.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+    )
+  : null;
 
 // Tablas gestionadas por extensiones (PostGIS) — no se copian
 const EXCLUDED_TABLES = new Set([
@@ -124,7 +138,17 @@ async function backupTarget(client, tables) {
 }
 
 async function truncateTable(dst, table) {
-  await dst.query(`TRUNCATE TABLE "${table}" CASCADE`);
+  if (TABLE_FILTER) {
+    // Modo filtrado: NUNCA usar TRUNCATE CASCADE — vaciaría también las
+    // tablas que referencian a ésta (product_variants, cart_items,
+    // order_items, etc.) aunque no estén en el filtro. Con
+    // session_replication_role=replica los triggers de FK no disparan,
+    // así que DELETE vacía SOLO esta tabla (los IDs se conservan, las
+    // referencias externas siguen apuntando a los mismos IDs).
+    await dst.query(`DELETE FROM "${table}"`);
+  } else {
+    await dst.query(`TRUNCATE TABLE "${table}" CASCADE`);
+  }
 }
 
 async function copyTable(src, dst, table, log) {
@@ -200,8 +224,33 @@ async function main() {
   const dstTables = new Set(await listTables(dst));
   const missing = tables.filter((t) => !dstTables.has(t));
   if (missing.length) console.log(`⚠ Tablas locales que no existen en Supabase (se omiten): ${missing.join(", ")}`);
-  const toCopy = tables.filter((t) => dstTables.has(t));
-  console.log(`Tablas a copiar: ${toCopy.length}\n`);
+  let toCopy = tables.filter((t) => dstTables.has(t));
+  if (TABLE_FILTER) {
+    const notFound = [...TABLE_FILTER].filter((t) => !toCopy.includes(t));
+    if (notFound.length) {
+      console.log(`⚠ TABLES: no existen localmente o en Supabase (se omiten): ${notFound.join(", ")}`);
+    }
+    toCopy = toCopy.filter((t) => TABLE_FILTER.has(t));
+  }
+  console.log(`Tablas a copiar: ${toCopy.length}${DRY_RUN ? "  [DRY-RUN: sin cambios]" : ""}\n`);
+
+  if (DRY_RUN) {
+    console.log("[verify] Conteos Local vs Supabase (solo lectura):");
+    let ok = true;
+    for (const t of toCopy) {
+      const a = (await src.query(`SELECT count(*)::int AS n FROM "${t}"`)).rows[0].n;
+      const b = (await dst.query(`SELECT count(*)::int AS n FROM "${t}"`)).rows[0].n;
+      const match = a === b;
+      if (!match) ok = false;
+      if (!match || a > 0) {
+        console.log(`  ${t.padEnd(26)} local ${String(a).padStart(7)}  supabase ${String(b).padStart(7)}  ${match ? "✓" : "✗ DIFERENCIA"}`);
+      }
+    }
+    console.log(ok ? "\n✅ Los conteos coinciden (nada que cambiar)." : "\n⚠ Hay diferencias. Revisa la lista y ejecuta sin --dry-run cuando estés listo.");
+    await src.end();
+    await dst.end();
+    return;
+  }
 
   if (BACKUP_BEFORE) {
     console.log("[backup] Guardando estado actual de Supabase...");
@@ -209,6 +258,11 @@ async function main() {
   }
 
   await confirm();
+
+  // Toda la fase destructiva dentro de UNA transacción: si algo falla a
+  // mitad (p. ej. FKs que no se pueden desactivar), se hace ROLLBACK y
+  // producción queda intacta.
+  await dst.query("BEGIN");
 
   // Desactivar FKs durante la copia (evita problemas de orden)
   let fkDisabled = true;
@@ -219,34 +273,47 @@ async function main() {
     console.warn("⚠ No se pudo desactivar FKs (session_replication_role):", e.message);
   }
 
-  // FASE A: truncar TODAS las tablas primero (CASCADE puede borrar tablas
-  // ya insertadas si se intercalara; con truncado previo global no hay problema)
-  console.log("[truncate] Vaciando destino...");
-  for (const t of toCopy) {
-    await truncateTable(dst, t);
-  }
-  console.log(`✓ ${toCopy.length} tablas truncadas`);
-
-  // FASE B: insertar todos los datos (FKs desactivadas)
-  const log = [];
-  console.log("[copy] Copiando datos...");
-  for (const t of toCopy) {
-    try {
-      await copyTable(src, dst, t, log);
-    } catch (e) {
-      console.error(`✗ Error en ${t}: ${e.message}`);
-      if (fkDisabled) await dst.query("SET session_replication_role = origin").catch(() => {});
-      fail(`Migración abortada en ${t}. Revisa el error arriba.`);
+  try {
+    // FASE A: vaciar las tablas destino (en modo filtrado: DELETE sin
+    // CASCADE para no arrastrar tablas fuera del filtro; en modo completo:
+    // TRUNCATE CASCADE global como siempre)
+    console.log("[truncate] Vaciando destino...");
+    for (const t of toCopy) {
+      await truncateTable(dst, t);
     }
-  }
+    console.log(`✓ ${toCopy.length} tablas vaciadas`);
 
-  if (fkDisabled) {
-    await dst.query("SET session_replication_role = origin");
-    console.log("✓ FKs reactivadas");
-  }
+    // FASE B: insertar todos los datos (FKs desactivadas)
+    const log = [];
+    console.log("[copy] Copiando datos...");
+    for (const t of toCopy) {
+      try {
+        await copyTable(src, dst, t, log);
+      } catch (e) {
+        throw new Error(`Error en ${t}: ${e.message}`);
+      }
+    }
 
-  console.log("[seq] Reiniciando secuencias...");
-  await resetSequences(dst, toCopy);
+    console.log("[seq] Reiniciando secuencias...");
+    await resetSequences(dst, toCopy);
+
+    await dst.query("COMMIT");
+    console.log("✓ Transacción confirmada");
+
+    if (fkDisabled) {
+      await dst.query("SET session_replication_role = origin");
+      console.log("✓ FKs reactivadas");
+    }
+
+    console.log("\n" + log.join("\n"));
+  } catch (e) {
+    await dst.query("ROLLBACK").catch(() => {});
+    console.error(`✗ ${e.message}`);
+    fail(
+      "Migración abortada y REVERTIDA (ROLLBACK): producción quedó como estaba. " +
+        "Revisa el error arriba.",
+    );
+  }
 
   console.log("\n[verify] Conteos Local vs Supabase (todas las tablas):");
   let ok = true;
@@ -259,7 +326,6 @@ async function main() {
       console.log(`  ${t.padEnd(26)} local ${String(a).padStart(7)}  supabase ${String(b).padStart(7)}  ${match ? "✓" : "✗ DIFERENCIA"}`);
     }
   }
-  console.log("\n" + log.join("\n"));
   console.log(ok ? "\n✅ Supabase idéntica a local." : "\n⚠ Hay diferencias, revisa las tablas marcadas.");
 
   await src.end();
