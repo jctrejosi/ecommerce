@@ -6,3 +6,8 @@ __pycache__/
 
 # logs del lanzador
 /logs/
+
+# variables de entorno
+.env
+.env.*
+!.env.example
