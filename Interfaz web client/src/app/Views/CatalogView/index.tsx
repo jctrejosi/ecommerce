@@ -315,7 +315,7 @@ export function CatalogPage({
               )}
             </div>
             <span
-              className="text-xs flex-1 truncate"
+              className="text-xs flex-1 transition-colors leading-tight break-words"
               style={{
                 color: nodeChecked ? "#1A1A2E" : "#6B7280",
                 fontWeight: nodeChecked ? 600 : 400,
@@ -400,7 +400,7 @@ export function CatalogPage({
                     ) : null}
                   </div>
                   <span
-                    className="text-sm flex-1 truncate transition-colors"
+                    className="text-sm flex-1 transition-colors leading-tight break-words"
                     style={{
                       color: checked ? "#1A1A2E" : "#6B7280",
                       fontWeight: checked ? 600 : 400,
