@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Search, X, ChevronRight } from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
 import { catalogService } from "../../../services/catalog.service";
@@ -70,10 +70,52 @@ export function CatalogPage({
   // ── Expansión del árbol de categorías (hover en desktop, chevron en móvil) ──
   const [hoverCat, setHoverCat] = useState<number | null>(null);
   const [pinCat, setPinCat] = useState<number | null>(null);
-  const [hoverChild, setHoverChild] = useState<number | null>(null);
-  const [pinChild, setPinChild] = useState<number | null>(null);
   const openCat = hoverCat ?? pinCat;
-  const openChild = hoverChild ?? pinChild;
+
+  // Ancla del flyout flotante: posición en pantalla de la fila hovereada
+  // (se usa position:fixed para que el panel no lo recorte el sidebar).
+  const [flyoutAnchor, setFlyoutAnchor] = useState<{
+    top: number;
+    right: number;
+    left: number;
+  } | null>(null);
+
+  const captureAnchor = (el: HTMLElement | null) => {
+    if (!el) return;
+    const row = el.closest(".catalog-cat-row") as HTMLElement | null;
+    const rect = (row ?? el).getBoundingClientRect();
+    setFlyoutAnchor({ top: rect.top, right: rect.right, left: rect.left });
+  };
+
+  // Cierre con pequeño retardo: permite cruzar el hueco entre la fila y el
+  // flyout sin que se cierre (mismo patrón que el menú del Header).
+  const flyoutCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleCloseCat = () => {
+    if (flyoutCloseTimer.current) clearTimeout(flyoutCloseTimer.current);
+    flyoutCloseTimer.current = setTimeout(() => setHoverCat(null), 180);
+  };
+  const cancelCloseCat = () => {
+    if (flyoutCloseTimer.current) {
+      clearTimeout(flyoutCloseTimer.current);
+      flyoutCloseTimer.current = null;
+    }
+  };
+
+  // Al hacer scroll (sidebar o página) se cierra el flyout: su ancla queda
+  // desactualizada y se vería "flotando" en una posición vieja.
+  useEffect(() => {
+    const closeFlyout = () => {
+      setHoverCat(null);
+      setPinCat(null);
+      setFlyoutAnchor(null);
+    };
+    window.addEventListener("scroll", closeFlyout, {
+      capture: true,
+      passive: true,
+    });
+    return () =>
+      window.removeEventListener("scroll", closeFlyout, { capture: true });
+  }, []);
 
   useEffect(() => {
     catalogService
@@ -230,7 +272,70 @@ export function CatalogPage({
     setCatalogProductType("");
   };
 
-  const SidebarContent = () => (
+  const SidebarContent = ({
+    flyoutToRight = true,
+  }: {
+    flyoutToRight?: boolean;
+  }) => {
+    // Nodo del subárbol dentro del flyout flotante: cada subcategoría con su
+    // check visible (anidado por nivel, con scroll propio si es muy largo).
+    const renderFlyoutNode = (node: CatalogCategory) => {
+      const kids = getChildCategories(node.id);
+      const nodeChecked = catalogCategory.includes(node.id);
+      return (
+        <div key={node.id}>
+          <label
+            className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer transition-colors ${
+              nodeChecked ? "bg-amber-50" : "hover:bg-muted"
+            }`}
+          >
+            <div
+              className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
+              style={{
+                borderColor: nodeChecked ? "#1A1A2E" : "#D1D5DB",
+                background: nodeChecked ? "#1A1A2E" : "white",
+              }}
+              onClick={() => toggleCategory(node.id)}
+            >
+              {nodeChecked && (
+                <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
+                  <path
+                    d="M1 4l2.5 2.5L9 1"
+                    stroke="#FFF200"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              )}
+            </div>
+            <span
+              className="text-xs flex-1 truncate"
+              style={{
+                color: nodeChecked ? "#1A1A2E" : "#6B7280",
+                fontWeight: nodeChecked ? 600 : 400,
+              }}
+              onClick={() => toggleCategory(node.id)}
+            >
+              {node.name}
+            </span>
+            {kids.length > 0 && (
+              <ChevronRight
+                size={12}
+                className="text-gray-300 flex-shrink-0"
+              />
+            )}
+          </label>
+          {kids.length > 0 && (
+            <div className="ml-4 border-l border-border pl-1">
+              {kids.map((k) => renderFlyoutNode(k))}
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
     <div className="space-y-6">
       {/* Categories */}
       <div>
@@ -245,12 +350,13 @@ export function CatalogPage({
             return (
               <div
                 key={cat.id}
-                className="relative"
-                onMouseEnter={() => {
+                className="relative catalog-cat-row"
+                onMouseEnter={(e) => {
+                  cancelCloseCat();
+                  captureAnchor(e.currentTarget);
                   setHoverCat(cat.id);
-                  setHoverChild(null);
                 }}
-                onMouseLeave={() => setHoverCat(null)}
+                onMouseLeave={scheduleCloseCat}
               >
                 <label
                   className={`flex items-center gap-2.5 py-1.5 px-2 rounded-lg cursor-pointer transition-colors ${
@@ -302,6 +408,7 @@ export function CatalogPage({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
+                        captureAnchor(e.currentTarget);
                         setPinCat(isOpen ? null : cat.id);
                       }}
                       className={`p-0.5 rounded transition-all ${
@@ -316,146 +423,24 @@ export function CatalogPage({
                   )}
                 </label>
 
-                {isOpen && childCategories.length > 0 && (
-                  <div className="mt-1 ml-7 space-y-0.5 border-l border-border pl-2 pb-1">
-                    {childCategories.map((child) => {
-                      const grandChildCategories = getChildCategories(child.id);
-                      const childChecked = catalogCategory.includes(child.id);
-                      const childOpen = openChild === child.id;
-
-                      return (
-                        <div
-                          key={child.id}
-                          className="relative"
-                          onMouseEnter={() => setHoverChild(child.id)}
-                          onMouseLeave={() => setHoverChild(null)}
-                        >
-                          <label
-                            className={`flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer transition-colors ${
-                              childOpen ? "bg-muted" : "hover:bg-muted"
-                            }`}
-                          >
-                            <div
-                              className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
-                              style={{
-                                borderColor: childChecked
-                                  ? "#1A1A2E"
-                                  : "#D1D5DB",
-                                background: childChecked ? "#1A1A2E" : "white",
-                              }}
-                              onClick={() => toggleCategory(child.id)}
-                            >
-                              {childChecked && (
-                                <svg
-                                  width="8"
-                                  height="6"
-                                  viewBox="0 0 10 8"
-                                  fill="none"
-                                >
-                                  <path
-                                    d="M1 4l2.5 2.5L9 1"
-                                    stroke="#FFF200"
-                                    strokeWidth="2"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  />
-                                </svg>
-                              )}
-                            </div>
-                            <span
-                              className="text-xs flex-1 truncate"
-                              style={{
-                                color: childChecked ? "#1A1A2E" : "#6B7280",
-                                fontWeight: childChecked ? 600 : 400,
-                              }}
-                              onClick={() => toggleCategory(child.id)}
-                            >
-                              {child.name}
-                            </span>
-                            {grandChildCategories.length > 0 && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setPinChild(childOpen ? null : child.id);
-                                }}
-                                className={`p-0.5 rounded transition-all ${
-                                  childOpen
-                                    ? "text-foreground rotate-90"
-                                    : "text-gray-300 hover:text-gray-500"
-                                }`}
-                                title={childOpen ? "Contraer" : "Expandir"}
-                              >
-                                <ChevronRight size={13} />
-                              </button>
-                            )}
-                          </label>
-
-                          {childOpen && grandChildCategories.length > 0 && (
-                            <div className="mt-1 ml-6 space-y-0.5 border-l border-border pl-2 pb-1">
-                              {grandChildCategories.map((grandChild) => {
-                                const grandChildChecked =
-                                  catalogCategory.includes(grandChild.id);
-
-                                return (
-                                  <label
-                                    key={grandChild.id}
-                                    className="flex items-center gap-2 py-1 px-2 rounded-lg cursor-pointer hover:bg-muted transition-colors"
-                                  >
-                                    <div
-                                      className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
-                                      style={{
-                                        borderColor: grandChildChecked
-                                          ? "#1A1A2E"
-                                          : "#D1D5DB",
-                                        background: grandChildChecked
-                                          ? "#1A1A2E"
-                                          : "white",
-                                      }}
-                                      onClick={() =>
-                                        toggleCategory(grandChild.id)
-                                      }
-                                    >
-                                      {grandChildChecked && (
-                                        <svg
-                                          width="8"
-                                          height="6"
-                                          viewBox="0 0 10 8"
-                                          fill="none"
-                                        >
-                                          <path
-                                            d="M1 4l2.5 2.5L9 1"
-                                            stroke="#FFF200"
-                                            strokeWidth="2"
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                          />
-                                        </svg>
-                                      )}
-                                    </div>
-                                    <span
-                                      className="text-xs flex-1 truncate"
-                                      style={{
-                                        color: grandChildChecked
-                                          ? "#1A1A2E"
-                                          : "#6B7280",
-                                        fontWeight: grandChildChecked
-                                          ? 600
-                                          : 400,
-                                      }}
-                                      onClick={() =>
-                                        toggleCategory(grandChild.id)
-                                      }
-                                    >
-                                      {grandChild.name}
-                                    </span>
-                                  </label>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                {isOpen && childCategories.length > 0 && flyoutAnchor && (
+                  <div
+                    className="fixed z-[60] w-64 max-h-[70vh] overflow-y-auto bg-white border border-border rounded-xl shadow-2xl p-2"
+                    style={{
+                      top: Math.min(flyoutAnchor.top, window.innerHeight - 80),
+                      left: flyoutToRight
+                        ? flyoutAnchor.right + 4
+                        : Math.max(8, flyoutAnchor.left - 256 - 4),
+                    }}
+                    onMouseEnter={() => {
+                      cancelCloseCat();
+                      setHoverCat(cat.id);
+                    }}
+                    onMouseLeave={scheduleCloseCat}
+                  >
+                    {childCategories.map((child) =>
+                      renderFlyoutNode(child),
+                    )}
                   </div>
                 )}
               </div>
@@ -670,7 +655,8 @@ export function CatalogPage({
         </button>
       )}
     </div>
-  );
+    );
+  };
 
   const filtered = allProducts;
 
@@ -713,7 +699,7 @@ export function CatalogPage({
             </form>
           </div>
           <div className="p-4">
-            <SidebarContent />
+            <SidebarContent flyoutToRight />
           </div>
         </aside>
 
@@ -943,7 +929,7 @@ export function CatalogPage({
               </button>
             </div>
             <div className="flex-1 overflow-y-auto p-4">
-              <SidebarContent />
+              <SidebarContent flyoutToRight={false} />
             </div>
             <div className="border-t border-border p-4">
               <button
