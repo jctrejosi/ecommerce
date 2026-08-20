@@ -48,6 +48,15 @@ El esquema **real** vive en `backend/drizzle/schema.ts` (Drizzle ORM). Los
 que ya no se usan para crear la BD de producción — esa se gestiona con
 `drizzle-kit push`.
 
+> ⚠ **Extensiones requeridas en producción (Supabase):** el buscador del
+> catálogo usa `unaccent()` (búsqueda insensible a tildes/ñ). Si no existe,
+> `POST /catalog/products` con `search` responde 500. Habilítala una vez:
+> ```sql
+> CREATE EXTENSION IF NOT EXISTS unaccent;
+> ```
+> (en el SQL editor de Supabase o con el rol `postgres`). En local la crea
+> `db/docker/init.sql`.
+
 ## Migraciones
 
 | Script | Origen → Destino | Cómo se ejecuta |
