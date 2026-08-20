@@ -1,0 +1,16 @@
+# Reverse proxy del servicio único de MercAldas.
+# Caddy escucha en $HTTP_PORT (el PORT público que inyecta Render).
+# - /bot/*  → bot FastAPI (interno 127.0.0.1:8000). handle_path quita el prefijo.
+# - lo demás → backend NestJS (interno 127.0.0.1:3000, incluye socket.io).
+
+:{$HTTP_PORT} {
+	encode zstd gzip
+
+	handle_path /bot/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}

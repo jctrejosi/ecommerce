@@ -1,0 +1,54 @@
+# Servicio único MercAldas: backend NestJS + bot FastAPI + proxy Caddy.
+# Dockerfile en la raíz del repo; el bot queda bajo el prefijo /bot.
+services:
+  - type: web
+    name: mercaldas-ecommerce
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api-status
+    envVars:
+      # --- Obligatorias (sin esto el backend no arranca) ---
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: CORS_ORIGIN
+        sync: false
+
+      # --- Backend ---
+      - key: NODE_ENV
+        value: production
+      - key: DB_SSL
+        value: "true"
+
+      # Cloudinary (imágenes)
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      # Pagos (opcionales)
+      - key: WOMPI_PUBLIC_KEY
+        sync: false
+      - key: WOMPI_PRIVATE_KEY
+        sync: false
+      - key: WOMPI_INTEGRITY_KEY
+        sync: false
+      - key: EPAYCO_PUBLIC_KEY
+        sync: false
+      - key: EPAYCO_PRIVATE_KEY
+        sync: false
+
+      # Email
+      - key: RESEND_API_KEY
+        sync: false
+
+      # --- Bot ---
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: DEEPSEEK_MODEL
+        value: deepseek-v4-flash

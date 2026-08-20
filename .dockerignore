@@ -1,0 +1,21 @@
+# Node / build
+**/node_modules
+**/dist
+
+# Python
+**/.venv
+**/__pycache__
+*.pyc
+
+# Entornos, secretos y datos locales
+.env
+.env.*
+logs/
+backend/logs/
+JPG/
+test_db/
+db/backups/
+
+# Git
+.git
+.gitignore
