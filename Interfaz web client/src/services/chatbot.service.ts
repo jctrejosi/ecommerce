@@ -35,10 +35,19 @@ export type BotCart = {
   total: number;
 };
 
+export type BotRecipe = {
+  nombre: string;
+  pasos: string[];
+  agregados: (BotProduct & { cantidad?: number })[];
+  no_encontrados: string[];
+  agotados: string[];
+};
+
 export type BotPayload = {
   products?: BotProduct[];
   cart?: BotCart;
   checkout?: boolean;
+  receta?: BotRecipe;
 };
 
 export type BotHistoryMessage = { role: "user" | "assistant"; content: string };

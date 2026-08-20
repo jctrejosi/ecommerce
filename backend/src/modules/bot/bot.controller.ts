@@ -50,6 +50,11 @@ const BOT_FUNCTIONS = [
     label: 'Finalizar compra',
     description: 'Prepara el resumen final para el checkout.',
   },
+  {
+    name: 'consultar_receta',
+    label: 'Consultar receta',
+    description: 'Consulta una receta, arma el carrito con sus ingredientes y muestra los pasos de preparación.',
+  },
 ];
 
 const SETTINGS_KEY = 'bot.functions';

@@ -15,13 +15,8 @@ async def _payload(ctx: dict) -> dict:
     return payload
 
 
-# ─── Handlers ─────────────────────────────────────────────────────
-
-async def armar_carrito(args: dict, ctx: dict) -> dict:
-    """Arma el carrito con una lista de productos: la MEJOR coincidencia de
-    cada uno, UNO por ítem, agregada directamente (sin preguntar)."""
-    raw_items = args.get("productos") or []
-    # Normalizar y deduplicar por término ("arroz, arroz" → una sola vez)
+def _normalize_items(raw_items: list) -> list[dict]:
+    """Normaliza y deduplica la lista de ítems ("arroz, arroz" → una vez)."""
     vistos: set[str] = set()
     items: list[dict] = []
     for it in raw_items:
@@ -33,7 +28,12 @@ async def armar_carrito(args: dict, ctx: dict) -> dict:
             continue
         vistos.add(clave)
         items.append({"nombre": nombre, "cantidad": max(1, int(it.get("cantidad") or 1))})
+    return items
 
+
+async def _add_items_to_cart(items: list[dict], ctx: dict) -> tuple[list, list, list]:
+    """Busca la MEJOR coincidencia de cada ítem y la agrega al carrito (sin
+    preguntar). Devuelve (agregados, no_encontrados, agotados)."""
     agregados: list[dict] = []
     no_encontrados: list[str] = []
     agotados: list[str] = []
@@ -65,6 +65,17 @@ async def armar_carrito(args: dict, ctx: dict) -> dict:
             branch_id=ctx.get("branch_id"),
         )
         agregados.append({**mejor, "cantidad": it["cantidad"]})
+
+    return agregados, no_encontrados, agotados
+
+
+# ─── Handlers ─────────────────────────────────────────────────────
+
+async def armar_carrito(args: dict, ctx: dict) -> dict:
+    """Arma el carrito con una lista de productos: la MEJOR coincidencia de
+    cada uno, UNO por ítem, agregada directamente (sin preguntar)."""
+    items = _normalize_items(args.get("productos") or [])
+    agregados, no_encontrados, agotados = await _add_items_to_cart(items, ctx)
 
     cart_state = await cart.get_cart(ctx["session_id"])
     payload = await _payload(ctx)
@@ -122,6 +133,67 @@ async def armar_lista_sugerida(args: dict, ctx: dict) -> dict:
             "El carrito ya tenía productos, así que no agregué la lista sugerida. "
             "Muestra el carrito actual y ofrece los productos sugeridos como opciones."
         ),
+    }
+
+
+async def consultar_receta(args: dict, ctx: dict) -> dict:
+    """Consulta una receta que pide el cliente: agrega al carrito los
+    ingredientes que necesita (mejor coincidencia del catálogo) y devuelve
+    los pasos de preparación para presentarlos."""
+    nombre = str(args.get("nombre_receta") or "").strip() or "la receta"
+    pasos = [str(p).strip() for p in (args.get("pasos") or []) if str(p).strip()]
+
+    items = _normalize_items(args.get("ingredientes") or [])
+    if not items:
+        return {
+            "ok": False,
+            "mensaje": (
+                "No recibí ingredientes para la receta. Desglosa primero los "
+                "ingredientes con sus cantidades en la llamada a esta herramienta."
+            ),
+        }
+
+    agregados, no_encontrados, agotados = await _add_items_to_cart(items, ctx)
+    cart_state = await cart.get_cart(ctx["session_id"])
+
+    payload = await _payload(ctx)
+    payload["cart"] = cart_state
+    payload["receta"] = {
+        "nombre": nombre,
+        "pasos": pasos,
+        "agregados": agregados,
+        "no_encontrados": no_encontrados,
+        "agotados": agotados,
+    }
+    (await _payload(ctx)).setdefault("products", []).extend(agregados)
+
+    partes = [
+        f"Receta '{nombre}': agregué {len(agregados)} de {len(items)} ingredientes al carrito."
+    ]
+    if agregados:
+        detalle = ", ".join(f"{a['name']} x{a['cantidad']}" for a in agregados)
+        partes.append(f"Ingredientes en el carrito: {detalle} (total ${cart_state['total']:,.0f}).")
+    if no_encontrados:
+        partes.append(f"No encontré en el catálogo: {', '.join(no_encontrados)}.")
+    if agotados:
+        partes.append(f"Estaban agotados: {', '.join(agotados)}.")
+    if pasos:
+        partes.append("Pasos de preparación:")
+        partes.extend(f"{i}. {p}" for i, p in enumerate(pasos, 1))
+    partes.append(
+        "Presenta la receta al cliente: nombre, ingredientes (los que quedaron en el "
+        "carrito), los pasos de preparación y el total. Pregunta si quiere ajustar "
+        "cantidades o quitar algún ingrediente."
+    )
+    return {
+        "ok": True,
+        "nombre_receta": nombre,
+        "agregados": agregados,
+        "no_encontrados": no_encontrados,
+        "agotados": agotados,
+        "pasos": pasos,
+        "carrito": cart_state,
+        "mensaje": " ".join(partes),
     }
 
 
@@ -496,6 +568,56 @@ TOOLS = [
             "parameters": {"type": "object", "properties": {}},
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "consultar_receta",
+            "description": (
+                "Consulta una receta de cocina que pide el cliente: escribe la "
+                "receta (ingredientes con cantidades y pasos de preparación), "
+                "agrega al carrito los productos del catálogo que necesita la "
+                "receta y devuelve los pasos para presentarlos. Úsala cuando el "
+                "cliente pida una receta, algo para preparar/cocinar, o pregunte "
+                "'qué puedo hacer con X'. IMPORTANTE: completa 'ingredientes' con "
+                "los productos reales que requiere la receta (nombre y cantidad, "
+                "ej: 'arroz' 2, 'pollo' 1) y 'pasos' con los pasos numerados de "
+                "preparación."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "nombre_receta": {
+                        "type": "string",
+                        "description": "Nombre de la receta (ej: 'arroz con pollo').",
+                    },
+                    "ingredientes": {
+                        "type": "array",
+                        "description": "Ingredientes de la receta (uno por ítem, con su cantidad).",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "nombre": {
+                                    "type": "string",
+                                    "description": "Nombre o término del ingrediente (ej: 'arroz', 'pollo').",
+                                },
+                                "cantidad": {
+                                    "type": "integer",
+                                    "description": "Cantidad de unidades (por defecto 1).",
+                                },
+                            },
+                            "required": ["nombre"],
+                        },
+                    },
+                    "pasos": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Pasos de preparación de la receta, en orden.",
+                    },
+                },
+                "required": ["nombre_receta", "ingredientes", "pasos"],
+            },
+        },
+    },
 ]
 
 FUNCTION_MAP = {
@@ -508,6 +630,7 @@ FUNCTION_MAP = {
     "quitar_del_carrito": quitar_del_carrito,
     "vaciar_carrito": vaciar_carrito,
     "finalizar_compra": finalizar_compra,
+    "consultar_receta": consultar_receta,
 }
 
 ALL_FUNCTION_NAMES = set(FUNCTION_MAP.keys())
@@ -544,6 +667,11 @@ QUICK_OPTIONS = [
         "id": "armar_carrito",
         "label": "🛒 Armar mi carrito de compras",
         "message": "Quiero armar mi carrito de compras.",
+    },
+    {
+        "id": "consultar_receta",
+        "label": "🍳 Consultar una receta",
+        "message": "Quiero consultar una receta para preparar.",
     },
     {
         "id": "armar_lista_sugerida",

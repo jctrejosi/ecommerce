@@ -476,6 +476,42 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                   <div className="max-w-[90%] bg-white border border-black/5 text-gray-800 text-sm px-3.5 py-2 rounded-2xl rounded-bl-md whitespace-pre-wrap shadow-sm">
                     {m.content}
                   </div>
+                  {m.payload?.receta && (
+                    <div className="mt-1.5 max-w-[90%] w-full bg-[#FFFDF2] border border-[#FFF200] rounded-xl p-3 shadow-sm">
+                      <p className="text-sm font-bold text-[#1A1A2E]">
+                        🍳 {m.payload.receta.nombre}
+                      </p>
+                      {m.payload.receta.agregados.length > 0 && (
+                        <p className="text-xs text-gray-600 mt-1">
+                          Ingredientes al carrito:{" "}
+                          {m.payload.receta.agregados
+                            .map((a) => `${a.name} x${a.cantidad ?? 1}`)
+                            .join(", ")}
+                        </p>
+                      )}
+                      {m.payload.receta.no_encontrados.length > 0 && (
+                        <p className="text-xs text-amber-600 mt-1">
+                          No encontrados en el catálogo:{" "}
+                          {m.payload.receta.no_encontrados.join(", ")}
+                        </p>
+                      )}
+                      {m.payload.receta.pasos.length > 0 && (
+                        <ol className="mt-2 space-y-1">
+                          {m.payload.receta.pasos.map((p, idx) => (
+                            <li
+                              key={idx}
+                              className="text-xs text-gray-700 flex gap-1.5"
+                            >
+                              <span className="font-bold text-[#1A1A2E] shrink-0">
+                                {idx + 1}.
+                              </span>
+                              <span>{p}</span>
+                            </li>
+                          ))}
+                        </ol>
+                      )}
+                    </div>
+                  )}
                   {m.payload?.cart && m.payload.cart.items.length > 0 && (
                     <button
                       onClick={() => openCartModal(m.payload!)}
