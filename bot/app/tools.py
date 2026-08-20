@@ -5,7 +5,7 @@ se le devuelve al modelo como resultado de la herramienta. Los handlers
 pueden acumular payloads estructurados en `ctx["payload"]` para que el
 web client los renderice (productos, carrito).
 """
-from . import cart, database
+from . import cart, database, recipes
 
 import re
 
@@ -178,13 +178,28 @@ async def armar_lista_sugerida(args: dict, ctx: dict) -> dict:
 
 
 async def consultar_receta(args: dict, ctx: dict) -> dict:
-    """Consulta una receta: valida cada ingrediente contra el catálogo y agrega
-    SOLO las coincidencias confiables. Las dudosas NO se agregan: se reportan
-    para que el modelo corrija el término y vuelva a llamar (agregar=true)."""
+    """Consulta una receta: valida CADA ingrediente contra el catálogo y agrega
+    SOLO las coincidencias confiables, de modo que todo lo que se sugiera
+    pertenezca realmente a la receta.
+
+    Si la receta está en la base curada (recipes.RECIPES) se usan SUS
+    ingredientes canónicos (validados) en lugar de lo que el modelo invente.
+    """
     nombre = str(args.get("nombre_receta") or "").strip() or "la receta"
-    pasos = [str(p).strip() for p in (args.get("pasos") or []) if str(p).strip()]
     agregar = bool(args.get("agregar", True))
-    items = _normalize_items(args.get("ingredientes") or [])
+
+    # ── Fuente de la receta: base curada > lo que escriba el modelo ──
+    receta_curada = recipes.find_recipe(nombre)
+    origen = "curada" if receta_curada else "modelo"
+    if receta_curada:
+        items = _normalize_items(receta_curada["ingredientes"])
+        pasos = [
+            p for p in (receta_curada.get("pasos") or []) if str(p).strip()
+        ] or [str(p).strip() for p in (args.get("pasos") or []) if str(p).strip()]
+    else:
+        items = _normalize_items(args.get("ingredientes") or [])
+        pasos = [str(p).strip() for p in (args.get("pasos") or []) if str(p).strip()]
+
     if not items:
         return {
             "ok": False,
@@ -206,6 +221,16 @@ async def consultar_receta(args: dict, ctx: dict) -> dict:
             limit=8,
             branch_id=ctx.get("branch_id"),
         )
+        # Frases multi-palabra ('pechuga de pollo') no matchean: se reintenta
+        # con el primer token ('pechuga'), que es el que valida la coincidencia.
+        if not resultados:
+            tokens_ing = _tokens(it["nombre"])
+            if len(tokens_ing) > 1:
+                resultados = await database.search_products(
+                    query=tokens_ing[0],
+                    limit=8,
+                    branch_id=ctx.get("branch_id"),
+                )
         if not resultados:
             no_encontrados.append(it["nombre"])
             revisados.append({
@@ -299,6 +324,7 @@ async def consultar_receta(args: dict, ctx: dict) -> dict:
         payload["cart"] = cart_state
     payload["receta"] = {
         "nombre": nombre,
+        "origen": origen,
         "pasos": pasos,
         "ingredientes_revisados": revisados,
         "agregados": agregados,
@@ -321,8 +347,8 @@ async def consultar_receta(args: dict, ctx: dict) -> dict:
     if dudosos:
         nombres_dudosos = ", ".join(d['nombre'] for d in dudosos)
         partes.append(
-            f"Coincidencias DUDOSAS que NO agregué (revisa y corrige el término "
-            f"por uno más específico del catálogo): {nombres_dudosos}."
+            f"Coincidencias DUDOSAS que NO agregué (no corresponden al ingrediente): "
+            f"{nombres_dudosos}."
         )
     if no_encontrados:
         partes.append(f"No encontré en el catálogo: {', '.join(no_encontrados)}.")
@@ -331,15 +357,26 @@ async def consultar_receta(args: dict, ctx: dict) -> dict:
     if pasos:
         partes.append("Pasos de preparación:")
         partes.extend(f"{i}. {p}" for i, p in enumerate(pasos, 1))
-    partes.append(
-        "Si quedaron ingredientes DUDOSOS o NO ENCONTRADOS, corrige esos términos "
-        "por otros que sí existan en el catálogo y vuelve a llamar consultar_receta "
-        "(con agregar=true) para completar el carrito. Presenta la receta solo cuando "
-        "los ingredientes estén bien: nombre, ingredientes del carrito, pasos y total."
-    )
+
+    if origen == "curada":
+        partes.append(
+            "Esta receta es de nuestra base de recetas (ingredientes validados). "
+            "Los ingredientes que no se encontraron en el catálogo NO están "
+            "disponibles: menciónalos al cliente, pero NO los reemplaces por "
+            "productos que no correspondan a la receta ni inventes ingredientes. "
+            "Presenta la receta con los pasos y el total del carrito."
+        )
+    else:
+        partes.append(
+            "Si quedaron ingredientes DUDOSOS o NO ENCONTRADOS, corrige esos términos "
+            "por otros que sí existan en el catálogo y vuelve a llamar consultar_receta "
+            "(con agregar=true) para completar el carrito. Presenta la receta solo cuando "
+            "los ingredientes estén bien: nombre, ingredientes del carrito, pasos y total."
+        )
     return {
         "ok": True,
         "nombre_receta": nombre,
+        "origen": origen,
         "ingredientes_revisados": revisados,
         "agregados": agregados,
         "ya_en_carrito": ya_en_carrito,
@@ -728,19 +765,24 @@ TOOLS = [
         "function": {
             "name": "consultar_receta",
             "description": (
-                "Consulta una receta de cocina que pide el cliente. PRIMERO escribe "
-                "la receta completa (nombre_receta, ingredientes con cantidades y "
-                "pasos). La herramienta revisa CADA ingrediente contra el catálogo "
-                "y agrega al carrito SOLO las coincidencias confiables; las dudosas "
-                "o no encontradas NO se agregan y se reportan en 'dudosos'/'no_encontrados'. "
-                "REGLAS: (1) escribe ingredientes genéricos que existan en un "
-                "supermercado ('pollo', 'papa', 'cebolla', 'aceite', 'yuca'); "
-                "(2) si el resultado reporta coincidencias DUDOSAS o no encontradas, "
-                "corrige esos términos por otros más específicos y vuelve a llamar "
-                "con agregar=true; (3) repite hasta que todos los ingredientes estén "
-                "bien. Usa la función también cuando el cliente diga 'qué puedo "
-                "hacer con X' o pida algo para preparar/cocinar. NO uses armar_carrito "
-                "para los ingredientes de la receta."
+                "Consulta una receta de cocina que pide el cliente y valida "
+                "CADA ingrediente contra el catálogo para que todo lo que se "
+                "agregue pertenezca realmente a la receta. Si la receta está en "
+                "la base curada del bot (sancocho, arroz con pollo, frijoles, "
+                "lentejas, ajiaco, arepa de huevo, espagueti con atún, arroz "
+                "atollado), se usan SUS ingredientes canónicos validados (no "
+                "importa lo que escribas en 'ingredientes'). Si NO está, escribe "
+                "tú la receta (nombre_receta, ingredientes genéricos con "
+                "cantidades y pasos). La herramienta agrega al carrito SOLO las "
+                "coincidencias confiables; las dudosas/inexistentes NO se "
+                "agregan y se reportan. Para recetas NO curadas: si hay "
+                "coincidencias dudosas, corrige el término por uno más "
+                "específico y vuelve a llamar con agregar=true. Para recetas "
+                "curadas: no reemplaces ingredientes faltantes por productos "
+                "que no correspondan a la receta. Usa la función también cuando "
+                "el cliente diga 'qué puedo hacer con X' o pida algo para "
+                "preparar/cocinar. NO uses armar_carrito para los ingredientes "
+                "de la receta."
             ),
             "parameters": {
                 "type": "object",
