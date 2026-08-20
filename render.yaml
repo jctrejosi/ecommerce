@@ -9,10 +9,16 @@ services:
     dockerContext: .
     healthCheckPath: /api-status
     envVars:
-      # --- Obligatorias (sin esto el backend no arranca) ---
+      # --- Obligatorias (sin estas el backend no arranca) ---
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
         sync: false
       - key: CORS_ORIGIN
         sync: false
@@ -23,12 +29,8 @@ services:
       - key: DB_SSL
         value: "true"
 
-      # Cloudinary (imágenes)
-      - key: CLOUDINARY_CLOUD_NAME
-        sync: false
-      - key: CLOUDINARY_API_KEY
-        sync: false
-      - key: CLOUDINARY_API_SECRET
+      # QR Analyzer externo (opcional; si no lo tienes, omítela)
+      - key: QR_ANALYZER_URL
         sync: false
 
       # Pagos (opcionales)

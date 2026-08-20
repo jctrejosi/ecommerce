@@ -7,7 +7,7 @@ set -euo pipefail
 
 PUBLIC_PORT="${PORT:-10000}"
 BACKEND_PORT="${BACKEND_PORT:-3000}"
-BOT_PORT="${BOT_PORT:-8000}"
+BOT_PORT="${BOT_PORT:-8001}"  # 8000 lo usa el QrService (analizador externo)
 
 echo "==> MercAldas: proxy :${PUBLIC_PORT} → backend :${BACKEND_PORT} y /bot → :${BOT_PORT}"
 
