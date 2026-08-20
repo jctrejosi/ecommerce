@@ -70,8 +70,21 @@ const dataDirectoryPath = path.join(__dirname, '..', 'data');
 const catalogFilePath = path.join(dataDirectoryPath, 'CATALOGO_0.JSON');
 const tidtabFilePath = path.join(dataDirectoryPath, 'TIDTAB_0.JSON');
 
-const rawCatalogData = fs.readFileSync(catalogFilePath, 'utf8');
-const rawTidtabData = fs.readFileSync(tidtabFilePath, 'utf8');
+/**
+ * Lee un JSON exportado de VISADS/Advantage: los archivos vienen en
+ * Windows-1252, pero si algún día llega un UTF-8 válido se respeta.
+ * Sin esto, ñ/á/é/ú se convierten en U+FFFD (carácter de reemplazo).
+ */
+function decodeCatalogBuffer(buf: Buffer): string {
+  try {
+    return new TextDecoder('utf-8', { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder('windows-1252').decode(buf);
+  }
+}
+
+const rawCatalogData = decodeCatalogBuffer(fs.readFileSync(catalogFilePath));
+const rawTidtabData = decodeCatalogBuffer(fs.readFileSync(tidtabFilePath));
 
 const catalog = JSON.parse(rawCatalogData) as CatalogFile;
 const tidtab = JSON.parse(rawTidtabData) as TidtabFile;

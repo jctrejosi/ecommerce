@@ -12,7 +12,6 @@ import {
   desc,
   eq,
   gte,
-  ilike,
   inArray,
   isNull,
   lte,
@@ -1700,11 +1699,14 @@ export class CatalogService {
             : undefined,
           search
             ? or(
-                ilike(products.name, `%${search}%`),
-                ilike(products.description, `%${search}%`),
-                ilike(products.plu, `%${search}%`),
-                ilike(productVariants.barcode, `%${search}%`),
-                ilike(products.externalId, `%${search}%`),
+                // unaccent() hace la búsqueda insensible a tildes/ñ: "bretana"
+                // encuentra "BRETAÑA" (y viceversa). Requiere la extensión
+                // unaccent (ver db/docker/init.sql).
+                sql`unaccent(${products.name}) ILIKE unaccent(${`%${search}%`})`,
+                sql`unaccent(${products.description}) ILIKE unaccent(${`%${search}%`})`,
+                sql`unaccent(${products.plu}) ILIKE unaccent(${`%${search}%`})`,
+                sql`unaccent(${productVariants.barcode}) ILIKE unaccent(${`%${search}%`})`,
+                sql`unaccent(${products.externalId}) ILIKE unaccent(${`%${search}%`})`,
               )
             : undefined,
           this.buildPriceRangeCondition(query.priceRange),
@@ -1720,11 +1722,11 @@ export class CatalogService {
       .orderBy(
         search
           ? sql`CASE
-            WHEN ${products.name} ILIKE ${'%' + search + '%'} THEN 0
-            WHEN ${products.description} ILIKE ${'%' + search + '%'} THEN 1
-            WHEN ${products.plu} ILIKE ${'%' + search + '%'} THEN 2
-            WHEN ${productVariants.barcode} ILIKE ${'%' + search + '%'} THEN 3
-            WHEN ${products.externalId} ILIKE ${'%' + search + '%'} THEN 4
+            WHEN unaccent(${products.name}) ILIKE unaccent(${`%${search}%`}) THEN 0
+            WHEN unaccent(${products.description}) ILIKE unaccent(${`%${search}%`}) THEN 1
+            WHEN unaccent(${products.plu}) ILIKE unaccent(${`%${search}%`}) THEN 2
+            WHEN unaccent(${productVariants.barcode}) ILIKE unaccent(${`%${search}%`}) THEN 3
+            WHEN unaccent(${products.externalId}) ILIKE unaccent(${`%${search}%`}) THEN 4
             ELSE 5
           END`
           : this.buildSort(sort)[0],
@@ -2005,7 +2007,14 @@ export class CatalogService {
   }
 
   async importProducts(file: any) {
-    const raw = file.buffer.toString('utf-8');
+    // Los JSON exportados de VISADS/Advantage vienen en Windows-1252; si se
+    // leen como UTF-8, ñ/á/é/ú se vuelven U+FFFD. Se acepta UTF-8 válido si lo hay.
+    let raw: string;
+    try {
+      raw = new TextDecoder('utf-8', { fatal: true }).decode(file.buffer);
+    } catch {
+      raw = new TextDecoder('windows-1252').decode(file.buffer);
+    }
     const catalog = JSON.parse(raw) as { PRODUCTOS?: any[] };
     const sourceProducts = catalog.PRODUCTOS ?? [];
 

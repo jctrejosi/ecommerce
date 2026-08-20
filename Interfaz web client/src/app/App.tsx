@@ -533,6 +533,21 @@ export default function App() {
     navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+  /**
+   * Búsqueda desde el header: abre el catálogo CON el término buscado.
+   * No debe pasar por openCatalog(), porque ese limpia la búsqueda.
+   */
+  const openCatalogWithSearch = (search: string) => {
+    setCatalogCategory([]);
+    setCatalogBrand(null);
+    setCatalogProductType("");
+    setCatalogOnSale(false);
+    setCatalogPriceRange("all");
+    setCatalogSearch(search);
+    setCurrentView("catalog");
+    navigate("/catalog");
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
   const openModal = (v: "choice" | "login" | "register") => {
     if (customer) {
       setLoginModal(false);
@@ -784,7 +799,7 @@ export default function App() {
       setOrdersOpen(true);
     },
     onLoginModal: openModal,
-    onCatalogSearch: setCatalogSearch,
+    onCatalogSearch: openCatalogWithSearch,
     onOpenCatalog: openCatalog,
     onAddToCart: addToCart,
     onRemoveFromCart: removeFromCart,

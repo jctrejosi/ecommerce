@@ -207,11 +207,19 @@ export function Header({
     };
   }, [searchQuery, searchCategories]);
 
+  const normalizeForMatch = (s: string) =>
+    s
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+
   const suggestedCategories =
     searchQuery.trim().length >= 2
       ? searchCategories
           .filter((cat) =>
-            cat.name.toLowerCase().includes(searchQuery.trim().toLowerCase()),
+            normalizeForMatch(cat.name).includes(
+              normalizeForMatch(searchQuery.trim()),
+            ),
           )
           .slice(0, 5)
       : [];
@@ -220,8 +228,8 @@ export function Header({
     const query = searchQuery.trim();
     if (query.length >= 2) {
       setSearchOpen(false);
+      // onCatalogSearch abre el catálogo con la búsqueda aplicada.
       onCatalogSearch(query);
-      onOpenCatalog();
     }
   };
 
@@ -566,7 +574,6 @@ export function Header({
                           onClick={() => {
                             setSearchOpen(false);
                             onCatalogSearch(searchQuery);
-                            onOpenCatalog();
                           }}
                         >
                           Ver todos los resultados para "{searchQuery}"

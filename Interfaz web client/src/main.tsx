@@ -5,6 +5,7 @@ import ReactDOM from "react-dom/client";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { BrowserRouter } from "react-router";
 import App from "./app/App.tsx";
+import { ErrorBoundary } from "./components/ErrorBoundary.tsx";
 import { apiStatusService } from "./services/api-status.service";
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
@@ -18,7 +19,9 @@ const renderApp = async () => {
 
   const app = (
     <BrowserRouter>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </BrowserRouter>
   );
 

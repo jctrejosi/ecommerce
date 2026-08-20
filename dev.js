@@ -1,76 +1,78 @@
 #!/usr/bin/env node
 /**
- * Levanta el entorno completo de MercAldas en local:
- *   1. Base de datos PostgreSQL (docker compose up -d en db/docker)
- *   2. Los 4 servicios: backend, web client, admin y bot de compras
+ * MercAldas — lanzador de servicios.
  *
- * Uso: node dev-all.js   (o: ./dev-all.js en bash)   —  Ctrl+C detiene los servicios.
- * La BD queda corriendo al salir (se detiene con `docker compose stop` en db/docker).
+ * Uso:
+ *   node dev.js            # DEV: levanta PostgreSQL + los 4 servicios en
+ *                          #   segundo plano, imprime las URLs y termina
+ *                          #   (la terminal queda libre para cerrarla).
+ *   node dev.js --prod     # PRODUCCIÓN ("en vivo"): comandos de producción.
+ *                          #   Requiere builds previos (backend: yarn build,
+ *                          #   webs: yarn build). Los logs quedan en logs/*.log.
+ *   node dev.js --stop     # Detiene los servicios levantados por dev.js.
+ *   node dev.js --help     # Esta ayuda.
  *
- * Antes de arrancar cada servicio libera su puerto (mata procesos previos),
- * evitando errores de EADDRINUSE / "address already in use".
+ * Logs: un archivo por servicio en logs/
+ *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/bot.log
+ *
+ * La BD (docker) queda corriendo al salir; se detiene con
+ * `cd db/docker && docker compose stop`.
  */
 const { spawn, spawnSync } = require("node:child_process");
+const fs = require("node:fs");
 const net = require("node:net");
 const path = require("node:path");
 
 const ROOT = __dirname;
+const LOGS_DIR = path.join(ROOT, "logs");
+const PIDS_FILE = path.join(LOGS_DIR, ".pids.json");
 
-const SERVICES = [
-  { name: "BACKEND", dir: "backend", url: "http://localhost:3000" },
-  { name: "WEB", dir: "Interfaz web client", url: "http://localhost:5173" },
-  { name: "ADMIN", dir: "Interfaz web admin", url: "http://localhost:8443" },
-  { name: "BOT", dir: "bot", url: "http://localhost:8000", cmd: ["bash", "dev.sh"] },
-];
+const ARGS = process.argv.slice(2);
+const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
+const STOP = ARGS.includes("--stop");
+const HELP = ARGS.includes("--help");
 
-const COLORS = {
-  DB: "\x1b[36m",
-  BACKEND: "\x1b[31m",
-  WEB: "\x1b[32m",
-  ADMIN: "\x1b[34m",
-  BOT: "\x1b[35m",
-  RESET: "\x1b[0m",
+const C = {
+  db: "\x1b[36m",
+  backend: "\x1b[31m",
+  web: "\x1b[32m",
+  admin: "\x1b[34m",
+  bot: "\x1b[35m",
+  reset: "\x1b[0m",
 };
 
-const children = [];
+const SERVICES = [
+  {
+    name: "backend",
+    dir: "backend",
+    url: "http://localhost:3000",
+    dev: ["yarn", "dev"],
+    prod: ["yarn", "start:prod"],
+  },
+  {
+    name: "web",
+    dir: "Interfaz web client",
+    url: "http://localhost:5173",
+    dev: ["yarn", "dev"],
+    prod: ["yarn", "vite", "preview"],
+  },
+  {
+    name: "admin",
+    dir: "Interfaz web admin",
+    url: "http://localhost:8443",
+    dev: ["yarn", "dev"],
+    prod: ["yarn", "preview"],
+  },
+  {
+    name: "bot",
+    dir: "bot",
+    url: "http://localhost:8000",
+    dev: ["bash", "dev.sh"],
+    prod: null, // se resuelve en resolveBotProd()
+  },
+];
 
-// ── Base de datos (Docker) ──────────────────────────────────
-
-function startDatabase() {
-  const dbDir = path.join(ROOT, "db", "docker");
-  const dbPrefix = `${COLORS.DB}[DB]${COLORS.RESET} `;
-  console.log(`${dbPrefix}🐘 Levantando PostgreSQL local (docker compose up -d)...`);
-
-  // Intento con --wait (espera el healthcheck de pg_isready).
-  // Si el flag no está soportado, cae al arranque simple + espera de puerto.
-  const r = spawnSync("docker", ["compose", "up", "-d", "--wait"], {
-    cwd: dbDir,
-    stdio: ["ignore", "pipe", "pipe"],
-    encoding: "utf8",
-    timeout: 120000,
-  });
-  if (r.status === 0) {
-    console.log(`${dbPrefix}✅ PostgreSQL listo (db/docker)`);
-    return true;
-  }
-
-  const r2 = spawnSync("docker", ["compose", "up", "-d"], {
-    cwd: dbDir,
-    stdio: ["ignore", "pipe", "pipe"],
-    encoding: "utf8",
-    timeout: 120000,
-  });
-  if (r2.status === 0) {
-    console.log(`${dbPrefix}✅ Contenedor arrancado. Esperando conexiones en :5432...`);
-    return true;
-  }
-
-  console.warn(`${dbPrefix}⚠️  No se pudo levantar PostgreSQL:`);
-  console.warn((r2.stdout || "").trim());
-  console.warn((r2.stderr || "").trim());
-  console.warn(`${dbPrefix}   → Verifica que Docker esté corriendo (docker info).`);
-  return false;
-}
+// ── Utilidades de red ───────────────────────────────────────
 
 function waitForPort(port, timeoutMs = 90000) {
   const deadline = Date.now() + timeoutMs;
@@ -100,24 +102,16 @@ function waitForPort(port, timeoutMs = 90000) {
   });
 }
 
-// ── Liberación de puertos ──────────────────────────────────
-
 function sleepSync(ms) {
   const sab = new SharedArrayBuffer(4);
   Atomics.wait(new Int32Array(sab), 0, 0, ms);
 }
 
-/**
- * Mata el proceso que esté escuchando en `port`.
- * - Unix:  fuser -k <port>/tcp
- * - Windows: netstat + taskkill /F
- */
+/** Mata el proceso que escuche en `port` (Unix: fuser, Windows: netstat+taskkill). */
 function killPort(port) {
   if (process.platform === "win32") {
     try {
-      const out = spawnSync("netstat", ["-ano"], {
-        encoding: "utf8",
-      }).stdout;
+      const out = spawnSync("netstat", ["-ano"], { encoding: "utf8" }).stdout;
       const pids = new Set();
       out.split("\n").forEach((line) => {
         const m = line.trim().match(new RegExp(`:${port}\\s+.*?LISTENING\\s+(\\d+)\\s*$`));
@@ -145,93 +139,188 @@ function killPort(port) {
   }
 }
 
-// ── Arranque de servicios ──────────────────────────────────
+// ── Logs ────────────────────────────────────────────────────
 
-function start(service) {
-  const { name, dir, url, cmd } = service;
-  const cwd = path.join(ROOT, dir);
-  const color = COLORS[name] || "";
-  const port = new URL(url).port;
-
-  console.log(`${color}[${name}]${COLORS.RESET} ▶ ${url}  (cwd: ${cwd})`);
-
-  // Liberar el puerto antes de levantar (evita EADDRINUSE)
-  killPort(port);
-  sleepSync(800); // dar tiempo a que el SO libere el socket
-
-  const child = spawn(
-    cmd ? cmd[0] : "yarn",
-    cmd ? cmd.slice(1) : ["dev"],
-    {
-      cwd,
-      stdio: ["ignore", "pipe", "pipe"],
-      shell: process.platform === "win32",
-      detached: process.platform !== "win32",
-    },
+function openLog(name) {
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+  const logPath = path.join(LOGS_DIR, `${name}.log`);
+  const fd = fs.openSync(logPath, "a");
+  fs.writeSync(
+    fd,
+    `\n===== [${name}] ${new Date().toISOString()} modo=${MODE} =====\n`,
   );
-
-  const prefix = `${color}[${name}]${COLORS.RESET} `;
-  const pipe = (stream, out) => {
-    stream.on("data", (chunk) => {
-      chunk
-        .toString()
-        .split("\n")
-        .forEach((line) => {
-          if (line.trim()) out.write(prefix + line + "\n");
-        });
-    });
-  };
-  if (child.stdout) pipe(child.stdout, process.stdout);
-  if (child.stderr) pipe(child.stderr, process.stderr);
-
-  child.on("exit", (code, signal) => {
-    console.log(`${prefix}terminó (${signal || code})`);
-  });
-
-  children.push(child);
+  return { fd, logPath };
 }
 
-async function main() {
-  startDatabase();
-  const dbUp = await waitForPort(5432, 90000);
-  if (!dbUp) {
-    const dbPrefix = `${COLORS.DB}[DB]${COLORS.RESET} `;
-    console.warn(`${dbPrefix}⚠️  No se detectó PostgreSQL en :5432; el backend reintentará la conexión al arrancar.`);
+// ── Base de datos (Docker) ──────────────────────────────────
+
+function startDatabase() {
+  const dbDir = path.join(ROOT, "db", "docker");
+  console.log(`${C.db}[db]${C.reset} 🐘 PostgreSQL (docker compose up -d) → logs/db.log`);
+
+  const { fd } = openLog("db");
+  const run = (args) =>
+    spawnSync("docker", args, {
+      cwd: dbDir,
+      stdio: ["ignore", fd, fd],
+      timeout: 120000,
+    });
+
+  // Intento con --wait (espera el healthcheck de pg_isready); si no lo soporta,
+  // cae al arranque simple.
+  let r = run(["compose", "up", "-d", "--wait"]);
+  if (r.status === 0) {
+    fs.closeSync(fd);
+    console.log(`${C.db}[db]${C.reset} ✅ PostgreSQL listo`);
+    return true;
+  }
+  r = run(["compose", "up", "-d"]);
+  fs.closeSync(fd);
+  if (r.status === 0) {
+    console.log(`${C.db}[db]${C.reset} ✅ Contenedor arrancado. Esperando :5432...`);
+    return true;
+  }
+  console.warn(`${C.db}[db]${C.reset} ⚠️  No se pudo levantar PostgreSQL (detalle en logs/db.log).`);
+  return false;
+}
+
+// ── Arranque de servicios ───────────────────────────────────
+
+function resolveCmd(svc) {
+  if (svc.name === "bot" && MODE === "prod") {
+    const py = path.join(ROOT, "bot", ".venv", "bin", "python");
+    if (!fs.existsSync(py)) {
+      console.warn(
+        `${C.bot}[bot]${C.reset} ⚠️  bot/.venv no existe — crealo con: ` +
+          `python3 -m venv bot/.venv && bot/.venv/bin/pip install -r bot/requirements.txt`,
+      );
+      return null;
+    }
+    // Producción: uvicorn sin --reload
+    return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
+  }
+  return MODE === "prod" ? svc.prod : svc.dev;
+}
+
+function startService(svc) {
+  const color = C[svc.name] || "";
+  console.log(`${color}[${svc.name}]${C.reset} ▶ ${svc.url || svc.dir}  (log: logs/${svc.name}.log)`);
+
+  const cmd = resolveCmd(svc);
+  if (!cmd) return null;
+
+  const port = svc.url ? new URL(svc.url).port : null;
+  if (port) {
+    killPort(port);
+    sleepSync(800); // tiempo para que el SO libere el socket
   }
 
-  SERVICES.forEach(start);
-  console.log("🌱 4 servicios levantados. Pulsa Ctrl+C para detener los servicios (la BD sigue arriba).");
+  const { fd } = openLog(svc.name);
+  const child = spawn(cmd[0], cmd.slice(1), {
+    cwd: path.join(ROOT, svc.dir),
+    stdio: ["ignore", fd, fd],
+    detached: true, // su propio grupo de procesos: sobrevive a la terminal
+    shell: process.platform === "win32",
+  });
+
+  child.on("error", (err) => {
+    console.error(`${color}[${svc.name}]${C.reset} ✘ no se pudo arrancar: ${err.message}`);
+  });
+  child.unref(); // no mantener vivo al padre por el hijo
+  fs.closeSync(fd); // el hijo heredó su propio fd al archivo
+  return child.pid;
 }
 
-main();
+function printUrls() {
+  console.log("\n━━━━━━━━━━━━━ MercAldas — URLs ━━━━━━━━━━━━━");
+  for (const svc of SERVICES) {
+    if (!svc.url) continue;
+    console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
+  }
+  console.log("  DB        → PostgreSQL localhost:5432 (docker)");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("Logs: logs/*.log  (db, backend, web, admin, bot)");
+}
 
-// ── Detención (Ctrl+C) ─────────────────────────────────────
+// ── Detención ───────────────────────────────────────────────
 
-function killAll() {
-  console.log("\n⏹  Deteniendo servicios...");
-  for (const child of children) {
-    if (process.platform === "win32") {
-      spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"]);
-    } else {
+function stopAll() {
+  let pids = {};
+  try {
+    pids = JSON.parse(fs.readFileSync(PIDS_FILE, "utf8"));
+  } catch {
+    /* sin archivo de pids */
+  }
+
+  const entries = Object.entries(pids);
+  if (!entries.length) console.log("No hay servicios registrados (logs/.pids.json).");
+  for (const [name, pid] of entries) {
+    try {
+      if (process.platform === "win32") {
+        spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"]);
+      } else {
+        process.kill(-pid, "SIGTERM"); // todo el grupo (procesos desacoplados)
+      }
+      console.log(`⏹  ${name} (pid ${pid})`);
+    } catch {
       try {
-        process.kill(-child.pid, "SIGTERM");
+        process.kill(pid, "SIGTERM");
+        console.log(`⏹  ${name} (pid ${pid})`);
       } catch {
-        try {
-          child.kill("SIGTERM");
-        } catch {
-          /* ya terminó */
-        }
+        console.log(`  ${name} ya no estaba corriendo`);
       }
     }
   }
-  console.log("💡 La BD local sigue corriendo. Para detenerla: cd db/docker && docker compose stop");
+
+  // Red de seguridad: liberar los puertos de los servicios
+  for (const svc of SERVICES) {
+    if (svc.url) killPort(new URL(svc.url).port);
+  }
+
+  try {
+    fs.unlinkSync(PIDS_FILE);
+  } catch {
+    /* noop */
+  }
+  console.log("\n💡 La BD (docker) sigue corriendo. Para detenerla: cd db/docker && docker compose stop");
 }
 
-process.on("SIGINT", () => {
-  killAll();
-  process.exit(0);
-});
-process.on("SIGTERM", () => {
-  killAll();
-  process.exit(0);
-});
+// ── Main ────────────────────────────────────────────────────
+
+async function main() {
+  if (HELP) {
+    console.log(
+      "MercAldas launcher\n" +
+        "  node dev.js            → dev (logs en logs/*.log, terminal libre)\n" +
+        "  node dev.js --prod     → producción (requiere builds previos)\n" +
+        "  node dev.js --stop     → detiene los servicios\n",
+    );
+    return;
+  }
+  if (STOP) return stopAll();
+
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+  console.log(`🧪 MercAldas — modo ${MODE.toUpperCase()}  (logs → logs/*.log)`);
+  console.log("");
+
+  startDatabase();
+  const dbUp = await waitForPort(5432, 90000);
+  if (!dbUp)
+    console.warn(
+      `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
+    );
+
+  const pids = {};
+  for (const svc of SERVICES) {
+    const pid = startService(svc);
+    if (pid) pids[svc.name] = pid;
+  }
+  fs.writeFileSync(PIDS_FILE, JSON.stringify(pids, null, 2));
+
+  printUrls();
+  console.log("\n✅ Todo levantado. Esta terminal queda libre — puedes cerrarla.");
+  console.log(`   Para detener los servicios más tarde: node dev.js --stop`);
+  process.exit(0); // cierra el script; los servicios siguen en segundo plano
+}
+
+main();

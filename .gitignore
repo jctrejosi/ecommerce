@@ -3,3 +3,6 @@
 # entornos virtuales
 /test_db/venv/
 __pycache__/
+
+# logs del lanzador
+/logs/

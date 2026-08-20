@@ -11,6 +11,9 @@ CREATE EXTENSION IF NOT EXISTS citext;
 -- 3. uuid-ossp: Para generar UUIDs (sesiones, tokens, etc.)
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- 4. unaccent: Búsqueda insensible a tildes/ñ (buscador del catálogo)
+CREATE EXTENSION IF NOT EXISTS unaccent;
+
 -- ======================================================
 -- VERIFICACIÓN (opcional)
 -- ======================================================
