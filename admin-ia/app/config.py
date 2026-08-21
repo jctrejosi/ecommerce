@@ -7,7 +7,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
+# API key DEDICADA para el servicio admin-ia (campañas). Si no se define,
+# se usa DEEPSEEK_API_KEY como respaldo.
+DEEPSEEK_API_KEY = os.getenv("ADMIN_IA_DEEPSEEK_API_KEY") or os.getenv("DEEPSEEK_API_KEY", "")
 DEEPSEEK_MODEL = os.getenv("DEEPSEEK_MODEL", "deepseek-v4-flash")
 DEEPSEEK_API_URL = os.getenv("DEEPSEEK_API_URL", "https://api.deepseek.com")
 DEEPSEEK_TIMEOUT = float(os.getenv("DEEPSEEK_TIMEOUT", "60"))

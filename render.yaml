@@ -54,3 +54,8 @@ services:
         sync: false
       - key: DEEPSEEK_MODEL
         value: deepseek-v4-flash
+
+      # --- Admin IA (campañas): API key DEDICADA, distinta a la del bot ---
+      # (si se omite, admin-ia usa DEEPSEEK_API_KEY como respaldo)
+      - key: ADMIN_IA_DEEPSEEK_API_KEY
+        sync: false

@@ -11,6 +11,11 @@ import EmailEditor, {
   defaultTemplate,
   type EmailBlock,
 } from "../components/EmailEditor";
+import {
+  campaignsService,
+  type Campaign as ApiCampaign,
+  type CampaignChannel,
+} from "../services/campaigns.service";
 
 /* ─── Types ─────────────────────────────────────── */
 interface Product {
@@ -22,10 +27,10 @@ interface GeneratedContent {
   whatsapp: string; email: { subject: string; body: string }; sms: string;
 }
 
-type CampaignStatus = "activa" | "programada" | "borrador" | "finalizada";
+type CampaignStatus = "borrador" | "programada" | "enviando" | "enviada" | "fallida";
 type Step = 1 | 2 | 3;
 
-/* ─── Mock data ─────────────────────────────────── */
+/* ─── Mock data (productos) ─────────────────────── */
 const PRODUCTS: Product[] = [
   { id: "p1", name: "Leche Alquería Entera 1.1L", price: 4350, image: "https://images.unsplash.com/photo-1604095853918-1a1823a63dd5?w=120&h=120&fit=crop&auto=format", category: "Lácteos", audience: 847, convRate: 34 },
   { id: "p2", name: "Pechuga de Pollo Fresca x kg", price: 12900, image: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=120&h=120&fit=crop&auto=format", category: "Carnes", audience: 1203, convRate: 41 },
@@ -35,18 +40,12 @@ const PRODUCTS: Product[] = [
   { id: "p6", name: "Huevos AA Blancos x30", price: 18900, image: "https://images.unsplash.com/photo-1729622493745-03ca9590c64a?w=120&h=120&fit=crop&auto=format", category: "Lácteos", audience: 1089, convRate: 45 },
 ];
 
-const CAMPAIGNS_MOCK = [
-  { id: "C1", name: "Oferta Pollo Fresco — Julio", product: "Pechuga de Pollo x kg", channels: ["wa", "email", "sms"], audience: 1203, status: "activa" as CampaignStatus, sent: 1203, opens: 724, conversions: 93, date: "2025-07-20" },
-  { id: "C2", name: "Lácteos de la semana", product: "Leche Alquería 1.1L", channels: ["wa", "sms"], audience: 847, status: "finalizada" as CampaignStatus, sent: 847, opens: 531, conversions: 68, date: "2025-07-14" },
-  { id: "C3", name: "Flash Sale Huevos AA", product: "Huevos AA x30", channels: ["email", "sms"], audience: 1089, status: "programada" as CampaignStatus, sent: 0, opens: 0, conversions: 0, date: "2025-07-25" },
-  { id: "C4", name: "Campaña Ariel Limpieza", product: "Detergente Ariel 3L", channels: ["wa", "email"], audience: 921, status: "borrador" as CampaignStatus, sent: 0, opens: 0, conversions: 0, date: "" },
-];
-
 const STATUS_CFG: Record<CampaignStatus, { label: string; color: string; bg: string; border: string }> = {
-  activa:     { label: "Activa",      color: "text-green-700",  bg: "bg-green-50",   border: "border-green-200" },
-  programada: { label: "Programada",  color: "text-blue-700",   bg: "bg-blue-50",    border: "border-blue-200" },
-  borrador:   { label: "Borrador",    color: "text-gray-600",   bg: "bg-gray-100",   border: "border-gray-200" },
-  finalizada: { label: "Finalizada",  color: "text-purple-700", bg: "bg-purple-50",  border: "border-purple-200" },
+  borrador:   { label: "Borrador",   color: "text-gray-600",  bg: "bg-gray-100",   border: "border-gray-200" },
+  programada: { label: "Programada", color: "text-blue-700",  bg: "bg-blue-50",    border: "border-blue-200" },
+  enviando:   { label: "Enviando",   color: "text-amber-700", bg: "bg-amber-50",   border: "border-amber-200" },
+  enviada:    { label: "Enviada",    color: "text-green-700", bg: "bg-green-50",   border: "border-green-200" },
+  fallida:    { label: "Fallida",    color: "text-red-700",   bg: "bg-red-50",     border: "border-red-200" },
 };
 
 const CHANNEL_CFG = {
@@ -54,6 +53,68 @@ const CHANNEL_CFG = {
   email: { label: "Email",    bg: "bg-blue-500",   icon: Mail },
   sms:   { label: "SMS",      bg: "bg-purple-500", icon: Smartphone },
 };
+
+/** Claves del wizard (wa/email/sms) ↔ canales de la API (whatsapp/email/sms). */
+const CHANNEL_TO_API: Record<keyof typeof CHANNEL_CFG, CampaignChannel> = {
+  wa: "whatsapp",
+  email: "email",
+  sms: "sms",
+};
+
+const CHANNEL_FROM_API: Record<CampaignChannel, keyof typeof CHANNEL_CFG> = {
+  whatsapp: "wa",
+  email: "email",
+  sms: "sms",
+};
+
+/** Forma de la tarjeta de campaña (lo que consume CampaignCard). */
+interface CampaignCardData {
+  id: number;
+  name: string;
+  product: string;
+  channels: (keyof typeof CHANNEL_CFG)[];
+  audience: number;
+  status: CampaignStatus;
+  sent: number;
+  opens: number;
+  conversions: number;
+  date: string;
+}
+
+function apiToCard(c: ApiCampaign): CampaignCardData {
+  return {
+    id: c.id,
+    name: c.name,
+    product: c.product?.name ?? "Sin producto",
+    channels: c.channels
+      .map((ch) => CHANNEL_FROM_API[ch])
+      .filter(Boolean),
+    audience: c.audienceCount,
+    status: c.status,
+    sent: c.sentCount,
+    opens: c.openedCount,
+    conversions: c.convertedCount,
+    date: (c.scheduledAt ?? c.createdAt ?? "").slice(0, 10),
+  };
+}
+
+/** Extrae un texto plano de los bloques del correo (para el preview). */
+function blocksToText(bloques: { type: string; props: Record<string, unknown> }[]): string {
+  const strip = (s: string) => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const partes: string[] = [];
+  for (const b of bloques ?? []) {
+    const p = b.props ?? {};
+    if (b.type === "text" && typeof p.text === "string") {
+      const t = strip(p.text);
+      if (t) partes.push(t);
+    } else if (b.type === "columns" && Array.isArray(p.items)) {
+      for (const it of p.items as { text?: string }[]) {
+        if (typeof it.text === "string" && it.text.trim()) partes.push(strip(it.text));
+      }
+    }
+  }
+  return partes.join("\n");
+}
 
 /* ─── Helpers ───────────────────────────────────── */
 function fmt(n: number) { return "$" + n.toLocaleString("es-CO"); }
@@ -73,23 +134,6 @@ function buildEmailBlocks(product: Product, content: GeneratedContent): EmailBlo
     newBlock("social"),
     { ...newBlock("text"), props: { text: "El equipo de Mercaldas 💛<br/>Si no quieres recibir más correos, haz clic aquí.", fontSize: 12, color: "#9CA3AF", align: "center" } },
   ];
-}
-
-function generateContent(product: Product, prompt: string): GeneratedContent {
-  const tone = prompt.toLowerCase();
-  const urgente = tone.includes("urgente") || tone.includes("hoy");
-  const joven = tone.includes("joven") || tone.includes("🔥");
-  const nombre = product.name.split(" ").slice(0, 3).join(" ");
-  const desc = joven ? "🔥 ¡Esta es tu oportunidad!" : urgente ? "⚡ ¡Solo por hoy!" : "✨ Oferta especial para ti";
-
-  return {
-    whatsapp: `Hola 👋 ¿Ya viste esto?\n\n${desc}\n\n*${nombre}* está disponible ahora en Mercaldas con precio especial: *${fmt(product.price)}*\n\nEs el favorito de nuestros clientes 🛒 ¡No dejes que se agote!\n\n👉 Pedir ahora: mercaldas.com/promo`,
-    email: {
-      subject: urgente ? `⚡ ¡Solo hoy! ${nombre} al mejor precio` : `${nombre} — Oferta exclusiva para ti`,
-      body: `Hola,\n\nSabemos que te gusta ${product.category.toLowerCase()} de calidad. Por eso hoy tenemos algo especial.\n\n${nombre} está disponible en Mercaldas a ${fmt(product.price)} — un precio que no querrás perderte.\n\n¿Por qué comprarlo hoy?\n• Entrega en menos de 2 horas en Medellín\n• Garantía de frescura o te devolvemos tu dinero\n• Miles de clientes ya lo eligieron esta semana\n\nHaz clic abajo y añádelo a tu carrito en segundos.\n\nEl equipo de Mercaldas 💛`,
-    },
-    sms: `Mercaldas: ${nombre} ${fmt(product.price)}. ${urgente ? "¡Solo hoy!" : "Precio especial."} Pide ya: mrcl.co/p${product.id}`,
-  };
 }
 
 /* ─── Channel preview components ───────────────── */
@@ -358,6 +402,7 @@ function Step2({
   onEditSms,
   onToggleEdit,
   onOpenDesigner,
+  genError,
   onNext,
   onBack,
 }: {
@@ -378,6 +423,7 @@ function Step2({
   onEditSms: (t: string) => void;
   onToggleEdit: (ch: "wa" | "email" | "sms") => void;
   onOpenDesigner: () => void;
+  genError: string | null;
   onNext: () => void;
   onBack: () => void;
 }) {
@@ -442,6 +488,11 @@ function Step2({
               />
             </div>
 
+            {genError && (
+              <div className="mb-4 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                ⚠ {genError}
+              </div>
+            )}
             {generating ? (
               <div className="flex flex-col items-center gap-4 py-10">
                 <div className="relative w-16 h-16">
@@ -578,12 +629,16 @@ function Step3({
   onSend,
   onBack,
   sent,
+  sending,
+  sendError,
 }: {
   product: Product;
   channels: Record<string, boolean>;
   onSend: () => void;
   onBack: () => void;
   sent: boolean;
+  sending: boolean;
+  sendError: string | null;
 }) {
   const [scheduled, setScheduled] = useState(false);
   const activeChannels = Object.entries(channels).filter(([, v]) => v).map(([k]) => k);
@@ -693,11 +748,17 @@ function Step3({
         <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
           <ChevronLeft size={15} /> Atrás
         </button>
+        {sendError && (
+          <p className="flex-1 mx-4 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+            ⚠ {sendError}
+          </p>
+        )}
         <button
           onClick={onSend}
-          className="flex items-center gap-2.5 px-6 py-3 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg"
+          disabled={sending}
+          className="flex items-center gap-2.5 px-6 py-3 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <Send size={15} /> {scheduled ? "Programar Campaña" : "Enviar Ahora"}
+          <Send size={15} /> {sending ? "Creando campaña…" : scheduled ? "Programar Campaña" : "Enviar Ahora"}
         </button>
       </div>
     </div>
@@ -731,54 +792,112 @@ function StepBar({ step }: { step: Step }) {
 }
 
 /* ─── Wizard overlay ────────────────────────────── */
-function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (c: typeof CAMPAIGNS_MOCK[0]) => void }) {
+function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (c: CampaignCardData) => void }) {
   const [step, setStep] = useState<Step>(1);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [channels, setChannels] = useState<Record<string, boolean>>({ wa: true, email: true, sms: true });
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
   const [content, setContent] = useState<GeneratedContent | null>(null);
   const [editableWa, setEditableWa] = useState(false);
   const [editableEmail, setEditableEmail] = useState(false);
   const [editableSms, setEditableSms] = useState(false);
   const [sent, setSent] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const [emailDesignOpen, setEmailDesignOpen] = useState(false);
   const [emailBlocks, setEmailBlocks] = useState<EmailBlock[] | null>(null);
+  const [emailHtml, setEmailHtml] = useState<string | null>(null);
 
   const toggleChannel = (c: string) => setChannels((prev) => ({ ...prev, [c]: !prev[c] }));
 
-  const handleGenerate = () => {
+  const activeChannelKeys = () =>
+    (Object.keys(channels) as (keyof typeof CHANNEL_CFG)[]).filter((k) => channels[k]);
+
+  const handleGenerate = async () => {
     if (!selectedProduct) return;
     setGenerating(true);
     setGenerated(false);
-    setTimeout(() => {
-      setContent(generateContent(selectedProduct, prompt));
-      setGenerating(false);
+    setGenError(null);
+    try {
+      const res = await campaignsService.generateContent({
+        productName: selectedProduct.name,
+        price: selectedProduct.price,
+        prompt,
+        channels: activeChannelKeys().map((k) => CHANNEL_TO_API[k]),
+      });
+      if (res.error) throw new Error(res.error);
+
+      const email = res.email;
+      setContent({
+        whatsapp: res.whatsapp ?? "",
+        email: {
+          subject: email?.asunto ?? "",
+          body: email?.bloques?.length ? blocksToText(email.bloques) : "",
+        },
+        sms: res.sms ?? "",
+      });
+      if (email?.bloques?.length) {
+        setEmailBlocks(email.bloques as unknown as EmailBlock[]);
+        setEmailHtml(email.html ?? null);
+      }
       setGenerated(true);
-    }, 2200);
+    } catch (e) {
+      setGenError(e instanceof Error ? e.message : "Error generando el contenido");
+    } finally {
+      setGenerating(false);
+    }
   };
 
-  const handleSend = () => {
-    setSent(true);
-    setTimeout(() => {
-      if (selectedProduct) {
-        const newCampaign = {
-          id: "C" + Date.now(),
-          name: prompt.slice(0, 32) || "Nueva campaña",
-          product: selectedProduct.name,
-          channels: Object.entries(channels).filter(([, v]) => v).map(([k]) => k),
-          audience: selectedProduct.audience,
-          status: "activa" as CampaignStatus,
-          sent: selectedProduct.audience,
-          opens: Math.round(selectedProduct.audience * 0.6),
-          conversions: Math.round(selectedProduct.audience * selectedProduct.convRate / 100),
-          date: new Date().toISOString().split("T")[0],
-        };
-        onCreated(newCampaign);
+  const handleSend = async () => {
+    if (!selectedProduct || !content) return;
+    setSending(true);
+    setSendError(null);
+    try {
+      const active = activeChannelKeys();
+      const messages: {
+        channel: CampaignChannel;
+        subject?: string;
+        content?: string;
+        html?: string;
+        emailBlocks?: unknown;
+      }[] = [];
+      if (channels.wa && content.whatsapp) {
+        messages.push({ channel: "whatsapp", content: content.whatsapp });
       }
+      if (channels.email) {
+        messages.push({
+          channel: "email",
+          subject: content.email.subject,
+          content: content.email.body,
+          html: emailHtml ?? undefined,
+          emailBlocks: emailBlocks ?? undefined,
+        });
+      }
+      if (channels.sms && content.sms) {
+        messages.push({ channel: "sms", content: content.sms });
+      }
+
+      const created = await campaignsService.create({
+        name: prompt.slice(0, 60) || `Campaña ${selectedProduct.name}`,
+        prompt,
+        channels: active.map((k) => CHANNEL_TO_API[k]),
+        messages,
+      });
+
+      // Recomendación de clientes (aleatoria por ahora)
+      await campaignsService.generateRecipients(created.id, 500).catch(() => {});
+
+      setSent(true);
+      onCreated(apiToCard(created));
       setTimeout(onClose, 1800);
-    }, 300);
+    } catch (e) {
+      setSendError(e instanceof Error ? e.message : "Error creando la campaña");
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -831,6 +950,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
               if (ch === "sms") setEditableSms((e) => !e);
             }}
             onOpenDesigner={() => setEmailDesignOpen(true)}
+            genError={genError}
             onNext={() => setStep(3)}
             onBack={() => setStep(1)}
           />
@@ -842,6 +962,8 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
             onSend={handleSend}
             onBack={() => setStep(2)}
             sent={sent}
+            sending={sending}
+            sendError={sendError}
           />
         )}
       </div>
@@ -855,8 +977,9 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
               ? buildEmailBlocks(selectedProduct, content)
               : defaultTemplate())
           }
-          onSave={(blocks) => {
+          onSave={(blocks, html) => {
             setEmailBlocks(blocks);
+            setEmailHtml(html);
             setEmailDesignOpen(false);
           }}
           onClose={() => setEmailDesignOpen(false)}
@@ -942,11 +1065,30 @@ function CampaignCard({ c }: { c: typeof CAMPAIGNS_MOCK[0] }) {
 /* ─── Main view ─────────────────────────────────── */
 export default function Campaigns() {
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [campaigns, setCampaigns] = useState(CAMPAIGNS_MOCK);
+  const [campaigns, setCampaigns] = useState<CampaignCardData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<CampaignStatus | "todos">("todos");
   const [search, setSearch] = useState("");
 
-  const handleCreated = (c: typeof CAMPAIGNS_MOCK[0]) => {
+  const load = async () => {
+    try {
+      setLoading(true);
+      const list = await campaignsService.list();
+      setCampaigns(list.map(apiToCard));
+      setLoadError(null);
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : "No se pudieron cargar las campañas");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const handleCreated = (c: CampaignCardData) => {
     setCampaigns((prev) => [c, ...prev]);
   };
 
@@ -956,7 +1098,7 @@ export default function Campaigns() {
     return matchStatus && matchSearch;
   });
 
-  const activas = campaigns.filter((c) => c.status === "activa").length;
+  const activas = campaigns.filter((c) => c.status === "enviando" || c.status === "programada").length;
   const totalSent = campaigns.reduce((a, c) => a + c.sent, 0);
   const avgOpen = campaigns.filter((c) => c.sent > 0).reduce((a, c, _, arr) => a + Math.round((c.opens / c.sent) * 100) / arr.length, 0);
   const totalConv = campaigns.reduce((a, c) => a + c.conversions, 0);
@@ -1033,7 +1175,7 @@ export default function Campaigns() {
             />
           </div>
           <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1">
-            {(["todos", "activa", "programada", "borrador", "finalizada"] as const).map((f) => (
+            {(["todos", "borrador", "programada", "enviando", "enviada", "fallida"] as const).map((f) => (
               <button
                 key={f}
                 onClick={() => setStatusFilter(f)}
@@ -1046,7 +1188,20 @@ export default function Campaigns() {
         </div>
 
         {/* Campaign grid */}
-        {filtered.length > 0 ? (
+        {loading ? (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="h-48 bg-white rounded-2xl border border-gray-100 animate-pulse" />
+            ))}
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center justify-center py-20 text-center">
+            <p className="text-sm font-semibold text-red-600">{loadError}</p>
+            <button onClick={() => void load()} className="mt-4 px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 rounded-xl hover:bg-amber-500 transition-colors">
+              Reintentar
+            </button>
+          </div>
+        ) : filtered.length > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {filtered.map((c) => <CampaignCard key={c.id} c={c} />)}
           </div>
