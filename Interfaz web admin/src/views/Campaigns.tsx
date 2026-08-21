@@ -4,7 +4,13 @@ import {
   ArrowRight, ChevronLeft, RefreshCw, Send, Clock,
   CheckCircle, Users, TrendingUp, Eye, Edit3, X,
   Sparkles, Target, BarChart2, Calendar, MoreHorizontal,
+  Palette,
 } from "lucide-react";
+import EmailEditor, {
+  newBlock,
+  defaultTemplate,
+  type EmailBlock,
+} from "../components/EmailEditor";
 
 /* ─── Types ─────────────────────────────────────── */
 interface Product {
@@ -51,6 +57,23 @@ const CHANNEL_CFG = {
 
 /* ─── Helpers ───────────────────────────────────── */
 function fmt(n: number) { return "$" + n.toLocaleString("es-CO"); }
+
+/** Convierte el contenido generado en bloques para el diseñador de correo. */
+function buildEmailBlocks(product: Product, content: GeneratedContent): EmailBlock[] {
+  const bodyHtml = content.email.body
+    .split(/\n\n+/)
+    .map((p) => `<p style="margin:0 0 8px;">${p.replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+  return [
+    { ...newBlock("text"), props: { text: "🛒 Mercaldas", fontSize: 24, color: "#B45309", align: "center", bold: true } },
+    { ...newBlock("image"), props: { src: product.image, alt: product.name, width: 100, borderRadius: 12, borderWidth: 0, shadow: true } },
+    { ...newBlock("text"), props: { text: bodyHtml, fontSize: 15, color: "#1F2937", align: "left" } },
+    { ...newBlock("button"), props: { text: "Ver oferta →", link: "https://mercaldas.com/promo", bg: "#FBBF24", color: "#78350F", radius: 10, align: "center" } },
+    newBlock("divider"),
+    newBlock("social"),
+    { ...newBlock("text"), props: { text: "El equipo de Mercaldas 💛<br/>Si no quieres recibir más correos, haz clic aquí.", fontSize: 12, color: "#9CA3AF", align: "center" } },
+  ];
+}
 
 function generateContent(product: Product, prompt: string): GeneratedContent {
   const tone = prompt.toLowerCase();
@@ -334,6 +357,7 @@ function Step2({
   onEditEmailBody,
   onEditSms,
   onToggleEdit,
+  onOpenDesigner,
   onNext,
   onBack,
 }: {
@@ -353,6 +377,7 @@ function Step2({
   onEditEmailBody: (b: string) => void;
   onEditSms: (t: string) => void;
   onToggleEdit: (ch: "wa" | "email" | "sms") => void;
+  onOpenDesigner: () => void;
   onNext: () => void;
   onBack: () => void;
 }) {
@@ -489,9 +514,14 @@ function Step2({
                       </div>
                       <span className="text-xs font-bold text-gray-700">Email</span>
                     </div>
-                    <button onClick={() => onToggleEdit("email")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableEmail ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-                      <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar"}
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <button onClick={onOpenDesigner} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">
+                        <Palette size={9} /> Diseñar
+                      </button>
+                      <button onClick={() => onToggleEdit("email")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableEmail ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                        <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar"}
+                      </button>
+                    </div>
                   </div>
                   <div className="flex-1 h-80">
                     <EmailPreview
@@ -713,6 +743,8 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   const [editableEmail, setEditableEmail] = useState(false);
   const [editableSms, setEditableSms] = useState(false);
   const [sent, setSent] = useState(false);
+  const [emailDesignOpen, setEmailDesignOpen] = useState(false);
+  const [emailBlocks, setEmailBlocks] = useState<EmailBlock[] | null>(null);
 
   const toggleChannel = (c: string) => setChannels((prev) => ({ ...prev, [c]: !prev[c] }));
 
@@ -798,6 +830,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
               if (ch === "email") setEditableEmail((e) => !e);
               if (ch === "sms") setEditableSms((e) => !e);
             }}
+            onOpenDesigner={() => setEmailDesignOpen(true)}
             onNext={() => setStep(3)}
             onBack={() => setStep(1)}
           />
@@ -812,6 +845,23 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
           />
         )}
       </div>
+
+      {/* Diseñador de correo (drag & drop) */}
+      {emailDesignOpen && (
+        <EmailEditor
+          initialBlocks={
+            emailBlocks ??
+            (selectedProduct && content
+              ? buildEmailBlocks(selectedProduct, content)
+              : defaultTemplate())
+          }
+          onSave={(blocks) => {
+            setEmailBlocks(blocks);
+            setEmailDesignOpen(false);
+          }}
+          onClose={() => setEmailDesignOpen(false)}
+        />
+      )}
     </div>
   );
 }
