@@ -168,9 +168,10 @@ function WhatsAppPreview({ text, editable, onEdit }: { text: string; editable: b
   );
 }
 
-function EmailPreview({ subject, body, editableBody, onEditSubject, onEditBody }: {
+function EmailPreview({ subject, body, editableBody, onEditSubject, onEditBody, html }: {
   subject: string; body: string; editableBody: boolean;
   onEditSubject: (s: string) => void; onEditBody: (b: string) => void;
+  html?: string | null;
 }) {
   return (
     <div className="flex flex-col h-full rounded-2xl overflow-hidden shadow-lg border border-gray-200 bg-white">
@@ -198,26 +199,37 @@ function EmailPreview({ subject, body, editableBody, onEditSubject, onEditBody }
         />
       </div>
       {/* Email body */}
-      <div className="flex-1 overflow-y-auto">
-        {/* Fake banner */}
-        <div className="h-16 bg-gradient-to-r from-amber-400 to-amber-500 flex items-center justify-center">
-          <p className="text-amber-900 font-bold text-sm">🛒 Mercaldas</p>
-        </div>
-        <div className="px-4 py-3">
-          {editableBody ? (
-            <textarea
-              value={body}
-              onChange={(e) => onEditBody(e.target.value)}
-              className="w-full text-xs text-gray-700 leading-relaxed bg-transparent resize-none focus:outline-none focus:bg-gray-50 rounded"
-              rows={12}
-            />
-          ) : (
-            <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{body}</p>
-          )}
-          <button className="mt-3 w-full py-2 text-xs font-bold bg-amber-400 text-amber-900 rounded-xl">
-            Ver oferta →
-          </button>
-        </div>
+      <div className="flex-1 overflow-hidden">
+        {html ? (
+          <iframe
+            srcDoc={html}
+            title="Vista previa del correo"
+            sandbox=""
+            className="w-full h-full border-0"
+          />
+        ) : (
+          <div className="h-full overflow-y-auto">
+            {/* Fake banner */}
+            <div className="h-16 bg-gradient-to-r from-amber-400 to-amber-500 flex items-center justify-center">
+              <p className="text-amber-900 font-bold text-sm">🛒 Mercaldas</p>
+            </div>
+            <div className="px-4 py-3">
+              {editableBody ? (
+                <textarea
+                  value={body}
+                  onChange={(e) => onEditBody(e.target.value)}
+                  className="w-full text-xs text-gray-700 leading-relaxed bg-transparent resize-none focus:outline-none focus:bg-gray-50 rounded"
+                  rows={12}
+                />
+              ) : (
+                <p className="text-xs text-gray-700 whitespace-pre-wrap leading-relaxed">{body}</p>
+              )}
+              <button className="mt-3 w-full py-2 text-xs font-bold bg-amber-400 text-amber-900 rounded-xl">
+                Ver oferta →
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -578,6 +590,7 @@ function Step2({
   onEditSms,
   onToggleEdit,
   onOpenDesigner,
+  emailHtml,
   genError,
   onNext,
   onBack,
@@ -599,6 +612,7 @@ function Step2({
   onEditSms: (t: string) => void;
   onToggleEdit: (ch: "wa" | "email" | "sms") => void;
   onOpenDesigner: () => void;
+  emailHtml: string | null;
   genError: string | null;
   onNext: () => void;
   onBack: () => void;
@@ -746,6 +760,7 @@ function Step2({
                       editableBody={editableEmail}
                       onEditSubject={onEditEmailSubject}
                       onEditBody={onEditEmailBody}
+                      html={emailHtml}
                     />
                   </div>
                 </div>
@@ -1144,6 +1159,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
               if (ch === "sms") setEditableSms((e) => !e);
             }}
             onOpenDesigner={() => setEmailDesignOpen(true)}
+            emailHtml={emailHtml}
             genError={genError}
             onNext={() => setStep(3)}
             onBack={() => setStep(1)}
@@ -1174,6 +1190,9 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
           onSave={(blocks, html) => {
             setEmailBlocks(blocks);
             setEmailHtml(html);
+            setContent((c) =>
+              c ? { ...c, email: { ...c.email, body: blocksToText(blocks) } } : c,
+            );
             setEmailDesignOpen(false);
           }}
           onClose={() => setEmailDesignOpen(false)}
