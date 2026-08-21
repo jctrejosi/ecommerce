@@ -1,0 +1,62 @@
+2026-08-21 08:34:00,096 Subiendo 21 archivos / 14.31 GB desde db/ADDT -> Users:/Desarrollo3/ADDT
+2026-08-21 08:34:00,096 Destino real: C:\Users\Desarrollo3\ADDT (share Users; C$ sin permiso)
+2026-08-21 08:34:00,096 Authentication with remote machine "WINHOST" for user "Desarrollo3" will be using NTLM v2 authentication (with extended security)
+2026-08-21 08:34:00,442 Now switching over to SMB2 protocol communication
+2026-08-21 08:34:00,442 SMB2 dialect negotiation successful
+2026-08-21 08:34:00,542 Performing NTLMv2 authentication (on SMB2) with server challenge "b'701062292d3ef68a'"
+2026-08-21 08:34:00,542 Performing NTLMv2 authentication (on SMB2) with server challenge "b'701062292d3ef68a'"
+2026-08-21 08:34:00,545 Server supports SMB signing
+2026-08-21 08:34:00,545 SMB signing deactivated. SMB messages will NOT be signed.
+2026-08-21 08:34:00,783 Authentication (on SMB2) successful!
+2026-08-21 08:34:01,124 Directorio remoto listo: Users:/Desarrollo3/ADDT
+2026-08-21 08:34:01,317 ✓ CATALOGO2.adi ya está en destino (0 MB), se omite
+2026-08-21 08:34:01,575 ✓ CATALOGO2.adm ya está en destino (0 MB), se omite
+2026-08-21 08:34:01,863 ✓ CATALOGO2.adt ya está en destino (0 MB), se omite
+2026-08-21 08:34:02,107 ✓ FADCLI.adm ya está en destino (0 MB), se omite
+2026-08-21 08:34:02,305 ✓ POSCLI.adi ya está en destino (2 MB), se omite
+2026-08-21 08:34:02,567 >> POSCLI.adt (232 MB)
+2026-08-21 08:34:02,815   POSCLI.adt:    0.1 /  232.7 MB (  0.0%) |    0.3 MB/s | ETA 0:15:21
+2026-08-21 08:34:04,879   POSCLI.adt:    0.8 /  232.7 MB (  0.3%) |    0.4 MB/s | ETA 0:11:00
+2026-08-21 08:34:06,928   POSCLI.adt:    1.6 /  232.7 MB (  0.7%) |    0.4 MB/s | ETA 0:10:45
+2026-08-21 08:34:08,957   POSCLI.adt:    2.3 /  232.7 MB (  1.0%) |    0.4 MB/s | ETA 0:10:36
+2026-08-21 08:34:10,999   POSCLI.adt:    3.3 /  232.7 MB (  1.4%) |    0.4 MB/s | ETA 0:09:43
+2026-08-21 08:34:13,045   POSCLI.adt:    4.4 /  232.7 MB (  1.9%) |    0.4 MB/s | ETA 0:08:58
+2026-08-21 08:34:15,157   POSCLI.adt:    5.6 /  232.7 MB (  2.4%) |    0.4 MB/s | ETA 0:08:28
+2026-08-21 08:34:17,245   POSCLI.adt:    6.9 /  232.7 MB (  3.0%) |    0.5 MB/s | ETA 0:08:02
+2026-08-21 08:34:19,348   POSCLI.adt:    8.0 /  232.7 MB (  3.4%) |    0.5 MB/s | ETA 0:07:51
+2026-08-21 08:34:21,397   POSCLI.adt:    9.2 /  232.7 MB (  3.9%) |    0.5 MB/s | ETA 0:07:38
+2026-08-21 08:34:23,522   POSCLI.adt:   10.4 /  232.7 MB (  4.5%) |    0.5 MB/s | ETA 0:07:29
+2026-08-21 08:34:25,562   POSCLI.adt:   11.5 /  232.7 MB (  4.9%) |    0.5 MB/s | ETA 0:07:22
+2026-08-21 08:34:27,658   POSCLI.adt:   12.6 /  232.7 MB (  5.4%) |    0.5 MB/s | ETA 0:07:17
+2026-08-21 08:34:29,717   POSCLI.adt:   13.8 /  232.7 MB (  5.9%) |    0.5 MB/s | ETA 0:07:12
+2026-08-21 08:34:31,808   POSCLI.adt:   14.9 /  232.7 MB (  6.4%) |    0.5 MB/s | ETA 0:07:08
+2026-08-21 08:34:33,865   POSCLI.adt:   16.0 /  232.7 MB (  6.9%) |    0.5 MB/s | ETA 0:07:03
+2026-08-21 08:34:35,912   POSCLI.adt:   17.2 /  232.7 MB (  7.4%) |    0.5 MB/s | ETA 0:06:58
+2026-08-21 08:34:37,938   POSCLI.adt:   18.4 /  232.7 MB (  7.9%) |    0.5 MB/s | ETA 0:06:52
+2026-08-21 08:34:40,000   POSCLI.adt:   19.4 /  232.7 MB (  8.4%) |    0.5 MB/s | ETA 0:06:50
+2026-08-21 08:34:42,012   POSCLI.adt:   19.9 /  232.7 MB (  8.5%) |    0.5 MB/s | ETA 0:07:02
+2026-08-21 08:34:44,019   POSCLI.adt:   20.6 /  232.7 MB (  8.9%) |    0.5 MB/s | ETA 0:07:06
+2026-08-21 08:34:46,071   POSCLI.adt:   21.4 /  232.7 MB (  9.2%) |    0.5 MB/s | ETA 0:07:08
+2026-08-21 08:34:48,175   POSCLI.adt:   22.1 /  232.7 MB (  9.5%) |    0.5 MB/s | ETA 0:07:14
+2026-08-21 08:34:50,201   POSCLI.adt:   22.9 /  232.7 MB (  9.8%) |    0.5 MB/s | ETA 0:07:16
+2026-08-21 08:34:52,278   POSCLI.adt:   23.8 /  232.7 MB ( 10.2%) |    0.5 MB/s | ETA 0:07:16
+2026-08-21 08:34:54,345   POSCLI.adt:   25.0 /  232.7 MB ( 10.7%) |    0.5 MB/s | ETA 0:07:10
+2026-08-21 08:34:56,383   POSCLI.adt:   25.9 /  232.7 MB ( 11.1%) |    0.5 MB/s | ETA 0:07:09
+2026-08-21 08:34:58,516   POSCLI.adt:   26.6 /  232.7 MB ( 11.4%) |    0.5 MB/s | ETA 0:07:14
+2026-08-21 08:35:00,585   POSCLI.adt:   27.2 /  232.7 MB ( 11.7%) |    0.5 MB/s | ETA 0:07:18
+2026-08-21 08:35:02,765   POSCLI.adt:   27.9 /  232.7 MB ( 12.0%) |    0.5 MB/s | ETA 0:07:22
+2026-08-21 08:35:04,838   POSCLI.adt:   28.7 /  232.7 MB ( 12.3%) |    0.5 MB/s | ETA 0:07:22
+2026-08-21 08:35:06,855   POSCLI.adt:   29.8 /  232.7 MB ( 12.8%) |    0.5 MB/s | ETA 0:07:18
+2026-08-21 08:35:08,865   POSCLI.adt:   30.9 /  232.7 MB ( 13.3%) |    0.5 MB/s | ETA 0:07:13
+2026-08-21 08:35:10,917   POSCLI.adt:   31.6 /  232.7 MB ( 13.6%) |    0.5 MB/s | ETA 0:07:15
+2026-08-21 08:35:12,935   POSCLI.adt:   32.1 /  232.7 MB ( 13.8%) |    0.5 MB/s | ETA 0:07:19
+2026-08-21 08:35:15,040   POSCLI.adt:   32.6 /  232.7 MB ( 14.0%) |    0.5 MB/s | ETA 0:07:24
+2026-08-21 08:35:17,640   POSCLI.adt:   32.9 /  232.7 MB ( 14.1%) |    0.4 MB/s | ETA 0:07:36
+2026-08-21 08:35:19,666   POSCLI.adt:   33.1 /  232.7 MB ( 14.2%) |    0.4 MB/s | ETA 0:07:44
+2026-08-21 08:35:21,942   POSCLI.adt:   33.4 /  232.7 MB ( 14.3%) |    0.4 MB/s | ETA 0:07:54
+2026-08-21 08:35:24,115   POSCLI.adt:   33.7 /  232.7 MB ( 14.5%) |    0.4 MB/s | ETA 0:08:01
+2026-08-21 08:35:26,415   POSCLI.adt:   34.0 /  232.7 MB ( 14.6%) |    0.4 MB/s | ETA 0:08:10
+2026-08-21 08:35:29,056   POSCLI.adt:   34.2 /  232.7 MB ( 14.7%) |    0.4 MB/s | ETA 0:08:21
+2026-08-21 08:35:31,315   POSCLI.adt:   34.6 /  232.7 MB ( 14.9%) |    0.4 MB/s | ETA 0:08:28
+2026-08-21 08:35:33,443   POSCLI.adt:   34.8 /  232.7 MB ( 14.9%) |    0.4 MB/s | ETA 0:08:37
+2026-08-21 08:35:35,708   POSCLI.adt:   34.9 /  232.7 MB ( 15.0%) |    0.4 MB/s | ETA 0:08:47
