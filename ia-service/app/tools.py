@@ -1,4 +1,4 @@
-"""Herramientas (function calling) del servicio admin-ia.
+"""Herramientas (function calling) del servicio ia-service.
 
 Tres funciones de recomendación de contenido de campañas:
   1. recomendar_whatsapp → mensaje de WhatsApp

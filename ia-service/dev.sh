@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Admin IA — uvicorn con reload para desarrollo local.
+# IA Service — uvicorn con reload para desarrollo local.
 set -e
 cd "$(dirname "$0")"
 
@@ -9,4 +9,4 @@ if [ ! -d ".venv" ]; then
 fi
 
 exec .venv/bin/python -m uvicorn app.main:app \
-  --host 0.0.0.0 --port "${ADMIN_IA_PORT:-8002}" --reload
+  --host 0.0.0.0 --port "${IA_SERVICE_PORT:-8002}" --reload

@@ -32,8 +32,8 @@ export class CampaignsService {
     return this.drizzle.db;
   }
 
-  private adminIaUrl(): string {
-    return process.env.ADMIN_IA_URL ?? 'http://127.0.0.1:8002';
+  private iaServiceUrl(): string {
+    return process.env.IA_SERVICE_URL ?? 'http://127.0.0.1:8002';
   }
 
   /* ── Helpers de serialización (bigint → number) ─── */
@@ -275,7 +275,7 @@ export class CampaignsService {
     };
   }
 
-  /* ── Generación de contenido con IA (/admin-ia) ──────── */
+  /* ── Generación de contenido con IA (/ia-service) ──────── */
 
   async generateContent(dto: {
     productId?: number;
@@ -313,7 +313,7 @@ export class CampaignsService {
       canales: dto.channels,
     };
 
-    const url = `${this.adminIaUrl()}/generate`;
+    const url = `${this.iaServiceUrl()}/generate`;
     let resp: Response;
     try {
       resp = await fetch(url, {
@@ -322,14 +322,14 @@ export class CampaignsService {
         body: JSON.stringify(body),
       });
     } catch (e) {
-      this.logger.error(`No se pudo contactar admin-ia en ${url}: ${e}`);
+      this.logger.error(`No se pudo contactar ia-service en ${url}: ${e}`);
       throw new BadRequestException(
-        'El servicio de IA de campañas (/admin-ia) no está disponible',
+        'El servicio de IA de campañas (/ia-service) no está disponible',
       );
     }
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
-      this.logger.error(`admin-ia respondió ${resp.status}: ${text}`);
+      this.logger.error(`ia-service respondió ${resp.status}: ${text}`);
       throw new BadRequestException(
         'El servicio de IA no pudo generar el contenido',
       );

@@ -1,4 +1,4 @@
-"""Cliente DeepSeek con loop de function calling para admin-ia.
+"""Cliente DeepSeek con loop de function calling para ia-service.
 
 El modelo recibe el contexto de la campaña (producto, precio, descuento, tono,
 prompt y canales solicitados) y debe llamar las herramientas correspondientes
@@ -11,7 +11,7 @@ import httpx
 
 from . import config, tools
 
-log = logging.getLogger("admin-ia.deepseek")
+log = logging.getLogger("ia-service.deepseek")
 
 SYSTEM_PROMPT = """Eres el redactor de campañas de marketing de Mercaldas, un supermercado en línea.
 
@@ -119,7 +119,7 @@ async def generar_contenido(
             # El modelo terminó: devolvemos lo acumulado por las herramientas
             payload = ctx.get("payload") or {}
             if not payload:
-                log.warning("admin-ia: el modelo no produjo contenido")
+                log.warning("ia-service: el modelo no produjo contenido")
                 return {
                     "error": "El modelo no generó contenido. Reintenta o ajusta el prompt."
                 }

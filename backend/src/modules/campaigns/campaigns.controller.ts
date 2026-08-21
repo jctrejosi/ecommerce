@@ -43,7 +43,7 @@ export class CampaignsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Genera contenido con IA (/admin-ia): whatsapp, email (bloques del diseñador) y sms',
+      'Genera contenido con IA (/ia-service): whatsapp, email (bloques del diseñador) y sms',
   })
   @ApiResponse({ status: 200, description: 'Contenido recomendado' })
   generate(@Body() dto: GenerateContentDto) {

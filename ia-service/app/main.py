@@ -1,4 +1,4 @@
-"""Admin IA — API de generación de contenido para campañas de MercAldas.
+"""IA Service — API de generación de contenido para campañas de MercAldas.
 
 POST /generate  → recomienda el contenido (whatsapp / email / sms) usando
                   DeepSeek con function calling (ver app/tools.py).
@@ -15,7 +15,7 @@ from . import config, deepseek
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 app = FastAPI(
-    title="MercAldas Admin IA",
+    title="MercAldas IA Service",
     description="Recomendación de contenido de campañas con DeepSeek function calling.",
     version="0.1.0",
 )
@@ -62,7 +62,7 @@ async def generate(req: GenerateRequest):
     if not config.DEEPSEEK_API_KEY:
         raise HTTPException(
             status_code=503,
-            detail="DEEPSEEK_API_KEY no está configurada en el servicio admin-ia",
+            detail="DEEPSEEK_API_KEY no está configurada en el servicio ia-service",
         )
 
     resultado = await deepseek.generar_contenido(

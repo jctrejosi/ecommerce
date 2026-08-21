@@ -57,10 +57,10 @@ COPY bot/ ./bot
 RUN python3 -m venv /opt/bot-venv \
     && /opt/bot-venv/bin/pip install --no-cache-dir -r ./bot/requirements.txt
 
-# Admin IA (Python: recomendación de contenido de campañas)
-COPY admin-ia/ ./admin-ia
-RUN python3 -m venv /opt/admin-ia-venv \
-    && /opt/admin-ia-venv/bin/pip install --no-cache-dir -r ./admin-ia/requirements.txt
+# IA Service (Python: recomendación de contenido de campañas)
+COPY ia-service/ ./ia-service
+RUN python3 -m venv /opt/ia-service-venv \
+    && /opt/ia-service-venv/bin/pip install --no-cache-dir -r ./ia-service/requirements.txt
 
 # Proxy y arranque
 COPY Caddyfile ./Caddyfile
