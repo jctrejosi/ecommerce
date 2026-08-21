@@ -16,12 +16,11 @@ import {
   type Campaign as ApiCampaign,
   type CampaignChannel,
 } from "../services/campaigns.service";
+import { catalogService, type CatalogProduct } from "../services/catalog.service";
 
 /* ─── Types ─────────────────────────────────────── */
-interface Product {
-  id: string; name: string; price: number; image: string;
-  category: string; audience: number; convRate: number;
-}
+/** Producto del catálogo real (alias del tipo del servicio de catálogo). */
+type Product = CatalogProduct;
 
 interface GeneratedContent {
   whatsapp: string; email: { subject: string; body: string }; sms: string;
@@ -30,15 +29,11 @@ interface GeneratedContent {
 type CampaignStatus = "borrador" | "programada" | "enviando" | "enviada" | "fallida";
 type Step = 1 | 2 | 3;
 
-/* ─── Mock data (productos) ─────────────────────── */
-const PRODUCTS: Product[] = [
-  { id: "p1", name: "Leche Alquería Entera 1.1L", price: 4350, image: "https://images.unsplash.com/photo-1604095853918-1a1823a63dd5?w=120&h=120&fit=crop&auto=format", category: "Lácteos", audience: 847, convRate: 34 },
-  { id: "p2", name: "Pechuga de Pollo Fresca x kg", price: 12900, image: "https://images.unsplash.com/photo-1607623814075-e51df1bdc82f?w=120&h=120&fit=crop&auto=format", category: "Carnes", audience: 1203, convRate: 41 },
-  { id: "p3", name: "Arroz Diana Extra Premium 5kg", price: 22500, image: "https://images.unsplash.com/photo-1557844352-761f2565b576?w=120&h=120&fit=crop&auto=format", category: "Despensa", audience: 632, convRate: 28 },
-  { id: "p4", name: "Aguacate Hass Mediano x und", price: 2800, image: "https://images.unsplash.com/photo-1488459716781-31db52582fe9?w=120&h=120&fit=crop&auto=format", category: "Frutas y Verduras", audience: 518, convRate: 22 },
-  { id: "p5", name: "Detergente Ariel Líquido 3L", price: 28900, image: "https://images.unsplash.com/photo-1563453392212-326f5e854473?w=120&h=120&fit=crop&auto=format", category: "Limpieza", audience: 921, convRate: 37 },
-  { id: "p6", name: "Huevos AA Blancos x30", price: 18900, image: "https://images.unsplash.com/photo-1729622493745-03ca9590c64a?w=120&h=120&fit=crop&auto=format", category: "Lácteos", audience: 1089, convRate: 45 },
-];
+/* ─── Placeholders de segmentación ──────────────── */
+// La segmentación inteligente de clientes aún no está conectada;
+// mientras tanto usamos estimaciones fijas para los paneles del wizard.
+const ESTIMATED_AUDIENCE = 500;
+const ESTIMATED_CONV_RATE = 3;
 
 const STATUS_CFG: Record<CampaignStatus, { label: string; color: string; bg: string; border: string }> = {
   borrador:   { label: "Borrador",   color: "text-gray-600",  bg: "bg-gray-100",   border: "border-gray-200" },
@@ -127,7 +122,7 @@ function buildEmailBlocks(product: Product, content: GeneratedContent): EmailBlo
     .join("");
   return [
     { ...newBlock("text"), props: { text: "🛒 Mercaldas", fontSize: 24, color: "#B45309", align: "center", bold: true } },
-    { ...newBlock("image"), props: { src: product.image, alt: product.name, width: 100, borderRadius: 12, borderWidth: 0, shadow: true } },
+    { ...newBlock("image"), props: { src: product.image ?? undefined, alt: product.name, width: 100, borderRadius: 12, borderWidth: 0, shadow: true } },
     { ...newBlock("text"), props: { text: bodyHtml, fontSize: 15, color: "#1F2937", align: "left" } },
     { ...newBlock("button"), props: { text: "Ver oferta →", link: "https://mercaldas.com/promo", bg: "#FBBF24", color: "#78350F", radius: 10, align: "center" } },
     newBlock("divider"),
@@ -270,7 +265,42 @@ function Step1({
   onNext: () => void;
 }) {
   const [search, setSearch] = useState("");
-  const filtered = PRODUCTS.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase()));
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    catalogService
+      .getProducts({ limit: 200, isActive: true })
+      .then((list) => {
+        if (!cancelled) setProducts(list);
+      })
+      .catch((e) => {
+        if (!cancelled)
+          setLoadError(
+            e instanceof Error ? e.message : "No se pudieron cargar los productos",
+          );
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const q = search.trim().toLowerCase();
+  const filtered = products.filter(
+    (p) =>
+      !q ||
+      p.name.toLowerCase().includes(q) ||
+      (p.category ?? "").toLowerCase().includes(q) ||
+      (p.brandName ?? "").toLowerCase().includes(q) ||
+      (p.productTypeName ?? "").toLowerCase().includes(q),
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -292,31 +322,57 @@ function Step1({
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-            {filtered.map((p) => {
-              const active = selectedProduct?.id === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => onSelect(p)}
-                  className={`relative text-left rounded-2xl border-2 p-4 transition-all hover:shadow-md ${active ? "border-amber-400 bg-amber-50 shadow-md" : "border-gray-100 bg-white hover:border-gray-200"}`}
-                >
-                  {active && (
-                    <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
-                      <CheckCircle size={12} className="text-white" />
+            {loading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-2xl border-2 border-gray-100 p-4 animate-pulse">
+                  <div className="w-14 h-14 rounded-xl bg-gray-100 mb-3" />
+                  <div className="h-3 bg-gray-100 rounded mb-2" />
+                  <div className="h-3 bg-gray-100 rounded w-1/2" />
+                </div>
+              ))
+            ) : loadError ? (
+              <div className="col-span-full bg-red-50 border border-red-200 rounded-2xl p-6 text-center">
+                <p className="text-sm font-semibold text-red-700 mb-1">No se pudieron cargar los productos</p>
+                <p className="text-xs text-red-500">{loadError}</p>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="col-span-full bg-gray-50 border border-gray-100 rounded-2xl p-8 text-center">
+                <p className="text-sm text-gray-500">No hay productos que coincidan con «{search}».</p>
+              </div>
+            ) : (
+              filtered.map((p) => {
+                const active = selectedProduct?.id === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => onSelect(p)}
+                    className={`relative text-left rounded-2xl border-2 p-4 transition-all hover:shadow-md ${active ? "border-amber-400 bg-amber-50 shadow-md" : "border-gray-100 bg-white hover:border-gray-200"}`}
+                  >
+                    {active && (
+                      <div className="absolute top-3 right-3 w-5 h-5 rounded-full bg-amber-400 flex items-center justify-center">
+                        <CheckCircle size={12} className="text-white" />
+                      </div>
+                    )}
+                    <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 mb-3 flex items-center justify-center">
+                      {p.image ? (
+                        <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xl">🛒</span>
+                      )}
                     </div>
-                  )}
-                  <div className="w-14 h-14 rounded-xl overflow-hidden bg-gray-100 mb-3">
-                    <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
-                  </div>
-                  <p className={`text-sm font-semibold leading-tight mb-1 ${active ? "text-amber-900" : "text-gray-800"}`}>{p.name}</p>
-                  <p className="text-xs text-gray-400 mb-2">{fmt(p.price)}</p>
-                  <div className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-lg w-fit">
-                    <Target size={9} />
-                    {p.audience.toLocaleString()} clientes · {p.convRate}% conv.
-                  </div>
-                </button>
-              );
-            })}
+                    <p className={`text-sm font-semibold leading-tight mb-1 ${active ? "text-amber-900" : "text-gray-800"}`}>{p.name}</p>
+                    <p className="text-xs text-gray-400 mb-2">{fmt(p.price)}</p>
+                    <div className="flex items-center gap-1.5 text-[10px] font-semibold text-amber-700 bg-amber-100 px-2 py-1 rounded-lg w-fit max-w-full">
+                      <Target size={9} className="shrink-0" />
+                      <span className="truncate">
+                        {p.category || "General"}
+                        {p.brandName ? ` · ${p.brandName}` : ""}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })
+            )}
           </div>
 
           {/* Audience panel */}
@@ -327,28 +383,28 @@ function Step1({
                   <Users size={15} className="text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">Público objetivo identificado</p>
-                  <p className="text-xs text-gray-400">Análisis basado en historial de compras</p>
+                  <p className="text-sm font-bold text-gray-900">Producto seleccionado</p>
+                  <p className="text-xs text-gray-400">La segmentación inteligente se conectará próximamente</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
                 <div className="bg-gray-50 rounded-xl p-3 text-center">
-                  <p className="text-xl font-bold text-gray-900">{selectedProduct.audience.toLocaleString()}</p>
-                  <p className="text-xs text-gray-500">clientes</p>
+                  <p className="text-sm font-bold text-gray-900 truncate">{selectedProduct.category || "Sin categoría"}</p>
+                  <p className="text-xs text-gray-500">categoría</p>
                 </div>
                 <div className="bg-amber-50 rounded-xl p-3 text-center">
-                  <p className="text-xl font-bold text-amber-700">{selectedProduct.convRate}%</p>
-                  <p className="text-xs text-amber-600">prob. conversión</p>
+                  <p className="text-sm font-bold text-amber-700 truncate">{selectedProduct.brandName || "Sin marca"}</p>
+                  <p className="text-xs text-amber-600">marca</p>
                 </div>
                 <div className="bg-green-50 rounded-xl p-3 text-center">
-                  <p className="text-xl font-bold text-green-700">~{Math.round(selectedProduct.audience * selectedProduct.convRate / 100)}</p>
-                  <p className="text-xs text-green-600">ventas esperadas</p>
+                  <p className="text-sm font-bold text-green-700">{fmt(selectedProduct.price)}</p>
+                  <p className="text-xs text-green-600">precio</p>
                 </div>
               </div>
 
               <div className="text-xs text-gray-500 bg-gray-50 rounded-xl px-4 py-3 mb-4 leading-relaxed">
-                📊 Clientes que compraron <strong>{selectedProduct.category}</strong> en los últimos 60 días, o visitaron el producto sin completar la compra, o tienen patrones de compra similares.
+                🔎 La segmentación inteligente de clientes se conectará próximamente. Por ahora la campaña se dirigirá a una audiencia estimada de <strong>{ESTIMATED_AUDIENCE.toLocaleString()} clientes</strong> (recomendación aleatoria).
               </div>
 
               <div>
@@ -451,12 +507,16 @@ function Step2({
 
             {/* Product reminder */}
             <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-5">
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-white shrink-0">
-                <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+              <div className="w-12 h-12 rounded-xl overflow-hidden bg-white shrink-0 flex items-center justify-center">
+                {product.image ? (
+                  <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-lg">🛒</span>
+                )}
               </div>
               <div>
                 <p className="text-sm font-bold text-amber-900">{product.name}</p>
-                <p className="text-xs text-amber-700">{product.audience.toLocaleString()} clientes · {fmt(product.price)}</p>
+                <p className="text-xs text-amber-700">{[product.category, product.brandName].filter(Boolean).join(" · ") || "Catálogo Mercaldas"} · {fmt(product.price)}</p>
               </div>
             </div>
 
@@ -642,7 +702,8 @@ function Step3({
 }) {
   const [scheduled, setScheduled] = useState(false);
   const activeChannels = Object.entries(channels).filter(([, v]) => v).map(([k]) => k);
-  const totalReach = product.audience;
+  // Estimación fija mientras no esté conectada la segmentación inteligente.
+  const totalReach = ESTIMATED_AUDIENCE;
 
   if (sent) {
     return (
@@ -660,8 +721,8 @@ function Step3({
         <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
           {[
             { label: "Estimados abiertos", value: Math.round(totalReach * 0.6).toLocaleString() },
-            { label: "Conversiones est.", value: Math.round(totalReach * product.convRate / 100).toLocaleString() },
-            { label: "ROI esperado", value: `${(product.convRate * 4.2).toFixed(0)}%` },
+            { label: "Conversiones est.", value: Math.round(totalReach * ESTIMATED_CONV_RATE / 100).toLocaleString() },
+            { label: "ROI esperado", value: `${(ESTIMATED_CONV_RATE * 4.2).toFixed(0)}%` },
           ].map((s) => (
             <div key={s.label} className="bg-gray-50 rounded-2xl p-4 text-center">
               <p className="text-lg font-bold text-gray-900">{s.value}</p>
@@ -685,8 +746,12 @@ function Step3({
             <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4">Resumen</h3>
             <div className="space-y-3">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 flex items-center justify-center">
+                  {product.image ? (
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-base">🛒</span>
+                  )}
                 </div>
                 <div>
                   <p className="text-sm font-bold text-gray-900">{product.name}</p>
@@ -712,7 +777,7 @@ function Step3({
               </div>
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Conversiones estimadas</span>
-                <span className="text-sm font-bold text-green-600">~{Math.round(totalReach * product.convRate / 100)}</span>
+                <span className="text-sm font-bold text-green-600">~{Math.round(totalReach * ESTIMATED_CONV_RATE / 100)}</span>
               </div>
             </div>
           </div>
@@ -823,6 +888,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
     setGenError(null);
     try {
       const res = await campaignsService.generateContent({
+        productId: selectedProduct.id,
         productName: selectedProduct.name,
         price: selectedProduct.price,
         prompt,
@@ -882,6 +948,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
 
       const created = await campaignsService.create({
         name: prompt.slice(0, 60) || `Campaña ${selectedProduct.name}`,
+        productId: selectedProduct.id,
         prompt,
         channels: active.map((k) => CHANNEL_TO_API[k]),
         messages,
@@ -990,7 +1057,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
 }
 
 /* ─── Campaign list ─────────────────────────────── */
-function CampaignCard({ c }: { c: typeof CAMPAIGNS_MOCK[0] }) {
+function CampaignCard({ c }: { c: CampaignCardData }) {
   const cfg = STATUS_CFG[c.status];
   const openRate = c.sent > 0 ? Math.round((c.opens / c.sent) * 100) : 0;
 
