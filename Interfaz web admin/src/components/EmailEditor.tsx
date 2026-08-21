@@ -41,6 +41,7 @@ export interface EmailBlock {
     // text
     text?: string;
     fontSize?: number;
+    lineHeight?: number;
     color?: string;
     align?: "left" | "center" | "right";
     bold?: boolean;
@@ -48,6 +49,7 @@ export interface EmailBlock {
     src?: string;
     alt?: string;
     width?: number;
+    height?: number;
     borderRadius?: number;
     borderWidth?: number;
     shadow?: boolean;
@@ -264,13 +266,13 @@ export function blocksToHtml(blocks: EmailBlock[]): string {
         case "text": {
           const html = (b.props.text ?? "").replace(/\n/g, "<br/>");
           return cell(
-            `<div style="font-size:${b.props.fontSize ?? 15}px;color:${b.props.color ?? "#1F2937"};text-align:${b.props.align ?? "left"};font-weight:${b.props.bold ? 700 : 400};line-height:1.6;">${html}</div>`,
+            `<div style="font-size:${b.props.fontSize ?? 15}px;color:${b.props.color ?? "#1F2937"};text-align:${b.props.align ?? "left"};font-weight:${b.props.bold ? 700 : 400};line-height:${b.props.lineHeight ?? 1.6};">${html}</div>`,
           );
         }
         case "image": {
           if (!b.props.src) return cell("<div></div>");
           return cell(
-            `<a href="${esc(b.props.link ?? "")}" style="text-decoration:none;"><img src="${esc(b.props.src!)}" alt="${esc(b.props.alt ?? "")}" width="${Math.round(560 * (b.props.width ?? 100) / 100)}" style="max-width:100%;border-radius:${b.props.borderRadius ?? 8}px;border:${b.props.borderWidth ?? 0}px solid #E5E7EB;${b.props.shadow ? "box-shadow:0 4px 12px rgba(0,0,0,.08);" : ""}display:block;" /></a>`,
+            `<a href="${esc(b.props.link ?? "")}" style="text-decoration:none;"><img src="${esc(b.props.src!)}" alt="${esc(b.props.alt ?? "")}" width="${Math.round(560 * (b.props.width ?? 100) / 100)}" style="max-width:100%;border-radius:${b.props.borderRadius ?? 8}px;border:${b.props.borderWidth ?? 0}px solid #E5E7EB;${b.props.shadow ? "box-shadow:0 4px 12px rgba(0,0,0,.08);" : ""}height:${b.props.height ? `${b.props.height}px` : "auto"};object-fit:cover;display:block;" /></a>`,
           );
         }
         case "button": {
@@ -525,6 +527,8 @@ export default function EmailEditor({
                   borderStyle: "solid",
                   borderColor: "#E5E7EB",
                   boxShadow: b.props.shadow ? "0 4px 12px rgba(0,0,0,.08)" : undefined,
+                  height: b.props.height ? `${b.props.height}px` : undefined,
+                  objectFit: b.props.height ? "cover" : undefined,
                 }}
               />
             ) : (
@@ -540,19 +544,25 @@ export default function EmailEditor({
         );
       case "button":
         return (
-          <div style={{ textAlign: (b.props.align ?? "center") as React.CSSProperties["textAlign"] }} className="w-full">
+          <div
+            style={{
+              textAlign: (b.props.align ?? "center") as React.CSSProperties["textAlign"],
+              width: b.props.width != null ? `${b.props.width}%` : "100%",
+            }}
+          >
             <span
               contentEditable={!preview}
               suppressContentEditableWarning
               onClick={() => setSelectedId(b.id)}
               onBlur={(e) => updateBlock(b.id, { text: e.currentTarget.innerText })}
-              className="inline-block cursor-text font-bold"
+              className="inline-flex items-center justify-center cursor-text font-bold"
               style={{
                 background: b.props.bg ?? "#FBBF24",
                 color: b.props.color ?? "#78350F",
                 fontSize: b.props.fontSize ?? 14,
                 padding: "12px 28px",
                 borderRadius: b.props.radius ?? 10,
+                minHeight: b.props.height ? `${b.props.height}px` : undefined,
               }}
             >
               {b.props.text ?? ""}
@@ -567,6 +577,8 @@ export default function EmailEditor({
                 borderTopWidth: b.props.thickness ?? 2,
                 borderTopStyle: (b.props.dividerStyle ?? "solid") as React.CSSProperties["borderTopStyle"],
                 borderTopColor: b.props.dividerColor ?? "#E5E7EB",
+                width: b.props.width != null ? `${b.props.width}%` : "100%",
+                margin: "0 auto",
               }}
             />
           </div>
@@ -899,6 +911,7 @@ function EditableText({
       className="outline-none w-full min-h-[18px] leading-relaxed cursor-text"
       style={{
         fontSize: block.props.fontSize ?? 15,
+        lineHeight: block.props.lineHeight ?? 1.6,
         color: block.props.color ?? "#1F2937",
         textAlign: (block.props.align ?? "left") as React.CSSProperties["textAlign"],
         fontWeight: block.props.bold ? 700 : 400,
@@ -957,6 +970,13 @@ function PropertiesPanel({
               className="w-full"
             />
           </Field>
+          <Field label={`Alto de línea (${p.lineHeight ?? 1.6})`}>
+            <input
+              type="range" min={1} max={2.5} step={0.1} value={p.lineHeight ?? 1.6}
+              onChange={(e) => onChange({ lineHeight: Number(e.target.value) })}
+              className="w-full"
+            />
+          </Field>
           <Field label="Color">
             <input type="color" value={p.color ?? "#1F2937"} onChange={(e) => onChange({ color: e.target.value })} className="w-full h-8 rounded-lg border border-gray-200 bg-white cursor-pointer" />
           </Field>
@@ -1009,6 +1029,9 @@ function PropertiesPanel({
           <Field label={`Ancho (${p.width ?? 100}%)`}>
             <input type="range" min={30} max={100} value={p.width ?? 100} onChange={(e) => onChange({ width: Number(e.target.value) })} className="w-full" />
           </Field>
+          <Field label={`Alto (${p.height ? `${p.height}px` : "auto"})`}>
+            <input type="range" min={0} max={600} value={p.height ?? 0} onChange={(e) => onChange({ height: Number(e.target.value) || undefined })} className="w-full" />
+          </Field>
           <Field label={`Borde redondeado (${p.borderRadius ?? 8}px)`}>
             <input type="range" min={0} max={40} value={p.borderRadius ?? 8} onChange={(e) => onChange({ borderRadius: Number(e.target.value) })} className="w-full" />
           </Field>
@@ -1032,6 +1055,12 @@ function PropertiesPanel({
           </Field>
           <Field label="Enlace (CTA)">
             <input placeholder="https://…" value={p.link ?? ""} onChange={(e) => onChange({ link: e.target.value })} className={inputCls} />
+          </Field>
+          <Field label={`Ancho (${p.width ?? 100}%)`}>
+            <input type="range" min={30} max={100} value={p.width ?? 100} onChange={(e) => onChange({ width: Number(e.target.value) })} className="w-full" />
+          </Field>
+          <Field label={`Alto (${p.height ? `${p.height}px` : "auto"})`}>
+            <input type="range" min={0} max={120} value={p.height ?? 0} onChange={(e) => onChange({ height: Number(e.target.value) || undefined })} className="w-full" />
           </Field>
           <Field label="Colores">
             <div className="flex gap-3">
@@ -1068,6 +1097,9 @@ function PropertiesPanel({
         <>
           <Field label={`Grosor (${p.thickness ?? 2}px)`}>
             <input type="range" min={1} max={8} value={p.thickness ?? 2} onChange={(e) => onChange({ thickness: Number(e.target.value) })} className="w-full" />
+          </Field>
+          <Field label={`Ancho (${p.width ?? 100}%)`}>
+            <input type="range" min={20} max={100} value={p.width ?? 100} onChange={(e) => onChange({ width: Number(e.target.value) })} className="w-full" />
           </Field>
           <Field label="Color">
             <input type="color" value={p.dividerColor ?? "#E5E7EB"} onChange={(e) => onChange({ dividerColor: e.target.value })} className="w-full h-8 rounded-lg border border-gray-200 bg-white cursor-pointer" />
