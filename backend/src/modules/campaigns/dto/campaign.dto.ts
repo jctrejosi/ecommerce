@@ -40,6 +40,11 @@ export class CreateCampaignDto {
   productId?: number;
 
   @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  productIds?: number[];
+
+  @IsOptional()
   @IsString()
   prompt?: string;
 
@@ -70,6 +75,11 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsNumber()
   productId?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsNumber({}, { each: true })
+  productIds?: number[];
 
   @IsOptional()
   @IsString()
@@ -122,6 +132,11 @@ export class GenerateContentDto {
   @IsOptional()
   @IsNumber()
   price?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsObject({ each: true })
+  products?: { id?: number; name?: string; price?: number }[];
 
   @IsOptional()
   @IsNumber()

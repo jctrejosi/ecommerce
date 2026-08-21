@@ -37,6 +37,7 @@ class Producto(BaseModel):
 
 class GenerateRequest(BaseModel):
     producto: Producto = Field(default_factory=Producto)
+    productos: list[Producto] = Field(default_factory=list)
     prompt: str = ""
     tono: str = "cercano"
     canales: list[str] = Field(default_factory=lambda: ["whatsapp", "email", "sms"])
@@ -67,6 +68,7 @@ async def generate(req: GenerateRequest):
 
     resultado = await deepseek.generar_contenido(
         producto=req.producto.model_dump(),
+        productos=[p.model_dump() for p in req.productos],
         prompt=req.prompt,
         tono=req.tono,
         canales=canales,

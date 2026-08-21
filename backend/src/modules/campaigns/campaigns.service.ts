@@ -8,6 +8,7 @@ import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   campaignMessages,
+  campaignProducts,
   campaignRecipients,
   campaigns,
   customers,
@@ -86,17 +87,26 @@ export class CampaignsService {
       : [];
 
     const productsById = await this.loadProducts(rows.map((r) => r.productId));
+    const campaignProductsById = await this.loadCampaignProducts(
+      rows.map((r) => Number(r.id)),
+    );
 
-    return rows.map((c) => ({
-      ...this.toCampaign(c),
-      product:
-        c.productId != null
-          ? (productsById.get(Number(c.productId)) ?? null)
-          : null,
-      messages: messages
-        .filter((m) => Number(m.campaignId) === Number(c.id))
-        .map((m) => this.toMessage(m)),
-    }));
+    return rows.map((c) => {
+      const products = (campaignProductsById.get(Number(c.id)) ?? [])
+        .map((pid) => productsById.get(pid) ?? null)
+        .filter((p): p is { id: number; name: string } => p !== null);
+      return {
+        ...this.toCampaign(c),
+        product:
+          c.productId != null
+            ? (productsById.get(Number(c.productId)) ?? null)
+            : null,
+        products,
+        messages: messages
+          .filter((m) => Number(m.campaignId) === Number(c.id))
+          .map((m) => this.toMessage(m)),
+      };
+    });
   }
 
   async findOne(id: number) {
@@ -119,6 +129,29 @@ export class CampaignsService {
           .where(eq(products.id, BigInt(row.productId)))
       : [null];
 
+    const campaignProductIds = (
+      await this.db
+        .select({ productId: campaignProducts.productId })
+        .from(campaignProducts)
+        .where(eq(campaignProducts.campaignId, id))
+        .orderBy(asc(campaignProducts.position))
+    ).map((r) => Number(r.productId));
+
+    const productRows = campaignProductIds.length
+      ? await this.db
+          .select({ id: products.id, name: products.name })
+          .from(products)
+          .where(
+            sql`${products.id} = ANY(${sql`ARRAY[${sql.join(
+              campaignProductIds.map((v) => BigInt(v)),
+              sql`, `,
+            )}]::bigint[]`})`,
+          )
+      : [];
+    const productListById = new Map(
+      productRows.map((p) => [Number(p.id), { id: Number(p.id), name: p.name }]),
+    );
+
     const recipientsCount = await this.db
       .select({ count: sql<number>`count(*)::int` })
       .from(campaignRecipients)
@@ -127,17 +160,25 @@ export class CampaignsService {
     return {
       ...this.toCampaign(row),
       product: product ? { id: Number(product.id), name: product.name } : null,
+      products: campaignProductIds
+        .map((pid) => productListById.get(pid) ?? null)
+        .filter((p): p is { id: number; name: string } => p !== null),
       messages: messages.map((m) => this.toMessage(m)),
       recipientsCount: recipientsCount[0]?.count ?? 0,
     };
   }
 
   async create(dto: CreateCampaignDto, userId?: number) {
+    const productIds = dto.productIds?.length
+      ? dto.productIds
+      : dto.productId != null
+        ? [dto.productId]
+        : [];
     const [row] = await this.db
       .insert(campaigns)
       .values({
         name: dto.name,
-        productId: dto.productId ?? null,
+        productId: productIds[0] ?? null,
         prompt: dto.prompt ?? null,
         tone: dto.tone ?? null,
         channels: dto.channels ?? [],
@@ -145,17 +186,26 @@ export class CampaignsService {
       })
       .returning();
 
+    await this.upsertCampaignProducts(Number(row.id), productIds);
     await this.upsertMessages(Number(row.id), dto.messages ?? []);
     return this.findOne(Number(row.id));
   }
 
   async update(id: number, dto: UpdateCampaignDto) {
     const existing = await this.findOne(id);
+
+    let productId = dto.productId ?? existing.productId;
+    if (dto.productIds) {
+      const ids = [...new Set(dto.productIds)];
+      await this.upsertCampaignProducts(id, ids);
+      productId = ids[0] ?? existing.productId;
+    }
+
     const [row] = await this.db
       .update(campaigns)
       .set({
         name: dto.name ?? existing.name,
-        productId: dto.productId ?? existing.productId,
+        productId,
         prompt: dto.prompt ?? existing.prompt,
         tone: dto.tone ?? existing.tone,
         channels: dto.channels ?? existing.channels,
@@ -196,6 +246,50 @@ export class CampaignsService {
         })
         .onConflictDoNothing();
     }
+  }
+
+  /* ── Productos de la campaña (multi-selección) ────────── */
+
+  private async upsertCampaignProducts(
+    campaignId: number,
+    productIds: number[],
+  ) {
+    await this.db
+      .delete(campaignProducts)
+      .where(eq(campaignProducts.campaignId, campaignId));
+    if (!productIds.length) return;
+    await this.db.insert(campaignProducts).values(
+      [...new Set(productIds)].map((pid, i) => ({
+        campaignId,
+        productId: pid,
+        position: i,
+      })),
+    );
+  }
+
+  private async loadCampaignProducts(campaignIds: number[]) {
+    const map = new Map<number, number[]>();
+    if (!campaignIds.length) return map;
+    const rows = await this.db
+      .select({
+        campaignId: campaignProducts.campaignId,
+        productId: campaignProducts.productId,
+        position: campaignProducts.position,
+      })
+      .from(campaignProducts)
+      .where(
+        sql`${campaignProducts.campaignId} = ANY(${sql`ARRAY[${sql.join(
+          campaignIds,
+          sql`, `,
+        )}]::bigint[]`})`,
+      )
+      .orderBy(asc(campaignProducts.position));
+    for (const r of rows) {
+      const list = map.get(Number(r.campaignId)) ?? [];
+      list.push(Number(r.productId));
+      map.set(Number(r.campaignId), list);
+    }
+    return map;
   }
 
   /* ── Recomendación de clientes (ALEATORIA por ahora) ───
@@ -285,29 +379,58 @@ export class CampaignsService {
     prompt?: string;
     tone?: string;
     channels: Channel[];
+    products?: { id?: number; name?: string; price?: number }[];
   }) {
-    let productName = dto.productName;
-    let price = dto.price;
-    if (dto.productId && (!productName || price === undefined)) {
-      const [p] = await this.db
+    // El wizard permite seleccionar varios productos; si no viene la lista,
+    // se arma con el producto principal.
+    let items: { id?: number; name?: string; price?: number }[] =
+      dto.products?.length ? [...dto.products] : [];
+    if (!items.length && dto.productId) {
+      items = [{ id: dto.productId, name: dto.productName, price: dto.price }];
+    }
+
+    // Completa nombre/precio desde la BD para los ids sin datos.
+    const pending = items.filter(
+      (p) => p.id != null && (!p.name || p.price === undefined),
+    );
+    if (pending.length) {
+      const rows = await this.db
         .select({
+          id: products.id,
           name: products.name,
           price: sql<number>`(SELECT pv.current_price::float8 FROM product_variants pv WHERE pv.product_id = ${products.id} AND pv.is_active = true AND pv.deleted_at IS NULL LIMIT 1)`,
         })
         .from(products)
-        .where(eq(products.id, BigInt(dto.productId)));
-      if (p) {
-        productName = productName ?? p.name;
-        price = price ?? p.price ?? undefined;
-      }
+        .where(
+          sql`${products.id} = ANY(${sql`ARRAY[${sql.join(
+            pending.map((p) => BigInt(p.id as number)),
+            sql`, `,
+          )}]::bigint[]`})`,
+        );
+      const byId = new Map(rows.map((r) => [Number(r.id), r]));
+      items = items.map((p) => {
+        if (p.id == null || (p.name && p.price !== undefined)) return p;
+        const r = byId.get(Number(p.id));
+        return {
+          ...p,
+          name: p.name ?? r?.name,
+          price: p.price ?? r?.price,
+        };
+      });
     }
 
+    const primary = items[0] ?? {};
     const body = {
       producto: {
-        nombre: productName ?? 'producto',
-        precio: price ?? null,
+        nombre: primary.name ?? dto.productName ?? 'producto',
+        precio: primary.price ?? dto.price ?? null,
         descuento: dto.discount ?? null,
       },
+      productos: items.map((p) => ({
+        nombre: p.name ?? 'producto',
+        precio: p.price ?? null,
+        descuento: dto.discount ?? null,
+      })),
       prompt: dto.prompt ?? '',
       tono: dto.tone ?? 'cercano',
       canales: dto.channels,

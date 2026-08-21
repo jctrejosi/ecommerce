@@ -35,11 +35,13 @@ export interface Campaign {
   updatedAt: string;
   messages: CampaignMessage[];
   product: { id: number; name: string } | null;
+  products?: { id: number; name: string }[];
 }
 
 export interface CreateCampaignPayload {
   name: string;
   productId?: number;
+  productIds?: number[];
   prompt?: string;
   tone?: string;
   channels?: CampaignChannel[];
@@ -58,6 +60,7 @@ export interface GenerateContentPayload {
   productName?: string;
   price?: number;
   discount?: number;
+  products?: { id?: number; name?: string; price?: number }[];
   prompt?: string;
   tone?: string;
   channels: CampaignChannel[];

@@ -27,7 +27,8 @@ REGLAS:
 7. SMS: máximo 160 caracteres, directo, con enlace corto.
 8. Adapta el tono indicado (urgente, joven, profesional, emocional, exclusivo, cercano).
 9. Si una llamada falla (resultado ok=false), corrige y vuelve a llamar la misma función.
-10. No menciones herramientas, funciones ni términos técnicos en el contenido."""
+10. No menciones herramientas, funciones ni términos técnicos en el contenido.
+11. Si la campaña incluye VARIOS productos, menciónalos todos en el contenido (hasta 5, con sus precios); no inventes productos que no estén en la lista."""
 
 
 async def _call_chat(messages: list[dict]) -> dict:
@@ -59,18 +60,48 @@ async def _call_chat(messages: list[dict]) -> dict:
 
 def _build_user_message(
     producto: dict,
+    productos: list[dict],
     prompt: str,
     tono: str,
     canales: list[str],
 ) -> str:
-    nombre = producto.get("nombre") or "producto"
-    precio = producto.get("precio")
-    descuento = producto.get("descuento")
-    partes = [f"Producto: {nombre}"]
-    if precio is not None:
-        partes.append(f"Precio: ${precio:,.0f}" if isinstance(precio, (int, float)) else f"Precio: {precio}")
-    if descuento is not None:
-        partes.append(f"Descuento: {descuento}%")
+    items = [
+        p
+        for p in (productos or [])
+        if p and (p.get("nombre") or p.get("precio") is not None)
+    ]
+    if not items:
+        items = [producto]
+
+    partes: list[str] = []
+    if len(items) == 1:
+        p = items[0]
+        nombre = p.get("nombre") or "producto"
+        partes.append(f"Producto: {nombre}")
+        precio = p.get("precio")
+        descuento = p.get("descuento")
+        if precio is not None:
+            partes.append(
+                f"Precio: ${precio:,.0f}"
+                if isinstance(precio, (int, float))
+                else f"Precio: {precio}"
+            )
+        if descuento is not None:
+            partes.append(f"Descuento: {descuento}%")
+    else:
+        partes.append("Productos de la campaña (varios):")
+        for i, p in enumerate(items, 1):
+            nombre = p.get("nombre") or f"producto {i}"
+            precio = p.get("precio")
+            precio_str = (
+                f"${precio:,.0f}"
+                if isinstance(precio, (int, float))
+                else (str(precio) if precio is not None else "")
+            )
+            partes.append(
+                f"  {i}. {nombre}" + (f" — {precio_str}" if precio_str else "")
+            )
+
     partes.append(f"Tono: {tono}")
     if prompt:
         partes.append(f"Objetivo/instrucciones del usuario: {prompt}")
@@ -91,6 +122,7 @@ def _build_user_message(
 
 async def generar_contenido(
     producto: dict,
+    productos: list[dict],
     prompt: str,
     tono: str,
     canales: list[str],
@@ -106,7 +138,7 @@ async def generar_contenido(
         {"role": "system", "content": SYSTEM_PROMPT.replace("{FUNCIONES}", funciones_str)},
         {
             "role": "user",
-            "content": _build_user_message(producto, prompt, tono, canales),
+            "content": _build_user_message(producto, productos, prompt, tono, canales),
         },
     ]
 

@@ -3702,6 +3702,26 @@ export const campaigns = pgTable(
   ],
 );
 
+export const campaignProducts = pgTable(
+  'campaign_products',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    campaignId: bigint('campaign_id', { mode: 'number' }).notNull(),
+    productId: bigint('product_id', { mode: 'number' }).notNull(),
+    position: integer('position').default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_campaign_products_campaign').on(table.campaignId),
+    uniqueIndex('uq_campaign_products_campaign_product').on(
+      table.campaignId,
+      table.productId,
+    ),
+  ],
+);
+
 export const campaignMessages = pgTable(
   'campaign_messages',
   {

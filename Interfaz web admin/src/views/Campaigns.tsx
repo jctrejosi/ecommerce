@@ -80,7 +80,10 @@ function apiToCard(c: ApiCampaign): CampaignCardData {
   return {
     id: c.id,
     name: c.name,
-    product: c.product?.name ?? "Sin producto",
+    product:
+      c.products?.length
+        ? c.products.map((p) => p.name).join(", ")
+        : c.product?.name ?? "Sin producto",
     channels: c.channels
       .map((ch) => CHANNEL_FROM_API[ch])
       .filter(Boolean),
@@ -256,10 +259,10 @@ function SmsPreview({ text, editable, onEdit }: { text: string; editable: boolea
 
 /* ─── Step components ───────────────────────────── */
 function Step1({
-  selectedProduct, onSelect, channels, onToggleChannel, onNext,
+  selectedProducts, onToggle, channels, onToggleChannel, onNext,
 }: {
-  selectedProduct: Product | null;
-  onSelect: (p: Product) => void;
+  selectedProducts: Product[];
+  onToggle: (p: Product) => void;
   channels: Record<string, boolean>;
   onToggleChannel: (c: string) => void;
   onNext: () => void;
@@ -306,9 +309,17 @@ function Step1({
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-4xl mx-auto">
-          <div className="mb-6">
-            <h2 className="text-xl font-bold text-gray-900">¿Qué producto quieres promocionar?</h2>
-            <p className="text-sm text-gray-500 mt-1">El sistema analizará el historial de compras y encontrará los mejores clientes para este producto.</p>
+          <div className="mb-6 flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">¿Qué producto(s) quieres promocionar?</h2>
+              <p className="text-sm text-gray-500 mt-1">Puedes seleccionar varios productos para una misma campaña.</p>
+            </div>
+            {selectedProducts.length > 0 && (
+              <div className="shrink-0 flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full">
+                <CheckCircle size={13} />
+                {selectedProducts.length} seleccionado{selectedProducts.length !== 1 ? "s" : ""}
+              </div>
+            )}
           </div>
 
           <div className="relative mb-5">
@@ -341,11 +352,11 @@ function Step1({
               </div>
             ) : (
               filtered.map((p) => {
-                const active = selectedProduct?.id === p.id;
+                const active = selectedProducts.some((s) => s.id === p.id);
                 return (
                   <button
                     key={p.id}
-                    onClick={() => onSelect(p)}
+                    onClick={() => onToggle(p)}
                     className={`relative text-left rounded-2xl border-2 p-4 transition-all hover:shadow-md ${active ? "border-amber-400 bg-amber-50 shadow-md" : "border-gray-100 bg-white hover:border-gray-200"}`}
                   >
                     {active && (
@@ -375,32 +386,42 @@ function Step1({
             )}
           </div>
 
-          {/* Audience panel */}
-          {selectedProduct && (
+          {/* Selected products panel */}
+          {selectedProducts.length > 0 && (
             <div className="mt-5 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
               <div className="flex items-center gap-2 mb-4">
                 <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
                   <Users size={15} className="text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm font-bold text-gray-900">Producto seleccionado</p>
+                  <p className="text-sm font-bold text-gray-900">
+                    {selectedProducts.length} producto{selectedProducts.length !== 1 ? "s" : ""} seleccionado{selectedProducts.length !== 1 ? "s" : ""}
+                  </p>
                   <p className="text-xs text-gray-400">La segmentación inteligente se conectará próximamente</p>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
-                <div className="bg-gray-50 rounded-xl p-3 text-center">
-                  <p className="text-sm font-bold text-gray-900 truncate">{selectedProduct.category || "Sin categoría"}</p>
-                  <p className="text-xs text-gray-500">categoría</p>
-                </div>
-                <div className="bg-amber-50 rounded-xl p-3 text-center">
-                  <p className="text-sm font-bold text-amber-700 truncate">{selectedProduct.brandName || "Sin marca"}</p>
-                  <p className="text-xs text-amber-600">marca</p>
-                </div>
-                <div className="bg-green-50 rounded-xl p-3 text-center">
-                  <p className="text-sm font-bold text-green-700">{fmt(selectedProduct.price)}</p>
-                  <p className="text-xs text-green-600">precio</p>
-                </div>
+              <div className="flex flex-wrap gap-2 mb-4">
+                {selectedProducts.map((p) => (
+                  <div key={p.id} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl pl-2 pr-1 py-1.5 max-w-full">
+                    <div className="w-6 h-6 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center shrink-0">
+                      {p.image ? (
+                        <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs">🛒</span>
+                      )}
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700 truncate max-w-45">{p.name}</span>
+                    <span className="text-[10px] text-gray-400 shrink-0">{fmt(p.price)}</span>
+                    <button
+                      onClick={() => onToggle(p)}
+                      className="w-5 h-5 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-600 flex items-center justify-center shrink-0 transition-colors"
+                      title="Quitar"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                ))}
               </div>
 
               <div className="text-xs text-gray-500 bg-gray-50 rounded-xl px-4 py-3 mb-4 leading-relaxed">
@@ -430,7 +451,7 @@ function Step1({
       <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex justify-end">
         <button
           onClick={onNext}
-          disabled={!selectedProduct || !Object.values(channels).some(Boolean)}
+          disabled={selectedProducts.length === 0 || !Object.values(channels).some(Boolean)}
           className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           Continuar <ArrowRight size={15} />
@@ -441,7 +462,7 @@ function Step1({
 }
 
 function Step2({
-  product,
+  products,
   channels,
   prompt,
   setPrompt,
@@ -462,7 +483,7 @@ function Step2({
   onNext,
   onBack,
 }: {
-  product: Product;
+  products: Product[];
   channels: Record<string, boolean>;
   prompt: string;
   setPrompt: (s: string) => void;
@@ -505,18 +526,31 @@ function Step2({
             <h2 className="text-xl font-bold text-gray-900 mb-1">Describe tu campaña</h2>
             <p className="text-sm text-gray-500 mb-6">La IA generará los mensajes para <strong>{activeChannelCount} canal{activeChannelCount !== 1 ? "es" : ""}</strong> automáticamente.</p>
 
-            {/* Product reminder */}
-            <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-5">
-              <div className="w-12 h-12 rounded-xl overflow-hidden bg-white shrink-0 flex items-center justify-center">
-                {product.image ? (
-                  <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-lg">🛒</span>
-                )}
+            {/* Products reminder */}
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4 mb-5">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="w-12 h-12 rounded-xl overflow-hidden bg-white shrink-0 flex items-center justify-center">
+                  {products[0]?.image ? (
+                    <img src={products[0].image} alt={products[0].name} className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-lg">🛒</span>
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-amber-900 truncate">
+                    {products.length === 1 ? products[0].name : `${products.length} productos seleccionados`}
+                  </p>
+                  <p className="text-xs text-amber-700 truncate">
+                    {products.map((p) => p.name).join(", ")}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-sm font-bold text-amber-900">{product.name}</p>
-                <p className="text-xs text-amber-700">{[product.category, product.brandName].filter(Boolean).join(" · ") || "Catálogo Mercaldas"} · {fmt(product.price)}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {products.map((p) => (
+                  <span key={p.id} className="text-[10px] font-semibold bg-white/70 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-full truncate max-w-50">
+                    {fmt(p.price)} · {p.name}
+                  </span>
+                ))}
               </div>
             </div>
 
@@ -684,7 +718,7 @@ function Step2({
 }
 
 function Step3({
-  product,
+  products,
   channels,
   onSend,
   onBack,
@@ -692,7 +726,7 @@ function Step3({
   sending,
   sendError,
 }: {
-  product: Product;
+  products: Product[];
   channels: Record<string, boolean>;
   onSend: () => void;
   onBack: () => void;
@@ -747,15 +781,19 @@ function Step3({
             <div className="space-y-3">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0 flex items-center justify-center">
-                  {product.image ? (
-                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                  {products[0]?.image ? (
+                    <img src={products[0].image} alt={products[0].name} className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-base">🛒</span>
                   )}
                 </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-900">{product.name}</p>
-                  <p className="text-xs text-gray-400">{fmt(product.price)}</p>
+                <div className="min-w-0">
+                  <p className="text-sm font-bold text-gray-900 truncate">
+                    {products.length === 1 ? products[0].name : `${products.length} productos`}
+                  </p>
+                  <p className="text-xs text-gray-400 truncate">
+                    {products.map((p) => p.name).join(", ")}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
@@ -859,7 +897,7 @@ function StepBar({ step }: { step: Step }) {
 /* ─── Wizard overlay ────────────────────────────── */
 function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (c: CampaignCardData) => void }) {
   const [step, setStep] = useState<Step>(1);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   const [channels, setChannels] = useState<Record<string, boolean>>({ wa: true, email: true, sms: true });
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -878,19 +916,32 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
 
   const toggleChannel = (c: string) => setChannels((prev) => ({ ...prev, [c]: !prev[c] }));
 
+  const toggleProduct = (p: Product) =>
+    setSelectedProducts((prev) =>
+      prev.some((s) => s.id === p.id)
+        ? prev.filter((s) => s.id !== p.id)
+        : [...prev, p],
+    );
+
   const activeChannelKeys = () =>
     (Object.keys(channels) as (keyof typeof CHANNEL_CFG)[]).filter((k) => channels[k]);
 
   const handleGenerate = async () => {
-    if (!selectedProduct) return;
+    if (!selectedProducts.length) return;
+    const primary = selectedProducts[0];
     setGenerating(true);
     setGenerated(false);
     setGenError(null);
     try {
       const res = await campaignsService.generateContent({
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        price: selectedProduct.price,
+        productId: primary.id,
+        productName: primary.name,
+        price: primary.price,
+        products: selectedProducts.map((p) => ({
+          id: p.id,
+          name: p.name,
+          price: p.price,
+        })),
         prompt,
         channels: activeChannelKeys().map((k) => CHANNEL_TO_API[k]),
       });
@@ -918,7 +969,8 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   };
 
   const handleSend = async () => {
-    if (!selectedProduct || !content) return;
+    if (!selectedProducts.length || !content) return;
+    const primary = selectedProducts[0];
     setSending(true);
     setSendError(null);
     try {
@@ -947,8 +999,11 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
       }
 
       const created = await campaignsService.create({
-        name: prompt.slice(0, 60) || `Campaña ${selectedProduct.name}`,
-        productId: selectedProduct.id,
+        name:
+          prompt.slice(0, 60) ||
+          `Campaña ${primary.name}${selectedProducts.length > 1 ? ` +${selectedProducts.length - 1}` : ""}`,
+        productId: primary.id,
+        productIds: selectedProducts.map((p) => p.id),
         prompt,
         channels: active.map((k) => CHANNEL_TO_API[k]),
         messages,
@@ -987,16 +1042,16 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
       <div className="flex-1 overflow-hidden flex flex-col">
         {step === 1 && (
           <Step1
-            selectedProduct={selectedProduct}
-            onSelect={setSelectedProduct}
+            selectedProducts={selectedProducts}
+            onToggle={toggleProduct}
             channels={channels}
             onToggleChannel={toggleChannel}
             onNext={() => setStep(2)}
           />
         )}
-        {step === 2 && selectedProduct && (
+        {step === 2 && selectedProducts.length > 0 && (
           <Step2
-            product={selectedProduct}
+            products={selectedProducts}
             channels={channels}
             prompt={prompt}
             setPrompt={setPrompt}
@@ -1022,9 +1077,9 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
             onBack={() => setStep(1)}
           />
         )}
-        {step === 3 && selectedProduct && (
+        {step === 3 && selectedProducts.length > 0 && (
           <Step3
-            product={selectedProduct}
+            products={selectedProducts}
             channels={channels}
             onSend={handleSend}
             onBack={() => setStep(2)}
@@ -1040,8 +1095,8 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
         <EmailEditor
           initialBlocks={
             emailBlocks ??
-            (selectedProduct && content
-              ? buildEmailBlocks(selectedProduct, content)
+            (selectedProducts.length > 0 && content
+              ? buildEmailBlocks(selectedProducts[0], content)
               : defaultTemplate())
           }
           onSave={(blocks, html) => {

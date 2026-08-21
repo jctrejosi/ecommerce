@@ -50,6 +50,28 @@ CREATE INDEX IF NOT EXISTS idx_campaigns_status
 CREATE INDEX IF NOT EXISTS idx_campaigns_deleted_at
   ON campaigns (deleted_at);
 
+-- Productos de una campaña (puede promocionar varios).
+-- campaigns.product_id sigue guardando el producto principal (para la
+-- tarjeta/lista), y esta tabla conserva la selección completa.
+CREATE TABLE IF NOT EXISTS campaign_products (
+  id          bigserial PRIMARY KEY,
+  campaign_id bigint NOT NULL,
+  product_id  bigint NOT NULL,
+  position    integer NOT NULL DEFAULT 0,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_campaign_products_campaign
+  ON campaign_products (campaign_id);
+
+-- Un producto no se repite dentro de la misma campaña
+DO $$
+BEGIN
+  CREATE UNIQUE INDEX IF NOT EXISTS uq_campaign_products_campaign_product
+    ON campaign_products (campaign_id, product_id);
+EXCEPTION WHEN duplicate_table THEN NULL;
+END $$;
+
 CREATE TABLE IF NOT EXISTS campaign_messages (
   id           bigserial PRIMARY KEY,
   campaign_id  bigint NOT NULL,
