@@ -4,7 +4,7 @@ import {
   ArrowRight, ChevronLeft, RefreshCw, Send, Clock,
   CheckCircle, Users, TrendingUp, Eye, Edit3, X,
   Sparkles, Target, BarChart2, Calendar, MoreHorizontal,
-  Palette,
+  Palette, ShoppingBag,
 } from "lucide-react";
 import EmailEditor, {
   newBlock,
@@ -16,7 +16,7 @@ import {
   type Campaign as ApiCampaign,
   type CampaignChannel,
 } from "../services/campaigns.service";
-import { catalogService, type CatalogProduct } from "../services/catalog.service";
+import { catalogService, type CatalogProduct, type CatalogCategory } from "../services/catalog.service";
 
 /* ─── Types ─────────────────────────────────────── */
 /** Producto del catálogo real (alias del tipo del servicio de catálogo). */
@@ -259,16 +259,20 @@ function SmsPreview({ text, editable, onEdit }: { text: string; editable: boolea
 
 /* ─── Step components ───────────────────────────── */
 function Step1({
-  selectedProducts, onToggle, channels, onToggleChannel, onNext,
+  selectedProducts, onToggle, onClear, channels, onToggleChannel, onNext,
 }: {
   selectedProducts: Product[];
   onToggle: (p: Product) => void;
+  onClear: () => void;
   channels: Record<string, boolean>;
   onToggleChannel: (c: string) => void;
   onNext: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<CatalogCategory[]>([]);
+  const [activeCats, setActiveCats] = useState<number[]>([]);
+  const [showSelected, setShowSelected] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -276,10 +280,14 @@ function Step1({
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
-    catalogService
-      .getProducts({ limit: 200, isActive: true })
-      .then((list) => {
-        if (!cancelled) setProducts(list);
+    Promise.all([
+      catalogService.getProducts({ limit: 200, isActive: true }),
+      catalogService.getCategories(),
+    ])
+      .then(([list, cats]) => {
+        if (cancelled) return;
+        setProducts(list);
+        setCategories(cats);
       })
       .catch((e) => {
         if (!cancelled)
@@ -295,15 +303,29 @@ function Step1({
     };
   }, []);
 
+  const toggleCat = (id: number) =>
+    setActiveCats((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+
   const q = search.trim().toLowerCase();
-  const filtered = products.filter(
-    (p) =>
-      !q ||
+  const catNames = new Set(
+    categories.filter((c) => activeCats.includes(c.id)).map((c) => c.name),
+  );
+  const filtered = products.filter((p) => {
+    if (activeCats.length) {
+      const byId = p.categoryId != null && activeCats.includes(p.categoryId);
+      const byName = catNames.has(p.category ?? "");
+      if (!byId && !byName) return false;
+    }
+    if (!q) return true;
+    return (
       p.name.toLowerCase().includes(q) ||
       (p.category ?? "").toLowerCase().includes(q) ||
       (p.brandName ?? "").toLowerCase().includes(q) ||
-      (p.productTypeName ?? "").toLowerCase().includes(q),
-  );
+      (p.productTypeName ?? "").toLowerCase().includes(q)
+    );
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -315,10 +337,13 @@ function Step1({
               <p className="text-sm text-gray-500 mt-1">Puedes seleccionar varios productos para una misma campaña.</p>
             </div>
             {selectedProducts.length > 0 && (
-              <div className="shrink-0 flex items-center gap-1.5 bg-amber-100 text-amber-800 text-xs font-bold px-3 py-1.5 rounded-full">
-                <CheckCircle size={13} />
-                {selectedProducts.length} seleccionado{selectedProducts.length !== 1 ? "s" : ""}
-              </div>
+              <button
+                onClick={() => setShowSelected(true)}
+                className="shrink-0 flex items-center gap-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold px-3 py-2 rounded-full transition-colors"
+              >
+                <ShoppingBag size={13} />
+                Ver seleccionados ({selectedProducts.length})
+              </button>
             )}
           </div>
 
@@ -331,6 +356,36 @@ function Step1({
               className="w-full pl-9 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
             />
           </div>
+
+          {categories.length > 0 && (
+            <div className="mb-5">
+              <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
+                <button
+                  onClick={() => setActiveCats([])}
+                  className={`shrink-0 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${activeCats.length === 0 ? "bg-amber-400 text-amber-900 border-transparent" : "bg-white border-gray-200 text-gray-600 hover:border-amber-300"}`}
+                >
+                  Todas
+                </button>
+                {categories.map((c) => {
+                  const on = activeCats.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => toggleCat(c.id)}
+                      className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-full border transition-all ${on ? "bg-amber-400 text-amber-900 border-transparent" : "bg-white border-gray-200 text-gray-600 hover:border-amber-300"}`}
+                    >
+                      {c.name}
+                      {c.count > 0 && (
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${on ? "bg-amber-900/15 text-amber-900" : "bg-gray-100 text-gray-400"}`}>
+                          {c.count}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {loading ? (
@@ -348,7 +403,9 @@ function Step1({
               </div>
             ) : filtered.length === 0 ? (
               <div className="col-span-full bg-gray-50 border border-gray-100 rounded-2xl p-8 text-center">
-                <p className="text-sm text-gray-500">No hay productos que coincidan con «{search}».</p>
+                <p className="text-sm text-gray-500">
+                  No hay productos que coincidan con los filtros aplicados.
+                </p>
               </div>
             ) : (
               filtered.map((p) => {
@@ -386,65 +443,33 @@ function Step1({
             )}
           </div>
 
-          {/* Selected products panel */}
-          {selectedProducts.length > 0 && (
-            <div className="mt-5 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-              <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
-                  <Users size={15} className="text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-sm font-bold text-gray-900">
-                    {selectedProducts.length} producto{selectedProducts.length !== 1 ? "s" : ""} seleccionado{selectedProducts.length !== 1 ? "s" : ""}
-                  </p>
-                  <p className="text-xs text-gray-400">La segmentación inteligente se conectará próximamente</p>
-                </div>
+          {/* Canales de envío */}
+          <div className="mt-5 bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 flex items-center justify-center">
+                <Users size={15} className="text-amber-600" />
               </div>
-
-              <div className="flex flex-wrap gap-2 mb-4">
-                {selectedProducts.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2 bg-gray-50 border border-gray-100 rounded-xl pl-2 pr-1 py-1.5 max-w-full">
-                    <div className="w-6 h-6 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center shrink-0">
-                      {p.image ? (
-                        <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-xs">🛒</span>
-                      )}
-                    </div>
-                    <span className="text-xs font-semibold text-gray-700 truncate max-w-45">{p.name}</span>
-                    <span className="text-[10px] text-gray-400 shrink-0">{fmt(p.price)}</span>
-                    <button
-                      onClick={() => onToggle(p)}
-                      className="w-5 h-5 rounded-md hover:bg-red-50 text-gray-400 hover:text-red-600 flex items-center justify-center shrink-0 transition-colors"
-                      title="Quitar"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-
-              <div className="text-xs text-gray-500 bg-gray-50 rounded-xl px-4 py-3 mb-4 leading-relaxed">
-                🔎 La segmentación inteligente de clientes se conectará próximamente. Por ahora la campaña se dirigirá a una audiencia estimada de <strong>{ESTIMATED_AUDIENCE.toLocaleString()} clientes</strong> (recomendación aleatoria).
-              </div>
-
               <div>
-                <p className="text-xs font-semibold text-gray-600 mb-2">Canales de envío</p>
-                <div className="flex gap-2">
-                  {(Object.entries(CHANNEL_CFG) as [string, typeof CHANNEL_CFG[keyof typeof CHANNEL_CFG]][]).map(([key, cfg]) => (
-                    <button
-                      key={key}
-                      onClick={() => onToggleChannel(key)}
-                      className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${channels[key] ? `${cfg.bg} text-white border-transparent` : "border-gray-200 text-gray-500 hover:border-gray-300"}`}
-                    >
-                      <cfg.icon size={13} />
-                      {cfg.label}
-                    </button>
-                  ))}
-                </div>
+                <p className="text-sm font-bold text-gray-900">Canales de envío</p>
+                <p className="text-xs text-gray-400">Elige por dónde enviar la campaña</p>
               </div>
             </div>
-          )}
+            <div className="flex gap-2">
+              {(Object.entries(CHANNEL_CFG) as [string, typeof CHANNEL_CFG[keyof typeof CHANNEL_CFG]][]).map(([key, cfg]) => (
+                <button
+                  key={key}
+                  onClick={() => onToggleChannel(key)}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl border-2 text-xs font-semibold transition-all ${channels[key] ? `${cfg.bg} text-white border-transparent` : "border-gray-200 text-gray-500 hover:border-gray-300"}`}
+                >
+                  <cfg.icon size={13} />
+                  {cfg.label}
+                </button>
+              ))}
+            </div>
+            <div className="text-xs text-gray-500 bg-gray-50 rounded-xl px-4 py-3 mt-4 leading-relaxed">
+              🔎 La segmentación inteligente de clientes se conectará próximamente. Por ahora la campaña se dirigirá a una audiencia estimada de <strong>{ESTIMATED_AUDIENCE.toLocaleString()} clientes</strong> (recomendación aleatoria).
+            </div>
+          </div>
         </div>
       </div>
 
@@ -457,6 +482,80 @@ function Step1({
           Continuar <ArrowRight size={15} />
         </button>
       </div>
+
+      {/* Modal: productos seleccionados */}
+      {showSelected && (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40"
+          onClick={() => setShowSelected(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[80vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+              <p className="font-bold text-gray-900 text-sm">
+                Productos seleccionados ({selectedProducts.length})
+              </p>
+              <button
+                onClick={() => setShowSelected(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {selectedProducts.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-10">
+                  Aún no has seleccionado productos.
+                </p>
+              ) : (
+                selectedProducts.map((p) => (
+                  <div key={p.id} className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl p-2.5">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center shrink-0">
+                      {p.image ? (
+                        <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-base">🛒</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-gray-800 truncate">{p.name}</p>
+                      <p className="text-xs text-gray-400 truncate">
+                        {[p.category, p.brandName].filter(Boolean).join(" · ") || "Catálogo Mercaldas"} · {fmt(p.price)}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => onToggle(p)}
+                      className="w-7 h-7 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 flex items-center justify-center shrink-0 transition-colors"
+                      title="Quitar"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 shrink-0">
+              <button
+                onClick={() => {
+                  onClear();
+                  setShowSelected(false);
+                }}
+                className="text-xs font-semibold text-red-600 hover:text-red-700 transition-colors"
+              >
+                Limpiar todo
+              </button>
+              <button
+                onClick={() => setShowSelected(false)}
+                className="px-4 py-2 text-xs font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1044,6 +1143,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
           <Step1
             selectedProducts={selectedProducts}
             onToggle={toggleProduct}
+            onClear={() => setSelectedProducts([])}
             channels={channels}
             onToggleChannel={toggleChannel}
             onNext={() => setStep(2)}
