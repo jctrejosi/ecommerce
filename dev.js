@@ -3,7 +3,7 @@
  * MercAldas — lanzador de servicios.
  *
  * Uso:
- *   node dev.js            # DEV: levanta PostgreSQL + los 4 servicios en
+ *   node dev.js            # DEV: levanta PostgreSQL + los 5 servicios en
  *                          #   segundo plano, imprime las URLs y termina
  *                          #   (la terminal queda libre para cerrarla).
  *   node dev.js --prod     # PRODUCCIÓN ("en vivo"): comandos de producción.
@@ -13,7 +13,7 @@
  *   node dev.js --help     # Esta ayuda.
  *
  * Logs: un archivo por servicio en logs/
- *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/bot.log
+ *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/bot.log  logs/ia.log
  *
  * La BD (docker) queda corriendo al salir; se detiene con
  * `cd db/docker && docker compose stop`.
@@ -38,6 +38,7 @@ const C = {
   web: "\x1b[32m",
   admin: "\x1b[34m",
   bot: "\x1b[35m",
+  ia: "\x1b[33m",
   reset: "\x1b[0m",
 };
 
@@ -68,7 +69,14 @@ const SERVICES = [
     dir: "bot",
     url: "http://localhost:8000",
     dev: ["bash", "dev.sh"],
-    prod: null, // se resuelve en resolveBotProd()
+    prod: null, // se resuelve en resolveCmd()
+  },
+  {
+    name: "ia",
+    dir: "ia-service",
+    url: "http://localhost:8002",
+    dev: ["bash", "dev.sh"],
+    prod: null, // se resuelve en resolveCmd()
   },
 ];
 
@@ -199,6 +207,18 @@ function resolveCmd(svc) {
     // Producción: uvicorn sin --reload
     return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
   }
+  if (svc.name === "ia" && MODE === "prod") {
+    const py = path.join(ROOT, "ia-service", ".venv", "bin", "python");
+    if (!fs.existsSync(py)) {
+      console.warn(
+        `${C.ia}[ia]${C.reset} ⚠️  ia-service/.venv no existe — crealo con: ` +
+          `python3 -m venv ia-service/.venv && ia-service/.venv/bin/pip install -r ia-service/requirements.txt`,
+      );
+      return null;
+    }
+    // Producción: uvicorn sin --reload
+    return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002"];
+  }
   return MODE === "prod" ? svc.prod : svc.dev;
 }
 
@@ -239,7 +259,7 @@ function printUrls() {
   }
   console.log("  DB        → PostgreSQL localhost:5432 (docker)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("Logs: logs/*.log  (db, backend, web, admin, bot)");
+  console.log("Logs: logs/*.log  (db, backend, web, admin, bot, ia)");
 }
 
 // ── Detención ───────────────────────────────────────────────
