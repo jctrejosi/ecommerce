@@ -643,7 +643,7 @@ function Step2({
 
             {/* Prompt */}
             <div className="mb-6">
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">Describe el objetivo y tono</label>
+              <label className="block text-xs font-semibold text-gray-600 mb-1.5">¿De qué trata la promoción?</label>
               <textarea
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
