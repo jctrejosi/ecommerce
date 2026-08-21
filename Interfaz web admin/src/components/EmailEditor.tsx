@@ -8,6 +8,8 @@ import {
   ChevronDown,
   Copy,
   Columns2,
+  GripVertical,
+  Maximize2,
   Minus,
   MousePointerClick,
   Share2,
@@ -132,6 +134,49 @@ export function newBlock(type: EmailBlockType): EmailBlock {
           align: "center",
         },
       };
+  }
+}
+
+/* ── Redimensionado de bloques ── */
+function clamp(v: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, v));
+}
+
+type ResizeTarget = "width" | "fontSize" | "iconSize" | "thickness";
+
+function resizeConfig(type: EmailBlockType): {
+  target: ResizeTarget;
+  min: number;
+  max: number;
+  step: number;
+  label: string;
+} | null {
+  switch (type) {
+    case "image":
+      return { target: "width", min: 25, max: 100, step: 2, label: "ancho" };
+    case "text":
+      return { target: "fontSize", min: 11, max: 48, step: 1, label: "fuente" };
+    case "button":
+      return { target: "fontSize", min: 10, max: 24, step: 1, label: "fuente" };
+    case "social":
+      return { target: "iconSize", min: 16, max: 48, step: 1, label: "íconos" };
+    case "divider":
+      return { target: "thickness", min: 1, max: 8, step: 1, label: "grosor" };
+    default:
+      return null;
+  }
+}
+
+function resizeDefault(type: EmailBlockType, target: ResizeTarget): number {
+  switch (target) {
+    case "width":
+      return 100;
+    case "fontSize":
+      return type === "text" ? 15 : 14;
+    case "iconSize":
+      return 22;
+    case "thickness":
+      return 2;
   }
 }
 
@@ -302,6 +347,16 @@ export default function EmailEditor({
   const [tagsOpen, setTagsOpen] = useState(false);
   const [htmlOpen, setHtmlOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dropTarget, setDropTarget] = useState<{ id: string; after: boolean } | null>(null);
+  const resizeSession = useRef<{
+    id: string;
+    target: ResizeTarget;
+    startY: number;
+    startVal: number;
+    min: number;
+    max: number;
+    step: number;
+  } | null>(null);
 
   const selected = blocks.find((b) => b.id === selectedId) ?? null;
 
@@ -327,6 +382,45 @@ export default function EmailEditor({
       setSelectedId(copy.id);
       return arr;
     });
+  };
+
+  /* ── Indicador de posición + redimensionado ── */
+  const dropAfter = (e: React.DragEvent<HTMLElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    return e.clientY > rect.top + rect.height / 2;
+  };
+
+  const beginResize = (e: React.PointerEvent, b: EmailBlock) => {
+    const cfg = resizeConfig(b.type);
+    if (!cfg || preview) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const startVal =
+      b.props[cfg.target] ?? resizeDefault(b.type, cfg.target);
+    resizeSession.current = {
+      id: b.id,
+      target: cfg.target,
+      startY: e.clientY,
+      startVal,
+      min: cfg.min,
+      max: cfg.max,
+      step: cfg.step,
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      const s = resizeSession.current;
+      if (!s) return;
+      const delta = Math.round((ev.clientY - s.startY) / 12) * s.step;
+      const val = clamp(s.startVal + delta, s.min, s.max);
+      updateBlock(s.id, { [s.target]: val } as Partial<EmailBlock["props"]>);
+    };
+    const onUp = () => {
+      resizeSession.current = null;
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
   };
 
   /* ── Drag & drop ── */
@@ -456,7 +550,7 @@ export default function EmailEditor({
               style={{
                 background: b.props.bg ?? "#FBBF24",
                 color: b.props.color ?? "#78350F",
-                fontSize: 14,
+                fontSize: b.props.fontSize ?? 14,
                 padding: "12px 28px",
                 borderRadius: b.props.radius ?? 10,
               }}
@@ -646,17 +740,26 @@ export default function EmailEditor({
               )}
               {blocks.map((b, i) => {
                 const isSelected = selectedId === b.id && !preview;
+                const resizeCfg = resizeConfig(b.type);
+                const showDropTop = dropTarget?.id === b.id && dropTarget.after === false;
+                const showDropBottom = dropTarget?.id === b.id && dropTarget.after === true;
                 return (
                   <div
                     key={b.id}
-                    draggable={!preview}
-                    onDragStart={(e) => {
-                      e.stopPropagation();
-                      e.dataTransfer.setData("text/email-block", JSON.stringify({ kind: "move", id: b.id }));
-                      e.dataTransfer.effectAllowed = "move";
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      setDropTarget({ id: b.id, after: dropAfter(e) });
                     }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => handleDrop(e, i)}
+                    onDragLeave={(e) => {
+                      if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                        setDropTarget(null);
+                      }
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleDrop(e, i);
+                      setDropTarget(null);
+                    }}
                     onClick={(e) => {
                       e.stopPropagation();
                       setSelectedId(b.id);
@@ -665,6 +768,32 @@ export default function EmailEditor({
                       isSelected ? "ring-2 ring-amber-400 bg-amber-50/30" : "ring-1 ring-transparent hover:ring-gray-200"
                     }`}
                   >
+                    {/* Indicador de posición de drop */}
+                    {showDropTop && (
+                      <div className="absolute -top-[7px] left-0 right-0 h-[3px] rounded-full bg-amber-400 z-20" />
+                    )}
+                    {showDropBottom && (
+                      <div className="absolute -bottom-[7px] left-0 right-0 h-[3px] rounded-full bg-amber-400 z-20" />
+                    )}
+
+                    {/* Mango de arrastre (reordenar) */}
+                    {!preview && (
+                      <div className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 hidden group-hover:flex">
+                        <div
+                          draggable
+                          onDragStart={(e) => {
+                            e.stopPropagation();
+                            e.dataTransfer.setData("text/email-block", JSON.stringify({ kind: "move", id: b.id }));
+                            e.dataTransfer.effectAllowed = "move";
+                          }}
+                          className="w-6 h-8 bg-white border border-gray-200 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 shadow-sm cursor-grab active:cursor-grabbing"
+                          title="Arrastrar para reordenar"
+                        >
+                          <GripVertical size={14} />
+                        </div>
+                      </div>
+                    )}
+
                     {!preview && (
                       <div className="absolute -right-1 -top-1 z-10 hidden group-hover:flex gap-1">
                         <button
@@ -683,6 +812,18 @@ export default function EmailEditor({
                         </button>
                       </div>
                     )}
+
+                    {/* Mango de redimensionado */}
+                    {!preview && isSelected && resizeCfg && (
+                      <div
+                        onPointerDown={(e) => beginResize(e, b)}
+                        className="absolute -right-2 -bottom-2 z-20 w-6 h-6 bg-white border border-amber-300 rounded-full flex items-center justify-center text-amber-600 shadow-sm cursor-nwse-resize hover:bg-amber-50"
+                        title={`Redimensionar ${resizeCfg.label}`}
+                      >
+                        <Maximize2 size={11} className="-rotate-45" />
+                      </div>
+                    )}
+
                     {renderBlockInner(b)}
                   </div>
                 );
