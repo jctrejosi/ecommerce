@@ -1,0 +1,165 @@
+"""Cliente DeepSeek con loop de function calling para admin-ia.
+
+El modelo recibe el contexto de la campaña (producto, precio, descuento, tono,
+prompt y canales solicitados) y debe llamar las herramientas correspondientes
+(tools.TOOLS): recomendar_whatsapp, recomendar_email, recomendar_sms.
+"""
+import json
+import logging
+
+import httpx
+
+from . import config, tools
+
+log = logging.getLogger("admin-ia.deepseek")
+
+SYSTEM_PROMPT = """Eres el redactor de campañas de marketing de Mercaldas, un supermercado en línea.
+
+Tu trabajo: generar contenido de ALTA CONVERSIÓN en español para los canales que te indique el usuario.
+
+REGLAS:
+1. SOLO puedes entregar contenido a través de las funciones disponibles ({FUNCIONES}). Nunca inventes que realizaste una acción.
+2. Para CADA canal solicitado debes llamar exactamente UNA vez a su función correspondiente.
+3. El contenido debe usar los datos reales del producto (nombre, precio, descuento) que aparecen en el mensaje del usuario. NUNCA inventes precios ni descuentos.
+4. Puedes usar variables de personalización: {{nombre}}, {{producto}}, {{precio}}, {{descuento}}, {{cupon}}.
+5. WhatsApp: mensaje corto y cálido (máximo ~300 caracteres), con emojis y CTA claro.
+6. Email: estructura profesional con bloques del diseñador (texto de encabezado, cuerpo, imagen del producto, botón CTA, divisor, redes sociales y pie). El asunto debe ser atractivo.
+7. SMS: máximo 160 caracteres, directo, con enlace corto.
+8. Adapta el tono indicado (urgente, joven, profesional, emocional, exclusivo, cercano).
+9. Si una llamada falla (resultado ok=false), corrige y vuelve a llamar la misma función.
+10. No menciones herramientas, funciones ni términos técnicos en el contenido."""
+
+
+async def _call_chat(messages: list[dict]) -> dict:
+    """Una llamada a la API de DeepSeek. Devuelve el JSON de la respuesta."""
+    if not config.DEEPSEEK_API_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY no está configurada")
+
+    body: dict = {
+        "model": config.DEEPSEEK_MODEL,
+        "messages": messages,
+        "temperature": 0.7,
+        "max_tokens": config.MAX_TOKENS,
+        "tools": tools.TOOLS,
+    }
+    async with httpx.AsyncClient(
+        headers={
+            "Authorization": f"Bearer {config.DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        timeout=config.DEEPSEEK_TIMEOUT,
+    ) as client:
+        resp = await client.post(
+            f"{config.DEEPSEEK_API_URL}/chat/completions",
+            json=body,
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+def _build_user_message(
+    producto: dict,
+    prompt: str,
+    tono: str,
+    canales: list[str],
+) -> str:
+    nombre = producto.get("nombre") or "producto"
+    precio = producto.get("precio")
+    descuento = producto.get("descuento")
+    partes = [f"Producto: {nombre}"]
+    if precio is not None:
+        partes.append(f"Precio: ${precio:,.0f}" if isinstance(precio, (int, float)) else f"Precio: {precio}")
+    if descuento is not None:
+        partes.append(f"Descuento: {descuento}%")
+    partes.append(f"Tono: {tono}")
+    if prompt:
+        partes.append(f"Objetivo/instrucciones del usuario: {prompt}")
+    nombres = {
+        "whatsapp": "recomendar_whatsapp",
+        "email": "recomendar_email",
+        "sms": "recomendar_sms",
+    }
+    partes.append(
+        "Canales solicitados: "
+        + ", ".join(canales)
+        + ". Llama a "
+        + ", ".join(nombres[c] for c in canales)
+        + " (una vez por canal) para entregar el contenido."
+    )
+    return "\n".join(partes)
+
+
+async def generar_contenido(
+    producto: dict,
+    prompt: str,
+    tono: str,
+    canales: list[str],
+) -> dict:
+    """Genera el contenido de la campaña con el loop de function calling.
+
+    Devuelve un dict con las claves que el modelo haya llenado:
+    `whatsapp` (str), `email` ({asunto, bloques, html}), `sms` (str).
+    """
+    ctx: dict = {"payload": {}}
+    funciones_str = ", ".join(tools.FUNCTION_MAP.keys())
+    messages: list[dict] = [
+        {"role": "system", "content": SYSTEM_PROMPT.replace("{FUNCIONES}", funciones_str)},
+        {
+            "role": "user",
+            "content": _build_user_message(producto, prompt, tono, canales),
+        },
+    ]
+
+    for _round in range(config.MAX_TOOL_ROUNDS):
+        data = await _call_chat(messages)
+        msg = data["choices"][0]["message"]
+        tool_calls = msg.get("tool_calls") or []
+
+        if not tool_calls:
+            # El modelo terminó: devolvemos lo acumulado por las herramientas
+            payload = ctx.get("payload") or {}
+            if not payload:
+                log.warning("admin-ia: el modelo no produjo contenido")
+                return {
+                    "error": "El modelo no generó contenido. Reintenta o ajusta el prompt."
+                }
+            return payload
+
+        messages.append(
+            {
+                "role": "assistant",
+                "content": msg.get("content") or "",
+                "tool_calls": tool_calls,
+            }
+        )
+        for tc in tool_calls:
+            fn = tc.get("function") or {}
+            name = fn.get("name") or ""
+            try:
+                args = json.loads(fn.get("arguments") or "{}")
+            except json.JSONDecodeError:
+                args = {}
+            handler = tools.FUNCTION_MAP.get(name)
+            if handler is None:
+                result = {
+                    "ok": False,
+                    "mensaje": f"La acción '{name}' no está disponible.",
+                }
+            else:
+                try:
+                    result = await handler(args, ctx)
+                except Exception as exc:  # noqa: BLE001
+                    log.exception("Error en herramienta %s", name)
+                    result = {"ok": False, "mensaje": f"Error al ejecutar: {exc}"}
+            log.info("tool %s -> %s", name, str(result)[:120])
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.get("id") or "",
+                    "content": json.dumps(result, ensure_ascii=False),
+                }
+            )
+
+    return {
+        "error": "El modelo no terminó de generar el contenido en las rondas permitidas."
+    }

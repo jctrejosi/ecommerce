@@ -57,6 +57,11 @@ COPY bot/ ./bot
 RUN python3 -m venv /opt/bot-venv \
     && /opt/bot-venv/bin/pip install --no-cache-dir -r ./bot/requirements.txt
 
+# Admin IA (Python: recomendación de contenido de campañas)
+COPY admin-ia/ ./admin-ia
+RUN python3 -m venv /opt/admin-ia-venv \
+    && /opt/admin-ia-venv/bin/pip install --no-cache-dir -r ./admin-ia/requirements.txt
+
 # Proxy y arranque
 COPY Caddyfile ./Caddyfile
 COPY docker-entrypoint.sh ./docker-entrypoint.sh
