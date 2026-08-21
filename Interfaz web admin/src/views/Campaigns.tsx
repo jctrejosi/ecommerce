@@ -603,18 +603,6 @@ function Step2({
   onNext: () => void;
   onBack: () => void;
 }) {
-  const TONES = [
-    { label: "⚡ Urgente", value: "urgente" },
-    { label: "🔥 Joven", value: "joven" },
-    { label: "💼 Profesional", value: "profesional" },
-    { label: "❤️ Emocional", value: "emocional" },
-    { label: "✨ Exclusivo", value: "exclusivo" },
-  ];
-
-  const addTone = (t: string) => {
-    setPrompt(prompt ? prompt + ", " + t : t);
-  };
-
   const activeChannelCount = Object.values(channels).filter(Boolean).length;
 
   return (
@@ -649,22 +637,6 @@ function Step2({
                   <span key={p.id} className="text-[10px] font-semibold bg-white/70 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-full truncate max-w-50">
                     {fmt(p.price)} · {p.name}
                   </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Tones */}
-            <div className="mb-4">
-              <p className="text-xs font-semibold text-gray-600 mb-2">Tono rápido</p>
-              <div className="flex flex-wrap gap-2">
-                {TONES.map((t) => (
-                  <button
-                    key={t.value}
-                    onClick={() => addTone(t.value)}
-                    className="px-3 py-1.5 text-xs font-semibold rounded-xl border border-gray-200 text-gray-600 hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700 transition-all"
-                  >
-                    {t.label}
-                  </button>
                 ))}
               </div>
             </div>
