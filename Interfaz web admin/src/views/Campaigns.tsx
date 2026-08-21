@@ -168,6 +168,61 @@ function WhatsAppPreview({ text, editable, onEdit }: { text: string; editable: b
   );
 }
 
+function EmailHtmlPreview({ html }: { html: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [content, setContent] = useState({ w: 600, h: 800 });
+  const [scale, setScale] = useState(1);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const compute = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const s = Math.min(rect.width / content.w, rect.height / content.h);
+      setScale(Math.min(s, 1));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [content]);
+
+  return (
+    <div ref={containerRef} className="w-full h-full overflow-hidden bg-gray-50">
+      <iframe
+        srcDoc={html}
+        title="Vista previa del correo"
+        sandbox="allow-same-origin"
+        scrolling="no"
+        onLoad={(e) => {
+          const frame = e.currentTarget as HTMLIFrameElement;
+          try {
+            const de = frame.contentDocument?.documentElement;
+            if (de) {
+              setContent({
+                w: Math.max(de.scrollWidth, 600),
+                h: Math.max(de.scrollHeight, 800),
+              });
+            }
+          } catch {
+            /* si no es accesible, queda con el tamaño por defecto */
+          }
+        }}
+        style={{
+          width: content.w,
+          height: content.h,
+          transform: `scale(${scale})`,
+          transformOrigin: "top left",
+          border: 0,
+          display: "block",
+          background: "#fff",
+        }}
+      />
+    </div>
+  );
+}
+
 function EmailPreview({ subject, body, editableBody, onEditSubject, onEditBody, html }: {
   subject: string; body: string; editableBody: boolean;
   onEditSubject: (s: string) => void; onEditBody: (b: string) => void;
@@ -201,12 +256,7 @@ function EmailPreview({ subject, body, editableBody, onEditSubject, onEditBody, 
       {/* Email body */}
       <div className="flex-1 overflow-hidden">
         {html ? (
-          <iframe
-            srcDoc={html}
-            title="Vista previa del correo"
-            sandbox=""
-            className="w-full h-full border-0"
-          />
+          <EmailHtmlPreview html={html} />
         ) : (
           <div className="h-full overflow-y-auto">
             {/* Fake banner */}
