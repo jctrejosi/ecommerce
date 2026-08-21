@@ -37,6 +37,7 @@ import {
   LayoutTemplate,
   Mail,
   Bot,
+  Send,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
@@ -60,6 +61,7 @@ import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
 import Branches from "./views/Branches";
 import Popups from "./views/Popups";
+import Campaigns from "./views/Campaigns";
 import Newsletter from "./views/Newsletter";
 import BotAdmin from "./views/BotAdmin";
 
@@ -83,6 +85,7 @@ export type ViewId =
   | "settings"
   | "branches"
   | "general"
+  | "campaigns"
   | "popups"
   | "newsletter"
   | "bot";
@@ -125,6 +128,7 @@ const NAV: NavSection[] = [
   {
     title: "Marketing",
     items: [
+      { id: "campaigns", label: "Campañas", icon: Send },
       { id: "popups", label: "Popups", icon: Megaphone },
       { id: "newsletter", label: "Newsletter", icon: Mail },
     ],
@@ -181,6 +185,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   users: "users",
   settings: "settings",
   general: "general",
+  campaigns: "campaigns",
   popups: "popups",
   newsletter: "newsletter",
   bot: "bot",
@@ -206,6 +211,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   users: "users",
   settings: "settings",
   general: "general",
+  campaigns: "campaigns",
   popups: "popups",
   newsletter: "newsletter",
   bot: "bot",
@@ -258,6 +264,7 @@ const LABELS: Record<ViewId, string> = {
   users: "Usuarios y Permisos",
   settings: "Configuración",
   general: "General",
+  campaigns: "Campañas",
   popups: "Popups",
   newsletter: "Newsletter",
   bot: "Bot",
@@ -726,6 +733,8 @@ function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProf
       return <Branches />;
     case "general":
       return <General />;
+    case "campaigns":
+      return <Campaigns />;
     case "popups":
       return <Popups />;
     case "newsletter":
