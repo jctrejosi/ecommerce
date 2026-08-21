@@ -3643,3 +3643,110 @@ export const newsletterCampaigns = pgTable(
     ),
   ],
 );
+
+/* ── Campañas de marketing (módulo admin: Campañas) ─────────────── */
+
+export const campaignStatusEnum = pgEnum('campaign_status_enum', [
+  'borrador',
+  'programada',
+  'enviando',
+  'enviada',
+  'fallida',
+]);
+
+export const campaignChannelEnum = pgEnum('campaign_channel_enum', [
+  'whatsapp',
+  'email',
+  'sms',
+]);
+
+export const campaignRecipientStatusEnum = pgEnum('campaign_recipient_status_enum', [
+  'pendiente',
+  'enviado',
+  'abierto',
+  'fallido',
+]);
+
+export const campaigns = pgTable(
+  'campaigns',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    name: varchar({ length: 200 }).notNull(),
+    // Producto promocionado (opcional: la campaña puede no ser de producto)
+    productId: bigint('product_id', { mode: 'number' }),
+    // Prompt/tono usados para generar el contenido con IA
+    prompt: text('prompt'),
+    tone: varchar({ length: 50 }),
+    channels: jsonb('channels').notNull().default(sql`'[]'::jsonb`).$type<string[]>(),
+    status: campaignStatusEnum('status').default('borrador').notNull(),
+    // Público: lo llena la recomendación de clientes (aleatoria por ahora,
+    // segmentación inteligente después)
+    audienceCount: integer('audience_count').default(0).notNull(),
+    scheduledAt: timestamp('scheduled_at', { withTimezone: true, mode: 'string' }),
+    sentAt: timestamp('sent_at', { withTimezone: true, mode: 'string' }),
+    sentCount: integer('sent_count').default(0).notNull(),
+    openedCount: integer('opened_count').default(0).notNull(),
+    convertedCount: integer('converted_count').default(0).notNull(),
+    createdBy: bigint('created_by', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_campaigns_status').using('btree', table.status),
+    index('idx_campaigns_deleted_at').on(table.deletedAt),
+  ],
+);
+
+export const campaignMessages = pgTable(
+  'campaign_messages',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    campaignId: bigint('campaign_id', { mode: 'number' }).notNull(),
+    channel: campaignChannelEnum('channel').notNull(),
+    // Email: asunto del correo
+    subject: varchar({ length: 300 }),
+    // WhatsApp / SMS: texto plano del mensaje
+    content: text('content'),
+    // Email: HTML final (generado por el diseñador/IA)
+    html: text('html'),
+    // Email: bloques del diseñador drag & drop (EmailEditor del admin)
+    emailBlocks: jsonb('email_blocks'),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_campaign_messages_campaign').on(table.campaignId),
+  ],
+);
+
+export const campaignRecipients = pgTable(
+  'campaign_recipients',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    campaignId: bigint('campaign_id', { mode: 'number' }).notNull(),
+    // Snapshot del cliente destino (id nullable: puede ser suscriptor sin cuenta)
+    customerId: bigint('customer_id', { mode: 'number' }),
+    name: varchar({ length: 200 }),
+    email: varchar({ length: 255 }),
+    phone: varchar({ length: 50 }),
+    status: campaignRecipientStatusEnum('status').default('pendiente').notNull(),
+    sentAt: timestamp('sent_at', { withTimezone: true, mode: 'string' }),
+    openedAt: timestamp('opened_at', { withTimezone: true, mode: 'string' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_campaign_recipients_campaign').on(table.campaignId),
+    index('idx_campaign_recipients_status').using('btree', table.status),
+  ],
+);

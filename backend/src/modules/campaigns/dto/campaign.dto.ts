@@ -1,0 +1,141 @@
+import {
+  IsArray,
+  IsEnum,
+  IsInt,
+  IsNumber,
+  IsObject,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+
+export class CampaignMessageDto {
+  @IsEnum(['whatsapp', 'email', 'sms'])
+  channel: 'whatsapp' | 'email' | 'sms';
+
+  @IsOptional()
+  @IsString()
+  subject?: string;
+
+  @IsOptional()
+  @IsString()
+  content?: string;
+
+  @IsOptional()
+  @IsString()
+  html?: string;
+
+  @IsOptional()
+  @IsObject()
+  emailBlocks?: Record<string, unknown>;
+}
+
+export class CreateCampaignDto {
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsNumber()
+  productId?: number;
+
+  @IsOptional()
+  @IsString()
+  prompt?: string;
+
+  @IsOptional()
+  @IsString()
+  tone?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
+  channels?: ('whatsapp' | 'email' | 'sms')[];
+
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => CampaignMessageDto)
+  messages?: CampaignMessageDto[];
+}
+
+export class UpdateCampaignDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsNumber()
+  productId?: number;
+
+  @IsOptional()
+  @IsString()
+  prompt?: string;
+
+  @IsOptional()
+  @IsString()
+  tone?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
+  channels?: ('whatsapp' | 'email' | 'sms')[];
+
+  @IsOptional()
+  @IsEnum(['borrador', 'programada', 'enviando', 'enviada', 'fallida'])
+  status?: 'borrador' | 'programada' | 'enviando' | 'enviada' | 'fallida';
+
+  @IsOptional()
+  @IsString()
+  scheduledAt?: string;
+
+  @IsOptional()
+  @IsArray()
+  @Type(() => CampaignMessageDto)
+  messages?: CampaignMessageDto[];
+}
+
+export class GenerateRecipientsDto {
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
+  channels?: ('whatsapp' | 'email' | 'sms')[];
+}
+
+export class GenerateContentDto {
+  @IsOptional()
+  @IsNumber()
+  productId?: number;
+
+  @IsOptional()
+  @IsString()
+  productName?: string;
+
+  @IsOptional()
+  @IsNumber()
+  price?: number;
+
+  @IsOptional()
+  @IsNumber()
+  discount?: number;
+
+  @IsOptional()
+  @IsString()
+  prompt?: string;
+
+  @IsOptional()
+  @IsString()
+  tone?: string;
+
+  @IsArray()
+  @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
+  channels: ('whatsapp' | 'email' | 'sms')[];
+}
