@@ -203,14 +203,17 @@ export function Footer({ categories, onCategoryClick, generalLogo }: FooterProps
           )}
         </div>
 
-        <div className="border-t pt-4 pb-2 relative flex items-center justify-center" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
-          <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="absolute left-0 flex items-center hover:opacity-80 transition-opacity">
+        <div
+          className="border-t pt-4 pb-2 flex flex-col md:flex-row items-center justify-center gap-x-6 gap-y-2 text-center"
+          style={{ borderColor: "rgba(255,255,255,0.08)" }}
+        >
+          <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
             <img src={dsiLogo} alt="DSI SA" className="w-9 h-9 object-contain" />
           </a>
           <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
             © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
           </p>
-          <p className="absolute right-0 text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
             Manizales, Caldas, Colombia
           </p>
         </div>

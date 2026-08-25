@@ -58,7 +58,7 @@ export function BenefitsSection() {
         >
           ¿Por qué comprar en Mercaldas?
         </h2>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 md:gap-6">
           {items.map((b) => {
             const Icon = ICON_MAP[b.icon] || Star;
             return (
