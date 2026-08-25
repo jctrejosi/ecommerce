@@ -343,7 +343,7 @@ export function Header({
             onHome();
           }}
         >
-          <Logo dark={true} logoSrc={generalLogo?.url} />
+          <Logo dark={true} logoSrc={generalLogo?.url} hideTextOnMobile />
         </a>
 
         <div className="flex-1 max-w-2xl mx-auto" ref={searchRef}>
@@ -396,7 +396,7 @@ export function Header({
             {/* Dropdown */}
             {searchOpen && (
               <div
-                className="absolute top-full left-0 right-0 bg-white border border-border rounded-b-xl shadow-xl z-50 overflow-hidden"
+                className="fixed inset-x-0 top-16 md:absolute md:top-full md:left-0 md:right-0 bg-white border border-border rounded-b-xl shadow-xl z-50 overflow-hidden"
                 style={{
                   borderTop: "none",
                   boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
@@ -696,8 +696,8 @@ export function Header({
       {mobileMenuOpen && (
         <div className="md:hidden border-t border-border bg-white px-4 py-3 flex flex-col gap-1">
           {(customer
-            ? ["Inicio", "Categorías", "Catálogo", "Mi cuenta"]
-            : ["Inicio", "Categorías", "Catálogo"]
+            ? ["Inicio", "Catálogo", "Mi cuenta"]
+            : ["Inicio", "Catálogo"]
           ).map((item) => (
             <a
               key={item}

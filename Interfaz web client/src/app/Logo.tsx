@@ -1,13 +1,25 @@
-export function Logo({ dark = true, logoSrc }: { dark?: boolean; logoSrc?: string | null }) {
+export function Logo({
+  dark = true,
+  logoSrc,
+  hideTextOnMobile = false,
+}: {
+  dark?: boolean;
+  logoSrc?: string | null;
+  hideTextOnMobile?: boolean;
+}) {
   if (logoSrc) {
     return (
-      <img src={logoSrc} alt="MercAldas" className="h-8 w-auto object-contain" />
+      <img
+        src={logoSrc}
+        alt="MercAldas"
+        className="h-7 md:h-8 w-auto object-contain"
+      />
     );
   }
   return (
     <div className="flex items-center gap-1 select-none">
       <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center font-black text-lg leading-none"
+        className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center font-black text-base md:text-lg leading-none"
         style={{
           background: "#FFF200",
           color: "#1A1A2E",
@@ -17,7 +29,9 @@ export function Logo({ dark = true, logoSrc }: { dark?: boolean; logoSrc?: strin
         M
       </div>
       <span
-        className="font-black text-xl tracking-tight leading-none"
+        className={`font-black text-xl tracking-tight leading-none ${
+          hideTextOnMobile ? "hidden md:inline" : ""
+        }`}
         style={{
           color: dark ? "#1A1A2E" : "#ffffff",
           fontFamily: "'Bricolage Grotesque', sans-serif",
