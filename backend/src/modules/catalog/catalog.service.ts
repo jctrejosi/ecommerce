@@ -1631,12 +1631,20 @@ export class CatalogService {
     //      a tildes/ñ, con stemming y palabras en cualquier orden.
     //      immutable_unaccent() es un wrapper IMMUTABLE de unaccent() para poder
     //      indexarlo (unaccent() es STABLE y no indexa). Ver db/docker/init.sql.
-    //   2) Fuzzy (pg_trgm / word_similarity): tolera tipeos ("cmará" → "cámara").
-    //      Solo se aplica a búsquedas de UNA palabra para no ensuciar los
-    //      resultados de búsquedas compuestas ("diana arroz").
+    //   2) Fuzzy por token (pg_trgm / strict_word_similarity): tolera tipeos,
+    //      incluso en frases ("celular samsng" → "Samsung Galaxy celular").
+    //      CADA token debe tener una palabra similar en nombre+descripción; los
+    //      tokens cortos (artículos/preposiciones) los maneja el full-text.
     //   3) Códigos (plu/barcode/externalId): lookup exacto por ILIKE.
     const searchTokens = search?.split(/\s+/).filter(Boolean) ?? [];
-    const isSingleToken = searchTokens.length === 1;
+    const fuzzyTokens = searchTokens
+      .map((t) =>
+        t
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase(),
+      )
+      .filter((t) => t.length >= 3);
 
     const searchDoc = search
       ? sql`to_tsvector('spanish'::regconfig, public.immutable_unaccent(${products.name} || ' ' || COALESCE(${products.description}, '')))`
@@ -1644,36 +1652,43 @@ export class CatalogService {
     const searchQuery = search
       ? sql`plainto_tsquery('spanish'::regconfig, public.immutable_unaccent(${search}))`
       : undefined;
-    const fuzzyName =
-      search && isSingleToken
-        ? sql`word_similarity(unaccent(lower(${search})), unaccent(lower(${products.name})))`
+    const fullText = sql`unaccent(lower(${products.name} || ' ' || COALESCE(${products.description}, '')))`;
+
+    // Coincidencia difusa: cada token debe tener una palabra similar en el texto.
+    // strict_word_similarity exige coincidencia con una palabra completa y separa
+    // mejor los tipeos reales (≥0.44) de los falsos positivos (≤0.22).
+    const fuzzyTokenMatches = fuzzyTokens.map(
+      (token) =>
+        sql`strict_word_similarity(unaccent(lower(${token})), ${fullText}) > 0.35`,
+    );
+    const fuzzyTokenScores = fuzzyTokens.map(
+      (token) =>
+        sql`strict_word_similarity(unaccent(lower(${token})), ${fullText})`,
+    );
+    const fuzzyCondition =
+      fuzzyTokenMatches.length > 0 ? and(...fuzzyTokenMatches) : undefined;
+    const fuzzyScore =
+      fuzzyTokenScores.length > 0
+        ? sql`((${sql.join(fuzzyTokenScores, sql` + `)}) / ${fuzzyTokenScores.length})`
         : undefined;
-    const fuzzyDescription =
-      search && isSingleToken
-        ? sql`word_similarity(unaccent(lower(${search})), unaccent(lower(COALESCE(${products.description}, ''))))`
-        : undefined;
+
     const codeMatch = search
       ? sql`(unaccent(${products.plu}) ILIKE unaccent(${`%${search}%`}) OR unaccent(${productVariants.barcode}) ILIKE unaccent(${`%${search}%`}) OR unaccent(${products.externalId}) ILIKE unaccent(${`%${search}%`}))`
       : undefined;
 
     const searchCondition =
       search && searchDoc && searchQuery && codeMatch
-        ? or(
-            sql`${searchDoc} @@ ${searchQuery}`,
-            fuzzyName ? sql`${fuzzyName} > 0.3` : undefined,
-            fuzzyDescription ? sql`${fuzzyDescription} > 0.3` : undefined,
-            codeMatch,
-          )
+        ? or(sql`${searchDoc} @@ ${searchQuery}`, fuzzyCondition, codeMatch)
         : undefined;
 
     const searchOrder =
       search && searchDoc && searchQuery && codeMatch
-        ? fuzzyName && fuzzyDescription
+        ? fuzzyCondition && fuzzyScore
           ? sql`CASE
                 WHEN ${searchDoc} @@ ${searchQuery}
                   THEN 3 + ts_rank(${searchDoc}, ${searchQuery})
-                WHEN ${fuzzyName} > 0.3 OR ${fuzzyDescription} > 0.3
-                  THEN 2 + GREATEST(${fuzzyName}, ${fuzzyDescription})
+                WHEN ${fuzzyCondition}
+                  THEN 2 + ${fuzzyScore}
                 WHEN ${codeMatch}
                   THEN 1
                 ELSE 0

@@ -313,7 +313,9 @@ async function main() {
       "MercAldas launcher\n" +
         "  node dev.js            → dev (logs en logs/*.log, terminal libre)\n" +
         "  node dev.js --prod     → producción (requiere builds previos)\n" +
-        "  node dev.js --stop     → detiene los servicios\n",
+        "  node dev.js --stop     → detiene los servicios\n" +
+        "  node dev.js --help     → esta ayuda\n" +
+        "  cd db/docker && docker compose stop → detener PostgreSQL\n",
     );
     return;
   }
@@ -339,7 +341,12 @@ async function main() {
 
   printUrls();
   console.log("\n✅ Todo levantado. Esta terminal queda libre — puedes cerrarla.");
-  console.log(`   Para detener los servicios más tarde: node dev.js --stop`);
+  console.log("");
+  console.log("Comandos útiles:");
+  console.log(`  node dev.js --stop                  → detener los servicios levantados`);
+  console.log(`  node dev.js --prod                  → levantar en modo producción`);
+  console.log(`  node dev.js --help                  → mostrar ayuda`);
+  console.log(`  cd db/docker && docker compose stop → detener PostgreSQL (docker)`);
   process.exit(0); // cierra el script; los servicios siguen en segundo plano
 }
 
