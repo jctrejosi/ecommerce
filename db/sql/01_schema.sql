@@ -11,6 +11,15 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "citext";
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 CREATE EXTENSION IF NOT EXISTS postgis;  -- Para GEOGRAPHY(POINT, 4326)
+CREATE EXTENSION IF NOT EXISTS unaccent;  -- Búsqueda insensible a tildes/ñ
+CREATE EXTENSION IF NOT EXISTS pg_trgm;   -- Búsqueda difusa (similitud trigramas)
+
+-- Wrapper IMMUTABLE de unaccent() para poder indexarlo (unaccent() es STABLE)
+CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$ SELECT public.unaccent($1) $$;
 
 -- ======================================================
 -- 2. TIPOS ENUM (Estados)

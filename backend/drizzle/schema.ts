@@ -722,7 +722,7 @@ export const products = pgTable(
     index('idx_products_search')
       .using(
         'gin',
-        sql`to_tsvector('spanish'::regconfig, (name || ' ' || COALESCE(description, '')))`,
+        sql`to_tsvector('spanish'::regconfig, public.immutable_unaccent((name || ' ' || COALESCE(description, ''))))`,
       )
       .where(sql`((is_active = true) AND (deleted_at IS NULL))`),
     uniqueIndex('idx_products_slug')

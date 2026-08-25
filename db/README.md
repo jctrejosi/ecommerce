@@ -49,13 +49,19 @@ que ya no se usan para crear la BD de producción — esa se gestiona con
 `drizzle-kit push`.
 
 > ⚠ **Extensiones requeridas en producción (Supabase):** el buscador del
-> catálogo usa `unaccent()` (búsqueda insensible a tildes/ñ). Si no existe,
-> `POST /catalog/products` con `search` responde 500. Habilítala una vez:
+> catálogo usa `unaccent()` (insensible a tildes/ñ), `pg_trgm` (búsqueda
+> difusa / tolerante a tipeos) y la función `public.immutable_unaccent()`
+> (wrapper IMMUTABLE de `unaccent()` para poder indexarla). Si no existen,
+> `POST /catalog/products` con `search` responde 500. Habilítalas una vez:
 > ```sql
 > CREATE EXTENSION IF NOT EXISTS unaccent;
+> CREATE EXTENSION IF NOT EXISTS pg_trgm;
+> CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+> RETURNS text LANGUAGE sql IMMUTABLE AS $$ SELECT public.unaccent($1) $$;
 > ```
-> (en el SQL editor de Supabase o con el rol `postgres`). En local la crea
-> `db/docker/init.sql`.
+> (en el SQL editor de Supabase o con el rol `postgres`). En local las crea
+> `db/docker/init.sql`. También puedes ejecutar
+> `DATABASE_URL='...' node backend/scripts/install-extensions.js`.
 
 ## Migraciones
 

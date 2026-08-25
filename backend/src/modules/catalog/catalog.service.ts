@@ -1626,6 +1626,67 @@ export class CatalogService {
 
     const allowedCategoryBigIntIds = allowedCategoryIds.map((id) => BigInt(id));
 
+    // Búsqueda semántica + tolerante a errores.
+    //   1) Full-text (tsvector/tsquery, español + immutable_unaccent): insensible
+    //      a tildes/ñ, con stemming y palabras en cualquier orden.
+    //      immutable_unaccent() es un wrapper IMMUTABLE de unaccent() para poder
+    //      indexarlo (unaccent() es STABLE y no indexa). Ver db/docker/init.sql.
+    //   2) Fuzzy (pg_trgm / word_similarity): tolera tipeos ("cmará" → "cámara").
+    //      Solo se aplica a búsquedas de UNA palabra para no ensuciar los
+    //      resultados de búsquedas compuestas ("diana arroz").
+    //   3) Códigos (plu/barcode/externalId): lookup exacto por ILIKE.
+    const searchTokens = search?.split(/\s+/).filter(Boolean) ?? [];
+    const isSingleToken = searchTokens.length === 1;
+
+    const searchDoc = search
+      ? sql`to_tsvector('spanish'::regconfig, public.immutable_unaccent(${products.name} || ' ' || COALESCE(${products.description}, '')))`
+      : undefined;
+    const searchQuery = search
+      ? sql`plainto_tsquery('spanish'::regconfig, public.immutable_unaccent(${search}))`
+      : undefined;
+    const fuzzyName =
+      search && isSingleToken
+        ? sql`word_similarity(unaccent(lower(${search})), unaccent(lower(${products.name})))`
+        : undefined;
+    const fuzzyDescription =
+      search && isSingleToken
+        ? sql`word_similarity(unaccent(lower(${search})), unaccent(lower(COALESCE(${products.description}, ''))))`
+        : undefined;
+    const codeMatch = search
+      ? sql`(unaccent(${products.plu}) ILIKE unaccent(${`%${search}%`}) OR unaccent(${productVariants.barcode}) ILIKE unaccent(${`%${search}%`}) OR unaccent(${products.externalId}) ILIKE unaccent(${`%${search}%`}))`
+      : undefined;
+
+    const searchCondition =
+      search && searchDoc && searchQuery && codeMatch
+        ? or(
+            sql`${searchDoc} @@ ${searchQuery}`,
+            fuzzyName ? sql`${fuzzyName} > 0.3` : undefined,
+            fuzzyDescription ? sql`${fuzzyDescription} > 0.3` : undefined,
+            codeMatch,
+          )
+        : undefined;
+
+    const searchOrder =
+      search && searchDoc && searchQuery && codeMatch
+        ? fuzzyName && fuzzyDescription
+          ? sql`CASE
+                WHEN ${searchDoc} @@ ${searchQuery}
+                  THEN 3 + ts_rank(${searchDoc}, ${searchQuery})
+                WHEN ${fuzzyName} > 0.3 OR ${fuzzyDescription} > 0.3
+                  THEN 2 + GREATEST(${fuzzyName}, ${fuzzyDescription})
+                WHEN ${codeMatch}
+                  THEN 1
+                ELSE 0
+              END DESC, ${products.name} ASC`
+          : sql`CASE
+                WHEN ${searchDoc} @@ ${searchQuery}
+                  THEN 3 + ts_rank(${searchDoc}, ${searchQuery})
+                WHEN ${codeMatch}
+                  THEN 1
+                ELSE 0
+              END DESC, ${products.name} ASC`
+        : undefined;
+
     const rows = await this.drizzleService.db
       .select({
         id: products.id,
@@ -1697,18 +1758,7 @@ export class CatalogService {
           query.productTypeCode
             ? eq(productTypes.code, query.productTypeCode)
             : undefined,
-          search
-            ? or(
-                // unaccent() hace la búsqueda insensible a tildes/ñ: "bretana"
-                // encuentra "BRETAÑA" (y viceversa). Requiere la extensión
-                // unaccent (ver db/docker/init.sql).
-                sql`unaccent(${products.name}) ILIKE unaccent(${`%${search}%`})`,
-                sql`unaccent(${products.description}) ILIKE unaccent(${`%${search}%`})`,
-                sql`unaccent(${products.plu}) ILIKE unaccent(${`%${search}%`})`,
-                sql`unaccent(${productVariants.barcode}) ILIKE unaccent(${`%${search}%`})`,
-                sql`unaccent(${products.externalId}) ILIKE unaccent(${`%${search}%`})`,
-              )
-            : undefined,
+          searchCondition,
           this.buildPriceRangeCondition(query.priceRange),
           query.uncategorized
             ? sql`NOT EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = ${products.id})`
@@ -1720,17 +1770,8 @@ export class CatalogService {
         ),
       )
       .orderBy(
-        search
-          ? sql`CASE
-            WHEN unaccent(${products.name}) ILIKE unaccent(${`%${search}%`}) THEN 0
-            WHEN unaccent(${products.description}) ILIKE unaccent(${`%${search}%`}) THEN 1
-            WHEN unaccent(${products.plu}) ILIKE unaccent(${`%${search}%`}) THEN 2
-            WHEN unaccent(${productVariants.barcode}) ILIKE unaccent(${`%${search}%`}) THEN 3
-            WHEN unaccent(${products.externalId}) ILIKE unaccent(${`%${search}%`}) THEN 4
-            ELSE 5
-          END`
-          : this.buildSort(sort)[0],
-        ...(search ? [asc(products.name)] : this.buildSort(sort).slice(1)),
+        searchOrder ?? this.buildSort(sort)[0],
+        ...(searchOrder ? [] : this.buildSort(sort).slice(1)),
       )
       .limit(limit * 3)
       .offset(offset);

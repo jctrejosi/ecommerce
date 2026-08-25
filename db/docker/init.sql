@@ -14,6 +14,17 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- 4. unaccent: Búsqueda insensible a tildes/ñ (buscador del catálogo)
 CREATE EXTENSION IF NOT EXISTS unaccent;
 
+-- 5. pg_trgm: Búsqueda difusa por similitud de trigramas (tolera tipeos)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- 6. immutable_unaccent: wrapper IMMUTABLE de unaccent() para poder usarlo en
+--    índices (unaccent() es STABLE y PostgreSQL no permite STABLE en índices).
+CREATE OR REPLACE FUNCTION public.immutable_unaccent(text)
+RETURNS text
+LANGUAGE sql
+IMMUTABLE
+AS $$ SELECT public.unaccent($1) $$;
+
 -- ======================================================
 -- VERIFICACIÓN (opcional)
 -- ======================================================
