@@ -4,8 +4,9 @@
  *
  * Uso:
  *   node dev.js            # DEV: levanta PostgreSQL + los 5 servicios en
- *                          #   segundo plano, imprime las URLs y termina
- *                          #   (la terminal queda libre para cerrarla).
+ *                          #   segundo plano, espera a que el backend esté
+ *                          #   listo, imprime las URLs y termina (la terminal
+ *                          #   queda libre para cerrarla).
  *   node dev.js --prod     # PRODUCCIÓN ("en vivo"): comandos de producción.
  *                          #   Requiere builds previos (backend: yarn build,
  *                          #   webs: yarn build). Los logs quedan en logs/*.log.
@@ -338,6 +339,24 @@ async function main() {
     if (pid) pids[svc.name] = pid;
   }
   fs.writeFileSync(PIDS_FILE, JSON.stringify(pids, null, 2));
+
+  // No liberar la terminal hasta que el backend esté montado: si se cierra
+  // antes, el usuario no puede ver si arrancó bien o falló al revisar logs.
+  const backendSvc = SERVICES.find((s) => s.name === "backend");
+  if (backendSvc && backendSvc.url) {
+    const backendPort = Number(new URL(backendSvc.url).port);
+    console.log(
+      `${C.backend}[backend]${C.reset} ⏳ esperando a que esté listo (${backendSvc.url})...`,
+    );
+    const backendUp = await waitForPort(backendPort, 120000);
+    if (backendUp) {
+      console.log(`${C.backend}[backend]${C.reset} ✅ Backend listo`);
+    } else {
+      console.warn(
+        `${C.backend}[backend]${C.reset} ⚠️  No respondió en :${backendPort} — revisa logs/backend.log`,
+      );
+    }
+  }
 
   printUrls();
   console.log("\n✅ Todo levantado. Esta terminal queda libre — puedes cerrarla.");
