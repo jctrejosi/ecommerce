@@ -2,99 +2,32 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import dsiLogo from "./assets/logo.png";
 import {
   LayoutDashboard,
-  Package,
-  FolderTree,
-  Tag,
-  Truck,
-  Users,
-  ShoppingCart,
-  Megaphone,
-  Image,
-  Layers,
-  Percent,
-  Store,
-  Warehouse,
-  BarChart2,
-  Shield,
-  Settings,
+  Send,
   Search,
   Bell,
   ChevronRight,
-  Plus,
-  X,
-  LogOut,
+  ChevronDown,
   User,
   HelpCircle,
   Command,
-  Zap,
-  Hash,
-  FileText,
-  Globe,
-  ChevronDown,
+  LogOut,
   Menu,
-  Building2,
   AlertTriangle,
-  LayoutTemplate,
-  Mail,
-  Bot,
-  Send,
+  ShoppingCart,
+  Zap,
+  Users,
+  Store,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
-import Products from "./views/Products";
-import Orders from "./views/Orders";
-import { ordersService } from "./services/orders.service";
-import { authService, type UserProfile } from "./services/auth.service";
-import HomepageEditor from "./views/HomepageEditor";
-import Banners from "./views/Banners";
-import Reports from "./views/Reports";
-import Customers from "./views/Customers";
-import Categories from "./views/Categories";
-import Brands from "./views/Brands";
-import General from "./views/General";
-import ProductTypes from "./views/ProductTypes";
-import Suppliers from "./views/Suppliers";
-import Promotions from "./views/Promotions";
-import Marketplace from "./views/Marketplace";
-import Inventory from "./views/Inventory";
-import Delivery from "./views/Delivery";
-import UsersView from "./views/Users";
-import SettingsView from "./views/Settings";
-import Branches from "./views/Branches";
-import Popups from "./views/Popups";
 import Campaigns from "./views/Campaigns";
-import Newsletter from "./views/Newsletter";
-import BotAdmin from "./views/BotAdmin";
+import { authService, type UserProfile } from "./services/auth.service";
 
-export type ViewId =
-  | "dashboard"
-  | "products"
-  | "categories"
-  | "productTypes"
-  | "brands"
-  | "suppliers"
-  | "orders"
-  | "customers"
-  | "promotions"
-  | "homepage"
-  | "banners"
-  | "marketplace"
-  | "inventory"
-  | "delivery"
-  | "reports"
-  | "users"
-  | "settings"
-  | "branches"
-  | "general"
-  | "campaigns"
-  | "popups"
-  | "newsletter"
-  | "bot";
+export type ViewId = "dashboard" | "campaigns";
 
 interface NavItem {
   id: ViewId;
   label: string;
   icon: React.ElementType;
-  badge?: number;
 }
 
 interface NavSection {
@@ -108,120 +41,35 @@ const NAV: NavSection[] = [
     items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
   },
   {
-    title: "Catálogo",
-    items: [
-      { id: "products", label: "Productos", icon: Package },
-      { id: "categories", label: "Categorías", icon: FolderTree },
-      { id: "productTypes", label: "Tipos de Producto", icon: Layers },
-      { id: "brands", label: "Marcas", icon: Tag },
-      { id: "suppliers", label: "Proveedores", icon: Building2 },
-    ],
-  },
-  {
-    title: "Comercio",
-    items: [
-      { id: "orders", label: "Pedidos", icon: ShoppingCart },
-      { id: "customers", label: "Clientes", icon: Users },
-      { id: "promotions", label: "Promociones", icon: Percent },
-    ],
-  },
-  {
     title: "Marketing",
-    items: [
-      { id: "campaigns", label: "Campañas", icon: Send },
-      { id: "popups", label: "Popups", icon: Megaphone },
-      { id: "newsletter", label: "Newsletter", icon: Mail },
-    ],
-  },
-  {
-    title: "Contenido",
-    items: [
-      // { id: "homepage", label: "Editor de Inicio", icon: LayoutTemplate }, // Oculto por ahora
-      // { id: "marketplace", label: "Publicidad", icon: Megaphone }, // Oculto por ahora
-      { id: "banners", label: "Home", icon: LayoutTemplate },
-      { id: "general", label: "General", icon: Settings },
-    ],
-  },
-  {
-    title: "Operaciones",
-    items: [
-      { id: "inventory", label: "Inventario", icon: Warehouse },
-      { id: "delivery", label: "Entregas", icon: Truck },
-      { id: "branches", label: "Sucursales", icon: Building2 },
-    ],
-  },
-  {
-    title: "Analítica",
-    items: [{ id: "reports", label: "Reportes", icon: BarChart2 }],
-  },
-  {
-    title: "Administración",
-    items: [
-      { id: "users", label: "Usuarios y Permisos", icon: Shield },
-      { id: "settings", label: "Configuración", icon: Settings },
-      { id: "bot", label: "Bot", icon: Bot },
-    ],
+    items: [{ id: "campaigns", label: "Campañas", icon: Send }],
   },
 ];
 
 const VIEW_PATHS: Record<string, ViewId> = {
-  "": "dashboard",
   dashboard: "dashboard",
-  products: "products",
-  categories: "categories",
-  "product-types": "productTypes",
-  brands: "brands",
-  suppliers: "suppliers",
-  orders: "orders",
-  customers: "customers",
-  promotions: "promotions",
-  "homepage-editor": "homepage",
-  banners: "banners",
-  marketplace: "marketplace",
-  inventory: "inventory",
-  delivery: "delivery",
-  branches: "branches",
-  reports: "reports",
-  users: "users",
-  settings: "settings",
-  general: "general",
   campaigns: "campaigns",
-  popups: "popups",
-  newsletter: "newsletter",
-  bot: "bot",
 };
 
 const VIEW_SLUGS: Record<ViewId, string> = {
   dashboard: "dashboard",
-  products: "products",
-  categories: "categories",
-  productTypes: "product-types",
-  brands: "brands",
-  suppliers: "suppliers",
-  orders: "orders",
-  customers: "customers",
-  promotions: "promotions",
-  homepage: "homepage-editor",
-  banners: "banners",
-  marketplace: "marketplace",
-  inventory: "inventory",
-  delivery: "delivery",
-  branches: "branches",
-  reports: "reports",
-  users: "users",
-  settings: "settings",
-  general: "general",
   campaigns: "campaigns",
-  popups: "popups",
-  newsletter: "newsletter",
-  bot: "bot",
 };
+
+const LABELS: Record<ViewId, string> = {
+  dashboard: "Dashboard",
+  campaigns: "Campañas",
+};
+
+const QUICK_COMMANDS = [
+  { icon: LayoutDashboard, label: "Ir al Dashboard", view: "dashboard" as ViewId },
+  { icon: Send, label: "Ver campañas", view: "campaigns" as ViewId },
+];
 
 function useViewFromUrl(): [ViewId, (v: ViewId) => void] {
   const path = location.pathname.replace(/^\/+/g, "");
   const [view, setView] = useState<ViewId>(VIEW_PATHS[path] || "dashboard");
 
-  // Sync from URL on popstate (back/forward)
   useEffect(() => {
     const onPop = () => {
       const p = location.pathname.replace(/^\/+/g, "");
@@ -233,75 +81,11 @@ function useViewFromUrl(): [ViewId, (v: ViewId) => void] {
 
   const navigate = useCallback((v: ViewId) => {
     setView(v);
-    const slug = VIEW_SLUGS[v];
-    if (slug === "dashboard") {
-      history.pushState(null, "", "/");
-    } else {
-      history.pushState(null, "", `/${slug}`);
-    }
+    history.pushState(null, "", `/${VIEW_SLUGS[v]}`);
   }, []);
 
   return [view, navigate];
 }
-
-const LABELS: Record<ViewId, string> = {
-  dashboard: "Dashboard",
-  products: "Productos",
-  categories: "Categorías",
-  productTypes: "Tipos de Producto",
-  brands: "Marcas",
-  suppliers: "Proveedores",
-  orders: "Pedidos",
-  customers: "Clientes",
-  promotions: "Promociones",
-  homepage: "Editor de Inicio",
-  banners: "Home",
-  marketplace: "Publicidad Marketplace",
-  inventory: "Inventario",
-  delivery: "Entregas",
-  branches: "Sucursales",
-  reports: "Reportes",
-  users: "Usuarios y Permisos",
-  settings: "Configuración",
-  general: "General",
-  campaigns: "Campañas",
-  popups: "Popups",
-  newsletter: "Newsletter",
-  bot: "Bot",
-};
-
-const QUICK_COMMANDS = [
-  {
-    icon: LayoutDashboard,
-    label: "Ir al Dashboard",
-    view: "dashboard" as ViewId,
-  },
-  { icon: Plus, label: "Crear nuevo producto", view: "products" as ViewId },
-  {
-    icon: ShoppingCart,
-    label: "Ver pedidos pendientes",
-    view: "orders" as ViewId,
-  },
-  {
-    icon: LayoutTemplate,
-    label: "Editar página de inicio",
-    view: "homepage" as ViewId,
-  },
-  { icon: Image, label: "Gestionar banners", view: "banners" as ViewId },
-  {
-    icon: Megaphone,
-    label: "Campañas publicitarias",
-    view: "marketplace" as ViewId,
-  },
-  { icon: BarChart2, label: "Ver reportes", view: "reports" as ViewId },
-  { icon: Users, label: "Gestionar clientes", view: "customers" as ViewId },
-  { icon: Percent, label: "Crear promoción", view: "promotions" as ViewId },
-  {
-    icon: Warehouse,
-    label: "Control de inventario",
-    view: "inventory" as ViewId,
-  },
-];
 
 function CommandPalette({
   onNavigate,
@@ -375,20 +159,13 @@ function CommandPalette({
         </div>
         <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-4">
           <span className="flex items-center gap-1 text-xs text-gray-400">
-            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">
-              ↑↓
-            </kbd>{" "}
-            navegar
+            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">↑↓</kbd> navegar
           </span>
           <span className="flex items-center gap-1 text-xs text-gray-400">
-            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">↵</kbd>{" "}
-            abrir
+            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">↵</kbd> abrir
           </span>
           <span className="flex items-center gap-1 text-xs text-gray-400">
-            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">
-              ESC
-            </kbd>{" "}
-            cerrar
+            <kbd className="bg-gray-100 px-1.5 py-0.5 rounded font-mono">ESC</kbd> cerrar
           </span>
         </div>
       </div>
@@ -434,9 +211,7 @@ function Notifications({ onClose }: { onClose: () => void }) {
       onClick={(e) => e.stopPropagation()}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <span className="font-semibold text-sm text-gray-900">
-          Notificaciones
-        </span>
+        <span className="font-semibold text-sm text-gray-900">Notificaciones</span>
         <button
           onClick={onClose}
           className="text-xs text-amber-600 hover:text-amber-700 font-medium"
@@ -456,9 +231,7 @@ function Notifications({ onClose }: { onClose: () => void }) {
               <n.icon size={14} />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-800 truncate">
-                {n.title}
-              </p>
+              <p className="text-sm font-medium text-gray-800 truncate">{n.title}</p>
               <p className="text-xs text-gray-500 truncate mt-0.5">{n.sub}</p>
             </div>
             <span className="text-xs text-gray-400 shrink-0">{n.time}</span>
@@ -478,12 +251,10 @@ function Sidebar({
   current,
   onNavigate,
   collapsed,
-  unreviewedCount,
 }: {
   current: ViewId;
   onNavigate: (v: ViewId) => void;
   collapsed: boolean;
-  unreviewedCount: number;
 }) {
   return (
     <aside
@@ -497,10 +268,8 @@ function Sidebar({
         </div>
         {!collapsed && (
           <div>
-            <p className="text-white font-bold text-sm leading-tight">
-              Mercaldas
-            </p>
-            <p className="text-white/40 text-xs">Admin Panel</p>
+            <p className="text-white font-bold text-sm leading-tight">Mercaldas</p>
+            <p className="text-white/40 text-xs">Web Analytics</p>
           </div>
         )}
       </div>
@@ -516,7 +285,6 @@ function Sidebar({
             )}
             {section.items.map((item) => {
               const active = current === item.id;
-              const badge = item.id === "orders" && unreviewedCount > 0 ? unreviewedCount : item.badge;
               return (
                 <button
                   key={item.id}
@@ -530,14 +298,6 @@ function Sidebar({
                 >
                   <item.icon size={15} className="shrink-0" />
                   {!collapsed && <span className="truncate">{item.label}</span>}
-                  {!collapsed && badge && (
-                    <span className="ml-auto bg-amber-400 text-amber-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
-                      {badge}
-                    </span>
-                  )}
-                  {collapsed && badge && (
-                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-amber-400 rounded-full" />
-                  )}
                 </button>
               );
             })}
@@ -555,12 +315,8 @@ function Sidebar({
           </div>
           {!collapsed && (
             <div className="flex-1 min-w-0">
-              <p className="text-white/80 text-xs font-semibold truncate">
-                Jorge Ramírez
-              </p>
-              <p className="text-white/30 text-[10px] truncate">
-                Administrador
-              </p>
+              <p className="text-white/80 text-xs font-semibold truncate">Jorge Ramírez</p>
+              <p className="text-white/30 text-[10px] truncate">Administrador</p>
             </div>
           )}
         </div>
@@ -665,9 +421,7 @@ function TopBar({
           {userOpen && (
             <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-40">
               <div className="px-4 py-2 border-b border-gray-100 mb-1">
-                <p className="text-sm font-semibold text-gray-800">
-                  {displayName}
-                </p>
+                <p className="text-sm font-semibold text-gray-800">{displayName}</p>
                 <p className="text-xs text-gray-500">{displayEmail}</p>
               </div>
               {[
@@ -697,58 +451,24 @@ function TopBar({
   );
 }
 
-function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProfile | null; onNavigate: (v: ViewId) => void }) {
+function ViewRenderer({
+  view,
+  user,
+  onNavigate,
+}: {
+  view: ViewId;
+  user: UserProfile | null;
+  onNavigate: (v: string) => void;
+}) {
   const userName = user?.firstName || user?.fullName?.split(" ")[0] || "Usuario";
-  
+
   switch (view) {
     case "dashboard":
-      return <Dashboard userName={userName} onNavigate={(v) => onNavigate(v as ViewId)} />;
-    case "products":
-      return <Products />;
-    case "orders":
-      return <Orders />;
-    case "customers":
-      return <Customers />;
-    case "categories":
-      return <Categories />;
-    case "productTypes":
-      return <ProductTypes />;
-    case "brands":
-      return <Brands />;
-    case "suppliers":
-      return <Suppliers />;
-    case "promotions":
-      return <Promotions />;
-    case "homepage":
-      return <HomepageEditor />;
-    case "banners":
-      return <Banners />;
-    case "marketplace":
-      return <Marketplace />;
-    case "inventory":
-      return <Inventory />;
-    case "delivery":
-      return <Delivery />;
-    case "branches":
-      return <Branches />;
-    case "general":
-      return <General />;
+      return <Dashboard userName={userName} onNavigate={onNavigate} />;
     case "campaigns":
       return <Campaigns />;
-    case "popups":
-      return <Popups />;
-    case "newsletter":
-      return <Newsletter />;
-    case "bot":
-      return <BotAdmin />;
-    case "reports":
-      return <Reports />;
-    case "users":
-      return <UsersView />;
-    case "settings":
-      return <SettingsView />;
     default:
-      return <Dashboard />;
+      return <Dashboard userName={userName} onNavigate={onNavigate} />;
   }
 }
 
@@ -756,7 +476,6 @@ export default function App() {
   const [view, navigate] = useViewFromUrl();
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
-  const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [user, setUser] = useState<UserProfile | null>(null);
 
   useEffect(() => {
@@ -771,29 +490,26 @@ export default function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Fetch unreviewed orders count
-  useEffect(() => {
-    const fetchCount = () => {
-      ordersService.getUnreviewedCount().then((r) => setUnreviewedCount(r.count)).catch(() => {});
-    };
-    fetchCount();
-    const interval = setInterval(fetchCount, 30000); // refresh every 30s
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fetch authenticated user profile
+  // Perfil autenticado (cookie). Si falla, se usa el nombre por defecto.
   useEffect(() => {
     authService
       .getProfile()
       .then((profile) => setUser(profile))
-      .catch(() => {
-        // User not authenticated or token expired
-      });
+      .catch(() => {});
   }, []);
+
+  // El dashboard puede pedir navegar a secciones que no existen aquí
+  // (pedidos, promociones...); solo navegamos a las vistas disponibles.
+  const handleDashboardNavigate = useCallback(
+    (v: string) => {
+      if (v === "dashboard" || v === "campaigns") navigate(v);
+    },
+    [navigate],
+  );
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} unreviewedCount={unreviewedCount} />
+      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
@@ -804,7 +520,7 @@ export default function App() {
           user={user}
         />
         <main className="flex-1 overflow-y-auto">
-          <ViewRenderer view={view} user={user} onNavigate={(v) => navigate(v as ViewId)} />
+          <ViewRenderer view={view} user={user} onNavigate={handleDashboardNavigate} />
         </main>
         <footer className="shrink-0 border-t border-gray-100 bg-white px-6 py-2.5 relative flex items-center justify-center">
           <a
@@ -813,11 +529,7 @@ export default function App() {
             rel="noopener noreferrer"
             className="absolute left-6 flex items-center hover:opacity-80 transition-opacity"
           >
-            <img
-              src={dsiLogo}
-              alt="DSI SA"
-              className="w-8 h-8 object-contain"
-            />
+            <img src={dsiLogo} alt="DSI SA" className="w-8 h-8 object-contain" />
           </a>
           <p className="text-[11px] text-gray-400">
             © 2026 Desarrollado por{" "}
@@ -831,10 +543,7 @@ export default function App() {
       </div>
 
       {cmdOpen && (
-        <CommandPalette
-          onNavigate={navigate}
-          onClose={() => setCmdOpen(false)}
-        />
+        <CommandPalette onNavigate={navigate} onClose={() => setCmdOpen(false)} />
       )}
     </div>
   );

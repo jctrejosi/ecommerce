@@ -3,18 +3,18 @@
  * MercAldas — lanzador de servicios.
  *
  * Uso:
- *   node dev.js            # DEV: levanta PostgreSQL + los 5 servicios en
+ *   node dev.js            # DEV: levanta PostgreSQL + los 6 servicios en
  *                          #   segundo plano, espera a que el backend esté
  *                          #   listo, imprime las URLs y termina (la terminal
  *                          #   queda libre para cerrarla).
  *   node dev.js --prod     # PRODUCCIÓN ("en vivo"): comandos de producción.
- *                          #   Requiere builds previos (backend: yarn build,
- *                          #   webs: yarn build). Los logs quedan en logs/*.log.
+ *                          #   Requiere builds previos (backend: npm run build,
+ *                          #   webs: npm run build). Los logs quedan en logs/*.log.
  *   node dev.js --stop     # Detiene los servicios levantados por dev.js.
  *   node dev.js --help     # Esta ayuda.
  *
  * Logs: un archivo por servicio en logs/
- *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/bot.log  logs/ia.log
+ *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/analytics.log  logs/bot.log  logs/ia.log
  *
  * La BD (docker) queda corriendo al salir; se detiene con
  * `cd db/docker && docker compose stop`.
@@ -38,6 +38,7 @@ const C = {
   backend: "\x1b[31m",
   web: "\x1b[32m",
   admin: "\x1b[34m",
+  analytics: "\x1b[96m",
   bot: "\x1b[35m",
   ia: "\x1b[33m",
   reset: "\x1b[0m",
@@ -48,22 +49,29 @@ const SERVICES = [
     name: "backend",
     dir: "backend",
     url: "http://localhost:3000",
-    dev: ["yarn", "dev"],
-    prod: ["yarn", "start:prod"],
+    dev: ["npm", "run", "dev"],
+    prod: ["npm", "run", "start:prod"],
   },
   {
     name: "web",
-    dir: "Interfaz web client",
+    dir: "Interface web client",
     url: "http://localhost:5173",
-    dev: ["yarn", "dev"],
-    prod: ["yarn", "vite", "preview"],
+    dev: ["npm", "run", "dev"],
+    prod: ["npx", "vite", "preview"],
   },
   {
     name: "admin",
-    dir: "Interfaz web admin",
+    dir: "Interface web admin",
     url: "http://localhost:8443",
-    dev: ["yarn", "dev"],
-    prod: ["yarn", "preview"],
+    dev: ["npm", "run", "dev"],
+    prod: ["npm", "run", "preview"],
+  },
+  {
+    name: "analytics",
+    dir: "Interface web analytics",
+    url: "http://localhost:8444",
+    dev: ["npm", "run", "dev"],
+    prod: ["npm", "run", "preview"],
   },
   {
     name: "bot",
@@ -260,7 +268,7 @@ function printUrls() {
   }
   console.log("  DB        → PostgreSQL localhost:5432 (docker)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("Logs: logs/*.log  (db, backend, web, admin, bot, ia)");
+  console.log("Logs: logs/*.log  (db, backend, web, admin, analytics, bot, ia)");
 }
 
 // ── Detención ───────────────────────────────────────────────

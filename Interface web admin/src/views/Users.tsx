@@ -27,7 +27,7 @@ const AUDIT = [
 
 const TYPE_COLOR: Record<string, string> = { edit: "bg-blue-100 text-blue-600", approve: "bg-green-100 text-green-600", create: "bg-amber-100 text-amber-600", delete: "bg-red-100 text-red-600" };
 
-const PERMS = ["Ver productos", "Editar productos", "Crear productos", "Eliminar productos", "Ver pedidos", "Gestionar pedidos", "Ver clientes", "Gestionar clientes", "Ver reportes", "Gestionar banners", "Editar homepage", "Gestionar usuarios"];
+const PERMS = ["Ver productos", "Editar productos", "Crear productos", "Eliminar productos", "Ver pedidos", "Gestionar pedidos", "Ver clientes", "Gestionar clientes", "Gestionar banners", "Editar homepage", "Gestionar usuarios"];
 
 export default function UsersView() {
   const [tab, setTab] = useState<"usuarios" | "roles" | "auditoria">("usuarios");
@@ -139,7 +139,7 @@ export default function UsersView() {
                     <tr key={perm} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-2.5 text-sm text-gray-700">{perm}</td>
                       {ROLES.map((r, j) => {
-                        const hasIt = r.id === "R1" || (r.id === "R2" && i < 8) || (r.id === "R3" && i === 4) || (r.id === "R4" && [7, 10].includes(i)) || (r.id === "R5" && [8, 9, 10].includes(i));
+                        const hasIt = r.id === "R1" || (r.id === "R2" && i < 8) || (r.id === "R3" && i === 4) || (r.id === "R4" && [7, 9].includes(i)) || (r.id === "R5" && [8, 9].includes(i));
                         return (
                           <td key={r.id} className="px-3 py-2.5 text-center">
                             {hasIt

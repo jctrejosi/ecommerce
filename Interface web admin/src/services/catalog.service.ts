@@ -20,6 +20,7 @@ export type CatalogProduct = {
   isFeatured?: boolean;
   isActive?: boolean;
   tags?: string[];
+  stock?: number;
 };
 
 export type CatalogCategory = {

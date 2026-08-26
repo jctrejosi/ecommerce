@@ -62,6 +62,9 @@ function SkeletonRow() {
         <div className="h-4 bg-gray-200 rounded w-20" />
       </td>
       <td className="px-4 py-3 text-right">
+        <div className="h-4 bg-gray-200 rounded w-10 ml-auto" />
+      </td>
+      <td className="px-4 py-3 text-right">
         <div className="h-4 bg-gray-200 rounded w-16 ml-auto" />
       </td>
       <td className="px-4 py-3 text-center">
@@ -93,7 +96,7 @@ function SortHeader({
   const isActive = active === col;
   return (
     <th
-      className={`px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"}`}
+      className={`px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider cursor-pointer hover:text-gray-700 select-none whitespace-nowrap ${align === "right" ? "text-right" : align === "center" ? "text-center" : "text-left"}`}
       onClick={() => onClick(col)}
     >
       <span className="inline-flex items-center gap-1">
@@ -627,51 +630,52 @@ export default function Products() {
         {/* Table — fills remaining height */}
         <div className="flex-1 min-h-0 px-6 pb-6">
           <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden h-full flex flex-col">
-            <table className="w-full shrink-0">
-              <thead>
-                <tr className="border-b border-gray-100 bg-gray-50">
-                  <th className="px-4 py-3 w-10">
-                    <input
-                      type="checkbox"
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      className="w-4 h-4 rounded accent-amber-400"
-                    />
-                  </th>
-                  <SortHeader
-                    label="Producto"
-                    col="name"
-                    active={sortCol}
-                    dir={sortDir}
-                    onClick={toggleSort}
-                  />
-                  <SortHeader
-                    label="SKU"
-                    col="sku"
-                    active={sortCol}
-                    dir={sortDir}
-                    onClick={toggleSort}
-                  />
-                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                    Categoría
-                  </th>
-                  <SortHeader
-                    label="Precio"
-                    col="price"
-                    active={sortCol}
-                    dir={sortDir}
-                    align="right"
-                    onClick={toggleSort}
-                  />
-                  <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                    Estado
-                  </th>
-                  <th className="px-4 py-3 w-10" />
-                </tr>
-              </thead>
-            </table>
             <div className="overflow-y-auto flex-1">
               <table className="w-full">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="px-4 py-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={toggleAll}
+                        className="w-4 h-4 rounded accent-amber-400"
+                      />
+                    </th>
+                    <SortHeader
+                      label="Producto"
+                      col="name"
+                      active={sortCol}
+                      dir={sortDir}
+                      onClick={toggleSort}
+                    />
+                    <SortHeader
+                      label="SKU"
+                      col="sku"
+                      active={sortCol}
+                      dir={sortDir}
+                      onClick={toggleSort}
+                    />
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Categoría
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Stock
+                    </th>
+                    <SortHeader
+                      label="Precio"
+                      col="price"
+                      active={sortCol}
+                      dir={sortDir}
+                      align="right"
+                      onClick={toggleSort}
+                    />
+                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                      Estado
+                    </th>
+                    <th className="px-4 py-3 w-10" />
+                  </tr>
+                </thead>
                 <tbody className="divide-y divide-gray-50">
                   {loading ? (
                     Array.from({ length: 8 }).map((_, i) => (
@@ -679,7 +683,7 @@ export default function Products() {
                     ))
                   ) : products.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="px-4 py-16 text-center">
+                      <td colSpan={9} className="px-4 py-16 text-center">
                         <div className="flex flex-col items-center gap-2">
                           <Package className="w-12 h-12 text-gray-300" />
                           <p className="text-sm font-semibold text-gray-500">
@@ -746,6 +750,17 @@ export default function Products() {
                           <span className="text-sm text-gray-600">
                             {p.category || "—"}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 text-right whitespace-nowrap">
+                          {p.stock ? (
+                            <span className="text-sm font-semibold text-gray-800">
+                              {p.stock}
+                            </span>
+                          ) : (
+                            <span className="text-xs font-semibold px-2 py-1 rounded-full border bg-red-50 text-red-700 border-red-200">
+                              Agotado
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap">
                           <div className="flex flex-col items-end">

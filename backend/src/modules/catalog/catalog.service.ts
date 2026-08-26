@@ -1867,6 +1867,29 @@ export class CatalogService {
       }
     }
 
+    // Total stock across all branches and variants (inventario agregado)
+    const stockRows = await this.drizzleService.db
+      .select({
+        productId: productVariants.productId,
+        totalStock: sql<number>`COALESCE(SUM(${inventory.stock}), 0)`,
+      })
+      .from(inventory)
+      .innerJoin(
+        productVariants,
+        eq(productVariants.id, inventory.productVariantId),
+      )
+      .where(inArray(productVariants.productId, productIds))
+      .groupBy(productVariants.productId);
+
+    const stockByProduct = new Map<number, number>();
+    for (const row of stockRows) {
+      stockByProduct.set(Number(row.productId), Number(row.totalStock ?? 0));
+    }
+
+    for (const [pid, product] of uniqueProducts) {
+      product.stock = stockByProduct.get(pid) ?? 0;
+    }
+
     return Array.from(uniqueProducts.values());
   }
 
