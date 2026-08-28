@@ -501,8 +501,10 @@ function OrderDetailScreen({
           className="w-full bg-white/5 border border-white/10 text-white font-700 text-sm rounded-2xl py-3 active:bg-white/10 transition-all flex items-center justify-center gap-2"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6z" stroke="white" strokeWidth="1.8" strokeLinejoin="round" strokeOpacity="0.7"/>
-            <path d="M9 3v15M15 6v15" stroke="white" strokeWidth="1.5" strokeOpacity="0.5"/>
+            <rect x="3" y="3" width="7" height="7" rx="1.2" stroke="white" strokeWidth="1.6" strokeOpacity="0.7" />
+            <rect x="14" y="3" width="7" height="7" rx="1.2" stroke="white" strokeWidth="1.6" strokeOpacity="0.7" />
+            <rect x="3" y="14" width="7" height="7" rx="1.2" stroke="white" strokeWidth="1.6" strokeOpacity="0.7" />
+            <rect x="14" y="14" width="7" height="7" rx="1.2" stroke="white" strokeWidth="1.6" strokeOpacity="0.7" />
           </svg>
           Ver mapa de bodega
         </button>
@@ -837,8 +839,10 @@ function ScannerScreen({
           className="absolute top-16 right-5 flex items-center gap-1.5 bg-[#0C0C0D]/80 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 active:bg-[#0C0C0D] transition-colors"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
-            <polyline points="9 22 9 12 15 12 15 22" stroke="#F59E0B" strokeWidth="1.8" strokeLinejoin="round"/>
+            <rect x="3" y="3" width="7" height="7" rx="1.2" stroke="#F59E0B" strokeWidth="1.8" />
+            <rect x="14" y="3" width="7" height="7" rx="1.2" stroke="#F59E0B" strokeWidth="1.8" />
+            <rect x="3" y="14" width="7" height="7" rx="1.2" stroke="#F59E0B" strokeWidth="1.8" />
+            <rect x="14" y="14" width="7" height="7" rx="1.2" stroke="#F59E0B" strokeWidth="1.8" />
           </svg>
           <span className="text-amber-400 text-xs font-700">Mapa</span>
         </button>
@@ -1067,6 +1071,8 @@ export default function App() {
   const [mapError, setMapError] = useState<string | null>(null);
   // Pantalla a la que volver cuando se cierra el mapa (detalle o escáner)
   const [mapReturnTo, setMapReturnTo] = useState<"detail" | "scanner">("detail");
+  // Mapa como modal encima del escáner (la cámara sigue activa debajo)
+  const [mapModalOpen, setMapModalOpen] = useState(false);
   // Picker (usuario) que usa la app
   const [pickers, setPickers] = useState<{ id: number; name: string }[]>([]);
   const [pickerId, setPickerId] = useState<number | null>(() => {
@@ -1254,16 +1260,19 @@ export default function App() {
     openMap("detail");
   }
 
-  // Abre el mapa de la bodega; desde el escáner se vuelve al escáner
+  // Abre el mapa de la bodega; desde el escáner se abre como MODAL (la cámara
+  // sigue activa debajo) y desde el detalle como pantalla completa.
   function openMap(returnTo: "detail" | "scanner") {
     setMapReturnTo(returnTo);
     if (returnTo === "detail" && activeOrder) {
       // Desde el detalle: apuntar al primer producto pendiente
       const first = activeOrder.items.find(i => i.scannedQty < i.quantity) ?? activeOrder.items[0];
       setActiveProd(first ?? null);
+      setScreen("pickingMap");
+    } else {
+      // Desde el escáner activeProd ya es el producto que se está escaneando
+      setMapModalOpen(true);
     }
-    // Desde el escáner activeProd ya es el producto que se está escaneando
-    setScreen("pickingMap");
     void loadMapData();
   }
 
@@ -1364,60 +1373,71 @@ export default function App() {
           onSave={shelves => setMapShelves(shelves)}
         />
       );
-      case "pickingMap": return (activeProd && activeOrder) ? (() => {
-        const items = activeOrder.items;
-        if (mapLoading && mapPlaced.length === 0) {
-          return (
-            <div className="h-full bg-[#0C0C0D] flex flex-col items-center justify-center px-8 text-center">
-              <div className="w-10 h-10 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin mb-4" />
-              <p className="text-white/40 text-sm font-500">Cargando mapa de la bodega…</p>
-            </div>
-          );
-        }
-        if (mapError && mapPlaced.length === 0) {
-          return (
-            <div className="h-full bg-[#0C0C0D] flex flex-col items-center justify-center px-8 text-center">
-              <p className="text-red-400 text-sm font-600 mb-4">{mapError}</p>
-              <button
-                onClick={() => void loadMapData()}
-                className="px-6 py-3 rounded-2xl bg-amber-400 text-[#0C0C0D] font-800 text-sm"
-              >
-                Reintentar
-              </button>
-            </div>
-          );
-        }
-        // El producto activo puede haber sido reemplazado al cargar las
-        // ubicaciones; buscamos la versión actualizada por id.
-        const activeItem = items.find(i => i.id === activeProd.id) ?? activeProd;
-        const activeLocation =
-          activeItem.shelfId != null && activeItem.rowNumber != null
-            ? { shelfId: activeItem.shelfId, rowNumber: activeItem.rowNumber }
-            : null;
-        const orderLocations = items
-          .filter(i => i.id !== activeItem.id && i.shelfId != null && i.rowNumber != null)
-          .map(i => ({ shelfId: i.shelfId as string, rowNumber: i.rowNumber as number }));
-        return (
-          <PickingMap
-            placed={mapPlaced}
-            activeLocation={activeLocation}
-            orderLocations={orderLocations}
-            orderCode={activeOrder.code}
-            currentProductName={activeItem.name}
-            scanned={items.filter(i => i.scannedQty >= i.quantity).length}
-            total={items.length}
-            onScan={() => { setScreen("scanner"); }}
-            onBack={() => setScreen(mapReturnTo)}
-          />
-        );
-      })() : null;
+      case "pickingMap": return renderMapContent(() => setScreen(mapReturnTo));
       default: return null;
     }
   };
 
+  // Contenido del mapa de la bodega (pantalla completa o modal sobre el escáner)
+  function renderMapContent(onBack: () => void) {
+    if (!activeProd || !activeOrder) return null;
+    const items = activeOrder.items;
+    if (mapLoading && mapPlaced.length === 0) {
+      return (
+        <div className="h-full bg-[#0C0C0D] flex flex-col items-center justify-center px-8 text-center">
+          <div className="w-10 h-10 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin mb-4" />
+          <p className="text-white/40 text-sm font-500">Cargando mapa de la bodega…</p>
+        </div>
+      );
+    }
+    if (mapError && mapPlaced.length === 0) {
+      return (
+        <div className="h-full bg-[#0C0C0D] flex flex-col items-center justify-center px-8 text-center">
+          <p className="text-red-400 text-sm font-600 mb-4">{mapError}</p>
+          <button
+            onClick={() => void loadMapData()}
+            className="px-6 py-3 rounded-2xl bg-amber-400 text-[#0C0C0D] font-800 text-sm"
+          >
+            Reintentar
+          </button>
+        </div>
+      );
+    }
+    // El producto activo puede haber sido reemplazado al cargar las
+    // ubicaciones; buscamos la versión actualizada por id.
+    const activeItem = items.find(i => i.id === activeProd.id) ?? activeProd;
+    const activeLocation =
+      activeItem.shelfId != null && activeItem.rowNumber != null
+        ? { shelfId: activeItem.shelfId, rowNumber: activeItem.rowNumber }
+        : null;
+    const orderLocations = items
+      .filter(i => i.id !== activeItem.id && i.shelfId != null && i.rowNumber != null)
+      .map(i => ({ shelfId: i.shelfId as string, rowNumber: i.rowNumber as number }));
+    return (
+      <PickingMap
+        placed={mapPlaced}
+        activeLocation={activeLocation}
+        orderLocations={orderLocations}
+        orderCode={activeOrder.code}
+        currentProductName={activeItem.name}
+        scanned={items.filter(i => i.scannedQty >= i.quantity).length}
+        total={items.length}
+        onScan={() => { setScreen("scanner"); setMapModalOpen(false); }}
+        onBack={onBack}
+      />
+    );
+  }
+
   return (
     <div className="h-dvh bg-[#0C0C0D] overflow-hidden">
       {content()}
+
+      {/* Mapa de la bodega como MODAL sobre el escáner (la cámara sigue activa) */}
+      {mapModalOpen && screen === "scanner" && activeProd && activeOrder && (
+        <div className="absolute inset-0 z-[70] bg-[#0C0C0D] animate-fade-in">
+          {renderMapContent(() => setMapModalOpen(false))}
+        </div>
+      )}
 
       {/* Selector de picker (usuario) */}
       {showPicker && pickers.length > 0 && (

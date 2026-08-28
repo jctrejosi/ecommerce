@@ -31,10 +31,12 @@ function MapShelf({
   shelf,
   activeRow,
   redRows,
+  cellPx,
 }: {
   shelf: PlacedShelf;
   activeRow: number | null;
   redRows: number[];
+  cellPx: number;
 }) {
   const { w, h } = visualSize(shelf);
   const rowsCount = shelf.rows.length;
@@ -44,13 +46,13 @@ function MapShelf({
     <div
       style={{
         position: "absolute",
-        left: shelf.gridX * CELL,
-        top: shelf.gridY * CELL,
-        width: w * CELL,
-        height: h * CELL,
+        left: shelf.gridX * cellPx,
+        top: shelf.gridY * cellPx,
+        width: w * cellPx,
+        height: h * cellPx,
         borderRadius: 6,
-        backgroundColor: "rgba(255,255,255,0.05)",
-        border: "1.5px solid rgba(255,255,255,0.16)",
+        backgroundColor: "rgba(255,255,255,0.10)",
+        border: "1.5px solid rgba(255,255,255,0.32)",
         zIndex: activeRow != null ? 10 : redRows.length > 0 ? 5 : 1,
       }}
       className="flex items-center justify-center select-none"
@@ -58,8 +60,8 @@ function MapShelf({
       <span
         className="font-800 truncate px-1"
         style={{
-          fontSize: Math.min(14, Math.max(9, w * 3)),
-          color: "rgba(255,255,255,0.6)",
+          fontSize: Math.max(8, Math.min(15, cellPx * 0.38)),
+          color: "rgba(255,255,255,0.75)",
           textShadow: "0 1px 3px rgba(0,0,0,0.9)",
           zIndex: 20,
         }}
@@ -100,7 +102,8 @@ export default function PickingMap({
   onBack,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(0.85);
+  const [scale, setScale] = useState(0.5);
+  const cellPx = CELL * scale;
 
   const allDone = total > 0 && scanned >= total;
 
@@ -109,19 +112,25 @@ export default function PickingMap({
     return activeLocation == null && placed.length > 0;
   }, [activeLocation, placed.length]);
 
-  // Ajustar el zoom inicial para que la bodega quepa en pantalla
+  // La bodega SIEMPRE cabe completa en pantalla: escala fit-both sobre el tamaño
+  // real de las celdas (sin transform), y se reajusta al cambiar el contenedor.
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
     const fit = () => {
       const w = GRID_COLS * CELL;
       const h = GRID_ROWS * CELL;
-      const s = Math.max(0.3, Math.min(1, Math.min(el.clientWidth / w, el.clientHeight / h)));
+      const s = Math.max(0.3, Math.min(el.clientWidth / w, el.clientHeight / h));
       setScale(s);
     };
     fit();
+    const ro = new ResizeObserver(fit);
+    ro.observe(el);
     window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", fit);
+    };
   }, []);
 
   return (
@@ -146,19 +155,6 @@ export default function PickingMap({
             <span className="text-white font-700 text-xs">{scanned}/{total}</span>
           </div>
         </div>
-      </div>
-
-      {/* Leyenda */}
-      <div className="px-4 py-2 flex items-center gap-4 shrink-0 border-b border-white/5">
-        <span className="flex items-center gap-1.5 text-white/45 text-[10px] font-600">
-          <span className="w-3 h-3 rounded-sm bg-green-500/40 border border-green-400 animate-pulse" /> Producto actual
-        </span>
-        <span className="flex items-center gap-1.5 text-white/45 text-[10px] font-600">
-          <span className="w-3 h-3 rounded-sm bg-red-500/25 border border-red-500/50" /> Otros del pedido
-        </span>
-        <span className="flex items-center gap-1.5 text-white/45 text-[10px] font-600">
-          <span className="w-3 h-3 rounded-sm bg-white/10 border border-white/20" /> Resto
-        </span>
       </div>
 
       {allDone ? (
@@ -206,45 +202,40 @@ export default function PickingMap({
           {/* ── Bodega ── */}
           <div
             ref={containerRef}
-            className="flex-1 overflow-hidden relative"
+            className="flex-1 overflow-hidden relative flex items-center justify-center"
             style={{ touchAction: "pan-x pan-y" }}
           >
             <div
-              className="absolute inset-0 flex items-center justify-center"
-              style={{ transform: `scale(${scale})` }}
+              className="relative bg-[#111113] border border-white/10 rounded-lg"
+              style={{
+                width: GRID_COLS * cellPx,
+                height: GRID_ROWS * cellPx,
+                backgroundImage: `
+                  linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px),
+                  linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px)
+                `,
+                backgroundSize: `${cellPx}px ${cellPx}px`,
+              }}
             >
-              <div
-                className="relative bg-[#111113] border border-white/10 rounded-lg"
-                style={{
-                  width: GRID_COLS * CELL,
-                  height: GRID_ROWS * CELL,
-                  backgroundImage: `
-                    linear-gradient(to right, rgba(255,255,255,0.035) 1px, transparent 1px),
-                    linear-gradient(to bottom, rgba(255,255,255,0.035) 1px, transparent 1px)
-                  `,
-                  backgroundSize: `${CELL}px ${CELL}px`,
-                }}
-              >
-                {/* Paredes */}
-                <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/25" />
-                <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-white/25" />
-                <div className="absolute top-0 right-0 bottom-0 w-1.5 bg-white/25" />
-                <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/25" />
+              {/* Paredes */}
+              <div className="absolute top-0 left-0 right-0 h-1.5 bg-white/25" />
+              <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-white/25" />
+              <div className="absolute top-0 right-0 bottom-0 w-1.5 bg-white/25" />
+              <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/25" />
 
-                <span className="absolute top-2 left-1/2 -translate-x-1/2 text-white/15 text-[10px] font-800 tracking-[0.3em] uppercase pointer-events-none select-none">
-                  Bodega
-                </span>
+              <span className="absolute top-2 left-1/2 -translate-x-1/2 text-white/15 text-[10px] font-800 tracking-[0.3em] uppercase pointer-events-none select-none">
+                Bodega
+              </span>
 
-                {placed.map((shelf) => {
-                  const sid = String(shelf.id);
-                  const activeRow =
-                    activeLocation && activeLocation.shelfId === sid ? activeLocation.rowNumber : null;
-                  const redRows = orderLocations
-                    .filter((l) => l.shelfId === sid)
-                    .map((l) => l.rowNumber);
-                  return <MapShelf key={shelf.id} shelf={shelf} activeRow={activeRow} redRows={redRows} />;
-                })}
-              </div>
+              {placed.map((shelf) => {
+                const sid = String(shelf.id);
+                const activeRow =
+                  activeLocation && activeLocation.shelfId === sid ? activeLocation.rowNumber : null;
+                const redRows = orderLocations
+                  .filter((l) => l.shelfId === sid)
+                  .map((l) => l.rowNumber);
+                return <MapShelf key={shelf.id} shelf={shelf} activeRow={activeRow} redRows={redRows} cellPx={cellPx} />;
+              })}
             </div>
           </div>
 
