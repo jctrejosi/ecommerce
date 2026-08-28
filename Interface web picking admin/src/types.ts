@@ -46,3 +46,42 @@ export interface BulkAssignResult {
   assigned: number;
   total: number;
 }
+
+// ── Métricas de pickers ──
+
+export interface PickerSummary {
+  id: number;
+  name: string;
+  email: string;
+  username: string;
+  phone: string | null;
+  currentOrder: {
+    id: number;
+    referenceCode: string;
+    customerName: string;
+    status: string;
+    pickedAt: string | null;
+    itemsCount: number;
+    totalPieces: number;
+    scannedPieces: number;
+  } | null;
+  completedToday: number;
+  dispatchedTotal: number;
+}
+
+export interface PickerHistoryOrder {
+  id: number;
+  referenceCode: string;
+  customerName: string;
+  grandTotal: number;
+  status: string;
+  deliveredAt: string;
+  itemsCount: number;
+  totalPieces: number;
+  scannedPieces: number;
+}
+
+export interface PickerHistory {
+  picker: { id: number; name: string };
+  orders: PickerHistoryOrder[];
+}

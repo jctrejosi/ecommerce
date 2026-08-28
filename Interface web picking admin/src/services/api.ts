@@ -2,6 +2,8 @@
 import type {
   Branch,
   BulkAssignResult,
+  PickerHistory,
+  PickerSummary,
   ProductWithLocation,
   Shelf,
   ShelfRow,
@@ -98,6 +100,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ branchId, shelfId, rowNumber, onlyUnassigned }),
     }),
+
+  metrics: () => fetchJson<PickerSummary[]>('/picking-admin/metrics'),
+
+  pickerHistory: (id: number) =>
+    fetchJson<PickerHistory>(`/picking-admin/pickers/${id}/history`),
 };
 
 export type { ShelfRow };

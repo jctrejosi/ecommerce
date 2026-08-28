@@ -133,4 +133,12 @@ export const pickingService = {
     fetchJson<PickingLocation[]>(
       `/picking-admin/locations?branchId=${branchId}&variantIds=${variantIds.join(",")}`,
     ),
+
+  pickers: () => fetchJson<{ id: number; name: string }[]>("/picking-admin/pickers"),
+
+  claim: (id: number, pickerId: number) =>
+    fetchJson<{ success: boolean; pickerId: number }>(`/picking/orders/${id}/claim`, {
+      method: "POST",
+      body: JSON.stringify({ pickerId }),
+    }),
 };

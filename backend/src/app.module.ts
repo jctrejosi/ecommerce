@@ -23,6 +23,7 @@ import { NewsletterModule } from './modules/newsletter/newsletter.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
 import { PickingModule } from './modules/picking/picking.module';
 import { ShelvesModule } from './modules/shelves/shelves.module';
+import { PickersModule } from './modules/pickers/pickers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StatusGateway } from './modules/status/status.gateway';
@@ -76,6 +77,7 @@ import {
     CampaignsModule,
     PickingModule,
     ShelvesModule,
+    PickersModule,
     DashboardModule,
     InventoryModule,
   ],

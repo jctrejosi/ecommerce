@@ -219,6 +219,8 @@ function OrderListScreen({
   queueError,
   loading,
   onRetry,
+  pickerName,
+  onOpenPicker,
 }: {
   orders: Order[];
   onSelectOrder: (o: Order) => void;
@@ -227,6 +229,8 @@ function OrderListScreen({
   queueError: string | null;
   loading: boolean;
   onRetry: () => void;
+  pickerName: string | null;
+  onOpenPicker: () => void;
 }) {
   const [filter, setFilter] = useState<FilterTab>("nuevo");
 
@@ -270,6 +274,15 @@ function OrderListScreen({
             <h1 className="text-white text-2xl font-800 tracking-tight">Picking DSI</h1>
             <p className="text-white/40 text-xs font-500 mt-0.5">Sucursal Centro · Turno mañana</p>
           </div>
+          <button
+            onClick={onOpenPicker}
+            className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full pl-3 pr-2 py-1.5 active:bg-white/10 transition-colors"
+          >
+            <span className="w-6 h-6 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center text-[10px] font-800">
+              {(pickerName ?? "?")[0]?.toUpperCase()}
+            </span>
+            <span className="text-white/70 text-xs font-700 max-w-[110px] truncate">{pickerName ?? "Elige usuario"}</span>
+          </button>
         </div>
       </div>
 
@@ -1003,6 +1016,14 @@ export default function App() {
   const [mapPlaced, setMapPlaced] = useState<PlacedShelf[]>([]);
   const [mapLoading, setMapLoading] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  // Picker (usuario) que usa la app
+  const [pickers, setPickers] = useState<{ id: number; name: string }[]>([]);
+  const [pickerId, setPickerId] = useState<number | null>(() => {
+    const v = localStorage.getItem("picking.pickerId");
+    return v ? Number(v) : null;
+  });
+  const [showPicker, setShowPicker] = useState(false);
+  const pickerName = pickers.find(p => p.id === pickerId)?.name ?? null;
   const [queueError, setQueueError] = useState<string | null>(null);
   const [loadingQueue, setLoadingQueue] = useState(false);
   const knownIds = useRef<Set<number>>(new Set());
@@ -1039,6 +1060,26 @@ export default function App() {
     void loadQueue();
   }, []);
 
+  // Usuarios de picking + selector al entrar (si aún no hay picker elegido)
+  useEffect(() => {
+    pickingService
+      .pickers()
+      .then(list => {
+        setPickers(list);
+        const saved = localStorage.getItem("picking.pickerId");
+        if (!saved || !list.some(p => p.id === Number(saved))) {
+          setShowPicker(true);
+        }
+      })
+      .catch(() => { /* sin usuarios, se sigue sin picker */ });
+  }, []);
+
+  function selectPicker(id: number) {
+    setPickerId(id);
+    localStorage.setItem("picking.pickerId", String(id));
+    setShowPicker(false);
+  }
+
   // Refrescar la cola periódicamente para recibir los pedidos de la web
   useEffect(() => {
     const t = setInterval(() => { void loadQueue(); }, 20000);
@@ -1052,6 +1093,10 @@ export default function App() {
     try {
       const detail = await pickingService.detail(Number(order.id));
       setActiveOrder(apiOrderToOrder(detail));
+      // El picker actual se asigna al pedido (claim)
+      if (pickerId) {
+        void pickingService.claim(Number(order.id), pickerId);
+      }
     } catch {
       // Se mantiene la vista con los datos de la cola
     }
@@ -1182,6 +1227,8 @@ export default function App() {
           queueError={queueError}
           loading={loadingQueue}
           onRetry={() => void loadQueue()}
+          pickerName={pickerName}
+          onOpenPicker={() => setShowPicker(true)}
         />
       );
       case "detail": return activeOrder ? (
@@ -1271,6 +1318,39 @@ export default function App() {
   return (
     <div className="h-dvh bg-[#0C0C0D] overflow-hidden">
       {content()}
+
+      {/* Selector de picker (usuario) */}
+      {showPicker && pickers.length > 0 && (
+        <div className="absolute inset-0 z-[60] bg-black/70 flex items-end sm:items-center justify-center" onClick={() => pickerId != null && setShowPicker(false)}>
+          <div
+            className="w-full sm:max-w-sm bg-[#161618] border-t sm:border border-white/10 rounded-t-3xl sm:rounded-2xl p-5 pb-8 max-h-[80dvh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-8 h-1 bg-white/20 rounded-full mx-auto mb-4 sm:hidden" />
+            <h2 className="text-white font-800 text-lg mb-1">¿Quién eres?</h2>
+            <p className="text-white/40 text-xs font-500 mb-4">Selecciona tu usuario para asignarte los pedidos que alistes.</p>
+            <div className="space-y-2">
+              {pickers.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => selectPicker(p.id)}
+                  className={`w-full flex items-center gap-3 rounded-xl px-4 py-3 border transition-colors ${
+                    pickerId === p.id
+                      ? "bg-amber-400/15 border-amber-400 text-white"
+                      : "bg-white/5 border-white/10 hover:bg-white/10"
+                  }`}
+                >
+                  <span className="w-8 h-8 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center text-xs font-800">
+                    {p.name[0]?.toUpperCase()}
+                  </span>
+                  <span className="text-sm font-700">{p.name}</span>
+                  {pickerId === p.id && <span className="ml-auto text-amber-400 text-xs font-800">✓</span>}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

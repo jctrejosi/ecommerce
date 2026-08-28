@@ -12,6 +12,7 @@ import {
   orderStatusHistory,
   productVariants,
   products,
+  users,
 } from '../../../drizzle/schema';
 
 /** Estados que pertenecen a la cola de picking. */
@@ -211,10 +212,36 @@ export class PickingService {
     return { reviewed: result !== undefined };
   }
 
+  /** Asignar el picker (usuario) que alista el pedido. */
+  async claim(id: number, pickerId: number) {
+    const [order] = await this.db
+      .select({ id: orders.id, pickerId: orders.pickerId })
+      .from(orders)
+      .where(eq(orders.id, BigInt(id)))
+      .limit(1);
+    if (!order) throw new NotFoundException(`No existe el pedido ${id}`);
+
+    const [user] = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, BigInt(pickerId)))
+      .limit(1);
+    if (!user) throw new NotFoundException(`El usuario ${pickerId} no existe`);
+
+    await this.db
+      .update(orders)
+      .set({
+        pickerId,
+        pickedAt: order.pickerId == null ? new Date().toISOString() : undefined,
+      })
+      .where(eq(orders.id, BigInt(id)));
+    return { success: true, pickerId, firstClaim: order.pickerId == null };
+  }
+
   /** Escaneo de un código (barcode o PLU): alista 1 unidad del item que coincida. */
   async scan(id: number, code: string) {
     const [order] = await this.db
-      .select({ id: orders.id, status: orders.status, referenceCode: orders.referenceCode })
+      .select({ id: orders.id, status: orders.status, referenceCode: orders.referenceCode, pickerId: orders.pickerId })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
@@ -275,6 +302,7 @@ export class PickingService {
           orderId: id,
           status: nextStatus,
           oldStatus: order.status,
+          pickerId: order.pickerId ?? undefined,
           createdAt: new Date().toISOString(),
         });
       }
@@ -300,7 +328,7 @@ export class PickingService {
   /** Completar el alistamiento: "entregado en caja" → pedido entregado. */
   async complete(id: number) {
     const [order] = await this.db
-      .select({ id: orders.id, status: orders.status })
+      .select({ id: orders.id, status: orders.status, pickerId: orders.pickerId })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
@@ -337,6 +365,7 @@ export class PickingService {
         orderId: id,
         status: 'delivered',
         oldStatus: order.status,
+        pickerId: order.pickerId ?? undefined,
         createdAt: new Date().toISOString(),
       });
     });

@@ -20,6 +20,21 @@ CREATE TABLE IF NOT EXISTS shelves (
 ALTER TABLE shelves ADD COLUMN IF NOT EXISTS width integer DEFAULT 3 NOT NULL;
 ALTER TABLE shelves ADD COLUMN IF NOT EXISTS height integer DEFAULT 4 NOT NULL;
 
+-- Picker (usuario de picking) que alista cada pedido + quién hizo la transición
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS picker_id bigint;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS picked_at timestamptz;
+ALTER TABLE order_status_history ADD COLUMN IF NOT EXISTS picker_id bigint;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_picker_id_fkey') THEN
+    ALTER TABLE orders ADD CONSTRAINT orders_picker_id_fkey FOREIGN KEY (picker_id) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'order_status_history_picker_id_fkey') THEN
+    ALTER TABLE order_status_history ADD CONSTRAINT order_status_history_picker_id_fkey FOREIGN KEY (picker_id) REFERENCES users(id) ON DELETE SET NULL;
+  END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS shelf_rows (
   id bigserial PRIMARY KEY NOT NULL,
   shelf_id bigint NOT NULL,

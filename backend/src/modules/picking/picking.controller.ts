@@ -48,6 +48,19 @@ export class PickingController {
     return this.pickingService.markReviewed(id);
   }
 
+  @Post('orders/:id/claim')
+  @ApiOperation({ summary: 'Asignar el picker (usuario) que alista el pedido' })
+  async claim(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { pickerId: number },
+  ) {
+    const pickerId = Number(body?.pickerId);
+    if (!Number.isInteger(pickerId) || pickerId <= 0) {
+      throw new BadRequestException('pickerId es obligatorio');
+    }
+    return this.pickingService.claim(id, pickerId);
+  }
+
   /** Escaneo: valida barcode o PLU contra los items pendientes del pedido. */
   @Post('orders/:id/scan')
   @ApiOperation({ summary: 'Escanear un código (barcode o PLU) y alistar un item' })

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from './services/api'
 import type { Branch, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
 import MapView from './MapView'
+import MetricsView from './MetricsView'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -10,7 +11,7 @@ const COLORS = [
   '#06B6D4', '#F97316', '#EC4899', '#10B981', '#6B7280',
 ]
 
-const PAGE_SIZE = 100
+const INFINITE_STEP = 50 // lazy load: productos que se van agregando al hacer scroll
 
 const emptyShelf = () => ({
   code: '',
@@ -28,7 +29,7 @@ const emptyShelf = () => ({
 export default function App() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState<number | null>(null)
-  const [tab, setTab] = useState<'shelves' | 'map' | 'products'>('shelves')
+  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'metrics'>('shelves')
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [products, setProducts] = useState<ProductWithLocation[]>([])
   const [search, setSearch] = useState('')
@@ -123,7 +124,7 @@ export default function App() {
       <main className="max-w-6xl mx-auto px-5 pb-16">
         {/* Tabs */}
         <div className="flex gap-2 my-5">
-          {(['shelves', 'map', 'products'] as const).map((t) => (
+          {(['shelves', 'map', 'products', 'metrics'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -131,7 +132,7 @@ export default function App() {
                 tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
               }`}
             >
-              {t === 'shelves' ? 'Estanterías' : t === 'map' ? 'Mapa' : 'Productos'}
+              {t === 'shelves' ? 'Estanterías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : 'Métricas'}
             </button>
           ))}
         </div>
@@ -167,6 +168,8 @@ export default function App() {
           ) : (
             <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
           )
+        ) : tab === 'metrics' ? (
+          <MetricsView notify={notify} />
         ) : (
           <ProductsView
             branchId={branchId}
@@ -578,7 +581,7 @@ function ProductsView({
   onLocationChanged: (variantId: number, loc: { shelfId: number; rowNumber: number } | null) => void
   notify: (m: string) => void
 }) {
-  const [page, setPage] = useState(0)
+  const [visibleCount, setVisibleCount] = useState(INFINITE_STEP)
   const [bulkShelfId, setBulkShelfId] = useState<number | ''>('')
   const [bulkRow, setBulkRow] = useState<number | ''>('')
   const [bulkBusy, setBulkBusy] = useState(false)
@@ -588,21 +591,43 @@ function ProductsView({
   // Listado local para refrescar tras una asignación masiva sin perder la búsqueda
   const [localProducts, setLocalProducts] = useState<ProductWithLocation[] | null>(null)
   const shownProducts = localProducts ?? products
+  const sentinelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setLocalProducts(null)
-    setPage(0)
+    setVisibleCount(INFINITE_STEP)
   }, [branchId, appliedSearch])
 
-  const filtered = useMemo(() => {
-    let list = shownProducts
-    if (onlyUnassigned) list = list.filter((p) => p.shelfId == null)
-    return list
-  }, [shownProducts, onlyUnassigned])
+  useEffect(() => {
+    setVisibleCount(INFINITE_STEP)
+  }, [onlyUnassigned])
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const safePage = Math.min(page, totalPages - 1)
-  const pageRows = filtered.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE)
+  // Sin estantería primero, luego el resto (con separador)
+  const ordered = useMemo(() => {
+    const list = onlyUnassigned ? shownProducts.filter((p) => p.shelfId == null) : shownProducts
+    return [...list.filter((p) => p.shelfId == null), ...list.filter((p) => p.shelfId != null)]
+  }, [shownProducts, onlyUnassigned])
+  const unassignedCount = useMemo(
+    () => ordered.filter((p) => p.shelfId == null).length,
+    [ordered],
+  )
+  const visible = ordered.slice(0, visibleCount)
+
+  // Lazy load infinito: cuando el sentinel entra en pantalla, cargar más
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || visible.length >= ordered.length) return
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisibleCount((v) => Math.min(ordered.length, v + INFINITE_STEP))
+        }
+      },
+      { rootMargin: '400px' },
+    )
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [ordered.length, visible.length])
 
   function rowsOf(shelfId: number | null | undefined): ShelfRow[] {
     const s = shelves.find((x) => x.id === shelfId)
@@ -683,7 +708,7 @@ function ProductsView({
           <input
             type="checkbox"
             checked={onlyUnassigned}
-            onChange={(e) => { setOnlyUnassigned(e.target.checked); setPage(0) }}
+            onChange={(e) => setOnlyUnassigned(e.target.checked)}
             className="accent-amber-400 w-4 h-4"
           />
           Solo sin ubicación
@@ -718,6 +743,7 @@ function ProductsView({
           <button
             onClick={() => doBulk(false)}
             disabled={bulkBusy}
+            title="Reemplaza la ubicación de TODOS los productos de la sucursal con la estantería y fila seleccionadas"
             className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 disabled:opacity-40"
           >
             {bulkBusy ? 'Asignando…' : 'Asignar todos'}
@@ -725,35 +751,56 @@ function ProductsView({
           <button
             onClick={() => doBulk(true)}
             disabled={bulkBusy}
+            title="Asigna solo los productos que aún no tienen estantería (no toca los ya asignados)"
             className="px-4 py-2.5 rounded-xl bg-white/10 text-sm font-700 disabled:opacity-40"
           >
             Solo sin ubicación
           </button>
         </div>
+        <p className="w-full text-white/30 text-xs font-500 mt-2 leading-relaxed">
+          <span className="text-white/60 font-700">Asignar todos</span>: reemplaza la ubicación de TODOS los
+          productos de la sucursal con la estantería y fila seleccionadas.{' '}
+          <span className="text-white/60 font-700">Solo sin ubicación</span>: asigna únicamente los que aún no
+          tienen estantería (no toca los ya asignados).
+        </p>
       </div>
 
       <p className="text-white/40 text-xs font-500 mb-3">
-        {loading ? 'Cargando…' : `${filtered.length} producto(s)`}
+        {loading ? 'Cargando…' : `${ordered.length} producto(s) · ${unassignedCount} sin estantería`}
         {appliedSearch ? ` para “${appliedSearch}”` : ''}
       </p>
 
       {/* Lista */}
       <div className="space-y-2">
-        {pageRows.map((p) => {
+        {unassignedCount > 0 && (
+          <div className="flex items-center gap-3 pt-2 pb-1">
+            <span className="text-amber-400 text-xs font-800 uppercase tracking-wider">Sin estantería asignada ({unassignedCount})</span>
+            <div className="flex-1 h-px bg-white/10" />
+          </div>
+        )}
+        {visible.map((p, i) => {
+          const showAssignedHeader = !onlyUnassigned && unassignedCount > 0 && i === unassignedCount
           const draft = drafts[p.productVariantId]
           const shelfId = draft ? draft.shelfId : p.shelfId
           const rowNumber = draft ? draft.rowNumber : p.rowNumber
           const dirty = !!draft
           const shelfRows = rowsOf(shelfId)
           return (
-            <div key={p.productVariantId} className="bg-[#161618] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
-              <div className="min-w-0 flex-1 basis-56">
-                <p className="font-700 text-sm truncate">{p.productName}</p>
-                <p className="text-white/35 text-xs font-500 truncate">
-                  SKU {p.sku ?? '—'} · {p.barcode ?? 'sin código'} · stock {p.stock}
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
+            <Fragment key={p.productVariantId}>
+              {showAssignedHeader && (
+                <div className="flex items-center gap-3 pt-3 pb-1">
+                  <span className="text-white/40 text-xs font-800 uppercase tracking-wider">Con estantería asignada ({ordered.length - unassignedCount})</span>
+                  <div className="flex-1 h-px bg-white/10" />
+                </div>
+              )}
+              <div className="bg-[#161618] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
+                <div className="min-w-0 flex-1 basis-56">
+                  <p className="font-700 text-sm truncate">{p.productName}</p>
+                  <p className="text-white/35 text-xs font-500 truncate">
+                    SKU {p.sku ?? '—'} · {p.barcode ?? 'sin código'} · stock {p.stock}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
                 <select
                   value={shelfId ?? ''}
                   onChange={(e) => {
@@ -805,37 +852,22 @@ function ProductsView({
                     Quitar
                   </button>
                 ) : null}
+                </div>
               </div>
-            </div>
+            </Fragment>
           )
         })}
-        {pageRows.length === 0 && !loading && (
+        {visible.length === 0 && !loading && (
           <p className="text-white/30 text-sm text-center py-10">Sin resultados.</p>
         )}
+        {/* Sentinel del lazy load infinito */}
+        {visible.length < ordered.length && (
+          <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4">
+            <div className="w-4 h-4 rounded-full border-2 border-white/15 border-t-amber-400 animate-spin" />
+            <span className="text-white/30 text-xs font-600">Cargando más…</span>
+          </div>
+        )}
       </div>
-
-      {/* Paginación */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-center gap-3 mt-5">
-          <button
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-            disabled={safePage === 0}
-            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-700 disabled:opacity-30"
-          >
-            ← Anterior
-          </button>
-          <span className="text-white/40 text-sm font-600">
-            {safePage + 1} / {totalPages}
-          </span>
-          <button
-            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-            disabled={safePage >= totalPages - 1}
-            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-700 disabled:opacity-30"
-          >
-            Siguiente →
-          </button>
-        </div>
-      )}
     </div>
   )
 }

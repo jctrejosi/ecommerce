@@ -1835,6 +1835,9 @@ export const orders = pgTable(
     notes: text(),
     internalNotes: text('internal_notes'),
     reviewedAt: timestamp('reviewed_at', { withTimezone: true, mode: 'string' }),
+    // Picker (usuario de picking) que alista el pedido
+    pickerId: bigint('picker_id', { mode: 'number' }),
+    pickedAt: timestamp('picked_at', { withTimezone: true, mode: 'string' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -2184,6 +2187,8 @@ export const orderStatusHistory = pgTable(
     oldStatus: orderStatusEnum('old_status'),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     createdBy: bigint('created_by', { mode: 'number' }),
+    // Picker (usuario de picking) que realizó la transición
+    pickerId: bigint('picker_id', { mode: 'number' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -2197,6 +2202,11 @@ export const orderStatusHistory = pgTable(
       columns: [table.createdBy],
       foreignColumns: [customers.id],
       name: 'order_status_history_created_by_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.pickerId],
+      foreignColumns: [users.id],
+      name: 'order_status_history_picker_id_fkey',
     }).onDelete('set null'),
     foreignKey({
       columns: [table.orderId],
