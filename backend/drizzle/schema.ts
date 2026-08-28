@@ -1922,6 +1922,8 @@ export const orderItems = pgTable(
     productName: varchar('product_name', { length: 255 }).notNull(),
     variantSku: varchar('variant_sku', { length: 100 }),
     quantity: integer().notNull(),
+    // Unidades ya alistadas por el picking (escaneadas/recogidas)
+    pickedQty: integer('picked_qty').default(0).notNull(),
     unitPriceNet: numeric('unit_price_net', {
       precision: 12,
       scale: 2,

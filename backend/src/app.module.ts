@@ -21,6 +21,7 @@ import { QrModule } from './modules/qr/qr.module';
 import { PopupsModule } from './modules/popups/popups.module';
 import { NewsletterModule } from './modules/newsletter/newsletter.module';
 import { CampaignsModule } from './modules/campaigns/campaigns.module';
+import { PickingModule } from './modules/picking/picking.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { StatusGateway } from './modules/status/status.gateway';
@@ -72,6 +73,7 @@ import {
     PopupsModule,
     NewsletterModule,
     CampaignsModule,
+    PickingModule,
     DashboardModule,
     InventoryModule,
   ],

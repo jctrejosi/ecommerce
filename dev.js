@@ -3,7 +3,7 @@
  * MercAldas — lanzador de servicios.
  *
  * Uso:
- *   node dev.js            # DEV: levanta PostgreSQL + los 6 servicios en
+ *   node dev.js            # DEV: levanta PostgreSQL + los 7 servicios en
  *                          #   segundo plano, espera a que el backend esté
  *                          #   listo, imprime las URLs y termina (la terminal
  *                          #   queda libre para cerrarla).
@@ -14,7 +14,7 @@
  *   node dev.js --help     # Esta ayuda.
  *
  * Logs: un archivo por servicio en logs/
- *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/analytics.log  logs/bot.log  logs/ia.log
+ *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/analytics.log  logs/picking.log  logs/bot.log  logs/ia.log
  *
  * La BD (docker) queda corriendo al salir; se detiene con
  * `cd db/docker && docker compose stop`.
@@ -39,6 +39,7 @@ const C = {
   web: "\x1b[32m",
   admin: "\x1b[34m",
   analytics: "\x1b[96m",
+  picking: "\x1b[95m",
   bot: "\x1b[35m",
   ia: "\x1b[33m",
   reset: "\x1b[0m",
@@ -72,6 +73,13 @@ const SERVICES = [
     url: "http://localhost:8444",
     dev: ["npm", "run", "dev"],
     prod: ["npm", "run", "preview"],
+  },
+  {
+    name: "picking",
+    dir: "Interface web picking",
+    url: "http://localhost:8445",
+    dev: ["pnpm", "dev"],
+    prod: ["pnpm", "run", "preview"],
   },
   {
     name: "bot",
@@ -268,7 +276,7 @@ function printUrls() {
   }
   console.log("  DB        → PostgreSQL localhost:5432 (docker)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("Logs: logs/*.log  (db, backend, web, admin, analytics, bot, ia)");
+  console.log("Logs: logs/*.log  (db, backend, web, admin, analytics, picking, bot, ia)");
 }
 
 // ── Detención ───────────────────────────────────────────────
