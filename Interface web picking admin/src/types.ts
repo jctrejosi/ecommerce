@@ -85,3 +85,37 @@ export interface PickerHistory {
   picker: { id: number; name: string };
   orders: PickerHistoryOrder[];
 }
+
+// ── Detalle de pedido (con picker y productos) ──
+
+export interface PickingOrderDetailItem {
+  id: number;
+  productVariantId: number | null;
+  name: string;
+  sku: string | null;
+  quantity: number;
+  pickedQty: number;
+  barcode: string | null;
+  plu: string | null;
+  unitPriceGross: number;
+  total: number;
+}
+
+export interface PickingOrderDetail {
+  id: number;
+  referenceCode: string;
+  customerName: string;
+  customerPhone: string | null;
+  status: string;
+  grandTotal: number;
+  notes: string | null;
+  reviewed: boolean;
+  createdAt: string;
+  branchId: number;
+  pickerId: number | null;
+  pickerName: string | null;
+  itemsCount: number;
+  totalPieces: number;
+  scannedPieces: number;
+  items: PickingOrderDetailItem[];
+}

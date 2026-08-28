@@ -4,6 +4,7 @@ import type {
   BulkAssignResult,
   PickerHistory,
   PickerSummary,
+  PickingOrderDetail,
   ProductWithLocation,
   Shelf,
   ShelfRow,
@@ -11,6 +12,8 @@ import type {
 } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+
+export { API_BASE_URL };
 
 export class ApiError extends Error {
   status: number;
@@ -105,6 +108,8 @@ export const api = {
 
   pickerHistory: (id: number) =>
     fetchJson<PickerHistory>(`/picking-admin/pickers/${id}/history`),
+
+  orderDetail: (id: number) => fetchJson<PickingOrderDetail>(`/picking/orders/${id}`),
 };
 
 export type { ShelfRow };

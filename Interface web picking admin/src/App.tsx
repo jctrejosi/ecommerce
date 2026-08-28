@@ -717,7 +717,7 @@ function ProductsView({
 
       {/* Asignación masiva */}
       <div className="bg-[#161618] border border-white/10 rounded-2xl p-4 mb-5">
-        <p className="text-white/40 text-xs font-600 mb-2">Asignación masiva — todos los productos de la sucursal</p>
+        <p className="text-white/40 text-xs font-600 mb-2">Asignación masiva — solo productos sin ubicación</p>
         <div className="flex flex-wrap gap-2 items-center">
           <select
             value={bulkShelfId}
@@ -741,27 +741,17 @@ function ProductsView({
             ))}
           </select>
           <button
-            onClick={() => doBulk(false)}
-            disabled={bulkBusy}
-            title="Reemplaza la ubicación de TODOS los productos de la sucursal con la estantería y fila seleccionadas"
-            className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 disabled:opacity-40"
-          >
-            {bulkBusy ? 'Asignando…' : 'Asignar todos'}
-          </button>
-          <button
             onClick={() => doBulk(true)}
             disabled={bulkBusy}
             title="Asigna solo los productos que aún no tienen estantería (no toca los ya asignados)"
-            className="px-4 py-2.5 rounded-xl bg-white/10 text-sm font-700 disabled:opacity-40"
+            className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 disabled:opacity-40"
           >
-            Solo sin ubicación
+            {bulkBusy ? 'Asignando…' : 'Solo sin ubicación'}
           </button>
         </div>
         <p className="w-full text-white/30 text-xs font-500 mt-2 leading-relaxed">
-          <span className="text-white/60 font-700">Asignar todos</span>: reemplaza la ubicación de TODOS los
-          productos de la sucursal con la estantería y fila seleccionadas.{' '}
-          <span className="text-white/60 font-700">Solo sin ubicación</span>: asigna únicamente los que aún no
-          tienen estantería (no toca los ya asignados).
+          <span className="text-white/60 font-700">Solo sin ubicación</span>: asigna únicamente los productos que
+          aún no tienen estantería (no toca los ya asignados).
         </p>
       </div>
 

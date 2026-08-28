@@ -4,7 +4,7 @@ import type { Shelf } from './types'
 
 // ─── Constantes de la bodega ─────────────────────────────────────────────────
 
-const CELL = 36 // px por celda de la rejilla
+const CELL = 36 // px base por celda (luego se escala para llenar el espacio)
 const GRID_COLS = 14 // ancho del cuadro de la bodega (celdas)
 const GRID_ROWS = 28 // alto del cuadro de la bodega (celdas)
 const BOX_W = GRID_COLS * CELL
@@ -88,6 +88,8 @@ export default function MapView({
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [autoSeeded, setAutoSeeded] = useState(false)
+  const [scale, setScale] = useState(1)
+  const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ id: number; dx: number; dy: number } | null>(null)
 
   useEffect(() => {
@@ -96,6 +98,27 @@ export default function MapView({
     setAutoSeeded(true)
   }, [shelves])
 
+  // Escala: la bodega ocupa TODO el ancho disponible de la zona. Como la rejilla
+  // es más alta que ancha (14×28), el alto crece y se recorre con scroll.
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const fit = () => {
+      const s = Math.max(0.3, el.clientWidth / BOX_W)
+      setScale(s)
+    }
+    fit()
+    const ro = new ResizeObserver(fit)
+    ro.observe(el)
+    window.addEventListener('resize', fit)
+    return () => {
+      ro.disconnect()
+      window.removeEventListener('resize', fit)
+    }
+  }, [])
+
+  const cellPx = CELL * scale
+
   const selected = items.find((s) => s.id === selectedId) ?? null
 
   const unplacedCount = useMemo(
@@ -103,17 +126,28 @@ export default function MapView({
     [items],
   )
 
+  // Coordenadas del puntero en el sistema del CONTENIDO (con scroll y escala)
+  function contentPos(e: React.PointerEvent) {
+    const canvas = containerRef.current
+    if (!canvas) return { x: 0, y: 0 }
+    const cr = canvas.getBoundingClientRect()
+    return {
+      x: e.clientX - cr.left + canvas.scrollLeft,
+      y: e.clientY - cr.top + canvas.scrollTop,
+    }
+  }
+
   function onPointerDown(e: React.PointerEvent, id: number) {
     e.stopPropagation()
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
-    const canvas = document.getElementById('map-canvas')!
-    const cr = canvas.getBoundingClientRect()
-    const px = e.clientX - cr.left + canvas.scrollLeft
-    const py = e.clientY - cr.top + canvas.scrollTop
+    const shelf = items.find((s) => s.id === id)
+    if (!shelf) return
+    const p = contentPos(e)
+    // El offset se calcula en coordenadas del contenido (grid * cellPx),
+    // para que la estantería quede pegada al cursor.
     dragRef.current = {
       id,
-      dx: px - rect.left,
-      dy: py - rect.top,
+      dx: p.x - shelf.posX * cellPx,
+      dy: p.y - shelf.posY * cellPx,
     }
     setSelectedId(id)
     ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -122,16 +156,13 @@ export default function MapView({
   function onPointerMove(e: React.PointerEvent) {
     const drag = dragRef.current
     if (!drag) return
-    const canvas = document.getElementById('map-canvas')!
-    const cr = canvas.getBoundingClientRect()
-    const px = e.clientX - cr.left + canvas.scrollLeft
-    const py = e.clientY - cr.top + canvas.scrollTop
+    const p = contentPos(e)
     setItems((prev) =>
       prev.map((s) => {
         if (s.id !== drag.id) return s
         const { w, h } = visualSize(s)
-        const gx = Math.max(0, Math.min(GRID_COLS - w, Math.round((px - drag.dx) / CELL)))
-        const gy = Math.max(0, Math.min(GRID_ROWS - h, Math.round((py - drag.dy) / CELL)))
+        const gx = Math.max(0, Math.min(GRID_COLS - w, Math.round((p.x - drag.dx) / cellPx)))
+        const gy = Math.max(0, Math.min(GRID_ROWS - h, Math.round((p.y - drag.dy) / cellPx)))
         return { ...s, posX: gx, posY: gy, autoPlaced: false }
       }),
     )
@@ -147,7 +178,6 @@ export default function MapView({
       prev.map((s) => {
         if (s.id !== selected.id) return s
         const rot = s.rotation === 90 ? 0 : 90
-        // al girar, mantener dentro del cuadro
         const { w, h } = visualSize({ ...s, rotation: rot })
         return {
           ...s,
@@ -211,12 +241,6 @@ export default function MapView({
         </p>
         <div className="ml-auto flex gap-2">
           <button
-            onClick={() => setItems(seedShelves(shelves.map((s) => ({ ...s, posX: 0, posY: 0 }))))}
-            className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-700"
-          >
-            Re-acomodar
-          </button>
-          <button
             onClick={saveAll}
             disabled={saving}
             className="px-4 py-2 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 disabled:opacity-40"
@@ -232,11 +256,12 @@ export default function MapView({
         </p>
       )}
 
-      {/* Cuadro de la bodega */}
+      {/* Cuadro de la bodega — ocupa el espacio disponible (escala automática) */}
       <div
         id="map-canvas"
+        ref={containerRef}
         className="relative overflow-auto rounded-2xl border border-white/10 bg-[#111113]"
-        style={{ maxHeight: '70dvh' }}
+        style={{ height: 'calc(100dvh - 250px)', minHeight: 280 }}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
         onPointerLeave={endDrag}
@@ -244,13 +269,13 @@ export default function MapView({
         <div
           className="relative"
           style={{
-            width: BOX_W,
-            height: BOX_H,
+            width: GRID_COLS * cellPx,
+            height: GRID_ROWS * cellPx,
             backgroundImage: `
               linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
               linear-gradient(to bottom, rgba(255,255,255,0.04) 1px, transparent 1px)
             `,
-            backgroundSize: `${CELL}px ${CELL}px`,
+            backgroundSize: `${cellPx}px ${cellPx}px`,
           }}
         >
           {/* Paredes */}
@@ -260,7 +285,10 @@ export default function MapView({
           <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-white/20" />
 
           {/* Etiqueta de la bodega */}
-          <span className="absolute top-3 left-1/2 -translate-x-1/2 text-white/20 text-[10px] font-800 tracking-[0.3em] uppercase pointer-events-none select-none">
+          <span
+            className="absolute top-3 left-1/2 -translate-x-1/2 text-white/20 font-800 tracking-[0.3em] uppercase pointer-events-none select-none"
+            style={{ fontSize: Math.max(8, 10 * scale) }}
+          >
             Bodega
           </span>
 
@@ -275,10 +303,10 @@ export default function MapView({
                   isSelected ? 'ring-2 ring-white' : ''
                 }`}
                 style={{
-                  left: s.posX * CELL,
-                  top: s.posY * CELL,
-                  width: w * CELL,
-                  height: h * CELL,
+                  left: s.posX * cellPx,
+                  top: s.posY * cellPx,
+                  width: w * cellPx,
+                  height: h * cellPx,
                   backgroundColor: s.color + '2E',
                   border: `1.5px solid ${s.color}`,
                   zIndex: isSelected ? 10 : 1,
@@ -286,7 +314,10 @@ export default function MapView({
               >
                 <span
                   className="text-white font-800 truncate px-1 pointer-events-none"
-                  style={{ fontSize: Math.min(13, Math.max(9, w * 3)), textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}
+                  style={{
+                    fontSize: Math.min(13, Math.max(9, w * 3 * Math.max(0.8, scale))),
+                    textShadow: '0 1px 2px rgba(0,0,0,0.8)',
+                  }}
                 >
                   {s.code}
                 </span>

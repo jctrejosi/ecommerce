@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
+import { PickingGateway } from './picking.gateway';
 import {
   orderItems,
   orders,
@@ -30,7 +31,10 @@ type QueueTab = 'nuevo' | 'preparando' | 'completado' | 'todos';
 export class PickingService {
   private readonly logger = new Logger(PickingService.name);
 
-  constructor(private readonly drizzle: DrizzleService) {}
+  constructor(
+    private readonly drizzle: DrizzleService,
+    private readonly gateway: PickingGateway,
+  ) {}
 
   private get db() {
     return this.drizzle.db;
@@ -142,8 +146,11 @@ export class PickingService {
         reviewedAt: orders.reviewedAt,
         createdAt: orders.createdAt,
         branchId: orders.branchId,
+        pickerId: orders.pickerId,
+        pickerName: sql<string>`concat(${users.firstName}, ' ', ${users.lastName})`,
       })
       .from(orders)
+      .leftJoin(users, eq(users.id, orders.pickerId))
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
 
@@ -184,6 +191,8 @@ export class PickingService {
       reviewed: order.reviewedAt !== null,
       createdAt: order.createdAt,
       branchId: Number(order.branchId),
+      pickerId: order.pickerId != null ? Number(order.pickerId) : null,
+      pickerName: order.pickerName ?? null,
       itemsCount: items.length,
       totalPieces: pieces,
       scannedPieces: scanned,
@@ -235,6 +244,11 @@ export class PickingService {
         pickedAt: order.pickerId == null ? new Date().toISOString() : undefined,
       })
       .where(eq(orders.id, BigInt(id)));
+    this.gateway.emit('picking:claim', {
+      orderId: id,
+      pickerId,
+      timestamp: new Date().toISOString(),
+    });
     return { success: true, pickerId, firstClaim: order.pickerId == null };
   }
 
@@ -312,6 +326,23 @@ export class PickingService {
       i.id === matched.id ? newPicked >= i.quantity : i.pickedQty >= i.quantity,
     );
 
+    // Evento en vivo para el admin (Métricas): progreso actualizado del pedido
+    const [agg] = await this.db
+      .select({
+        scanned: sql<number>`COALESCE(SUM(${orderItems.pickedQty}),0)::int`,
+        pieces: sql<number>`COALESCE(SUM(${orderItems.quantity}),0)::int`,
+      })
+      .from(orderItems)
+      .where(eq(orderItems.orderId, Number(id)));
+    this.gateway.emit('picking:scan', {
+      orderId: id,
+      referenceCode: order.referenceCode,
+      pickerId: order.pickerId ?? undefined,
+      scannedPieces: agg?.scanned ?? 0,
+      totalPieces: agg?.pieces ?? 0,
+      timestamp: new Date().toISOString(),
+    });
+
     return {
       ok: true,
       itemId: Number(matched.id),
@@ -328,7 +359,7 @@ export class PickingService {
   /** Completar el alistamiento: "entregado en caja" → pedido entregado. */
   async complete(id: number) {
     const [order] = await this.db
-      .select({ id: orders.id, status: orders.status, pickerId: orders.pickerId })
+      .select({ id: orders.id, status: orders.status, pickerId: orders.pickerId, referenceCode: orders.referenceCode })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
@@ -368,6 +399,13 @@ export class PickingService {
         pickerId: order.pickerId ?? undefined,
         createdAt: new Date().toISOString(),
       });
+    });
+
+    this.gateway.emit('picking:delivered', {
+      orderId: id,
+      referenceCode: order.referenceCode,
+      pickerId: order.pickerId ?? undefined,
+      deliveredAt: new Date().toISOString(),
     });
 
     return { ok: true, status: 'delivered', already: false };

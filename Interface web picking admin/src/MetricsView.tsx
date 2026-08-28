@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react'
-import { api, ApiError } from './services/api'
-import type { PickerHistory, PickerSummary } from './types'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { io, type Socket } from 'socket.io-client'
+import { api, ApiError, API_BASE_URL } from './services/api'
+import type { PickerHistory, PickerSummary, PickingOrderDetail } from './types'
 
 const fmtTime = (s: string | null) => {
   if (!s) return '—'
@@ -24,6 +25,9 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
   const [loading, setLoading] = useState(true)
   const [history, setHistory] = useState<PickerHistory | null>(null)
   const [historyLoading, setHistoryLoading] = useState(false)
+  const [order, setOrder] = useState<PickingOrderDetail | null>(null)
+  const [orderLoading, setOrderLoading] = useState(false)
+  const socketRef = useRef<Socket | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -37,9 +41,29 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
 
   useEffect(() => {
     void load()
-    const t = setInterval(() => void load(), 30000)
-    return () => clearInterval(t)
   }, [load])
+
+  // Eventos EN VIVO: cada acción del picker (claim / scan / entregado) refresca
+  // las métricas al instante, sin polling.
+  useEffect(() => {
+    const socket = io(`${API_BASE_URL}/picking-events`, {
+      transports: ['websocket', 'polling'],
+    })
+    socketRef.current = socket
+
+    socket.on('picking:claim', () => void load())
+    socket.on('picking:scan', () => void load())
+
+    socket.on('picking:delivered', (payload: { referenceCode?: string }) => {
+      void load()
+      notify(`📦 Pedido ${payload?.referenceCode ?? ''} entregado en caja`)
+    })
+
+    return () => {
+      socket.disconnect()
+      socketRef.current = null
+    }
+  }, [load, notify])
 
   async function openHistory(p: PickerSummary) {
     setHistoryLoading(true)
@@ -52,10 +76,28 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
     }
   }
 
+  async function openOrder(id: number) {
+    setOrderLoading(true)
+    try {
+      setOrder(await api.orderDetail(id))
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'Error cargando el pedido')
+    } finally {
+      setOrderLoading(false)
+    }
+  }
+
+  const connected = socketRef.current?.connected
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <p className="text-white/40 text-sm font-500">Estado en vivo de los pickers · se actualiza cada 30s</p>
+        <p className="text-white/40 text-sm font-500">
+          Estado en vivo ·{' '}
+          <span className={connected ? 'text-green-400' : 'text-amber-400'}>
+            {connected ? 'conectado (tiempo real)' : 'reconectando…'}
+          </span>
+        </p>
         <button
           onClick={() => { setLoading(true); void load() }}
           disabled={loading}
@@ -98,7 +140,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                 {/* Progreso */}
                 <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-amber-400 rounded-full transition-all"
+                    className="h-full bg-amber-400 rounded-full transition-all duration-500"
                     style={{
                       width: `${p.currentOrder.totalPieces > 0 ? Math.min(100, (p.currentOrder.scannedPieces / p.currentOrder.totalPieces) * 100) : 0}%`,
                     }}
@@ -107,6 +149,12 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                 <p className="text-white/35 text-[10px] font-500 mt-1">
                   {p.currentOrder.scannedPieces}/{p.currentOrder.totalPieces} piezas · {p.currentOrder.itemsCount} producto(s)
                 </p>
+                <button
+                  onClick={() => void openOrder(p.currentOrder!.id)}
+                  className="mt-2 w-full py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-700 hover:bg-white/10 transition-colors"
+                >
+                  Abrir pedido (picker y productos)
+                </button>
               </div>
             ) : (
               <div className="bg-[#0C0C0D] border border-dashed border-white/10 rounded-xl p-3 text-center">
@@ -171,25 +219,103 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                       <th className="pb-2 pr-3">Cliente</th>
                       <th className="pb-2 pr-3 text-right">Total</th>
                       <th className="pb-2 pr-3 text-center">Piezas</th>
-                      <th className="pb-2">Entregado</th>
+                      <th className="pb-2 pr-3">Entregado</th>
+                      <th className="pb-2" />
                     </tr>
                   </thead>
                   <tbody>
                     {history.orders.map((o) => (
                       <tr key={o.id} className="border-t border-white/5">
                         <td className="py-2.5 pr-3 font-700">{o.referenceCode}</td>
-                        <td className="py-2.5 pr-3 text-white/60 truncate max-w-[180px]">{o.customerName}</td>
+                        <td className="py-2.5 pr-3 text-white/60 truncate max-w-[150px]">{o.customerName}</td>
                         <td className="py-2.5 pr-3 text-right font-700">
                           {o.grandTotal.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })}
                         </td>
                         <td className="py-2.5 pr-3 text-center text-white/60">
                           {o.scannedPieces}/{o.totalPieces}
                         </td>
-                        <td className="py-2.5 text-white/45 text-xs">{fmtTime(o.deliveredAt)}</td>
+                        <td className="py-2.5 pr-3 text-white/45 text-xs">{fmtTime(o.deliveredAt)}</td>
+                        <td className="py-2.5 text-right">
+                          <button
+                            onClick={() => void openOrder(o.id)}
+                            className="text-xs font-700 text-amber-400 hover:underline"
+                          >
+                            Ver
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal del pedido: picker + productos */}
+      {order && (
+        <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={() => setOrder(null)}>
+          <div
+            className="w-full sm:max-w-2xl bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between shrink-0">
+              <div>
+                <h2 className="font-800 text-lg">{order.referenceCode}</h2>
+                <p className="text-white/40 text-xs font-500">{order.customerName}</p>
+              </div>
+              <button
+                onClick={() => setOrder(null)}
+                className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {orderLoading ? (
+                <p className="text-white/40 text-sm text-center py-10">Cargando…</p>
+              ) : (
+                <>
+                  {/* Picker asociado */}
+                  <div className="bg-[#0C0C0D] border border-white/10 rounded-xl p-3 mb-4 flex items-center gap-3">
+                    <span className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-800">
+                      {order.pickerName?.[0]?.toUpperCase() ?? '?'}
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-white/35 text-[10px] font-700 uppercase tracking-wider">Picker asociado</p>
+                      <p className="font-800 truncate">{order.pickerName ?? 'Sin asignar'}</p>
+                    </div>
+                    <span className={`ml-auto text-[10px] font-800 px-2 py-0.5 rounded-full border ${STATUS_LABEL[order.status]?.cls ?? 'bg-white/10 text-white/60 border-white/20'}`}>
+                      {STATUS_LABEL[order.status]?.label ?? order.status}
+                    </span>
+                  </div>
+
+                  <p className="text-white/35 text-[10px] font-700 uppercase tracking-wider mb-2">
+                    Productos ({order.itemsCount}) · {order.scannedPieces}/{order.totalPieces} piezas
+                  </p>
+                  <div className="space-y-2">
+                    {order.items.map((it) => (
+                      <div key={it.id} className="bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-700 truncate">{it.name}</p>
+                          <p className="text-white/35 text-[10px] font-500 truncate">
+                            SKU {it.sku ?? '—'} · {it.barcode ?? 'sin código'}{it.plu ? ` · PLU ${it.plu}` : ''}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className={`text-sm font-800 ${it.pickedQty >= it.quantity ? 'text-green-400' : 'text-amber-400'}`}>
+                            {it.pickedQty}/{it.quantity}
+                          </p>
+                          <p className="text-white/30 text-[10px] font-500">piezas</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
           </div>
