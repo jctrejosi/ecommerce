@@ -153,6 +153,7 @@ export class PickingService {
     const items = await this.db
       .select({
         id: orderItems.id,
+        productVariantId: orderItems.productVariantId,
         name: orderItems.productName,
         sku: orderItems.variantSku,
         quantity: orderItems.quantity,
@@ -187,6 +188,7 @@ export class PickingService {
       scannedPieces: scanned,
       items: items.map((i) => ({
         id: Number(i.id),
+        productVariantId: i.productVariantId != null ? Number(i.productVariantId) : null,
         name: i.name,
         sku: i.sku,
         quantity: i.quantity,

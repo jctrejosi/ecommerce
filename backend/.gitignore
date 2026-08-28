@@ -48,6 +48,9 @@ lerna-debug.log*
 .temp
 .tmp
 
+# Contiene credenciales de la BD de producción — NO commitear
+check-supabase.tmp.js
+
 # Runtime data
 pids
 *.pid

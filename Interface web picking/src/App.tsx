@@ -28,6 +28,12 @@ interface Product {
   shelf: string;
   level: string;
   imageHue: number;
+  /** id de la variante en el backend (para buscar su ubicación en el mapa). */
+  variantId: number | null;
+  /** id de la estantería donde está el producto (rellenado al abrir el mapa). */
+  shelfId: string | null;
+  /** fila dentro de la estantería (rellenada al abrir el mapa). */
+  rowNumber: number | null;
 }
 
 interface Order {
@@ -38,6 +44,7 @@ interface Order {
   total: number;
   createdMinutesAgo: number;
   reviewed: boolean;
+  branchId: number;
   items: Product[];
   itemsCount?: number;
   totalPieces?: number;
@@ -66,6 +73,9 @@ function apiItemToProduct(i: PickingItem): Product {
     shelf: "",
     level: "",
     imageHue: hueFrom(i.sku ?? i.name),
+    variantId: i.productVariantId ?? null,
+    shelfId: null,
+    rowNumber: null,
   };
 }
 
@@ -84,6 +94,7 @@ function apiOrderToOrder(o: PickingOrder): Order {
     total: o.grandTotal,
     createdMinutesAgo: minutes,
     reviewed: o.reviewed,
+    branchId: o.branchId,
     items,
   };
 }
@@ -253,7 +264,7 @@ function OrderListScreen({
       )}
 
       {/* Header */}
-      <div className="px-5 pt-14 pb-4">
+      <div className="px-5 pt-4 pb-4">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-white text-2xl font-800 tracking-tight">Picking DSI</h1>
@@ -412,7 +423,7 @@ function OrderDetailScreen({
   return (
     <div className="h-full bg-[#0C0C0D] flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="px-5 pt-14 pb-4">
+      <div className="px-5 pt-4 pb-4">
         <div className="flex items-center gap-3 mb-4">
           <button onClick={onBack} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center active:bg-white/10 transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -611,6 +622,22 @@ function ScannerScreen({
     let qr: Html5Qrcode | null = null;
     let active = true;
 
+    // El <video> que crea html5-qrcode usa el ancho del contenedor y su alto
+    // natural (sin object-fit). Ajustamos el contenedor al aspect ratio real
+    // del stream para que el cuadro de captura (sombreado + esquinas de la
+    // librería) quede exactamente sobre el video: lo que se ve = lo que se
+    // escanea.
+    const fitViewfinder = () => {
+      const container = document.getElementById("picking-qr-reader");
+      const video = container?.querySelector<HTMLVideoElement>("video");
+      if (!container || !video) return;
+      video.style.width = `${container.clientWidth}px`;
+      if (video.videoWidth && video.videoHeight) {
+        container.style.height =
+          `${Math.round((container.clientWidth * video.videoHeight) / video.videoWidth)}px`;
+      }
+    };
+
     (async () => {
       try {
         qr = new Html5Qrcode("picking-qr-reader", {
@@ -643,6 +670,10 @@ function ScannerScreen({
           (decodedText) => { void scanRef.current(decodedText); },
           () => { /* ignorar frames sin código */ }
         );
+        const video = document.getElementById("picking-qr-reader")?.querySelector<HTMLVideoElement>("video");
+        video?.addEventListener("loadedmetadata", fitViewfinder);
+        window.addEventListener("resize", fitViewfinder);
+        fitViewfinder();
       } catch (e) {
         if (active) {
           setCameraError(
@@ -656,6 +687,7 @@ function ScannerScreen({
 
     return () => {
       active = false;
+      window.removeEventListener("resize", fitViewfinder);
       if (qr) {
         qr.stop().then(() => qr?.clear()).catch(() => { /* noop */ });
       }
@@ -687,18 +719,10 @@ function ScannerScreen({
     <div className={`h-full bg-[#0C0C0D] flex flex-col overflow-hidden relative ${bgClass}`}>
       {/* Cámara real */}
       <div className="relative bg-[#111112] flex-1 flex items-center justify-center overflow-hidden">
-        {/* Contenedor de la cámara (html5-qrcode inyecta el video aquí) */}
-        <div id="picking-qr-reader" className="absolute inset-0" />
-
-        {/* Corner brackets */}
-        <div className="absolute inset-12 pointer-events-none">
-          <div className="absolute top-0 left-0 w-8 h-8 border-t-2 border-l-2 border-amber-400 rounded-tl-lg" />
-          <div className="absolute top-0 right-0 w-8 h-8 border-t-2 border-r-2 border-amber-400 rounded-tr-lg" />
-          <div className="absolute bottom-0 left-0 w-8 h-8 border-b-2 border-l-2 border-amber-400 rounded-bl-lg" />
-          <div className="absolute bottom-0 right-0 w-8 h-8 border-b-2 border-r-2 border-amber-400 rounded-br-lg" />
-        </div>
-        {/* Scan line */}
-        <div className="absolute inset-x-12 top-12 h-0.5 bg-amber-400/60 animate-scan-line rounded-full shadow-[0_0_8px_rgba(245,158,11,0.8)]" />
+        {/* Contenedor de la cámara: html5-qrcode inyecta aquí el <video> y el
+            cuadro de captura (sombreado + esquinas blancas). El alto se ajusta
+            al aspect ratio del stream para que el cuadro quede sobre el video. */}
+        <div id="picking-qr-reader" className="relative w-full" />
 
         {/* Cámara no disponible */}
         {cameraError && (
@@ -819,7 +843,7 @@ function ChecklistScreen({
 
   return (
     <div className="h-full bg-[#0C0C0D] flex flex-col overflow-hidden">
-      <div className="px-5 pt-14 pb-4">
+      <div className="px-5 pt-4 pb-4">
         <div className="flex items-center gap-3 mb-1">
           <button onClick={onBack} className="w-9 h-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center active:bg-white/10 transition-colors">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -976,6 +1000,9 @@ export default function App() {
   const [activeProd, setActiveProd] = useState<Product | null>(null);
   const [toast, setToast] = useState<{ code: string } | null>(null);
   const [mapShelves, setMapShelves] = useState<PlacedShelf[]>(INITIAL_PLACED);
+  const [mapPlaced, setMapPlaced] = useState<PlacedShelf[]>([]);
+  const [mapLoading, setMapLoading] = useState(false);
+  const [mapError, setMapError] = useState<string | null>(null);
   const [queueError, setQueueError] = useState<string | null>(null);
   const [loadingQueue, setLoadingQueue] = useState(false);
   const knownIds = useRef<Set<number>>(new Set());
@@ -1093,6 +1120,54 @@ export default function App() {
       setActiveProd(first ?? null);
     }
     setScreen("pickingMap");
+    void loadMapData();
+  }
+
+  // Cargar estanterías reales y ubicaciones de los productos del pedido
+  async function loadMapData() {
+    if (!activeOrder) return;
+    setMapLoading(true);
+    setMapError(null);
+    try {
+      const branchId = activeOrder.branchId;
+      const variantIds = activeOrder.items
+        .map(i => i.variantId)
+        .filter((v): v is number => v != null);
+      const [shelves, locations] = await Promise.all([
+        pickingService.shelves(branchId),
+        pickingService.locations(branchId, variantIds),
+      ]);
+      const locByVariant = new Map(locations.map(l => [l.productVariantId, { shelfId: String(l.shelfId), rowNumber: l.rowNumber }]));
+      setMapPlaced(shelves.map(s => ({
+        id: String(s.id),
+        code: s.code,
+        name: s.name,
+        type: s.type,
+        color: s.color,
+        rows: s.rows.map(r => ({ label: r.label })),
+        gridX: s.posX,
+        gridY: s.posY,
+        rotation: s.rotation,
+        width: s.width,
+        height: s.height,
+      })));
+      // Rellenar la estantería de cada producto del pedido
+      setActiveOrder(prev => prev ? {
+        ...prev,
+        items: prev.items.map(i => {
+          const loc = i.variantId != null ? locByVariant.get(i.variantId) : undefined;
+          return {
+            ...i,
+            shelfId: loc ? loc.shelfId : null,
+            rowNumber: loc ? loc.rowNumber : null,
+          };
+        }),
+      } : prev);
+    } catch (e) {
+      setMapError(e instanceof Error ? e.message : "No se pudo cargar el mapa");
+    } finally {
+      setMapLoading(false);
+    }
   }
 
   // Phone frame wrapper
@@ -1144,14 +1219,44 @@ export default function App() {
       );
       case "pickingMap": return (activeProd && activeOrder) ? (() => {
         const items = activeOrder.items;
-        const currentIdx = items.findIndex(i => i.id === activeProd.id);
-        const nextProd = items.find((i, idx) => idx > currentIdx && i.scannedQty < i.quantity) ?? null;
+        if (mapLoading && mapPlaced.length === 0) {
+          return (
+            <div className="h-full bg-[#0C0C0D] flex flex-col items-center justify-center px-8 text-center">
+              <div className="w-10 h-10 rounded-full border-2 border-amber-400/30 border-t-amber-400 animate-spin mb-4" />
+              <p className="text-white/40 text-sm font-500">Cargando mapa de la bodega…</p>
+            </div>
+          );
+        }
+        if (mapError && mapPlaced.length === 0) {
+          return (
+            <div className="h-full bg-[#0C0C0D] flex flex-col items-center justify-center px-8 text-center">
+              <p className="text-red-400 text-sm font-600 mb-4">{mapError}</p>
+              <button
+                onClick={() => void loadMapData()}
+                className="px-6 py-3 rounded-2xl bg-amber-400 text-[#0C0C0D] font-800 text-sm"
+              >
+                Reintentar
+              </button>
+            </div>
+          );
+        }
+        // El producto activo puede haber sido reemplazado al cargar las
+        // ubicaciones; buscamos la versión actualizada por id.
+        const activeItem = items.find(i => i.id === activeProd.id) ?? activeProd;
+        const activeLocation =
+          activeItem.shelfId != null && activeItem.rowNumber != null
+            ? { shelfId: activeItem.shelfId, rowNumber: activeItem.rowNumber }
+            : null;
+        const orderLocations = items
+          .filter(i => i.id !== activeItem.id && i.shelfId != null && i.rowNumber != null)
+          .map(i => ({ shelfId: i.shelfId as string, rowNumber: i.rowNumber as number }));
         return (
           <PickingMap
-            placed={mapShelves}
-            currentProduct={activeProd}
-            nextProduct={nextProd}
+            placed={mapPlaced}
+            activeLocation={activeLocation}
+            orderLocations={orderLocations}
             orderCode={activeOrder.code}
+            currentProductName={activeItem.name}
             scanned={items.filter(i => i.scannedQty >= i.quantity).length}
             total={items.length}
             onScan={() => { setScreen("scanner"); }}
@@ -1164,46 +1269,8 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-full bg-[#1A1A1C] flex items-center justify-center p-4">
-      <div
-        className="relative overflow-hidden bg-[#0C0C0D]"
-        style={{
-          width: 390,
-          height: 844,
-          borderRadius: 44,
-          boxShadow: "0 0 0 1px rgba(255,255,255,0.08), 0 40px 80px rgba(0,0,0,0.8), 0 0 0 8px #111113",
-        }}
-      >
-        {/* Status bar */}
-        <div className="absolute top-0 left-0 right-0 h-12 flex items-center justify-between px-8 z-40 pointer-events-none">
-          <span className="text-white text-[13px] font-600">9:41</span>
-          <div className="w-28 h-7 bg-[#0C0C0D] rounded-full absolute left-1/2 -translate-x-1/2 top-2" />
-          <div className="flex items-center gap-1.5">
-            <svg width="16" height="12" viewBox="0 0 16 12" fill="white">
-              <rect x="0" y="6" width="3" height="6" rx="0.5" opacity="0.4"/>
-              <rect x="4" y="4" width="3" height="8" rx="0.5" opacity="0.6"/>
-              <rect x="8" y="2" width="3" height="10" rx="0.5" opacity="0.8"/>
-              <rect x="12" y="0" width="3" height="12" rx="0.5"/>
-            </svg>
-            <svg width="16" height="12" viewBox="0 0 16 12" fill="white">
-              <path d="M8 2.5C5.5 2.5 3.3 3.6 1.8 5.3l1.4 1.4C4.4 5.3 6.1 4.5 8 4.5s3.6.8 4.8 2.2l1.4-1.4C12.7 3.6 10.5 2.5 8 2.5z" opacity="0.6"/>
-              <path d="M8 6.5c-1.1 0-2.1.5-2.8 1.2l1.4 1.4c.4-.4.9-.6 1.4-.6s1 .2 1.4.6l1.4-1.4C10.1 7 9.1 6.5 8 6.5z" opacity="0.8"/>
-              <circle cx="8" cy="11" r="1.5"/>
-            </svg>
-            <div className="flex items-center">
-              <div className="w-[22px] h-[11px] rounded-[3px] border border-white flex items-center pr-0.5 gap-0.5 pl-0.5">
-                <div className="flex-1 h-[7px] bg-green-400 rounded-[1.5px]" />
-              </div>
-              <div className="w-[2px] h-[5px] bg-white/40 rounded-r-[2px] ml-0.5" />
-            </div>
-          </div>
-        </div>
-
-        {/* Screen content */}
-        <div className="h-full">
-          {content()}
-        </div>
-      </div>
+    <div className="h-dvh bg-[#0C0C0D] overflow-hidden">
+      {content()}
     </div>
   );
 }

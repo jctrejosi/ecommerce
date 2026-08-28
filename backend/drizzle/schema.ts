@@ -1970,6 +1970,102 @@ export const orderItems = pgTable(
   ],
 );
 
+// ── Picking: estanterías, filas y ubicación de productos ──────────────────────
+
+export const shelves = pgTable(
+  'shelves',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    branchId: bigint('branch_id', { mode: 'number' }).notNull(),
+    code: varchar({ length: 20 }).notNull(),
+    name: varchar({ length: 100 }).notNull(),
+    type: varchar({ length: 10 }).default('center').notNull(), // 'wall' | 'center'
+    color: varchar({ length: 20 }).default('#F59E0B').notNull(),
+    // Dimensiones del rectángulo de la estantería en el mapa (celdas de la rejilla)
+    width: integer().default(3).notNull(),
+    height: integer().default(4).notNull(),
+    posX: integer('pos_x').default(0).notNull(),
+    posY: integer('pos_y').default(0).notNull(),
+    rotation: integer().default(0).notNull(), // 0 | 90
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'shelves_branch_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const shelfRows = pgTable(
+  'shelf_rows',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    shelfId: bigint('shelf_id', { mode: 'number' }).notNull(),
+    rowNumber: integer('row_number').notNull(),
+    label: varchar({ length: 150 }).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.shelfId],
+      foreignColumns: [shelves.id],
+      name: 'shelf_rows_shelf_id_fkey',
+    }).onDelete('cascade'),
+  ],
+);
+
+export const productLocations = pgTable(
+  'product_locations',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    productVariantId: bigint('product_variant_id', {
+      mode: 'number',
+    }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    branchId: bigint('branch_id', { mode: 'number' }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    shelfId: bigint('shelf_id', { mode: 'number' }).notNull(),
+    rowNumber: integer('row_number').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.productVariantId],
+      foreignColumns: [productVariants.id],
+      name: 'product_locations_product_variant_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'product_locations_branch_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.shelfId],
+      foreignColumns: [shelves.id],
+      name: 'product_locations_shelf_id_fkey',
+    }).onDelete('cascade'),
+    // Un producto solo tiene UNA ubicación por sucursal (upsert por variante+sucursal)
+    uniqueIndex('product_locations_variant_branch_uq').on(
+      table.productVariantId,
+      table.branchId,
+    ),
+  ],
+);
+
 export const deliveryTimeSlots = pgTable(
   'delivery_time_slots',
   {

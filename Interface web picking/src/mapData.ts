@@ -22,6 +22,9 @@ export interface PlacedShelf extends ShelfDef {
   gridX: number;
   gridY: number;
   rotation: 0 | 90;
+  // Dimensiones del rectángulo en celdas (si no vienen, se derivan de las filas)
+  width?: number;
+  height?: number;
 }
 
 export function shelfPixelH(shelf: { rows: ShelfRowDef[] }) {

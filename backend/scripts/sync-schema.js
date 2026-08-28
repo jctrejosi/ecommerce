@@ -9,6 +9,8 @@
 // Uso:
 //   DATABASE_URL=... DB_SSL=true node scripts/sync-schema.js
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
 
 const DATABASE_URL = process.env.DATABASE_URL;
 
@@ -36,6 +38,62 @@ const COLUMNS = [
      ADD COLUMN IF NOT EXISTS reviewed_at timestamptz`,
 ];
 
+function splitSQL(sql) {
+  const statements = [];
+  let current = '';
+  let inString = false;
+  let stringChar = '';
+  let inDollar = false;
+  let dollarTag = '';
+  let i = 0;
+  while (i < sql.length) {
+    const ch = sql[i];
+    if (inDollar) {
+      current += ch;
+      // Buscar el cierre del tag (p. ej. '$$' o '$tag$')
+      if (sql.startsWith(dollarTag, i)) {
+        current += dollarTag.slice(1);
+        i += dollarTag.length;
+        inDollar = false;
+        continue;
+      }
+      i++;
+    } else if (inString) {
+      current += ch;
+      if (ch === stringChar && sql[i - 1] !== '\\') inString = false;
+      i++;
+    } else if (ch === "'" || ch === '"') {
+      current += ch;
+      inString = true;
+      stringChar = ch;
+      i++;
+    } else if (ch === '$') {
+      // Detectar tag dollar-quoted: $$ o $nombre$
+      const m = sql.slice(i).match(/^\$(?:[A-Za-z_][A-Za-z0-9_]*)?\$/);
+      if (m) {
+        dollarTag = m[0];
+        inDollar = true;
+        current += m[0];
+        i += m[0].length;
+      } else {
+        current += ch;
+        i++;
+      }
+    } else if (ch === ';') {
+      const stmt = current.trim();
+      if (stmt) statements.push(stmt);
+      current = '';
+      i++;
+    } else {
+      current += ch;
+      i++;
+    }
+  }
+  const last = current.trim();
+  if (last) statements.push(last);
+  return statements;
+}
+
 async function sync() {
   let client;
   try {
@@ -53,6 +111,26 @@ async function sync() {
         throw err;
       }
     }
+
+    // Tablas del admin de picking (estanterías por sucursal). El archivo es
+    // idempotente (IF NOT EXISTS) — se corre en cada arranque.
+    const sqlPath = path.join(__dirname, 'picking-shelves.sql');
+    if (fs.existsSync(sqlPath)) {
+      const sqlText = fs.readFileSync(sqlPath, 'utf8');
+      for (const stmt of splitSQL(sqlText)) {
+        try {
+          await client.query(stmt);
+        } catch (err) {
+          if (['42P07', '42P16', '42710', '42P17'].includes(err.code)) {
+            console.log(`⏭️ [sync-schema] ya existe: ${stmt.substring(0, 60)}...`);
+            continue;
+          }
+          throw err;
+        }
+      }
+      console.log('✅ [sync-schema] tablas de estanterías listas');
+    }
+
     console.log('✅ [sync-schema] esquema al día');
   } catch (error) {
     // No fatal: si la BD está caída el backend reintenta al arrancar y el

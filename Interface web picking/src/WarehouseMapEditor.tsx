@@ -191,7 +191,7 @@ export default function WarehouseMapEditor({ initialPlaced, onBack, onSave }: Pr
   return (
     <div className="h-full bg-[#0C0C0D] flex flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 pt-14 pb-3 shrink-0 border-b border-white/8">
+      <div className="flex items-center justify-between px-4 pt-4 pb-3 shrink-0 border-b border-white/8">
         <div className="flex items-center gap-3">
           <button
             onClick={onBack}

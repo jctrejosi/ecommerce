@@ -91,3 +91,16 @@ body,
   100% { transform: scale(1.6); opacity: 0; }
 }
 .animate-map-pulse-ring { animation: mapPulseRing 1.4s ease-out infinite; }
+
+/* Fragmento de estantería (ubicación del producto) parpadeando */
+@keyframes blinkGreen {
+  0%, 100% { background-color: rgba(34,197,94,0.30); box-shadow: 0 0 0 2px rgba(34,197,94,0.75), 0 0 14px rgba(34,197,94,0.45); }
+  50% { background-color: rgba(34,197,94,0.70); box-shadow: 0 0 0 3px rgba(34,197,94,1), 0 0 24px rgba(34,197,94,0.8); }
+}
+.animate-blink-green { animation: blinkGreen 0.85s ease-in-out infinite; }
+
+@keyframes blinkRed {
+  0%, 100% { background-color: rgba(239,68,68,0.18); box-shadow: 0 0 0 1px rgba(239,68,68,0.5); }
+  50% { background-color: rgba(239,68,68,0.45); box-shadow: 0 0 0 2px rgba(239,68,68,0.75), 0 0 12px rgba(239,68,68,0.4); }
+}
+.animate-blink-red { animation: blinkRed 1s ease-in-out infinite; }

@@ -40,6 +40,7 @@ const C = {
   admin: "\x1b[34m",
   analytics: "\x1b[96m",
   picking: "\x1b[95m",
+  "picking-admin": "\x1b[91m",
   bot: "\x1b[35m",
   ia: "\x1b[33m",
   reset: "\x1b[0m",
@@ -80,6 +81,13 @@ const SERVICES = [
     url: "http://localhost:8445",
     dev: ["pnpm", "dev"],
     prod: ["pnpm", "run", "preview"],
+  },
+  {
+    name: "picking-admin",
+    dir: "Interface web picking admin",
+    url: "http://localhost:8446",
+    dev: ["npm", "run", "dev"],
+    prod: ["npm", "run", "preview"],
   },
   {
     name: "bot",
@@ -276,7 +284,7 @@ function printUrls() {
   }
   console.log("  DB        → PostgreSQL localhost:5432 (docker)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("Logs: logs/*.log  (db, backend, web, admin, analytics, picking, bot, ia)");
+  console.log("Logs: logs/*.log  (db, backend, web, admin, analytics, picking, picking-admin, bot, ia)");
 }
 
 // ── Detención ───────────────────────────────────────────────

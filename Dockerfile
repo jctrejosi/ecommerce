@@ -54,6 +54,7 @@ COPY --from=backend-build /build/backend/package.json ./backend/package.json
 
 # Script de sync de esquema (corre al arrancar; ver docker-entrypoint.sh)
 COPY --from=backend-build /build/backend/scripts/sync-schema.js ./backend/scripts/sync-schema.js
+COPY --from=backend-build /build/backend/scripts/picking-shelves.sql ./backend/scripts/picking-shelves.sql
 
 # Bot (Python)
 COPY bot/ ./bot

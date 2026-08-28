@@ -3,6 +3,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export interface PickingItem {
   id: number;
+  productVariantId: number | null;
   name: string;
   sku: string | null;
   quantity: number;
@@ -39,6 +40,33 @@ export interface ScanResult {
   allDone: boolean;
   orderStatus: string;
   expected: string[];
+}
+
+/** Estantería tal como la guarda el admin de picking (para el mapa). */
+export interface PickingShelf {
+  id: number;
+  branchId: number;
+  code: string;
+  name: string;
+  type: 'wall' | 'center';
+  color: string;
+  width: number;
+  height: number;
+  posX: number;
+  posY: number;
+  rotation: 0 | 90;
+  productCount: number;
+  rows: { id: number; rowNumber: number; label: string }[];
+}
+
+/** Ubicación de una variante en una sucursal. */
+export interface PickingLocation {
+  productVariantId: number;
+  shelfId: number;
+  rowNumber: number;
+  shelfCode: string;
+  shelfName: string;
+  shelfColor: string;
 }
 
 export class ApiError extends Error {
@@ -97,4 +125,12 @@ export const pickingService = {
 
   complete: (id: number) =>
     fetchJson<{ ok: boolean; status: string }>(`/picking/orders/${id}/complete`, { method: "POST" }),
+
+  shelves: (branchId: number) =>
+    fetchJson<PickingShelf[]>(`/picking-admin/shelves?branchId=${branchId}`),
+
+  locations: (branchId: number, variantIds: number[]) =>
+    fetchJson<PickingLocation[]>(
+      `/picking-admin/locations?branchId=${branchId}&variantIds=${variantIds.join(",")}`,
+    ),
 };
