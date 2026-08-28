@@ -183,11 +183,24 @@ function useViewFromUrl(): [ViewId, (v: ViewId) => void] {
   const path = location.pathname.replace(/^\/+/g, "");
   const [view, setView] = useState<ViewId>(VIEW_PATHS[path] || "dashboard");
 
+  // Ruta inexistente → redirigir a la raíz del proyecto
+  useEffect(() => {
+    if (!(path in VIEW_PATHS)) {
+      history.replaceState(null, "", "/");
+      setView("dashboard");
+    }
+  }, [path]);
+
   // Sync from URL on popstate (back/forward)
   useEffect(() => {
     const onPop = () => {
       const p = location.pathname.replace(/^\/+/g, "");
-      setView(VIEW_PATHS[p] || "dashboard");
+      if (!(p in VIEW_PATHS)) {
+        history.replaceState(null, "", "/");
+        setView("dashboard");
+        return;
+      }
+      setView(VIEW_PATHS[p]);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
