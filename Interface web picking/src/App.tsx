@@ -10,6 +10,7 @@ import {
   type ScanResult,
 } from "./services/picking.service";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
+import logo from "./assets/logo.bmp";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -296,9 +297,10 @@ function OrderListScreen({
       {/* Header */}
       <div className="px-5 pt-4 pb-4">
         <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-white text-2xl font-800 tracking-tight">Picking DSI</h1>
-            <p className="text-white/40 text-xs font-500 mt-0.5">Sucursal Centro · Turno mañana</p>
+          <div className="flex flex-col items-start gap-1">
+            <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+            <h1 className="text-white text-2xl font-800 tracking-tight">Picking</h1>
+            <p className="text-white/40 text-xs font-500">Sucursal Centro · Turno mañana</p>
           </div>
           <button
             onClick={onOpenPicker}
@@ -314,7 +316,7 @@ function OrderListScreen({
 
       {/* Filter tabs */}
       <div className="px-5 mb-4">
-        <div className="flex gap-2 overflow-x-auto">
+        <div className="flex gap-2 flex-wrap">
           {tabs.map(t => (
             <button
               key={t.key}
