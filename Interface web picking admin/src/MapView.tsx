@@ -71,6 +71,48 @@ function seedShelves(shelves: Shelf[]): MapShelf[] {
   return result
 }
 
+// ─── Input numérico que permite vaciar el campo mientras se edita ─────────────
+
+function DimInput({
+  value,
+  max,
+  onCommit,
+}: {
+  value: number
+  max: number
+  onCommit: (v: number) => void
+}) {
+  const [text, setText] = useState(String(value))
+  const [focused, setFocused] = useState(false)
+
+  // Sincroniza si el valor cambia desde fuera (p. ej. manijas de redimensionado)
+  useEffect(() => {
+    if (!focused) setText(String(value))
+  }, [value, focused])
+
+  const commit = () => {
+    setFocused(false)
+    const n = parseInt(text, 10)
+    onCommit(Number.isFinite(n) ? n : 1)
+  }
+
+  return (
+    <input
+      type="number"
+      min={1}
+      max={max}
+      value={text}
+      onChange={(e) => setText(e.target.value)}
+      onFocus={() => setFocused(true)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
+      }}
+      className="mt-1 w-24 bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+    />
+  )
+}
+
 // ─── Componente ───────────────────────────────────────────────────────────────
 
 export default function MapView({
@@ -91,6 +133,15 @@ export default function MapView({
   const [scale, setScale] = useState(1)
   const containerRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<{ id: number; dx: number; dy: number } | null>(null)
+  const resizeRef = useRef<{
+    id: number
+    edge: 'e' | 's' | 'se'
+    startX: number
+    startY: number
+    startW: number
+    startH: number
+    rotation: 0 | 90
+  } | null>(null)
 
   useEffect(() => {
     setItems(seedShelves(shelves))
@@ -154,6 +205,11 @@ export default function MapView({
   }
 
   function onPointerMove(e: React.PointerEvent) {
+    // ¿Redimensionando?
+    if (resizeRef.current) {
+      onResizeMove(e)
+      return
+    }
     const drag = dragRef.current
     if (!drag) return
     const p = contentPos(e)
@@ -170,6 +226,57 @@ export default function MapView({
 
   function endDrag() {
     dragRef.current = null
+    resizeRef.current = null
+  }
+
+  // ── Redimensionar ancho/alto arrastrando las manijas ────────────────────────
+
+  function onResizeStart(e: React.PointerEvent, id: number, edge: 'e' | 's' | 'se') {
+    e.stopPropagation()
+    const shelf = items.find((s) => s.id === id)
+    if (!shelf) return
+    const p = contentPos(e)
+    const { w, h } = visualSize(shelf)
+    resizeRef.current = {
+      id,
+      edge,
+      startX: p.x,
+      startY: p.y,
+      startW: w,
+      startH: h,
+      rotation: shelf.rotation,
+    }
+    setSelectedId(id)
+    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
+  }
+
+  function onResizeMove(e: React.PointerEvent) {
+    const rz = resizeRef.current
+    if (!rz) return
+    const p = contentPos(e)
+    setItems((prev) =>
+      prev.map((s) => {
+        if (s.id !== rz.id) return s
+        const dW = Math.round((p.x - rz.startX) / cellPx)
+        const dH = Math.round((p.y - rz.startY) / cellPx)
+        let nW = rz.startW
+        let nH = rz.startH
+        if (rz.edge === 'e' || rz.edge === 'se') nW = rz.startW + dW
+        if (rz.edge === 's' || rz.edge === 'se') nH = rz.startH + dH
+        // Máximo visual desde la esquina anclada (arriba-izquierda del rectángulo)
+        const maxVW = GRID_COLS - s.posX
+        const maxVH = GRID_ROWS - s.posY
+        nW = Math.max(1, Math.min(maxVW, nW))
+        nH = Math.max(1, Math.min(maxVH, nH))
+        // Convertir dimensiones visuales → dimensiones de la estantería (rotación)
+        return {
+          ...s,
+          width: rz.rotation === 90 ? nH : nW,
+          height: rz.rotation === 90 ? nW : nH,
+          autoPlaced: false,
+        }
+      }),
+    )
   }
 
   function rotateSelected() {
@@ -324,6 +431,26 @@ export default function MapView({
                 {s.rotation === 90 && (
                   <span className="absolute top-0.5 right-1 text-white/40 text-[8px] font-700 pointer-events-none">90°</span>
                 )}
+                {/* Manijas de redimensionado (ancho/alto) — solo en la seleccionada */}
+                {isSelected && (
+                  <>
+                    <div
+                      onPointerDown={(e) => onResizeStart(e, s.id, 'e')}
+                      className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-6 rounded-sm bg-amber-400 border border-[#0C0C0D] cursor-ew-resize touch-none"
+                      style={{ zIndex: 20 }}
+                    />
+                    <div
+                      onPointerDown={(e) => onResizeStart(e, s.id, 's')}
+                      className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-3 rounded-sm bg-amber-400 border border-[#0C0C0D] cursor-ns-resize touch-none"
+                      style={{ zIndex: 20 }}
+                    />
+                    <div
+                      onPointerDown={(e) => onResizeStart(e, s.id, 'se')}
+                      className="absolute -right-1.5 -bottom-1.5 w-3 h-3 rounded-sm bg-amber-400 border border-[#0C0C0D] cursor-nwse-resize touch-none"
+                      style={{ zIndex: 20 }}
+                    />
+                  </>
+                )}
               </div>
             )
           })}
@@ -343,25 +470,11 @@ export default function MapView({
           <div className="flex flex-wrap items-end gap-4">
             <label className="block">
               <span className="text-white/40 text-xs font-600">Ancho (celdas)</span>
-              <input
-                type="number"
-                min={1}
-                max={GRID_COLS}
-                value={selected.width}
-                onChange={(e) => setDim('width', Number(e.target.value) || 1)}
-                className="mt-1 w-24 bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
-              />
+              <DimInput value={selected.width} max={GRID_COLS} onCommit={(v) => setDim('width', v)} />
             </label>
             <label className="block">
               <span className="text-white/40 text-xs font-600">Alto (celdas)</span>
-              <input
-                type="number"
-                min={1}
-                max={GRID_ROWS}
-                value={selected.height}
-                onChange={(e) => setDim('height', Number(e.target.value) || 1)}
-                className="mt-1 w-24 bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
-              />
+              <DimInput value={selected.height} max={GRID_ROWS} onCommit={(v) => setDim('height', v)} />
             </label>
             <button
               onClick={rotateSelected}
