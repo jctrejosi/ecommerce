@@ -52,6 +52,9 @@ COPY --from=backend-build /build/backend/dist ./backend/dist
 COPY --from=backend-build /build/backend/node_modules ./backend/node_modules
 COPY --from=backend-build /build/backend/package.json ./backend/package.json
 
+# Script de sync de esquema (corre al arrancar; ver docker-entrypoint.sh)
+COPY --from=backend-build /build/backend/scripts/sync-schema.js ./backend/scripts/sync-schema.js
+
 # Bot (Python)
 COPY bot/ ./bot
 RUN python3 -m venv /opt/bot-venv \

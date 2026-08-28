@@ -17,6 +17,11 @@ echo "==> MercAldas: proxy :${PUBLIC_PORT} â†’ backend :${BACKEND_PORT} y /bot â
 
 # ---- Backend NestJS ----
 cd /app/backend
+
+# Sync de esquema idempotente: agrega columnas nuevas si faltan (picking, etc.)
+echo "==> backend: sync de esquema (ADD COLUMN IF NOT EXISTS)"
+DATABASE_URL="${DATABASE_URL:-}" DB_SSL="${DB_SSL:-false}" node scripts/sync-schema.js || true
+
 MAIN="dist/src/main.js"
 [ -f "$MAIN" ] || MAIN="dist/main.js"
 echo "==> backend: node $MAIN"
