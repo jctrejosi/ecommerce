@@ -48,7 +48,7 @@ export function FeaturedProductsSection({
             Productos Destacados
           </h2>
           <button
-            onClick={onViewAll}
+            onClick={() => onViewAll()}
             className="hidden md:flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
           >
             Ver catálogo completo <ChevronRight className="w-4 h-4" />
@@ -117,7 +117,7 @@ export function FeaturedProductsSection({
 
             <div className="text-center mt-8">
               <button
-                onClick={onViewAll}
+                onClick={() => onViewAll()}
                 className="px-8 py-3 rounded-xl font-bold text-sm border-2 transition-all cursor-pointer hover:bg-[#1A1A2E] hover:text-white"
                 style={{ borderColor: "#1A1A2E" }}
               >

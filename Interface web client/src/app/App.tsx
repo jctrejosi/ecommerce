@@ -513,7 +513,7 @@ export default function App() {
   };
 
   const openCatalog = (categoryId?: number) => {
-    if (categoryId) {
+    if (typeof categoryId === "number") {
       // El dropdown "Nuestros productos" pasa la categoría: aplicarla en el catálogo.
       setCatalogCategory([categoryId]);
       setCatalogBrand(null);
@@ -1045,7 +1045,12 @@ export default function App() {
           setSelectedOrder(null);
         }}
         onSelectOrder={setSelectedOrder}
-        onGoToCatalog={openCatalog}
+        onGoToCatalog={() => {
+          // Cierra el panel y abre el catálogo SIN filtros (openCatalog() limpia).
+          setOrdersOpen(false);
+          setSelectedOrder(null);
+          openCatalog();
+        }}
         fmt={fmt}
       />
 

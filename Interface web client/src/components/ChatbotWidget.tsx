@@ -8,6 +8,7 @@ import {
   type BotQuickOption,
 } from "../services/chatbot.service";
 import logoBot from "../assets/logo-bot.png";
+import logo from "../assets/logo.png";
 import type { CartItem } from "../app/types";
 
 type ChatMessage = {
@@ -399,14 +400,14 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
           style={{ animation: "panelIn 0.25s ease-out both" }}
         >
           {/* Header */}
-          <div className="bg-[#1A1A2E] text-white px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="relative bg-[#FFF200] text-[#1A1A2E] px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#FFF200] text-[#1A1A2E] flex items-center justify-center overflow-hidden">
+              <div className="w-9 h-9 rounded-full bg-[#FFF200] text-[#1A1A2E] flex items-center justify-center overflow-hidden border-2 border-[#1A1A2E]">
                 <img src={logoBot} alt="Daisy" className="w-full h-full object-cover" />
               </div>
               <div>
                 <p className="text-sm font-bold leading-tight">Daisy</p>
-                <p className="text-[10px] text-white/70 flex items-center gap-1">
+                <p className="text-[10px] text-[#1A1A2E]/70 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   Arma tu carrito conmigo 🛒
                 </p>
@@ -417,7 +418,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
               <button
                 onClick={openCurrentCart}
                 aria-label="Ver carrito de compras"
-                className="relative p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="relative p-1.5 rounded-lg text-[#1A1A2E]/70 hover:text-[#1A1A2E] hover:bg-black/10 transition-colors cursor-pointer"
               >
                 <svg
                   width="19"
@@ -434,7 +435,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                   <path d="M2.5 3h2l2.6 12.5a2 2 0 0 0 2 1.5h8.7a2 2 0 0 0 2-1.5L22 7H6" />
                 </svg>
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#FFF200] text-[#1A1A2E] text-[9px] font-bold flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#1A1A2E] text-[#FFF200] text-[9px] font-bold flex items-center justify-center">
                     {cartCount}
                   </span>
                 )}
@@ -442,13 +443,20 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Cerrar"
-                className="text-white/70 hover:text-white p-1 rounded-lg hover:bg-white/10"
+                className="text-[#1A1A2E]/70 hover:text-[#1A1A2E] p-1 rounded-lg hover:bg-black/10"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                   <path d="M18 6 6 18M6 6l12 12" />
                 </svg>
               </button>
             </div>
+
+            {/* Logo centrado en el header */}
+            <img
+              src={logo}
+              alt="DSI"
+              className="absolute left-1/2 top-3 -translate-x-1/2 h-3.5 w-auto object-contain"
+            />
           </div>
 
           {/* Mensajes */}

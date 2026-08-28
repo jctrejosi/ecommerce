@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CatalogCategory } from "../types";
-import dsiLogo from "../../assets/logo.png";
+import footerLogo from "../../assets/logo.bmp";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -208,12 +208,12 @@ export function Footer({ categories, onCategoryClick, generalLogo }: FooterProps
           style={{ borderColor: "rgba(255,255,255,0.08)" }}
         >
           <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
-            <img src={dsiLogo} alt="DSI SA" className="w-9 h-9 object-contain" />
+            <img src={footerLogo} alt="MercAldas" className="h-10 w-auto object-contain" />
           </a>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
             © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
           </p>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
             Manizales, Caldas, Colombia
           </p>
         </div>

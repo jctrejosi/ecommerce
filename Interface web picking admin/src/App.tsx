@@ -3,6 +3,8 @@ import { api, ApiError } from './services/api'
 import type { Branch, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
+import footerLogo from './assets/logo.bmp'
+import headerLogo from './assets/logo.png'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -99,9 +101,12 @@ export default function App() {
       {/* Header */}
       <header className="sticky top-0 z-40 bg-[#0C0C0D]/90 backdrop-blur border-b border-white/8 px-5 pt-5 pb-4">
         <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-4">
-          <div className="mr-auto">
-            <h1 className="text-2xl font-800 tracking-tight">Picking DSI <span className="text-amber-400">Admin</span></h1>
-            <p className="text-white/40 text-xs font-500 mt-0.5">Estanterías y ubicaciones por sucursal</p>
+          <div className="mr-auto flex items-center gap-3">
+            <img src={headerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+            <div>
+              <h1 className="text-2xl font-800 tracking-tight">Picking DSI <span className="text-amber-400">Admin</span></h1>
+              <p className="text-white/40 text-xs font-500 mt-0.5">Estanterías y ubicaciones por sucursal</p>
+            </div>
           </div>
           <div className="flex items-center gap-2 overflow-x-auto">
             {branches.map((b) => (
@@ -202,6 +207,21 @@ export default function App() {
           />
         )}
       </main>
+
+      {/* Footer */}
+      <footer className="border-t border-white/8 px-5 py-4">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-x-6 gap-y-2 text-center">
+          <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
+            <img src={footerLogo} alt="MercAldas" className="h-8 w-auto object-contain" />
+          </a>
+          <p className="text-xs text-white/40">
+            © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
+          </p>
+          <p className="text-xs text-white/30">
+            Manizales, Caldas, Colombia
+          </p>
+        </div>
+      </footer>
     </div>
   )
 }

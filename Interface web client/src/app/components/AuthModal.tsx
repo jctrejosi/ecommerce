@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import { Logo } from "../Logo";
 import { SocialAuthButtons } from "../SocialAuthButtons";
 import type { CartItem } from "../types";
+import logo from "../../assets/logo.png";
 
 interface AuthModalProps {
   loginModal: boolean;
@@ -377,6 +378,12 @@ export function AuthModal({
               </p>
             </form>
           )}
+        </div>
+
+        {/* Crédito */}
+        <div className="px-6 py-4 border-t border-border flex items-center justify-center gap-1.5">
+          <span className="text-xs text-muted-foreground">© 2026 Desarrollado por</span>
+          <img src={logo} alt="DSI" className="h-4 w-auto object-contain" />
         </div>
       </div>
     </div>

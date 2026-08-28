@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import dsiLogo from "./assets/logo.png";
+import footerLogo from "./assets/logo.bmp";
+import sidebarLogo from "./assets/logo.png";
 import {
   LayoutDashboard,
   Send,
@@ -16,7 +17,6 @@ import {
   ShoppingCart,
   Zap,
   Users,
-  Store,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Campaigns from "./views/Campaigns";
@@ -277,9 +277,11 @@ function Sidebar({
     >
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-5 border-b border-white/[0.06] shrink-0">
-        <div className="w-8 h-8 rounded-lg bg-amber-400 flex items-center justify-center shrink-0">
-          <Store size={16} className="text-amber-900" />
-        </div>
+        <img
+          src={sidebarLogo}
+          alt="Mercaldas"
+          className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-6 w-auto"}`}
+        />
         {!collapsed && (
           <div>
             <p className="text-white font-bold text-sm leading-tight">Mercaldas</p>
@@ -543,7 +545,7 @@ export default function App() {
             rel="noopener noreferrer"
             className="absolute left-6 flex items-center hover:opacity-80 transition-opacity"
           >
-            <img src={dsiLogo} alt="DSI SA" className="w-8 h-8 object-contain" />
+            <img src={footerLogo} alt="MercAldas" className="h-8 w-auto object-contain" />
           </a>
           <p className="text-[11px] text-gray-400">
             © 2026 Desarrollado por{" "}

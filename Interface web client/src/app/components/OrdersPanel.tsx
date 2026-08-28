@@ -144,7 +144,7 @@ export function OrdersPanel({
                 Cuando completes una compra, aparecerá aquí.
               </p>
               <button
-                onClick={onGoToCatalog}
+                onClick={() => onGoToCatalog()}
                 className="mt-2 px-6 py-3 rounded-xl font-bold text-sm"
                 style={{ background: "#FFF200", color: "#1A1A2E" }}
               >
