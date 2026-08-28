@@ -14,6 +14,10 @@ import {
   productVariants,
   products,
   users,
+  media,
+  productImages,
+  productLocations,
+  shelves,
 } from '../../../drizzle/schema';
 
 /** Estados que pertenecen a la cola de picking. */
@@ -170,10 +174,27 @@ export class PickingService {
         total: orderItems.total,
         barcode: productVariants.barcode,
         plu: products.plu,
+        image: media.path,
+        shelfCode: shelves.code,
+        shelfName: shelves.name,
+        rowNumber: productLocations.rowNumber,
       })
       .from(orderItems)
       .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
       .leftJoin(products, eq(products.id, productVariants.productId))
+      .leftJoin(
+        productImages,
+        and(eq(productImages.productId, products.id), eq(productImages.isCover, true)),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .leftJoin(
+        productLocations,
+        and(
+          eq(productLocations.productVariantId, orderItems.productVariantId),
+          eq(productLocations.branchId, order.branchId),
+        ),
+      )
+      .leftJoin(shelves, eq(shelves.id, productLocations.shelfId))
       .where(eq(orderItems.orderId, Number(id)))
       .orderBy(asc(orderItems.id));
 
@@ -205,6 +226,10 @@ export class PickingService {
         pickedQty: i.pickedQty,
         barcode: i.barcode,
         plu: i.plu,
+        image: i.image ?? null,
+        shelfCode: i.shelfCode ?? null,
+        shelfName: i.shelfName ?? null,
+        rowNumber: i.rowNumber ?? null,
         unitPriceGross: Number(i.unitPriceGross),
         total: Number(i.total),
       })),

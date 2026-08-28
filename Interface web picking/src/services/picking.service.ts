@@ -10,6 +10,10 @@ export interface PickingItem {
   pickedQty: number;
   barcode: string | null;
   plu: string | null;
+  image: string | null;
+  shelfCode: string | null;
+  shelfName: string | null;
+  rowNumber: number | null;
   unitPriceGross: number;
   total: number;
 }

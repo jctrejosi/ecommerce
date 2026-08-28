@@ -34,6 +34,11 @@ interface Product {
   shelfId: string | null;
   /** fila dentro de la estantería (rellenada al abrir el mapa). */
   rowNumber: number | null;
+  /** ubicación real (estantería + fila) tal como viene del backend. */
+  shelfCode: string | null;
+  shelfName: string | null;
+  /** url de la imagen del producto (si tiene). */
+  image: string | null;
 }
 
 interface Order {
@@ -75,7 +80,10 @@ function apiItemToProduct(i: PickingItem): Product {
     imageHue: hueFrom(i.sku ?? i.name),
     variantId: i.productVariantId ?? null,
     shelfId: null,
-    rowNumber: null,
+    rowNumber: i.rowNumber ?? null,
+    shelfCode: i.shelfCode ?? null,
+    shelfName: i.shelfName ?? null,
+    image: i.image ?? null,
   };
 }
 
@@ -199,11 +207,29 @@ function ProductPlaceholder({ hue, size = 48 }: { hue: number; size?: number }) 
         border: `1px solid hsl(${hue}, 55%, 22%)`,
       }}
     >
-      <svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24" fill="none">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
         <rect x="2" y="7" width="20" height="14" rx="2" stroke={`hsl(${hue}, 70%, 55%)`} strokeWidth="1.5" />
         <path d="M16 7V5a4 4 0 0 0-8 0v2" stroke={`hsl(${hue}, 70%, 55%)`} strokeWidth="1.5" strokeLinecap="round" />
       </svg>
     </div>
+  );
+}
+
+// Imagen del producto con fallback al placeholder si no hay imagen o falla
+function ProductImage({ product, size = 48 }: { product: Product; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (!product.image || failed) {
+    return <ProductPlaceholder hue={product.imageHue} size={size} />;
+  }
+  return (
+    <img
+      src={product.image}
+      alt={product.name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="rounded-lg object-cover shrink-0"
+      style={{ width: size, height: size, background: "#161618", border: "1px solid rgba(255,255,255,0.08)" }}
+    />
   );
 }
 
@@ -344,10 +370,6 @@ function OrderListScreen({
 
 function OrderCard({ order, onTap, onMarkReviewed }: { order: Order; onTap: () => void; onMarkReviewed: () => void }) {
   const isNew = order.status === "nuevo" && !order.reviewed;
-  const scanned = order.items.length
-    ? order.items.reduce((s, i) => s + (i.scannedQty >= i.quantity ? 1 : 0), 0)
-    : (order.scannedPieces ?? 0);
-  const total = order.items.length ? order.items.length : (order.itemsCount ?? 0);
 
   return (
     <div
@@ -376,17 +398,7 @@ function OrderCard({ order, onTap, onMarkReviewed }: { order: Order; onTap: () =
       <p className="text-white/70 text-sm font-500 mb-3 truncate">{order.customer}</p>
 
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 text-white/40 text-xs font-500">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
-              <path d="M20 7H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zM16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            {total} items
-            {order.status === "preparando" && ` · ${scanned}/${total}`}
-          </div>
-          <span className="text-white/20">·</span>
-          <span className="text-white/40 text-xs font-500">{formatTime(order.createdMinutesAgo)}</span>
-        </div>
+        <span className="text-white/40 text-xs font-500">{formatTime(order.createdMinutesAgo)}</span>
         <span className="text-white font-700 text-sm">{formatCOP(order.total)}</span>
       </div>
 
@@ -519,7 +531,7 @@ function ProductRow({ product, onTap }: { product: Product; onTap: () => void })
           : "bg-white/[0.04] border border-white/8 active:bg-white/8"
       }`}
     >
-      <ProductPlaceholder hue={product.imageHue} size={48} />
+      <ProductImage product={product} size={48} />
 
       <div className="flex-1 min-w-0">
         <p className={`text-sm font-700 leading-tight mb-1 ${done ? "text-white/50 line-through" : "text-white"}`}>
@@ -534,8 +546,8 @@ function ProductRow({ product, onTap }: { product: Product; onTap: () => void })
           )}
         </div>
         <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-          <span className="text-[11px] font-600 bg-amber-400/10 text-amber-400 border border-amber-400/20 px-2 py-0.5 rounded-lg">
-            {product.aisle ? `${product.aisle} · ${product.shelf} · ${product.level}` : "Sin ubicación"}
+          <span className={`text-[11px] font-700 px-2 py-0.5 rounded-lg border ${product.shelfCode ? "bg-green-500/10 text-green-400 border-green-500/25" : "bg-amber-400/10 text-amber-400 border-amber-400/20"}`}>
+            {product.shelfCode ? `${product.shelfCode}${product.rowNumber ? ` · Fila ${product.rowNumber}` : ""}` : "Sin ubicación"}
           </span>
           <span className="text-[11px] font-500 text-white/30">{product.barcode}</span>
         </div>
@@ -568,11 +580,13 @@ function ScannerScreen({
   order,
   onScanSuccess,
   onBack,
+  onViewMap,
 }: {
   product: Product;
   order: Order;
   onScanSuccess: (result: ScanResult) => void;
   onBack: () => void;
+  onViewMap: () => void;
 }) {
   const [input, setInput] = useState("");
   const [scanState, setScanState] = useState<ScanState>("idle");
@@ -634,6 +648,7 @@ function ScannerScreen({
   useEffect(() => {
     let qr: Html5Qrcode | null = null;
     let active = true;
+    let videoEl: HTMLVideoElement | null = null;
 
     // El <video> que crea html5-qrcode usa el ancho del contenedor y su alto
     // natural (sin object-fit). Ajustamos el contenedor al aspect ratio real
@@ -642,17 +657,31 @@ function ScannerScreen({
     // escanea.
     const fitViewfinder = () => {
       const container = document.getElementById("picking-qr-reader");
-      const video = container?.querySelector<HTMLVideoElement>("video");
-      if (!container || !video) return;
-      video.style.width = `${container.clientWidth}px`;
-      if (video.videoWidth && video.videoHeight) {
+      if (!container || !videoEl) return;
+      videoEl.style.width = `${container.clientWidth}px`;
+      if (videoEl.videoWidth && videoEl.videoHeight) {
         container.style.height =
-          `${Math.round((container.clientWidth * video.videoHeight) / video.videoWidth)}px`;
+          `${Math.round((container.clientWidth * videoEl.videoHeight) / videoEl.videoWidth)}px`;
       }
     };
 
-    (async () => {
+    const stopCamera = async () => {
+      if (videoEl) {
+        videoEl.removeEventListener("loadedmetadata", fitViewfinder);
+        videoEl = null;
+      }
+      if (qr) {
+        try { await qr.stop(); } catch { /* noop */ }
+        try { await qr.clear(); } catch { /* noop */ }
+        qr = null;
+      }
+    };
+
+    const startCamera = async () => {
+      if (!active) return;
+      setCameraError(null);
       try {
+        await stopCamera();
         qr = new Html5Qrcode("picking-qr-reader", {
           verbose: false,
           formatsToSupport: [
@@ -683,9 +712,8 @@ function ScannerScreen({
           (decodedText) => { void scanRef.current(decodedText); },
           () => { /* ignorar frames sin código */ }
         );
-        const video = document.getElementById("picking-qr-reader")?.querySelector<HTMLVideoElement>("video");
-        video?.addEventListener("loadedmetadata", fitViewfinder);
-        window.addEventListener("resize", fitViewfinder);
+        videoEl = document.getElementById("picking-qr-reader")?.querySelector<HTMLVideoElement>("video") ?? null;
+        videoEl?.addEventListener("loadedmetadata", fitViewfinder);
         fitViewfinder();
       } catch (e) {
         if (active) {
@@ -696,14 +724,23 @@ function ScannerScreen({
           );
         }
       }
-    })();
+    };
+
+    // Al volver de segundo plano (el móvil pausa/congela el stream), reiniciar
+    // la cámara para recuperar el foco.
+    const onVisibility = () => {
+      if (!document.hidden) void startCamera();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    window.addEventListener("resize", fitViewfinder);
+
+    void startCamera();
 
     return () => {
       active = false;
+      document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("resize", fitViewfinder);
-      if (qr) {
-        qr.stop().then(() => qr?.clear()).catch(() => { /* noop */ });
-      }
+      void stopCamera();
     };
   }, []);
 
@@ -793,18 +830,30 @@ function ScannerScreen({
           <span className="text-amber-400 font-800 text-lg leading-none">{qty}</span>
           <span className="text-white/40 text-xs font-500"> / {product.quantity}</span>
         </div>
+
+        {/* Ver mapa de la bodega */}
+        <button
+          onClick={onViewMap}
+          className="absolute top-16 right-5 flex items-center gap-1.5 bg-[#0C0C0D]/80 backdrop-blur-sm border border-white/10 rounded-xl px-3 py-2 active:bg-[#0C0C0D] transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" stroke="#F59E0B" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+            <polyline points="9 22 9 12 15 12 15 22" stroke="#F59E0B" strokeWidth="1.8" strokeLinejoin="round"/>
+          </svg>
+          <span className="text-amber-400 text-xs font-700">Mapa</span>
+        </button>
       </div>
 
       {/* Product card */}
       <div className="bg-[#161618] border-t border-white/8 px-5 pt-4 pb-2">
         <div className="flex items-center gap-3 mb-4">
-          <ProductPlaceholder hue={product.imageHue} size={52} />
+          <ProductImage product={product} size={52} />
           <div className="flex-1 min-w-0">
             <p className="text-white font-700 text-sm leading-tight">{product.name}</p>
             <p className="text-white/40 text-xs font-500 mt-0.5">{product.sku}</p>
             <div className="flex items-center gap-1.5 mt-1.5">
-              <span className="text-[11px] font-600 bg-amber-400/10 text-amber-400 border border-amber-400/20 px-2 py-0.5 rounded-lg">
-                {product.aisle ? `${product.aisle} · ${product.shelf} · ${product.level}` : "Sin ubicación"}
+              <span className={`text-[11px] font-700 px-2 py-0.5 rounded-lg border ${product.shelfCode ? "bg-green-500/10 text-green-400 border-green-500/25" : "bg-amber-400/10 text-amber-400 border-amber-400/20"}`}>
+                {product.shelfCode ? `${product.shelfCode}${product.rowNumber ? ` · Fila ${product.rowNumber}` : ""}` : "Sin ubicación"}
               </span>
               {product.plu && (
                 <span className="text-[10px] font-700 bg-violet-500/20 text-violet-400 border border-violet-500/30 px-1.5 py-0.5 rounded-full">
@@ -1016,6 +1065,8 @@ export default function App() {
   const [mapPlaced, setMapPlaced] = useState<PlacedShelf[]>([]);
   const [mapLoading, setMapLoading] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  // Pantalla a la que volver cuando se cierra el mapa (detalle o escáner)
+  const [mapReturnTo, setMapReturnTo] = useState<"detail" | "scanner">("detail");
   // Picker (usuario) que usa la app
   const [pickers, setPickers] = useState<{ id: number; name: string }[]>([]);
   const [pickerId, setPickerId] = useState<number | null>(() => {
@@ -1079,6 +1130,47 @@ export default function App() {
     localStorage.setItem("picking.pickerId", String(id));
     setShowPicker(false);
   }
+
+  // Restaurar sesión tras recarga (el móvil puede matar la pestaña con el
+  // escáner abierto): vuelve al mismo pedido/producto donde iba.
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("picking.session");
+      if (!saved) return;
+      const s = JSON.parse(saved) as { orderId?: number; productId?: string };
+      if (!s.orderId) return;
+      void pickingService
+        .detail(s.orderId)
+        .then((detail) => {
+          const order = apiOrderToOrder(detail);
+          setActiveOrder(order);
+          const target = order.items.find((i) => i.id === s.productId) ?? null;
+          const pending = order.items.find((i) => i.scannedQty < i.quantity) ?? null;
+          const next = target ?? pending;
+          setActiveProd(next);
+          setScreen(next ? "scanner" : "detail");
+        })
+        .catch(() => { /* sesión inválida: se queda en la lista */ });
+    } catch {
+      /* noop */
+    }
+  }, []);
+
+  // Guardar la sesión actual (pedido + producto) para restaurarla si se recarga
+  useEffect(() => {
+    try {
+      if (screen === "list" || !activeOrder) {
+        sessionStorage.removeItem("picking.session");
+        return;
+      }
+      sessionStorage.setItem(
+        "picking.session",
+        JSON.stringify({ orderId: Number(activeOrder.id), productId: activeProd?.id ?? null }),
+      );
+    } catch {
+      /* noop */
+    }
+  }, [screen, activeOrder, activeProd]);
 
   // Refrescar la cola periódicamente para recibir los pedidos de la web
   useEffect(() => {
@@ -1159,11 +1251,18 @@ export default function App() {
   }
 
   function handleViewMap() {
-    // Set activeProd to first unscanned product before showing map
-    if (activeOrder) {
+    openMap("detail");
+  }
+
+  // Abre el mapa de la bodega; desde el escáner se vuelve al escáner
+  function openMap(returnTo: "detail" | "scanner") {
+    setMapReturnTo(returnTo);
+    if (returnTo === "detail" && activeOrder) {
+      // Desde el detalle: apuntar al primer producto pendiente
       const first = activeOrder.items.find(i => i.scannedQty < i.quantity) ?? activeOrder.items[0];
       setActiveProd(first ?? null);
     }
+    // Desde el escáner activeProd ya es el producto que se está escaneando
     setScreen("pickingMap");
     void loadMapData();
   }
@@ -1245,6 +1344,7 @@ export default function App() {
           order={activeOrder}
           onScanSuccess={handleScanSuccess}
           onBack={() => setScreen("detail")}
+          onViewMap={() => openMap("scanner")}
         />
       ) : null;
       case "checklist": return activeOrder ? (
@@ -1307,7 +1407,7 @@ export default function App() {
             scanned={items.filter(i => i.scannedQty >= i.quantity).length}
             total={items.length}
             onScan={() => { setScreen("scanner"); }}
-            onBack={() => setScreen("detail")}
+            onBack={() => setScreen(mapReturnTo)}
           />
         );
       })() : null;
