@@ -135,24 +135,46 @@ export class ShelvesService {
       .where(branchId ? eq(shelves.branchId, branchId) : undefined)
       .orderBy(asc(shelves.code));
 
+    const ids = rows.map((r) => Number(r.id));
+
+    // Batch de filas: UNA sola query para todas las estanterías (evita N+1 y
+    // agotar el pool del pooler de Supabase, límite ~15 sesiones).
+    const rowRows =
+      ids.length > 0
+        ? await this.db
+            .select({
+              id: shelfRows.id,
+              shelfId: shelfRows.shelfId,
+              rowNumber: shelfRows.rowNumber,
+              label: shelfRows.label,
+            })
+            .from(shelfRows)
+            .where(inArray(shelfRows.shelfId, ids))
+            .orderBy(asc(shelfRows.rowNumber))
+        : [];
+    const rowsByShelf = new Map<number, { id: number; rowNumber: number; label: string }[]>();
+    for (const rr of rowRows) {
+      const sid = Number(rr.shelfId);
+      if (!rowsByShelf.has(sid)) rowsByShelf.set(sid, []);
+      rowsByShelf.get(sid)!.push({ id: Number(rr.id), rowNumber: rr.rowNumber, label: rr.label });
+    }
+
     const counts = await this.productCountByShelf();
-    return Promise.all(
-      rows.map(async (r) => ({
-        id: Number(r.id),
-        branchId: Number(r.branchId),
-        code: r.code,
-        name: r.name,
-        type: r.type,
-        color: r.color,
-        width: r.width,
-        height: r.height,
-        posX: r.posX,
-        posY: r.posY,
-        rotation: r.rotation,
-        productCount: counts.get(Number(r.id)) ?? 0,
-        rows: await this.rowsOfShelf(Number(r.id)),
-      })),
-    );
+    return rows.map((r) => ({
+      id: Number(r.id),
+      branchId: Number(r.branchId),
+      code: r.code,
+      name: r.name,
+      type: r.type,
+      color: r.color,
+      width: r.width,
+      height: r.height,
+      posX: r.posX,
+      posY: r.posY,
+      rotation: r.rotation,
+      productCount: counts.get(Number(r.id)) ?? 0,
+      rows: rowsByShelf.get(Number(r.id)) ?? [],
+    }));
   }
 
   async createShelf(dto: CreateShelfDto) {

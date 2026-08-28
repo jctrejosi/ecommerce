@@ -37,7 +37,9 @@ export class DrizzleService implements OnModuleInit, OnModuleDestroy {
 
     this.pool = new Pool({
       connectionString: databaseUrl,
-      max: 20, // Máximo de conexiones en el pool
+      // max 15: el pooler de sesión de Supabase limita a ~15 clientes
+      // (pool_size). Con más, el pooler rechaza con EMAXCONNSESSION.
+      max: 15,
       idleTimeoutMillis: 30000, // Tiempo de inactividad antes de cerrar conexión
       connectionTimeoutMillis: 10000, // Timeout de conexión (Render free tier despierta la DB)
       ssl: sslEnabled ? { rejectUnauthorized: false } : false,
