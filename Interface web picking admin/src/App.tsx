@@ -689,9 +689,11 @@ function ProductsView({
   }
 
   return (
-    <div>
-      {/* Barra de búsqueda */}
-      <div className="flex flex-wrap gap-3 items-center mb-4">
+    <div className="flex flex-col" style={{ height: 'calc(100dvh - 210px)', minHeight: 320 }}>
+      {/* Filtros y encabezados — fijos (no hacen scroll) */}
+      <div className="shrink-0">
+        {/* Barra de búsqueda */}
+        <div className="flex flex-wrap gap-3 items-center mb-4">
         <div className="flex-1 min-w-[220px] flex gap-2">
           <input
             value={search}
@@ -759,9 +761,10 @@ function ProductsView({
         {loading ? 'Cargando…' : `${ordered.length} producto(s) · ${unassignedCount} sin estantería`}
         {appliedSearch ? ` para “${appliedSearch}”` : ''}
       </p>
+      </div>
 
-      {/* Lista */}
-      <div className="space-y-2">
+      {/* Lista — único elemento con scroll */}
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 pb-4">
         {unassignedCount > 0 && (
           <div className="flex items-center gap-3 pt-2 pb-1">
             <span className="text-amber-400 text-xs font-800 uppercase tracking-wider">Sin estantería asignada ({unassignedCount})</span>
