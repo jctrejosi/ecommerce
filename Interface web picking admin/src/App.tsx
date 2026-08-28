@@ -104,7 +104,7 @@ export default function App() {
           <div className="mr-auto flex items-center gap-3">
             <img src={headerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
             <div>
-              <h1 className="text-2xl font-800 tracking-tight">Picking DSI <span className="text-amber-400">Admin</span></h1>
+              <h1 className="text-2xl font-800 tracking-tight">Picking <span className="text-amber-400">Admin</span></h1>
               <p className="text-white/40 text-xs font-500 mt-0.5">Estanterías y ubicaciones por sucursal</p>
             </div>
           </div>
