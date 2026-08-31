@@ -62,6 +62,7 @@ export class CampaignsController {
   segmentPreview(
     @Query('productIds') productIds: string,
     @Query('limit') limit?: string,
+    @Query('mode') mode?: string,
   ): Observable<MessageEvent> {
     const ids = (productIds ?? '')
       .split(',')
@@ -70,6 +71,7 @@ export class CampaignsController {
     return this.campaignsService.segmentPreviewStream(
       ids,
       limit ? Number(limit) : undefined,
+      mode === 'bundle' ? 'bundle' : 'multi',
     );
   }
 
@@ -119,6 +121,7 @@ export class CampaignsController {
       dto.limit ?? 500,
       dto.segment,
       dto.modelName,
+      dto.mode,
     );
   }
 }

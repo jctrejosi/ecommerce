@@ -1,6 +1,7 @@
 import {
   IsArray,
   IsEnum,
+  IsIn,
   IsInt,
   IsNumber,
   IsObject,
@@ -127,6 +128,10 @@ export class GenerateRecipientsDto {
   @IsOptional()
   @IsString()
   modelName?: string;
+
+  @IsOptional()
+  @IsIn(['multi', 'bundle'])
+  mode?: 'multi' | 'bundle';
 }
 
 export class GenerateContentDto {

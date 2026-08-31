@@ -411,12 +411,14 @@ export class CampaignsService {
     modelName: string | undefined,
     products: string[],
     limit?: number,
+    mode?: 'multi' | 'bundle',
   ) {
     const data = (await this.postToClustering('/segment-for-products', {
       model_name: modelName ?? this.clusteringModelName(),
       products,
       auto_fit: true,
       ...(limit ? { limit } : {}),
+      mode: mode ?? 'multi',
     })) as {
       best_segment: number;
       buyers: number;
@@ -536,6 +538,7 @@ export class CampaignsService {
   segmentPreviewStream(
     productIds: number[],
     limit = 500,
+    mode: 'multi' | 'bundle' = 'multi',
   ): Observable<MessageEvent> {
     const cap = Math.min(Math.max(limit, 1), 5000);
     return new Observable<MessageEvent>((subscriber) => {
@@ -568,6 +571,7 @@ export class CampaignsService {
               auto_fit: true,
               limit: cap,
               stream: true,
+              mode,
             }),
           });
           if (!resp.ok || !resp.body) {
@@ -637,6 +641,9 @@ export class CampaignsService {
                         segmentTotal: r.segment_total,
                         total: r.total,
                         buyers: r.buyers,
+                        mode: r.mode ?? 'multi',
+                        bundleFallback: r.bundle_fallback ?? false,
+                        note: r.affinity_note,
                         recipients: enriched,
                       },
                     },
@@ -671,6 +678,7 @@ export class CampaignsService {
     limit = 500,
     segment?: number,
     modelName?: string,
+    mode?: 'multi' | 'bundle',
   ) {
     await this.findOne(id);
     const cap = Math.min(Math.max(limit, 1), 5000);
@@ -690,7 +698,7 @@ export class CampaignsService {
       if (extIds.length) {
         // La réplica de analytics (pos.clientes) es la fuente de destinatarios:
         // clustering-api devuelve el mejor segmento + el contacto de cada cliente.
-        const seg = await this.segmentForProducts(modelName, extIds, cap);
+        const seg = await this.segmentForProducts(modelName, extIds, cap, mode);
         if (!seg.recipients.length) {
           throw new BadRequestException(
             'El mejor segmento para estos productos no tiene clientes',

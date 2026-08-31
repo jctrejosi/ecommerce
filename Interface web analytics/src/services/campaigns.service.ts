@@ -111,6 +111,9 @@ export interface SegmentPreviewResult {
   segmentTotal: number;
   total: number;
   buyers: number;
+  mode?: "multi" | "bundle";
+  bundleFallback?: boolean;
+  note?: string;
   recipients: SegmentPreviewRecipient[];
 }
 
@@ -158,10 +161,16 @@ export const campaignsService = {
       body: JSON.stringify(payload),
     }),
 
-  generateRecipients: (id: number, limit = 500, segment?: number, modelName?: string) =>
+  generateRecipients: (
+    id: number,
+    limit = 500,
+    segment?: number,
+    modelName?: string,
+    mode?: "multi" | "bundle",
+  ) =>
     fetchJson<GenerateRecipientsResult>(`/admin/campaigns/${id}/recipients/generate`, {
       method: "POST",
-      body: JSON.stringify({ limit, segment, modelName }),
+      body: JSON.stringify({ limit, segment, modelName, mode }),
     }),
 
   segmentPreviewStream: (
@@ -171,9 +180,10 @@ export const campaignsService = {
       onResult?: (r: SegmentPreviewResult) => void;
       onError?: (msg: string) => void;
     },
+    mode: "multi" | "bundle" = "multi",
   ) => {
     const es = new EventSource(
-      `${API_BASE_URL}/admin/campaigns/segment-preview?productIds=${productIds.join(",")}&limit=500`,
+      `${API_BASE_URL}/admin/campaigns/segment-preview?productIds=${productIds.join(",")}&limit=500&mode=${mode}`,
     );
     es.addEventListener("message", (e) => {
       try {
