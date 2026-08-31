@@ -217,6 +217,35 @@ function startDatabase() {
   return false;
 }
 
+/** PostgreSQL de ANALYTICS (campañas/segmentación, :5436) — db-campaigns/. */
+function startDatabaseCampaigns() {
+  const dbDir = path.join(ROOT, "db-campaigns");
+  console.log(`${C.db}[db-campaigns]${C.reset} 🗄️  PostgreSQL analytics (docker compose up -d) → logs/db.log`);
+
+  const { fd } = openLog("db");
+  const run = (args) =>
+    spawnSync("docker", args, {
+      cwd: dbDir,
+      stdio: ["ignore", fd, fd],
+      timeout: 120000,
+    });
+
+  let r = run(["compose", "up", "-d", "--wait"]);
+  if (r.status === 0) {
+    fs.closeSync(fd);
+    console.log(`${C.db}[db-campaigns]${C.reset} ✅ PostgreSQL analytics listo (:5436)`);
+    return true;
+  }
+  r = run(["compose", "up", "-d"]);
+  fs.closeSync(fd);
+  if (r.status === 0) {
+    console.log(`${C.db}[db-campaigns]${C.reset} ✅ Contenedor arrancado. Esperando :5436...`);
+    return true;
+  }
+  console.warn(`${C.db}[db-campaigns]${C.reset} ⚠️  No se pudo levantar PostgreSQL analytics (detalle en logs/db.log).`);
+  return false;
+}
+
 // ── Arranque de servicios ───────────────────────────────────
 
 function resolveCmd(svc) {
@@ -282,7 +311,8 @@ function printUrls() {
     if (!svc.url) continue;
     console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
   }
-  console.log("  DB        → PostgreSQL localhost:5432 (docker)");
+  console.log("  DB             → PostgreSQL localhost:5432 (docker)");
+  console.log("  DB-CAMPAIGNS   → PostgreSQL localhost:5436 (docker, analytics)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("Logs: logs/*.log  (db, backend, web, admin, analytics, picking, picking-admin, bot, ia)");
 }
@@ -328,6 +358,7 @@ function stopAll() {
     /* noop */
   }
   console.log("\n💡 La BD (docker) sigue corriendo. Para detenerla: cd db/docker && docker compose stop");
+  console.log("   La BD de analytics (campañas): cd db-campaigns && docker compose stop");
 }
 
 // ── Main ────────────────────────────────────────────────────
@@ -340,7 +371,8 @@ async function main() {
         "  node dev.js --prod     → producción (requiere builds previos)\n" +
         "  node dev.js --stop     → detiene los servicios\n" +
         "  node dev.js --help     → esta ayuda\n" +
-        "  cd db/docker && docker compose stop → detener PostgreSQL\n",
+        "  cd db/docker && docker compose stop → detener PostgreSQL\n" +
+        "  cd db-campaigns && docker compose stop → detener PostgreSQL analytics (:5436)\n",
     );
     return;
   }
@@ -355,6 +387,13 @@ async function main() {
   if (!dbUp)
     console.warn(
       `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
+    );
+
+  startDatabaseCampaigns();
+  const dbCampaignsUp = await waitForPort(5436, 90000);
+  if (!dbCampaignsUp)
+    console.warn(
+      `${C.db}[db-campaigns]${C.reset} ⚠️  PostgreSQL analytics no responde en :5436; la segmentación fallará hasta que esté arriba.`,
     );
 
   const pids = {};

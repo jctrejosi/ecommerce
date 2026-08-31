@@ -5,11 +5,14 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  MessageEvent,
   Param,
   Post,
   Put,
   Query,
+  Sse,
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CampaignsService } from './campaigns.service';
 import {
@@ -48,6 +51,26 @@ export class CampaignsController {
   @ApiResponse({ status: 200, description: 'Contenido recomendado' })
   generate(@Body() dto: GenerateContentDto) {
     return this.campaignsService.generateContent(dto);
+  }
+
+  @Sse('segment-preview')
+  @ApiOperation({
+    summary:
+      'Previsualiza la segmentación para unos productos (SSE con progreso por etapas, sin crear campaña)',
+  })
+  @ApiResponse({ status: 200, description: 'Eventos de progreso + resultado final' })
+  segmentPreview(
+    @Query('productIds') productIds: string,
+    @Query('limit') limit?: string,
+  ): Observable<MessageEvent> {
+    const ids = (productIds ?? '')
+      .split(',')
+      .map((v) => Number(v))
+      .filter((n) => Number.isInteger(n) && n > 0);
+    return this.campaignsService.segmentPreviewStream(
+      ids,
+      limit ? Number(limit) : undefined,
+    );
   }
 
   @Get(':id')

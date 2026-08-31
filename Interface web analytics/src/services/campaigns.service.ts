@@ -91,8 +91,27 @@ export interface GenerateRecipientsResult {
   campaignId: number;
   total: number;
   segment: number | null;
-  recipients: { id: number; name: string | null; email: string | null; phone: string | null }[];
+  recipients: { id: number | null; name: string | null; email: string | null; phone: string | null }[];
   note: string;
+}
+
+export interface SegmentPreviewRecipient {
+  cedula: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  segment?: number;
+  propensity?: number | null;
+  uplift?: number | null;
+  percentile?: number | null;
+}
+
+export interface SegmentPreviewResult {
+  segment: number;
+  segmentTotal: number;
+  total: number;
+  buyers: number;
+  recipients: SegmentPreviewRecipient[];
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
@@ -144,6 +163,46 @@ export const campaignsService = {
       method: "POST",
       body: JSON.stringify({ limit, segment, modelName }),
     }),
+
+  segmentPreviewStream: (
+    productIds: number[],
+    opts: {
+      onStage?: (s: { message: string; progress: number }) => void;
+      onResult?: (r: SegmentPreviewResult) => void;
+      onError?: (msg: string) => void;
+    },
+  ) => {
+    const es = new EventSource(
+      `${API_BASE_URL}/admin/campaigns/segment-preview?productIds=${productIds.join(",")}&limit=500`,
+    );
+    es.addEventListener("message", (e) => {
+      try {
+        const d = JSON.parse((e as MessageEvent<string>).data) as
+          | { stage: string; message?: string; progress?: number; error?: string; result?: SegmentPreviewResult }
+          | undefined;
+        if (!d) return;
+        if (d.error) {
+          opts.onError?.(d.error);
+          es.close();
+          return;
+        }
+        if (d.stage && d.stage !== "done" && d.message != null && d.progress != null) {
+          opts.onStage?.({ message: d.message, progress: d.progress });
+        }
+        if (d.result) {
+          opts.onResult?.(d.result);
+          es.close();
+        }
+      } catch {
+        /* tramas inválidas: se ignoran */
+      }
+    });
+    es.onerror = () => {
+      opts.onError?.("No se pudo conectar con el servicio de segmentación");
+      es.close();
+    };
+    return es;
+  },
 
   getRecipients: (id: number) =>
     fetchJson<Recipient[]>(`/admin/campaigns/${id}/recipients`),

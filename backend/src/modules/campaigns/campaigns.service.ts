@@ -2,8 +2,10 @@ import {
   BadRequestException,
   Injectable,
   Logger,
+  MessageEvent,
   NotFoundException,
 } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
@@ -22,6 +24,20 @@ import {
 
 const CHANNELS = ['whatsapp', 'email', 'sms'] as const;
 type Channel = (typeof CHANNELS)[number];
+
+interface SegRecipient {
+  cedula: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  segment?: number;
+  features?: {
+    frecuencia?: number;
+    monetario?: number;
+    ticket_promedio?: number;
+    categorias_distintas?: number;
+  };
+}
 
 @Injectable()
 export class CampaignsService {
@@ -47,6 +63,22 @@ export class CampaignsService {
 
   private clusteringModelName(): string {
     return process.env.CLUSTERING_MODEL_NAME ?? 'seg_rfm_v1';
+  }
+
+  private xgboostApiUrl(): string {
+    return process.env.XGBOOST_API_URL ?? 'http://127.0.0.1:8011';
+  }
+
+  private xgboostModel(): string {
+    return process.env.XGBOOST_PROPENSITY_MODEL ?? 'prop_activo';
+  }
+
+  private upliftApiUrl(): string {
+    return process.env.UPLIFT_API_URL ?? 'http://127.0.0.1:8012';
+  }
+
+  private upliftModel(): string {
+    return process.env.UPLIFT_MODEL ?? 'uplift_dr_learner';
   }
 
   // Vista RFM de la réplica de analytics (cédula + features). El clustering
@@ -324,21 +356,10 @@ export class CampaignsService {
   }
 
   /**
-   * Consulta a clustering-api las cédulas (cliente_cod) que pertenecen a un
-   * cluster. Devuelve la lista de cédulas para mapearlas a `customers`.
+   * POST genérico a clustering-api (protegido con X-Admin-Key).
    */
-  private async fetchSegmentCedulas(
-    segment: number,
-    modelName?: string,
-  ): Promise<string[]> {
-    const url = `${this.clusteringApiUrl()}/assign-from-db`;
-    const body = {
-      model_name: modelName ?? this.clusteringModelName(),
-      query: this.RFM_QUERY,
-      id_column: this.RFM_ID_COLUMN,
-      label: segment,
-    };
-
+  private async postToClustering(path: string, body: Record<string, unknown>) {
+    const url = `${this.clusteringApiUrl()}${path}`;
     let resp: Response;
     try {
       resp = await fetch(url, {
@@ -355,17 +376,294 @@ export class CampaignsService {
         'El servicio de segmentación (clustering-api) no está disponible',
       );
     }
-
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');
       this.logger.error(`clustering-api respondió ${resp.status}: ${text}`);
       throw new BadRequestException(
-        'El servicio de segmentación no pudo asignar el segmento',
+        'El servicio de segmentación no pudo completar la operación',
       );
     }
+    return resp.json();
+  }
 
-    const data = (await resp.json()) as { ids?: unknown[] };
+  /**
+   * Consulta a clustering-api las cédulas (cliente_cod) que pertenecen a un
+   * cluster. Devuelve la lista de cédulas para mapearlas a `customers`.
+   */
+  private async fetchSegmentCedulas(
+    segment: number,
+    modelName?: string,
+  ): Promise<string[]> {
+    const data = (await this.postToClustering('/assign-from-db', {
+      model_name: modelName ?? this.clusteringModelName(),
+      query: this.RFM_QUERY,
+      id_column: this.RFM_ID_COLUMN,
+      label: segment,
+    })) as { ids?: unknown[] };
     return (data.ids ?? []).map((v) => String(v));
+  }
+
+  /**
+   * Evalúa en clustering-api el mejor segmento para los productos de la
+   * campaña. Con `auto_fit: true` entrena el modelo si aún no existe.
+   */
+  private async segmentForProducts(
+    modelName: string | undefined,
+    products: string[],
+    limit?: number,
+  ) {
+    const data = (await this.postToClustering('/segment-for-products', {
+      model_name: modelName ?? this.clusteringModelName(),
+      products,
+      auto_fit: true,
+      ...(limit ? { limit } : {}),
+    })) as {
+      best_segment: number;
+      buyers: number;
+      segment_total: number;
+      total: number;
+      recipients: SegRecipient[];
+    };
+    return {
+      best_segment: data.best_segment,
+      buyers: data.buyers,
+      segment_total: data.segment_total,
+      total: data.total,
+      recipients: data.recipients ?? [],
+    };
+  }
+
+  /**
+   * POST genérico a un servicio de análisis (XGBoost / Uplift) sin admin key.
+   * Levanta un error claro si el servicio no responde.
+   */
+  private async postToService(baseUrl: string, path: string, body: Record<string, unknown>) {
+    const url = `${baseUrl}${path}`;
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      this.logger.error(`No se pudo contactar ${url}: ${e}`);
+      throw new BadRequestException('Un servicio de análisis no está disponible');
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      this.logger.error(`${url} respondió ${resp.status}: ${text}`);
+      throw new BadRequestException('Un servicio de análisis no pudo completar la operación');
+    }
+    return resp.json();
+  }
+
+  /** Filas de features (RFM + segmento) que esperan los modelos de xgboost/uplift. */
+  private buildModelRows(recipients: SegRecipient[]) {
+    return recipients.map((r) => ({
+      frecuencia: r.features?.frecuencia ?? 0,
+      monetario: r.features?.monetario ?? 0,
+      ticket_promedio: r.features?.ticket_promedio ?? 0,
+      categorias_distintas: r.features?.categorias_distintas ?? 0,
+      segmento: String(r.segment ?? 0),
+    }));
+  }
+
+  /** Propensión de compra por cliente (XGBoost). Devuelve null si falla. */
+  private async scorePropensity(recipients: SegRecipient[]): Promise<number[] | null> {
+    try {
+      const data = (await this.postToService(this.xgboostApiUrl(), '/propensity/predict', {
+        model_name: this.xgboostModel(),
+        data: this.buildModelRows(recipients),
+      })) as {
+        predictions?: { index: number; label: string; probabilities?: Record<string, number> }[];
+      };
+      return (data.predictions ?? []).map((p) => p.probabilities?.['1'] ?? 0);
+    } catch (e) {
+      this.logger.warn(`scorePropensity no disponible: ${e}`);
+      return null;
+    }
+  }
+
+  /** Persuasibilidad (uplift) por cliente. Devuelve null si falla. */
+  private async scoreUplift(
+    recipients: SegRecipient[],
+  ): Promise<{ uplift: number; percentile: number }[] | null> {
+    try {
+      const data = (await this.postToService(this.upliftApiUrl(), '/uplift/predict', {
+        model_name: this.upliftModel(),
+        data: this.buildModelRows(recipients),
+        with_percentile: true,
+      })) as {
+        predictions?: { index: number; uplift_score: number; percentile?: number }[];
+      };
+      return (data.predictions ?? []).map((p) => ({
+        uplift: p.uplift_score,
+        percentile: p.percentile ?? 0,
+      }));
+    } catch (e) {
+      this.logger.warn(`scoreUplift no disponible: ${e}`);
+      return null;
+    }
+  }
+
+  /** external_id (articulo_cod del legado) de unos productIds dados. */
+  private async externalIdsForProducts(productIds: number[]): Promise<string[]> {
+    if (!productIds.length) return [];
+    const rows = await this.db
+      .select({ externalId: products.externalId })
+      .from(products)
+      .where(inArray(products.id, productIds.map((p) => BigInt(p))));
+    return rows
+      .map((r) => r.externalId)
+      .filter((x): x is string => Boolean(x));
+  }
+
+  /** external_id (articulo_cod del legado) de los productos de la campaña. */
+  private async campaignProductExternalIds(campaignId: number): Promise<string[]> {
+    const rows = await this.db
+      .select({ productId: campaignProducts.productId })
+      .from(campaignProducts)
+      .where(eq(campaignProducts.campaignId, campaignId));
+    return this.externalIdsForProducts(rows.map((r) => r.productId));
+  }
+
+  /**
+   * Previsualización de la segmentación para el wizard (SSE con progreso).
+   * Hace proxy del stream de clustering-api y re-emite cada evento de etapa
+   * y el resultado final al cliente.
+   */
+  segmentPreviewStream(
+    productIds: number[],
+    limit = 500,
+  ): Observable<MessageEvent> {
+    const cap = Math.min(Math.max(limit, 1), 5000);
+    return new Observable<MessageEvent>((subscriber) => {
+      let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
+      let closed = false;
+
+      void (async () => {
+        try {
+          const extIds = await this.externalIdsForProducts(productIds);
+          if (!extIds.length) {
+            subscriber.next({
+              data: {
+                stage: 'error',
+                error: 'Los productos seleccionados no tienen external_id en la réplica',
+              },
+            });
+            subscriber.complete();
+            return;
+          }
+
+          const resp = await fetch(`${this.clusteringApiUrl()}/segment-for-products`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Admin-Key': this.clusteringApiKey(),
+            },
+            body: JSON.stringify({
+              model_name: this.clusteringModelName(),
+              products: extIds,
+              auto_fit: true,
+              limit: cap,
+              stream: true,
+            }),
+          });
+          if (!resp.ok || !resp.body) {
+            subscriber.next({
+              data: { stage: 'error', error: `El servicio de segmentación respondió ${resp.status}` },
+            });
+            subscriber.complete();
+            return;
+          }
+
+          reader = resp.body.getReader();
+          const decoder = new TextDecoder();
+          let buffer = '';
+          while (!closed) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const events = buffer.split('\n\n');
+            buffer = events.pop() ?? '';
+            for (const evt of events) {
+              const line = evt.split('\n').find((l) => l.startsWith('data:'));
+              if (!line) continue;
+              const raw = line.slice(5).trim();
+              if (!raw) continue;
+              try {
+                const parsed = JSON.parse(raw);
+                if (parsed?.stage === 'done' && parsed?.result) {
+                  const r = parsed.result;
+                  const recipients: SegRecipient[] = r.recipients ?? [];
+
+                  // Capa 2 — XGBoost: propensión de compra.
+                  subscriber.next({
+                    data: { stage: 'xgboost', message: 'Puntuando propensión de compra (XGBoost)…', progress: 88 },
+                  });
+                  const propensity = await this.scorePropensity(recipients);
+
+                  // Capa 3 — Uplift: persuasibilidad.
+                  subscriber.next({
+                    data: { stage: 'uplift', message: 'Calculando persuasibilidad (Uplift)…', progress: 94 },
+                  });
+                  const uplift = await this.scoreUplift(recipients);
+
+                  const enriched = recipients.map((rc, i) => ({
+                    cedula: rc.cedula,
+                    name: rc.name,
+                    email: rc.email,
+                    phone: rc.phone,
+                    segment: rc.segment,
+                    propensity: propensity ? (propensity[i] ?? null) : null,
+                    uplift: uplift ? (uplift[i]?.uplift ?? null) : null,
+                    percentile: uplift ? (uplift[i]?.percentile ?? null) : null,
+                  }));
+
+                  // Ranking: persuasibles primero (uplift), luego propensión.
+                  enriched.sort((a, b) => {
+                    const du = (b.uplift ?? -Infinity) - (a.uplift ?? -Infinity);
+                    if (du !== 0) return du;
+                    return (b.propensity ?? -Infinity) - (a.propensity ?? -Infinity);
+                  });
+
+                  subscriber.next({
+                    data: {
+                      stage: 'done',
+                      progress: 100,
+                      result: {
+                        segment: r.best_segment,
+                        segmentTotal: r.segment_total,
+                        total: r.total,
+                        buyers: r.buyers,
+                        recipients: enriched,
+                      },
+                    },
+                  });
+                } else {
+                  subscriber.next({ data: parsed });
+                }
+              } catch {
+                /* tramas malformadas: se ignoran */
+              }
+            }
+          }
+        } catch (e) {
+          this.logger.error(`segment-preview stream error: ${e}`);
+          subscriber.next({
+            data: { stage: 'error', error: 'No se pudo completar la segmentación' },
+          });
+        } finally {
+          if (!closed) subscriber.complete();
+        }
+      })();
+
+      return () => {
+        closed = true;
+        reader?.cancel().catch(() => undefined);
+      };
+    });
   }
 
   async generateRecipients(
@@ -377,45 +675,79 @@ export class CampaignsService {
     await this.findOne(id);
     const cap = Math.min(Math.max(limit, 1), 5000);
 
-    let pool: {
-      id: bigint;
+    let items: {
       name: string | null;
-      email: string;
+      email: string | null;
       phone: string | null;
+      customerId: number | null;
     }[];
     let note: string;
+    let segInfo: { segment: number; buyers: number } | null = null;
 
     if (segment === undefined) {
-      // Fallback aleatorio (compatibilidad si aún no se usa segmentación).
-      pool = await this.db
-        .select({
-          id: customers.id,
-          name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
-          email: customers.email,
-          phone: customers.phone,
-        })
-        .from(customers)
-        .where(
-          and(
-            eq(customers.isActive, true),
-            isNull(customers.deletedAt),
-            sql`${customers.email} IS NOT NULL AND ${customers.email} <> ''`,
-          ),
-        )
-        .orderBy(sql`random()`)
-        .limit(cap);
-      note = 'Recomendación aleatoria (segmentación inteligente no configurada)';
+      // ── Modo automático: segmenta según los productos de la campaña ──
+      const extIds = await this.campaignProductExternalIds(id);
+      if (extIds.length) {
+        // La réplica de analytics (pos.clientes) es la fuente de destinatarios:
+        // clustering-api devuelve el mejor segmento + el contacto de cada cliente.
+        const seg = await this.segmentForProducts(modelName, extIds, cap);
+        if (!seg.recipients.length) {
+          throw new BadRequestException(
+            'El mejor segmento para estos productos no tiene clientes',
+          );
+        }
+        items = [...seg.recipients]
+          .sort(() => Math.random() - 0.5)
+          .slice(0, cap)
+          .map((r) => ({
+            name: r.name,
+            email: r.email,
+            phone: r.phone,
+            customerId: null,
+          }));
+        segInfo = { segment: seg.best_segment, buyers: seg.buyers };
+        note = `Segmentación automática: segmento ${seg.best_segment} (${seg.total} clientes, ${seg.buyers} con afinidad a los productos; ${items.length} destinatarios)`;
+      } else {
+        // La campaña no tiene productos con external_id → aleatorio desde customers.
+        const pool = await this.db
+          .select({
+            id: customers.id,
+            name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
+            email: customers.email,
+            phone: customers.phone,
+          })
+          .from(customers)
+          .where(
+            and(
+              eq(customers.isActive, true),
+              isNull(customers.deletedAt),
+              sql`${customers.email} IS NOT NULL AND ${customers.email} <> ''`,
+            ),
+          )
+          .orderBy(sql`random()`)
+          .limit(cap);
+        if (!pool.length) {
+          throw new BadRequestException(
+            'No hay clientes disponibles para recomendar',
+          );
+        }
+        items = pool.map((c) => ({
+          name: c.name || null,
+          email: c.email,
+          phone: c.phone || null,
+          customerId: Number(c.id),
+        }));
+        note = 'Recomendación aleatoria (la campaña no tiene productos con external_id)';
+      }
     } else {
+      // ── Modo manual: segmento específico (contactos del ecommerce) ──
       const cedulas = await this.fetchSegmentCedulas(segment, modelName);
       if (!cedulas.length) {
         throw new BadRequestException(
           `El segmento ${segment} no tiene clientes asignados`,
         );
       }
-
-      // La cédula de la vista RFM (cliente_cod) corresponde a
-      // customers.documentNumber (ver core/NOTAS_LEGADO.md).
-      pool = await this.db
+      const pool = await this.db
         .select({
           id: customers.id,
           name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
@@ -433,10 +765,22 @@ export class CampaignsService {
         )
         .orderBy(sql`random()`)
         .limit(cap);
+      if (!pool.length) {
+        throw new BadRequestException(
+          'No hay clientes disponibles para recomendar',
+        );
+      }
+      items = pool.map((c) => ({
+        name: c.name || null,
+        email: c.email,
+        phone: c.phone || null,
+        customerId: Number(c.id),
+      }));
+      segInfo = { segment, buyers: cedulas.length };
       note = `Segmentación inteligente: cluster ${segment} (${cedulas.length} clientes en el segmento, ${pool.length} con contacto)`;
     }
 
-    if (!pool.length) {
+    if (!items.length) {
       throw new BadRequestException(
         'No hay clientes disponibles para recomendar',
       );
@@ -447,33 +791,33 @@ export class CampaignsService {
       .where(eq(campaignRecipients.campaignId, id));
 
     await this.db.insert(campaignRecipients).values(
-      pool.map((c) => ({
+      items.map((r) => ({
         campaignId: id,
-        customerId: Number(c.id),
-        name: c.name || null,
-        email: c.email,
-        phone: c.phone || null,
+        customerId: r.customerId,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
       })),
     );
 
     await this.db
       .update(campaigns)
-      .set({ audienceCount: pool.length, updatedAt: new Date().toISOString() })
+      .set({ audienceCount: items.length, updatedAt: new Date().toISOString() })
       .where(eq(campaigns.id, BigInt(id)));
 
-    this.logger.log(`Campaña ${id}: ${pool.length} clientes recomendados`);
+    this.logger.log(`Campaña ${id}: ${items.length} destinatarios recomendados`);
 
     return {
       campaignId: id,
-      total: pool.length,
-      segment: segment ?? null,
-      recipients: pool.map((c) => ({
-        id: Number(c.id),
-        name: c.name,
-        email: c.email,
-        phone: c.phone,
-      })),
+      total: items.length,
+      segment: segInfo?.segment ?? null,
       note,
+      recipients: items.map((r) => ({
+        id: r.customerId ?? null,
+        name: r.name,
+        email: r.email,
+        phone: r.phone,
+      })),
     };
   }
 

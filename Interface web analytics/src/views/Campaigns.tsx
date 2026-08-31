@@ -16,6 +16,7 @@ import {
   type Campaign as ApiCampaign,
   type CampaignChannel,
   type Recipient,
+  type SegmentPreviewResult,
 } from "../services/campaigns.service";
 import { catalogService, type CatalogProduct, type CatalogCategory } from "../services/catalog.service";
 
@@ -873,8 +874,44 @@ function Step3({
 }) {
   const [scheduled, setScheduled] = useState(false);
   const activeChannels = Object.entries(channels).filter(([, v]) => v).map(([k]) => k);
-  // Estimación fija mientras no esté conectada la segmentación inteligente.
-  const totalReach = ESTIMATED_AUDIENCE;
+
+  // Previsualización de la segmentación (analytics / clustering-api) vía SSE:
+  // corre al entrar al paso, muestra el progreso por etapas y el resultado.
+  const [seg, setSeg] = useState<SegmentPreviewResult | null>(null);
+  const [segLoading, setSegLoading] = useState(true);
+  const [segStage, setSegStage] = useState<{ message: string; progress: number }>({
+    message: "Analizando el comportamiento de compra de los clientes…",
+    progress: 3,
+  });
+  const [segError, setSegError] = useState<string | null>(null);
+  const [clientsOpen, setClientsOpen] = useState(false);
+
+  useEffect(() => {
+    const ids = products.map((p) => p.id).filter((x): x is number => x != null);
+    if (!ids.length) {
+      setSegError("La campaña no tiene productos seleccionados");
+      setSegLoading(false);
+      return;
+    }
+    setSegLoading(true);
+    setSegError(null);
+    setSegStage({ message: "Conectando con el servicio de segmentación…", progress: 2 });
+    const es = campaignsService.segmentPreviewStream(ids, {
+      onStage: (s) => setSegStage(s),
+      onResult: (r) => {
+        setSeg(r);
+        setSegLoading(false);
+      },
+      onError: (msg) => {
+        setSegError(msg);
+        setSegLoading(false);
+      },
+    });
+    return () => es.close();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const totalReach = seg?.segmentTotal ?? ESTIMATED_AUDIENCE;
 
   if (sent) {
     return (
@@ -935,8 +972,34 @@ function Step3({
               </div>
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Público objetivo</span>
-                <span className="text-sm font-bold text-gray-900">{totalReach.toLocaleString()} clientes</span>
+                <div className="flex items-center gap-2.5">
+                  {segLoading ? (
+                    <span className="text-sm text-gray-400">segmentando…</span>
+                  ) : segError ? (
+                    <span className="text-sm font-bold text-red-600">—</span>
+                  ) : (
+                    <span className="text-sm font-bold text-gray-900">{totalReach.toLocaleString()} clientes</span>
+                  )}
+                  <button
+                    onClick={() => setClientsOpen(true)}
+                    disabled={!seg || seg.recipients.length === 0}
+                    className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    title="Ver qué clientes cumplen el estándar"
+                  >
+                    <Users size={13} /> Ver clientes
+                  </button>
+                </div>
               </div>
+              {segError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  ⚠ No se pudo ejecutar la segmentación: {segError}
+                </p>
+              )}
+              {seg && !segError && (
+                <p className="text-[11px] text-gray-400">
+                  Segmento {seg.segment} · {seg.buyers.toLocaleString()} clientes con afinidad a los productos · mostrando {seg.total.toLocaleString()} de {seg.segmentTotal.toLocaleString()}
+                </p>
+              )}
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Canales</span>
                 <div className="flex gap-1.5">
@@ -956,6 +1019,15 @@ function Step3({
               </div>
             </div>
           </div>
+
+          {clientsOpen && seg && (
+            <RecipientsModal
+              title="Clientes segmentados"
+              subtitle={`Segmento ${seg.segment} — mostrando ${seg.total.toLocaleString()} de ${seg.segmentTotal.toLocaleString()} clientes que cumplen el estándar`}
+              recipients={seg.recipients}
+              onClose={() => setClientsOpen(false)}
+            />
+          )}
 
           {/* Schedule option */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-6">
@@ -1001,6 +1073,24 @@ function Step3({
           <Send size={15} /> {sending ? "Creando campaña…" : scheduled ? "Programar Campaña" : "Enviar Ahora"}
         </button>
       </div>
+
+      {/* ── Pantalla de carga de la segmentación ── */}
+      {segLoading && (
+        <div className="fixed inset-0 z-60 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-400 flex items-center justify-center shadow-lg animate-pulse">
+            <RefreshCw size={28} className="text-amber-900 animate-spin" />
+          </div>
+          <h3 className="mt-6 text-lg font-bold text-gray-900 text-center">Trabajando en la segmentación…</h3>
+          <p className="mt-2 text-sm text-gray-500 text-center max-w-sm">{segStage.message}</p>
+          <div className="mt-6 w-64 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-400 rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(segStage.progress, 99)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-gray-400 font-semibold">{Math.round(segStage.progress)}%</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1257,19 +1347,57 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
 }
 
 /* ─── Modal de clientes segmentados ──────────────── */
-function RecipientsModal({ campaign, onClose }: { campaign: CampaignCardData; onClose: () => void }) {
-  const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [loading, setLoading] = useState(true);
+type SegClientRow = {
+  id: number | string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  status?: string;
+  segment?: number;
+  propensity?: number | null;
+  uplift?: number | null;
+  percentile?: number | null;
+};
+
+function RecipientsModal({
+  title,
+  subtitle,
+  recipients: preset,
+  campaignId,
+  onClose,
+}: {
+  title: string;
+  subtitle?: string;
+  recipients?: {
+    name: string | null;
+    email: string | null;
+    phone: string | null;
+    segment?: number;
+    propensity?: number | null;
+    uplift?: number | null;
+    percentile?: number | null;
+  }[];
+  campaignId?: number;
+  onClose: () => void;
+}) {
+  const [recipients, setRecipients] = useState<SegClientRow[]>([]);
+  const [loading, setLoading] = useState(campaignId != null && preset == null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      if (preset) {
+        setRecipients(preset.map((r, i) => ({ id: i, ...r })));
+        setLoading(false);
+        return;
+      }
+      if (campaignId == null) return;
       setLoading(true);
       setError(null);
       try {
-        const list = await campaignsService.getRecipients(campaign.id);
+        const list = await campaignsService.getRecipients(campaignId);
         if (!cancelled) setRecipients(list);
       } catch (e) {
         if (!cancelled) setError(e instanceof Error ? e.message : "No se pudieron cargar los clientes");
@@ -1280,7 +1408,7 @@ function RecipientsModal({ campaign, onClose }: { campaign: CampaignCardData; on
     return () => {
       cancelled = true;
     };
-  }, [campaign.id]);
+  }, [campaignId, preset]);
 
   const q = query.trim().toLowerCase();
   const filtered = recipients.filter((r) =>
@@ -1304,9 +1432,9 @@ function RecipientsModal({ campaign, onClose }: { campaign: CampaignCardData; on
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="min-w-0 pr-3">
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Users size={18} className="text-amber-600" /> Clientes segmentados
+              <Users size={18} className="text-amber-600" /> {title}
             </h3>
-            <p className="text-sm text-gray-500 mt-0.5 truncate">{campaign.name}</p>
+            {subtitle && <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitle}</p>}
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
             <X size={16} />
@@ -1348,7 +1476,7 @@ function RecipientsModal({ campaign, onClose }: { campaign: CampaignCardData; on
               </p>
               <p className="text-xs text-gray-400 mt-1">
                 {recipients.length === 0
-                  ? "Esta campaña aún no tiene destinatarios."
+                  ? "No hay clientes que cumplan el estándar de esta segmentación."
                   : "Ningún cliente coincide con la búsqueda."}
               </p>
             </div>
@@ -1365,7 +1493,13 @@ function RecipientsModal({ campaign, onClose }: { campaign: CampaignCardData; on
                   </div>
                   <div className="text-right shrink-0">
                     <p className="text-xs text-gray-500">{r.phone ?? "—"}</p>
-                    <p className="text-[10px] font-bold text-gray-400 uppercase">{r.status}</p>
+                    {(r.propensity != null || r.uplift != null) && (
+                      <p className="text-[10px] font-semibold text-gray-400">
+                        {r.propensity != null ? `P ${Math.round(r.propensity * 100)}%` : ""}
+                        {r.uplift != null ? ` · U ${r.uplift.toFixed(3)}` : ""}
+                      </p>
+                    )}
+                    {r.status && <p className="text-[10px] font-bold text-gray-400 uppercase">{r.status}</p>}
                   </div>
                 </li>
               ))}
@@ -1622,7 +1756,12 @@ export default function Campaigns() {
       )}
 
       {clientsModal && (
-        <RecipientsModal campaign={clientsModal} onClose={() => setClientsModal(null)} />
+        <RecipientsModal
+          title="Clientes segmentados"
+          subtitle={clientsModal.name}
+          campaignId={clientsModal.id}
+          onClose={() => setClientsModal(null)}
+        />
       )}
     </>
   );
