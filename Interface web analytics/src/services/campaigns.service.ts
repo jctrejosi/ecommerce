@@ -79,6 +79,22 @@ export interface GeneratedContent {
   error?: string;
 }
 
+export interface Recipient {
+  id: number;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  status: string;
+}
+
+export interface GenerateRecipientsResult {
+  campaignId: number;
+  total: number;
+  segment: number | null;
+  recipients: { id: number; name: string | null; email: string | null; phone: string | null }[];
+  note: string;
+}
+
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${input}`, {
     credentials: "include",
@@ -123,14 +139,12 @@ export const campaignsService = {
       body: JSON.stringify(payload),
     }),
 
-  generateRecipients: (id: number, limit = 500) =>
-    fetchJson<{ total: number }>(`/admin/campaigns/${id}/recipients/generate`, {
+  generateRecipients: (id: number, limit = 500, segment?: number, modelName?: string) =>
+    fetchJson<GenerateRecipientsResult>(`/admin/campaigns/${id}/recipients/generate`, {
       method: "POST",
-      body: JSON.stringify({ limit }),
+      body: JSON.stringify({ limit, segment, modelName }),
     }),
 
   getRecipients: (id: number) =>
-    fetchJson<{ id: number; name: string | null; email: string | null; phone: string | null; status: string }[]>(
-      `/admin/campaigns/${id}/recipients`,
-    ),
+    fetchJson<Recipient[]>(`/admin/campaigns/${id}/recipients`),
 };

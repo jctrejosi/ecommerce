@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   campaignMessages,
@@ -36,6 +36,23 @@ export class CampaignsService {
   private iaServiceUrl(): string {
     return process.env.IA_SERVICE_URL ?? 'http://127.0.0.1:8002';
   }
+
+  private clusteringApiUrl(): string {
+    return process.env.CLUSTERING_API_URL ?? 'http://127.0.0.1:8010';
+  }
+
+  private clusteringApiKey(): string {
+    return process.env.CLUSTERING_API_KEY ?? 'change-me';
+  }
+
+  private clusteringModelName(): string {
+    return process.env.CLUSTERING_MODEL_NAME ?? 'seg_rfm_v1';
+  }
+
+  // Vista RFM de la réplica de analytics (cédula + features). El clustering
+  // la lee server-side y devuelve ids (= cédula/NIT) + labels.
+  private readonly RFM_QUERY = 'SELECT * FROM analytics.vw_rfm_clientes';
+  private readonly RFM_ID_COLUMN = 'cliente_cod';
 
   /* ── Helpers de serialización (bigint → number) ─── */
 
@@ -292,8 +309,9 @@ export class CampaignsService {
     return map;
   }
 
-  /* ── Recomendación de clientes (ALEATORIA por ahora) ───
-     TODO: reemplazar por segmentación inteligente. */
+  /* ── Recomendación de clientes (segmentación inteligente) ──
+     Con `segment` llama a clustering-api y mapea cédulas → clientes.
+     Sin `segment` mantiene el fallback aleatorio. */
 
   async listRecipients(id: number) {
     await this.findOne(id);
@@ -305,27 +323,118 @@ export class CampaignsService {
     return rows.map((r) => this.toRecipient(r));
   }
 
-  async generateRecipients(id: number, limit = 500) {
+  /**
+   * Consulta a clustering-api las cédulas (cliente_cod) que pertenecen a un
+   * cluster. Devuelve la lista de cédulas para mapearlas a `customers`.
+   */
+  private async fetchSegmentCedulas(
+    segment: number,
+    modelName?: string,
+  ): Promise<string[]> {
+    const url = `${this.clusteringApiUrl()}/assign-from-db`;
+    const body = {
+      model_name: modelName ?? this.clusteringModelName(),
+      query: this.RFM_QUERY,
+      id_column: this.RFM_ID_COLUMN,
+      label: segment,
+    };
+
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Key': this.clusteringApiKey(),
+        },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      this.logger.error(`No se pudo contactar clustering-api en ${url}: ${e}`);
+      throw new BadRequestException(
+        'El servicio de segmentación (clustering-api) no está disponible',
+      );
+    }
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      this.logger.error(`clustering-api respondió ${resp.status}: ${text}`);
+      throw new BadRequestException(
+        'El servicio de segmentación no pudo asignar el segmento',
+      );
+    }
+
+    const data = (await resp.json()) as { ids?: unknown[] };
+    return (data.ids ?? []).map((v) => String(v));
+  }
+
+  async generateRecipients(
+    id: number,
+    limit = 500,
+    segment?: number,
+    modelName?: string,
+  ) {
     await this.findOne(id);
     const cap = Math.min(Math.max(limit, 1), 5000);
 
-    const pool = await this.db
-      .select({
-        id: customers.id,
-        name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
-        email: customers.email,
-        phone: customers.phone,
-      })
-      .from(customers)
-      .where(
-        and(
-          eq(customers.isActive, true),
-          isNull(customers.deletedAt),
-          sql`${customers.email} IS NOT NULL AND ${customers.email} <> ''`,
-        ),
-      )
-      .orderBy(sql`random()`)
-      .limit(cap);
+    let pool: {
+      id: bigint;
+      name: string | null;
+      email: string;
+      phone: string | null;
+    }[];
+    let note: string;
+
+    if (segment === undefined) {
+      // Fallback aleatorio (compatibilidad si aún no se usa segmentación).
+      pool = await this.db
+        .select({
+          id: customers.id,
+          name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
+          email: customers.email,
+          phone: customers.phone,
+        })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.isActive, true),
+            isNull(customers.deletedAt),
+            sql`${customers.email} IS NOT NULL AND ${customers.email} <> ''`,
+          ),
+        )
+        .orderBy(sql`random()`)
+        .limit(cap);
+      note = 'Recomendación aleatoria (segmentación inteligente no configurada)';
+    } else {
+      const cedulas = await this.fetchSegmentCedulas(segment, modelName);
+      if (!cedulas.length) {
+        throw new BadRequestException(
+          `El segmento ${segment} no tiene clientes asignados`,
+        );
+      }
+
+      // La cédula de la vista RFM (cliente_cod) corresponde a
+      // customers.documentNumber (ver core/NOTAS_LEGADO.md).
+      pool = await this.db
+        .select({
+          id: customers.id,
+          name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
+          email: customers.email,
+          phone: customers.phone,
+        })
+        .from(customers)
+        .where(
+          and(
+            eq(customers.isActive, true),
+            isNull(customers.deletedAt),
+            sql`${customers.email} IS NOT NULL AND ${customers.email} <> ''`,
+            inArray(customers.documentNumber, cedulas),
+          ),
+        )
+        .orderBy(sql`random()`)
+        .limit(cap);
+      note = `Segmentación inteligente: cluster ${segment} (${cedulas.length} clientes en el segmento, ${pool.length} con contacto)`;
+    }
 
     if (!pool.length) {
       throw new BadRequestException(
@@ -352,20 +461,19 @@ export class CampaignsService {
       .set({ audienceCount: pool.length, updatedAt: new Date().toISOString() })
       .where(eq(campaigns.id, BigInt(id)));
 
-    this.logger.log(
-      `Campaña ${id}: recomendación aleatoria de ${pool.length} clientes`,
-    );
+    this.logger.log(`Campaña ${id}: ${pool.length} clientes recomendados`);
 
     return {
       campaignId: id,
       total: pool.length,
+      segment: segment ?? null,
       recipients: pool.map((c) => ({
         id: Number(c.id),
         name: c.name,
         email: c.email,
         phone: c.phone,
       })),
-      note: 'Recomendación aleatoria (la segmentación inteligente se conectará después)',
+      note,
     };
   }
 

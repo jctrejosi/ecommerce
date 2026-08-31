@@ -118,6 +118,15 @@ export class GenerateRecipientsDto {
   @IsArray()
   @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
   channels?: ('whatsapp' | 'email' | 'sms')[];
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  segment?: number;
+
+  @IsOptional()
+  @IsString()
+  modelName?: string;
 }
 
 export class GenerateContentDto {

@@ -84,7 +84,7 @@ export class CampaignsController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary:
-      'Generar recomendación de clientes (aleatoria por ahora; segmentación inteligente después)',
+      'Generar recomendación de clientes (segmentación inteligente vía clustering-api; sin segmento usa aleatorio)',
   })
   @ApiResponse({ status: 200, description: 'Destinatarios recomendados' })
   generateRecipients(
@@ -94,6 +94,8 @@ export class CampaignsController {
     return this.campaignsService.generateRecipients(
       Number(id),
       dto.limit ?? 500,
+      dto.segment,
+      dto.modelName,
     );
   }
 }

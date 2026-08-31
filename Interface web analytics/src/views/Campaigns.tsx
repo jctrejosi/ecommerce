@@ -15,6 +15,7 @@ import {
   campaignsService,
   type Campaign as ApiCampaign,
   type CampaignChannel,
+  type Recipient,
 } from "../services/campaigns.service";
 import { catalogService, type CatalogProduct, type CatalogCategory } from "../services/catalog.service";
 
@@ -1145,11 +1146,14 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
         messages,
       });
 
-      // Recomendación de clientes (aleatoria por ahora)
-      await campaignsService.generateRecipients(created.id, 500).catch(() => {});
+      // Recomendación de clientes (segmentación vía clustering-api cuando
+      // se indique segmento; por ahora sin segmento → aleatorio).
+      const gen = await campaignsService.generateRecipients(created.id, 500).catch(() => null);
 
       setSent(true);
-      onCreated(apiToCard(created));
+      const card = apiToCard(created);
+      if (gen) card.audience = gen.total;
+      onCreated(card);
       setTimeout(onClose, 1800);
     } catch (e) {
       setSendError(e instanceof Error ? e.message : "Error creando la campaña");
@@ -1252,8 +1256,129 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   );
 }
 
+/* ─── Modal de clientes segmentados ──────────────── */
+function RecipientsModal({ campaign, onClose }: { campaign: CampaignCardData; onClose: () => void }) {
+  const [recipients, setRecipients] = useState<Recipient[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const list = await campaignsService.getRecipients(campaign.id);
+        if (!cancelled) setRecipients(list);
+      } catch (e) {
+        if (!cancelled) setError(e instanceof Error ? e.message : "No se pudieron cargar los clientes");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [campaign.id]);
+
+  const q = query.trim().toLowerCase();
+  const filtered = recipients.filter((r) =>
+    !q ||
+    (r.name ?? "").toLowerCase().includes(q) ||
+    (r.email ?? "").toLowerCase().includes(q) ||
+    (r.phone ?? "").toLowerCase().includes(q),
+  );
+
+  const initials = (name: string | null) => {
+    if (!name) return "?";
+    const parts = name.trim().split(/\s+/);
+    return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div className="min-w-0 pr-3">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Users size={18} className="text-amber-600" /> Clientes segmentados
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5 truncate">{campaign.name}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Toolbar */}
+        <div className="px-6 py-3 border-b border-gray-100 shrink-0 flex items-center gap-3">
+          <div className="relative flex-1">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar por nombre, email o teléfono…"
+              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+            />
+          </div>
+          <span className="text-xs text-gray-400 font-semibold whitespace-nowrap">
+            {filtered.length.toLocaleString()} de {recipients.length.toLocaleString()}
+          </span>
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <RefreshCw size={22} className="text-gray-300 animate-spin" />
+              <p className="text-xs text-gray-400">Cargando clientes…</p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="text-sm font-semibold text-red-600">{error}</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Users size={24} className="text-gray-300 mb-3" />
+              <p className="text-sm font-semibold text-gray-700">
+                {recipients.length === 0 ? "Sin clientes" : "Sin resultados"}
+              </p>
+              <p className="text-xs text-gray-400 mt-1">
+                {recipients.length === 0
+                  ? "Esta campaña aún no tiene destinatarios."
+                  : "Ningún cliente coincide con la búsqueda."}
+              </p>
+            </div>
+          ) : (
+            <ul className="divide-y divide-gray-100">
+              {filtered.map((r) => (
+                <li key={r.id} className="flex items-center gap-3 py-3">
+                  <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">
+                    {initials(r.name)}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{r.name ?? "Sin nombre"}</p>
+                    <p className="text-xs text-gray-400 truncate">{r.email ?? "Sin email"}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs text-gray-500">{r.phone ?? "—"}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">{r.status}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Campaign list ─────────────────────────────── */
-function CampaignCard({ c }: { c: CampaignCardData }) {
+function CampaignCard({ c, onViewClients }: { c: CampaignCardData; onViewClients: () => void }) {
   const cfg = STATUS_CFG[c.status];
   const openRate = c.sent > 0 ? Math.round((c.opens / c.sent) * 100) : 0;
 
@@ -1284,7 +1409,13 @@ function CampaignCard({ c }: { c: CampaignCardData }) {
             </div>
           );
         })}
-        <span className="text-xs text-gray-400 ml-1">{c.audience.toLocaleString()} contactos</span>
+        <button
+          onClick={onViewClients}
+          className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 font-semibold transition-colors"
+          title="Ver clientes segmentados"
+        >
+          <Users size={12} /> {c.audience.toLocaleString()} clientes
+        </button>
         {c.date && <span className="text-xs text-gray-400 ml-auto">{c.date}</span>}
       </div>
 
@@ -1333,6 +1464,7 @@ export default function Campaigns() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<CampaignStatus | "todos">("todos");
   const [search, setSearch] = useState("");
+  const [clientsModal, setClientsModal] = useState<CampaignCardData | null>(null);
 
   const load = async () => {
     try {
@@ -1466,7 +1598,7 @@ export default function Campaigns() {
           </div>
         ) : filtered.length > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((c) => <CampaignCard key={c.id} c={c} />)}
+            {filtered.map((c) => <CampaignCard key={c.id} c={c} onViewClients={() => setClientsModal(c)} />)}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -1487,6 +1619,10 @@ export default function Campaigns() {
 
       {wizardOpen && (
         <CampaignWizard onClose={() => setWizardOpen(false)} onCreated={handleCreated} />
+      )}
+
+      {clientsModal && (
+        <RecipientsModal campaign={clientsModal} onClose={() => setClientsModal(null)} />
       )}
     </>
   );
