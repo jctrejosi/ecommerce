@@ -3,3 +3,6 @@
 # servidor ADS en docker: instalador (con licencia) y copia de datos
 /ads/installers/
 /ads/data/
+
+# dumps de la réplica de analytics (grandes, no se versionan en git)
+/backups/analytics/
