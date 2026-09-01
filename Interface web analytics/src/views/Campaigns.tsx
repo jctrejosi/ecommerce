@@ -1890,7 +1890,8 @@ function RecipientsModal({
       const res = await campaignsService.scoreClients({
         sort: "propensity",
         dir: "desc",
-        limit: 500,
+        // Páginas de 20: el resto se carga con el scroll (lazy).
+        limit: 20,
         offset,
       });
       setAllRows((prev) => (append ? [...prev, ...res.clients] : res.clients));
