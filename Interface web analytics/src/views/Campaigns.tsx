@@ -2100,7 +2100,7 @@ function RecipientsModal({
               <div>
                 <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wide pb-2">
                   <span>Cliente</span>
-                  <span>Score</span>
+                  <span>Probabilidad</span>
                 </div>
                 <ul className="divide-y divide-gray-100">
                   {shown.map((r) => (
@@ -2114,15 +2114,12 @@ function RecipientsModal({
                     </div>
                     <div className="text-right shrink-0 min-w-20">
                       <p className="text-xs text-gray-500">{r.phone ?? "—"}</p>
-                      {r.propensity != null && (
+                      {r.propensity != null ? (
                         <span className={`inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${scoreColor(r.propensity)}`}>
                           Prob. {Math.round(r.propensity * 100)}%
                         </span>
-                      )}
-                      {r.uplift != null && (
-                        <p className="text-[10px] text-purple-600 font-semibold mt-0.5">
-                          Persuasión {r.uplift >= 0 ? "+" : ""}{r.uplift.toFixed(3)}
-                        </p>
+                      ) : (
+                        <span className="inline-block mt-1 text-[11px] font-semibold text-gray-300">—</span>
                       )}
                       {r.status && <p className="text-[10px] font-bold text-gray-400 uppercase">{r.status}</p>}
                     </div>
@@ -2172,8 +2169,7 @@ function RecipientsModal({
                       <th className="py-2 pr-3">Monetario</th>
                       <th className="py-2 pr-3">Ticket</th>
                       <th className="py-2 pr-3">Cat</th>
-                      <th className="py-2 pr-3 text-right">Probabilidad</th>
-                      <th className="py-2 text-right">Persuasión</th>
+                      <th className="py-2 text-right">Probabilidad</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -2190,13 +2186,10 @@ function RecipientsModal({
                         <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.monetario)}</td>
                         <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.ticket_promedio)}</td>
                         <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.categorias_distintas)}</td>
-                        <td className="py-2.5 pr-3 text-right">
+                        <td className="py-2.5 text-right">
                           <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${scoreColor(c.propensity)}`}>
                             {Math.round(c.propensity * 100)}%
                           </span>
-                        </td>
-                        <td className="py-2.5 text-right text-[11px] font-semibold text-purple-600 whitespace-nowrap">
-                          {c.uplift >= 0 ? "+" : ""}{c.uplift.toFixed(3)}
                         </td>
                       </tr>
                     ))}
@@ -2518,8 +2511,7 @@ function ManualSegModal({
                       <th className="py-2 pr-3">Monetario</th>
                       <th className="py-2 pr-3">Ticket</th>
                       <th className="py-2 pr-3">Cat</th>
-                      <th className="py-2 pr-3 text-right">Probabilidad</th>
-                      <th className="py-2 text-right">Persuasión</th>
+                      <th className="py-2 text-right">Probabilidad</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50">
@@ -2551,13 +2543,10 @@ function ManualSegModal({
                         <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.monetario)}</td>
                         <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.ticket_promedio)}</td>
                         <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.categorias_distintas)}</td>
-                        <td className="py-2.5 pr-3 text-right">
+                        <td className="py-2.5 text-right">
                           <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${scoreColor(c.propensity)}`}>
                             {Math.round(c.propensity * 100)}%
                           </span>
-                        </td>
-                        <td className="py-2.5 text-right text-[11px] font-semibold text-purple-600 whitespace-nowrap">
-                          {c.uplift >= 0 ? "+" : ""}{c.uplift.toFixed(3)}
                         </td>
                       </tr>
                     ))}
