@@ -100,7 +100,7 @@ export function Footer({ categories, onCategoryClick, generalLogo }: FooterProps
   const socialLinks = config.socialLinks || [];
 
   return (
-    <footer className="pt-12 pb-6" style={{ background: "#111827" }}>
+    <footer className="pt-10 pb-4" style={{ background: "#111827" }}>
       <div className="max-w-7xl mx-auto px-4">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
           <div className="col-span-2 md:col-span-1">
@@ -204,16 +204,16 @@ export function Footer({ categories, onCategoryClick, generalLogo }: FooterProps
         </div>
 
         <div
-          className="border-t pt-4 pb-2 flex flex-col md:flex-row items-center justify-center gap-x-6 gap-y-2 text-center"
+          className="border-t pt-3 pb-1.5 flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 text-center"
           style={{ borderColor: "rgba(255,255,255,0.08)" }}
         >
           <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
-            <img src={footerLogo} alt="MercAldas" className="h-10 w-auto object-contain" />
+            <img src={footerLogo} alt="MercAldas" className="h-8 w-auto object-contain" />
           </a>
-          <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
             © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
           </p>
-          <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+          <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
             Manizales, Caldas, Colombia
           </p>
         </div>

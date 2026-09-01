@@ -4,7 +4,8 @@ import {
   ArrowRight, ChevronLeft, RefreshCw, Send, Clock,
   CheckCircle, Users, TrendingUp, Eye, Edit3, X,
   Sparkles, Target, BarChart2, Calendar, MoreHorizontal,
-  Palette, ShoppingBag,
+  Palette, ShoppingBag, Pencil, Trash2, History, RotateCw,
+  Filter, CheckSquare, SlidersHorizontal,
 } from "lucide-react";
 import EmailEditor, {
   newBlock,
@@ -15,9 +16,12 @@ import {
   campaignsService,
   type Campaign as ApiCampaign,
   type CampaignChannel,
+  type CampaignHistoryEntry,
   type Recipient,
   type SegmentPreviewResult,
   type SegmentRankingRow,
+  type ScoredClient,
+  type ScoreClientsPayload,
 } from "../services/campaigns.service";
 import { catalogService, type CatalogProduct, type CatalogCategory } from "../services/catalog.service";
 
@@ -647,6 +651,28 @@ function Step1({
   );
 }
 
+/* Switch de canal: permite deshabilitar un módulo sin perder su contenido. */
+function ChannelSwitch({ active, onToggle }: { active: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={active}
+      onClick={onToggle}
+      title={active ? "Desactivar este canal" : "Activar este canal"}
+      className={`relative rounded-full transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-amber-300 ${
+        active ? "bg-green-500" : "bg-gray-300"
+      }`}
+      style={{ width: 36, height: 20 }}
+    >
+      <span
+        className="absolute top-0.5 bg-white rounded-full shadow transition-transform"
+        style={{ width: 16, height: 16, left: 2, transform: active ? "translateX(16px)" : "none" }}
+      />
+    </button>
+  );
+}
+
 function Step2({
   products,
   channels,
@@ -669,6 +695,7 @@ function Step2({
   genError,
   onNext,
   onBack,
+  onToggleChannel,
 }: {
   products: Product[];
   channels: Record<string, boolean>;
@@ -691,8 +718,28 @@ function Step2({
   genError: string | null;
   onNext: () => void;
   onBack: () => void;
+  onToggleChannel: (c: string) => void;
 }) {
   const activeChannelCount = Object.values(channels).filter(Boolean).length;
+
+  // Módulos visibles: los activos + los desactivados que conservan contenido
+  // (para poder reactivarlos con su switch sin perder el preview).
+  const renderedModules = (["wa", "email", "sms"] as const).filter(
+    (k) =>
+      channels[k] ||
+      (content &&
+        (k === "wa"
+          ? !!content.whatsapp
+          : k === "email"
+            ? !!(content.email.subject || content.email.body)
+            : !!content.sms)),
+  ).length;
+  const gridCls =
+    renderedModules === 3
+      ? "grid-cols-3"
+      : renderedModules === 2
+        ? "grid-cols-2"
+        : "grid-cols-1 max-w-sm mx-auto";
 
   // Mientras la IA genera, se oculta el resto y solo se muestra este aviso.
   if (generating) {
@@ -791,72 +838,114 @@ function Step2({
               </button>
             </div>
 
-            <div className={`grid gap-4 ${activeChannelCount === 3 ? "grid-cols-3" : activeChannelCount === 2 ? "grid-cols-2" : "grid-cols-1 max-w-sm mx-auto"}`}>
-              {channels.wa && content && (
-                <div className="flex flex-col">
+            <div className={`grid gap-4 ${gridCls}`}>
+              {(channels.wa || content?.whatsapp) && (
+                <div className={`flex flex-col ${!channels.wa ? "opacity-45" : ""}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-lg bg-green-500 flex items-center justify-center">
                         <MessageCircle size={12} className="text-white" />
                       </div>
                       <span className="text-xs font-bold text-gray-700">WhatsApp</span>
+                      {!channels.wa && (
+                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
+                      )}
                     </div>
-                    <button onClick={() => onToggleEdit("wa")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableWa ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-                      <Edit3 size={9} /> {editableWa ? "Listo" : "Editar"}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {channels.wa && (
+                        <button onClick={() => onToggleEdit("wa")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableWa ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                          <Edit3 size={9} /> {editableWa ? "Listo" : "Editar"}
+                        </button>
+                      )}
+                      <ChannelSwitch active={!!channels.wa} onToggle={() => onToggleChannel("wa")} />
+                    </div>
                   </div>
                   <div className="flex-1 h-80">
-                    <WhatsAppPreview text={content.whatsapp} editable={editableWa} onEdit={onEditWa} />
+                    {content?.whatsapp ? (
+                      <WhatsAppPreview text={content.whatsapp} editable={editableWa} onEdit={onEditWa} />
+                    ) : (
+                      <div className="h-full flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl text-xs text-gray-400 px-4 text-center">
+                        No generado para este canal
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {channels.email && content && (
-                <div className="flex flex-col">
+              {(channels.email || content?.email.subject || content?.email.body) && (
+                <div className={`flex flex-col ${!channels.email ? "opacity-45" : ""}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-lg bg-blue-500 flex items-center justify-center">
                         <Mail size={12} className="text-white" />
                       </div>
                       <span className="text-xs font-bold text-gray-700">Email</span>
+                      {!channels.email && (
+                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={onOpenDesigner} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">
-                        <Palette size={9} /> Diseñar
-                      </button>
-                      <button onClick={() => onToggleEdit("email")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableEmail ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-                        <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar"}
-                      </button>
+                    <div className="flex items-center gap-1.5">
+                      {channels.email && (
+                        <>
+                          <button onClick={onOpenDesigner} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">
+                            <Palette size={9} /> Diseñar
+                          </button>
+                          <button onClick={() => onToggleEdit("email")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableEmail ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                            <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar"}
+                          </button>
+                        </>
+                      )}
+                      <ChannelSwitch active={!!channels.email} onToggle={() => onToggleChannel("email")} />
                     </div>
                   </div>
                   <div className="flex-1 h-80">
-                    <EmailPreview
-                      subject={content.email.subject}
-                      body={content.email.body}
-                      editableBody={editableEmail}
-                      onEditSubject={onEditEmailSubject}
-                      onEditBody={onEditEmailBody}
-                      html={emailHtml}
-                    />
+                    {content?.email.subject || content?.email.body ? (
+                      <EmailPreview
+                        subject={content.email.subject}
+                        body={content.email.body}
+                        editableBody={editableEmail}
+                        onEditSubject={onEditEmailSubject}
+                        onEditBody={onEditEmailBody}
+                        html={emailHtml}
+                      />
+                    ) : (
+                      <div className="h-full flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl text-xs text-gray-400 px-4 text-center">
+                        No generado para este canal
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {channels.sms && content && (
-                <div className="flex flex-col">
+              {(channels.sms || content?.sms) && (
+                <div className={`flex flex-col ${!channels.sms ? "opacity-45" : ""}`}>
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-6 h-6 rounded-lg bg-purple-500 flex items-center justify-center">
                         <Smartphone size={12} className="text-white" />
                       </div>
                       <span className="text-xs font-bold text-gray-700">SMS</span>
+                      {!channels.sms && (
+                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
+                      )}
                     </div>
-                    <button onClick={() => onToggleEdit("sms")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableSms ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-                      <Edit3 size={9} /> {editableSms ? "Listo" : "Editar"}
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                      {channels.sms && (
+                        <button onClick={() => onToggleEdit("sms")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableSms ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                          <Edit3 size={9} /> {editableSms ? "Listo" : "Editar"}
+                        </button>
+                      )}
+                      <ChannelSwitch active={!!channels.sms} onToggle={() => onToggleChannel("sms")} />
+                    </div>
                   </div>
                   <div className="flex-1 h-80">
-                    <SmsPreview text={content.sms} editable={editableSms} onEdit={onEditSms} />
+                    {content?.sms ? (
+                      <SmsPreview text={content.sms} editable={editableSms} onEdit={onEditSms} />
+                    ) : (
+                      <div className="h-full flex items-center justify-center bg-gray-50 border-2 border-dashed border-gray-200 rounded-xl text-xs text-gray-400 px-4 text-center">
+                        No generado para este canal
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1210,7 +1299,12 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   const [emailBlocks, setEmailBlocks] = useState<EmailBlock[] | null>(null);
   const [emailHtml, setEmailHtml] = useState<string | null>(null);
 
-  const toggleChannel = (c: string) => setChannels((prev) => ({ ...prev, [c]: !prev[c] }));
+  const toggleChannel = (c: string) =>
+    setChannels((prev) => {
+      // Nunca desactivar el último canal activo (mínimo uno siempre).
+      if (prev[c] && Object.values(prev).filter(Boolean).length === 1) return prev;
+      return { ...prev, [c]: !prev[c] };
+    });
 
   const toggleProduct = (p: Product) =>
     setSelectedProducts((prev) =>
@@ -1244,14 +1338,16 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
       if (res.error) throw new Error(res.error);
 
       const email = res.email;
-      setContent({
-        whatsapp: res.whatsapp ?? "",
+      // Conserva el contenido de canales desactivados al regenerar: solo se
+      // sobreescribe lo que la IA devolvió para los canales activos.
+      setContent((c) => ({
+        whatsapp: res.whatsapp ?? c?.whatsapp ?? "",
         email: {
-          subject: email?.asunto ?? "",
-          body: email?.bloques?.length ? blocksToText(email.bloques) : "",
+          subject: email?.asunto ?? c?.email?.subject ?? "",
+          body: email?.bloques?.length ? blocksToText(email.bloques) : c?.email?.body ?? "",
         },
-        sms: res.sms ?? "",
-      });
+        sms: res.sms ?? c?.sms ?? "",
+      }));
       if (email?.bloques?.length) {
         setEmailBlocks(email.bloques as unknown as EmailBlock[]);
         setEmailHtml(email.html ?? null);
@@ -1301,6 +1397,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
         productId: primary.id,
         productIds: selectedProducts.map((p) => p.id),
         prompt,
+        mode,
         channels: active.map((k) => CHANNEL_TO_API[k]),
         messages,
       });
@@ -1377,6 +1474,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
             genError={genError}
             onNext={() => setStep(3)}
             onBack={() => setStep(1)}
+            onToggleChannel={toggleChannel}
           />
         )}
         {step === 3 && selectedProducts.length > 0 && (
@@ -1737,6 +1835,7 @@ function RecipientsModal({
   recipients: preset,
   campaignId,
   explain,
+  onManualSeg,
   onClose,
 }: {
   title: string;
@@ -1752,8 +1851,12 @@ function RecipientsModal({
   }[];
   campaignId?: number;
   explain?: ExplainContext | null;
+  onManualSeg?: () => void;
   onClose: () => void;
 }) {
+  const [tab, setTab] = useState<"seg" | "all">("seg");
+
+  // ── Pestaña "Segmentados" (recomendados / destinatarios) ──
   const [recipients, setRecipients] = useState<SegClientRow[]>([]);
   const [loading, setLoading] = useState(campaignId != null && preset == null);
   const [error, setError] = useState<string | null>(null);
@@ -1765,6 +1868,49 @@ function RecipientsModal({
   const PAGE = 50;
   const [visible, setVisible] = useState(PAGE);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  // ── Pestaña "Todos los clientes" (score sobre la base completa) ──
+  // La puntuación corre en el backend (con caché de 5 min) y se pagina por
+  // offset de 500: cada página pide su propia tanda al hacer scroll.
+  const [allRows, setAllRows] = useState<ScoredClient[]>([]);
+  const [allTotal, setAllTotal] = useState<number | null>(null);
+  const [allLoading, setAllLoading] = useState(false);
+  const [allLoadingMore, setAllLoadingMore] = useState(false);
+  const [allError, setAllError] = useState<string | null>(null);
+  const allFetchingRef = useRef(false);
+  const allSentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadAllPage = async (offset: number, append: boolean) => {
+    if (allFetchingRef.current) return;
+    allFetchingRef.current = true;
+    if (append) setAllLoadingMore(true);
+    else setAllLoading(true);
+    setAllError(null);
+    try {
+      const res = await campaignsService.scoreClients({
+        sort: "propensity",
+        dir: "desc",
+        limit: 500,
+        offset,
+      });
+      setAllRows((prev) => (append ? [...prev, ...res.clients] : res.clients));
+      setAllTotal(res.total);
+    } catch (e) {
+      if (!append) setAllError(e instanceof Error ? e.message : "No se pudieron puntuar los clientes");
+    } finally {
+      allFetchingRef.current = false;
+      if (append) setAllLoadingMore(false);
+      else setAllLoading(false);
+    }
+  };
+
+  // Al abrir la pestaña "todos" se puntúa desde cero (solo la primera vez).
+  useEffect(() => {
+    if (tab !== "all") return;
+    if (allRows.length > 0 || allLoading || allTotal != null) return;
+    void loadAllPage(0, false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab]);
 
   useEffect(() => {
     setVisible(PAGE);
@@ -1819,6 +1965,36 @@ function RecipientsModal({
     return () => io.disconnect();
   }, [filtered.length]);
 
+  const allFiltered = allRows.filter((c) =>
+    !q ||
+    (c.name ?? "").toLowerCase().includes(q) ||
+    c.cedula.includes(q) ||
+    (c.email ?? "").toLowerCase().includes(q) ||
+    (c.phone ?? "").toLowerCase().includes(q),
+  );
+
+  // Scroll infinito en "todos": pide la siguiente página al llegar al final.
+  useEffect(() => {
+    const el = allSentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries[0]?.isIntersecting &&
+          !allFetchingRef.current &&
+          allTotal != null &&
+          allRows.length < allTotal
+        ) {
+          void loadAllPage(allRows.length, true);
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTotal, allRows.length, q]);
+
   const initials = (name: string | null) => {
     if (!name) return "?";
     const parts = name.trim().split(/\s+/);
@@ -1828,7 +2004,7 @@ function RecipientsModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="min-w-0 pr-3">
@@ -1852,78 +2028,183 @@ function RecipientsModal({
           </button>
         </div>
 
-        {/* Toolbar */}
-        <div className="px-6 py-3 border-b border-gray-100 shrink-0 flex items-center gap-3">
-          <div className="relative flex-1">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar por nombre, email o teléfono…"
-              className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-            />
+        {/* Toolbar: pestañas + búsqueda + segmentación manual */}
+        <div className="px-6 py-3 border-b border-gray-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
+              <button
+                onClick={() => setTab("seg")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "seg" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                Segmentados
+              </button>
+              <button
+                onClick={() => setTab("all")}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "all" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
+              >
+                Todos los clientes
+              </button>
+            </div>
+            <div className="relative flex-1">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder={tab === "all" ? "Buscar por nombre, cédula, email o teléfono…" : "Buscar por nombre, email o teléfono…"}
+                className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+              />
+            </div>
+            {onManualSeg && (
+              <button
+                onClick={onManualSeg}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors shadow-sm shrink-0"
+                title="Segmentar clientes manualmente por filtros y añadirlos a la campaña"
+              >
+                <SlidersHorizontal size={13} /> Segmentar manualmente
+              </button>
+            )}
           </div>
+          {tab === "all" && allTotal != null && (
+            <p className="text-[11px] text-gray-400 mt-2">
+              {allTotal.toLocaleString()} clientes en la base · ordenados por probabilidad de compra
+            </p>
+          )}
         </div>
 
-        {/* List */}
+        {/* List / tabla */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <RefreshCw size={22} className="text-gray-300 animate-spin" />
-              <p className="text-xs text-gray-400">Cargando clientes…</p>
+          {tab === "seg" ? (
+            loading ? (
+              <div className="flex flex-col items-center justify-center py-16 gap-3">
+                <RefreshCw size={22} className="text-gray-300 animate-spin" />
+                <p className="text-xs text-gray-400">Cargando clientes…</p>
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <p className="text-sm font-semibold text-red-600">{error}</p>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Users size={24} className="text-gray-300 mb-3" />
+                <p className="text-sm font-semibold text-gray-700">
+                  {recipients.length === 0 ? "Sin clientes" : "Sin resultados"}
+                </p>
+                <p className="text-xs text-gray-400 mt-1">
+                  {recipients.length === 0
+                    ? "No hay clientes que cumplan el estándar de esta segmentación."
+                    : "Ningún cliente coincide con la búsqueda."}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wide pb-2">
+                  <span>Cliente</span>
+                  <span>Score</span>
+                </div>
+                <ul className="divide-y divide-gray-100">
+                  {shown.map((r) => (
+                  <li key={r.id} className="flex items-center gap-3 py-3">
+                    <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">
+                      {initials(r.name)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 truncate">{r.name ?? "Sin nombre"}</p>
+                      <p className="text-xs text-gray-400 truncate">{r.email ?? "Sin email"}</p>
+                    </div>
+                    <div className="text-right shrink-0 min-w-20">
+                      <p className="text-xs text-gray-500">{r.phone ?? "—"}</p>
+                      {r.propensity != null && (
+                        <span className={`inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${scoreColor(r.propensity)}`}>
+                          Prob. {Math.round(r.propensity * 100)}%
+                        </span>
+                      )}
+                      {r.uplift != null && (
+                        <p className="text-[10px] text-purple-600 font-semibold mt-0.5">
+                          Persuasión {r.uplift >= 0 ? "+" : ""}{r.uplift.toFixed(3)}
+                        </p>
+                      )}
+                      {r.status && <p className="text-[10px] font-bold text-gray-400 uppercase">{r.status}</p>}
+                    </div>
+                  </li>
+                ))}
+                </ul>
+                {visible < filtered.length && (
+                  <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                    <RefreshCw size={13} className="animate-spin" /> Cargando más clientes…
+                  </div>
+                )}
+              </div>
+            )
+          ) : allLoading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <RefreshCw size={22} className="text-amber-400 animate-spin" />
+              <p className="text-sm font-semibold text-gray-700">Puntuando toda la base de clientes…</p>
+              <p className="text-xs text-gray-400 max-w-xs">
+                La primera vez puede tardar un par de minutos (XGBoost + Uplift sobre toda la base); después queda en caché.
+              </p>
             </div>
-          ) : error ? (
+          ) : allError ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
-              <p className="text-sm font-semibold text-red-600">{error}</p>
+              <p className="text-sm font-semibold text-red-600">{allError}</p>
+              <button
+                onClick={() => void loadAllPage(0, false)}
+                className="mt-4 px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 rounded-xl hover:bg-amber-500 transition-colors"
+              >
+                Reintentar
+              </button>
             </div>
-          ) : filtered.length === 0 ? (
+          ) : allFiltered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Users size={24} className="text-gray-300 mb-3" />
-              <p className="text-sm font-semibold text-gray-700">
-                {recipients.length === 0 ? "Sin clientes" : "Sin resultados"}
-              </p>
-              <p className="text-xs text-gray-400 mt-1">
-                {recipients.length === 0
-                  ? "No hay clientes que cumplan el estándar de esta segmentación."
-                  : "Ningún cliente coincide con la búsqueda."}
-              </p>
+              <p className="text-sm font-semibold text-gray-700">Sin resultados</p>
+              <p className="text-xs text-gray-400 mt-1">Ningún cliente coincide con la búsqueda.</p>
             </div>
           ) : (
             <div>
-              <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wide pb-2">
-                <span>Cliente</span>
-                <span>Score</span>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide border-b border-gray-100">
+                      <th className="py-2 pr-3">Cliente</th>
+                      <th className="py-2 pr-3">Seg</th>
+                      <th className="py-2 pr-3">Frec</th>
+                      <th className="py-2 pr-3">Monetario</th>
+                      <th className="py-2 pr-3">Ticket</th>
+                      <th className="py-2 pr-3">Cat</th>
+                      <th className="py-2 pr-3 text-right">Probabilidad</th>
+                      <th className="py-2 text-right">Persuasión</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {allFiltered.map((c) => (
+                      <tr key={c.cedula} className="hover:bg-amber-50/40">
+                        <td className="py-2.5 pr-3">
+                          <p className="text-xs font-bold text-gray-900 truncate max-w-44">{c.name ?? "Sin nombre"}</p>
+                          <p className="text-[10px] text-gray-400">{c.cedula}</p>
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <span className="inline-block text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-md">S{c.segment}</span>
+                        </td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.frecuencia).toLocaleString()}</td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.monetario)}</td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.ticket_promedio)}</td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.categorias_distintas)}</td>
+                        <td className="py-2.5 pr-3 text-right">
+                          <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${scoreColor(c.propensity)}`}>
+                            {Math.round(c.propensity * 100)}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right text-[11px] font-semibold text-purple-600 whitespace-nowrap">
+                          {c.uplift >= 0 ? "+" : ""}{c.uplift.toFixed(3)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <ul className="divide-y divide-gray-100">
-                {shown.map((r) => (
-                <li key={r.id} className="flex items-center gap-3 py-3">
-                  <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">
-                    {initials(r.name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-gray-900 truncate">{r.name ?? "Sin nombre"}</p>
-                    <p className="text-xs text-gray-400 truncate">{r.email ?? "Sin email"}</p>
-                  </div>
-                  <div className="text-right shrink-0 min-w-20">
-                    <p className="text-xs text-gray-500">{r.phone ?? "—"}</p>
-                    {r.propensity != null && (
-                      <span className={`inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${scoreColor(r.propensity)}`}>
-                        Prob. {Math.round(r.propensity * 100)}%
-                      </span>
-                    )}
-                    {r.uplift != null && (
-                      <p className="text-[10px] text-purple-600 font-semibold mt-0.5">
-                        Persuasión {r.uplift >= 0 ? "+" : ""}{r.uplift.toFixed(3)}
-                      </p>
-                    )}
-                    {r.status && <p className="text-[10px] font-bold text-gray-400 uppercase">{r.status}</p>}
-                  </div>
-                </li>
-              ))}
-              </ul>
-              {visible < filtered.length && (
-                <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
-                  <RefreshCw size={13} className="animate-spin" /> Cargando más clientes…
+              {allTotal != null && allRows.length < allTotal && (
+                <div ref={allSentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                  <RefreshCw size={13} className="animate-spin" /> {allLoadingMore ? "Cargando más clientes…" : "…"}
                 </div>
               )}
             </div>
@@ -1938,13 +2219,710 @@ function RecipientsModal({
   );
 }
 
-/* ─── Campaign list ─────────────────────────────── */
-function CampaignCard({ c, onViewClients }: { c: CampaignCardData; onViewClients: () => void }) {
-  const cfg = STATUS_CFG[c.status];
-  const openRate = c.sent > 0 ? Math.round((c.opens / c.sent) * 100) : 0;
+/* ─── Segmentación manual por filtros (RFM + analítica) ── */
+
+/** Par de inputs min/max para un filtro numérico. */
+function RangeInputs({
+  label,
+  min,
+  max,
+  onMin,
+  onMax,
+  step = 1,
+}: {
+  label: string;
+  min: string;
+  max: string;
+  onMin: (v: string) => void;
+  onMax: (v: string) => void;
+  step?: number;
+}) {
+  const inputCls =
+    "w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white";
+  return (
+    <div>
+      <label className="block text-[11px] font-semibold text-gray-500 mb-1">{label}</label>
+      <div className="flex items-center gap-1.5">
+        <input
+          type="number"
+          step={step}
+          min={0}
+          value={min}
+          onChange={(e) => onMin(e.target.value)}
+          placeholder="Mín"
+          className={inputCls}
+        />
+        <span className="text-gray-300 text-xs">—</span>
+        <input
+          type="number"
+          step={step}
+          min={0}
+          value={max}
+          onChange={(e) => onMax(e.target.value)}
+          placeholder="Máx"
+          className={inputCls}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ManualSegModal({
+  campaignId,
+  campaignName,
+  onAdded,
+  onClose,
+}: {
+  campaignId: number;
+  campaignName: string;
+  onAdded: (n: number) => void;
+  onClose: () => void;
+}) {
+  // Filtros sobre atributos RFM de la base (analytics).
+  const [segment, setSegment] = useState("");
+  const [minF, setMinF] = useState("");
+  const [maxF, setMaxF] = useState("");
+  const [minM, setMinM] = useState("");
+  const [maxM, setMaxM] = useState("");
+  const [minT, setMinT] = useState("");
+  const [maxT, setMaxT] = useState("");
+  const [minC, setMinC] = useState("");
+  const [maxC, setMaxC] = useState("");
+  // Solo clientes con ≥70% de probabilidad de compra (estándar de la campaña).
+  const [onlyHigh, setOnlyHigh] = useState(true);
+
+  const [rows, setRows] = useState<ScoredClient[]>([]);
+  const [total, setTotal] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [adding, setAdding] = useState(false);
+  const [addedMsg, setAddedMsg] = useState<string | null>(null);
+  const fetchRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const buildFilters = (): NonNullable<ScoreClientsPayload["filters"]> => {
+    const f: NonNullable<ScoreClientsPayload["filters"]> = {};
+    if (segment) f.segment = Number(segment);
+    if (minF) f.minFrecuencia = Number(minF);
+    if (maxF) f.maxFrecuencia = Number(maxF);
+    if (minM) f.minMonetario = Number(minM);
+    if (maxM) f.maxMonetario = Number(maxM);
+    if (minT) f.minTicketPromedio = Number(minT);
+    if (maxT) f.maxTicketPromedio = Number(maxT);
+    if (minC) f.minCategoriasDistintas = Number(minC);
+    if (maxC) f.maxCategoriasDistintas = Number(maxC);
+    return f;
+  };
+
+  const hasFilters = Object.keys(buildFilters()).length > 0;
+
+  const runAnalysis = async (offset = 0, append = false) => {
+    if (fetchRef.current) return;
+    fetchRef.current = true;
+    if (append) setLoadingMore(true);
+    else setLoading(true);
+    setError(null);
+    setAddedMsg(null);
+    try {
+      const res = await campaignsService.scoreClients({
+        filters: buildFilters(),
+        minPropensity: onlyHigh ? 0.7 : undefined,
+        sort: "propensity",
+        dir: "desc",
+        limit: 500,
+        offset,
+      });
+      setRows((prev) => (append ? [...prev, ...res.clients] : res.clients));
+      setTotal(res.total);
+    } catch (e) {
+      if (!append) setError(e instanceof Error ? e.message : "No se pudo ejecutar la analítica");
+    } finally {
+      fetchRef.current = false;
+      if (append) setLoadingMore(false);
+      else setLoading(false);
+    }
+  };
+
+  const toggleRow = (cedula: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(cedula)) next.delete(cedula);
+      else next.add(cedula);
+      return next;
+    });
+  };
+
+  const allSelected = rows.length > 0 && rows.every((r) => selected.has(r.cedula));
+  const toggleAll = () => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      rows.forEach((r) => {
+        if (allSelected) next.delete(r.cedula);
+        else next.add(r.cedula);
+      });
+      return next;
+    });
+  };
+
+  const handleAdd = async () => {
+    if (!selected.size) return;
+    setAdding(true);
+    setAddedMsg(null);
+    try {
+      const res = await campaignsService.addManualRecipients(campaignId, [...selected]);
+      setAddedMsg(`Se añadieron ${res.added} clientes a la campaña.`);
+      setSelected(new Set());
+      onAdded(res.added);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudieron añadir los clientes");
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  // Scroll infinito: pide la siguiente página al llegar al final.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !fetchRef.current && total != null && rows.length < total) {
+          void runAnalysis(rows.length, true);
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total, rows.length, onlyHigh, segment, minF, maxF, minM, maxM, minT, maxT, minC, maxC]);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div className="min-w-0 pr-3">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <SlidersHorizontal size={18} className="text-amber-600" /> Segmentar manualmente
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5 truncate">
+              {campaignName} · filtra la base de clientes, ejecuta analítica y añádelos a la campaña
+            </p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Filtros */}
+        <div className="px-6 py-4 border-b border-gray-100 shrink-0">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <div>
+              <label className="block text-[11px] font-semibold text-gray-500 mb-1">Segmento</label>
+              <select
+                value={segment}
+                onChange={(e) => setSegment(e.target.value)}
+                className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+              >
+                <option value="">Todos</option>
+                {[1, 2, 3, 4, 5, 6].map((s) => (
+                  <option key={s} value={s}>Segmento {s}</option>
+                ))}
+              </select>
+            </div>
+            <RangeInputs label="Frecuencia (compras)" min={minF} max={maxF} onMin={setMinF} onMax={setMaxF} />
+            <RangeInputs label="Monetario (gasto)" min={minM} max={maxM} onMin={setMinM} onMax={setMaxM} step={10000} />
+            <RangeInputs label="Ticket promedio" min={minT} max={maxT} onMin={setMinT} onMax={setMaxT} step={1000} />
+            <RangeInputs label="Categorías distintas" min={minC} max={maxC} onMin={setMinC} onMax={setMaxC} />
+          </div>
+          <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
+            <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={onlyHigh}
+                onChange={(e) => setOnlyHigh(e.target.checked)}
+                className="accent-amber-500 w-3.5 h-3.5"
+              />
+              Solo clientes con <strong>≥70% de probabilidad de compra</strong>
+            </label>
+            <button
+              onClick={() => void runAnalysis(0, false)}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Zap size={13} />
+              {loading ? "Analizando…" : hasFilters ? "Aplicar y analizar" : "Analizar toda la base"}
+            </button>
+          </div>
+          {error && (
+            <p className="mt-3 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+              ⚠ {error}
+            </p>
+          )}
+          {addedMsg && (
+            <p className="mt-3 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-2 flex items-center gap-1.5">
+              <CheckSquare size={13} /> {addedMsg}
+            </p>
+          )}
+        </div>
+
+        {/* Resultados */}
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
+              <RefreshCw size={22} className="text-amber-400 animate-spin" />
+              <p className="text-sm font-semibold text-gray-700">Ejecutando analítica sobre los clientes filtrados…</p>
+              <p className="text-xs text-gray-400 max-w-xs">
+                Se calcula la probabilidad de compra (XGBoost) y la persuasibilidad (Uplift) de cada cliente.
+              </p>
+            </div>
+          ) : rows.length === 0 && total == null && !error ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Filter size={24} className="text-gray-300 mb-3" />
+              <p className="text-sm font-semibold text-gray-700">Sin análisis todavía</p>
+              <p className="text-xs text-gray-400 mt-1 max-w-xs">
+                Define los filtros (o ninguno para toda la base) y pulsa “Aplicar y analizar” para ver los clientes con su probabilidad de compra.
+              </p>
+            </div>
+          ) : rows.length === 0 && !error ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Users size={24} className="text-gray-300 mb-3" />
+              <p className="text-sm font-semibold text-gray-700">Sin resultados</p>
+              <p className="text-xs text-gray-400 mt-1">Ningún cliente cumple los filtros seleccionados.</p>
+            </div>
+          ) : rows.length > 0 ? (
+            <div>
+              <div className="flex items-center justify-between pb-2">
+                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleAll}
+                    className="accent-amber-500 w-3.5 h-3.5"
+                  />
+                  <strong>{selected.size.toLocaleString()}</strong> seleccionados de {total?.toLocaleString() ?? rows.length.toLocaleString()} resultados
+                </label>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide border-b border-gray-100">
+                      <th className="py-2 pr-3">Cliente</th>
+                      <th className="py-2 pr-3">Seg</th>
+                      <th className="py-2 pr-3">Frec</th>
+                      <th className="py-2 pr-3">Monetario</th>
+                      <th className="py-2 pr-3">Ticket</th>
+                      <th className="py-2 pr-3">Cat</th>
+                      <th className="py-2 pr-3 text-right">Probabilidad</th>
+                      <th className="py-2 text-right">Persuasión</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {rows.map((c) => (
+                      <tr
+                        key={c.cedula}
+                        onClick={() => toggleRow(c.cedula)}
+                        className={`cursor-pointer transition-colors ${selected.has(c.cedula) ? "bg-amber-50" : "hover:bg-amber-50/40"}`}
+                      >
+                        <td className="py-2.5 pr-3">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={selected.has(c.cedula)}
+                              onChange={() => toggleRow(c.cedula)}
+                              onClick={(e) => e.stopPropagation()}
+                              className="accent-amber-500 w-3.5 h-3.5 shrink-0"
+                            />
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold text-gray-900 truncate max-w-40">{c.name ?? "Sin nombre"}</p>
+                              <p className="text-[10px] text-gray-400">{c.cedula}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-2.5 pr-3">
+                          <span className="inline-block text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-md">S{c.segment}</span>
+                        </td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.frecuencia).toLocaleString()}</td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.monetario)}</td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.ticket_promedio)}</td>
+                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.categorias_distintas)}</td>
+                        <td className="py-2.5 pr-3 text-right">
+                          <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${scoreColor(c.propensity)}`}>
+                            {Math.round(c.propensity * 100)}%
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-right text-[11px] font-semibold text-purple-600 whitespace-nowrap">
+                          {c.uplift >= 0 ? "+" : ""}{c.uplift.toFixed(3)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {total != null && rows.length < total && (
+                <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                  <RefreshCw size={13} className="animate-spin" /> {loadingMore ? "Cargando más clientes…" : "…"}
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+
+        {/* Footer: añadir a la campaña */}
+        <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between gap-3">
+          <p className="text-xs text-gray-500">
+            {selected.size > 0
+              ? `${selected.size.toLocaleString()} cliente${selected.size === 1 ? "" : "s"} por añadir a los destinatarios de la campaña.`
+              : "Selecciona clientes de los resultados para añadirlos a la campaña."}
+          </p>
+          <button
+            onClick={() => void handleAdd()}
+            disabled={selected.size === 0 || adding}
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+          >
+            <Plus size={14} /> {adding ? "Añadiendo…" : `Añadir ${selected.size.toLocaleString()} a la campaña`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Acciones de campaña (editar / relanzar / historial / eliminar) ── */
+
+function ConfirmModal({
+  title,
+  message,
+  confirmLabel,
+  busy,
+  danger,
+  onConfirm,
+  onClose,
+}: {
+  title: string;
+  message: string;
+  confirmLabel: string;
+  busy?: boolean;
+  danger?: boolean;
+  onConfirm: () => void;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
+        <h3 className="text-lg font-bold text-gray-900">{title}</h3>
+        <p className="text-sm text-gray-500 mt-2 leading-relaxed">{message}</p>
+        <div className="flex justify-end gap-2 mt-6">
+          <button
+            onClick={onClose}
+            disabled={busy}
+            className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={busy}
+            className={`px-4 py-2 text-xs font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+              danger ? "bg-red-500 text-white hover:bg-red-600" : "bg-amber-400 text-amber-900 hover:bg-amber-500"
+            }`}
+          >
+            {busy ? "Procesando…" : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const HISTORY_LABELS: Record<string, string> = {
+  created: "Creación",
+  updated: "Edición",
+  deleted: "Eliminación",
+  relaunched: "Relanzamiento",
+  scheduled: "Programación",
+};
+
+function HistoryModal({
+  entries,
+  loading,
+  onClose,
+}: {
+  entries: CampaignHistoryEntry[];
+  loading?: boolean;
+  onClose: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <History size={18} className="text-amber-600" /> Historial de la campaña
+          </h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto px-6 py-4">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-xs text-gray-400">
+              <RefreshCw size={14} className="animate-spin" /> Cargando historial…
+            </div>
+          ) : entries.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-10">Sin eventos registrados</p>
+          ) : (
+            <div className="space-y-3">
+              {entries.map((e) => (
+                <div key={e.id} className="flex items-start gap-3">
+                  <div className="w-2 h-2 rounded-full bg-amber-400 mt-1.5 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-gray-800">
+                        {HISTORY_LABELS[e.action] ?? e.action}
+                        {e.status && (
+                          <span className="ml-1.5 text-[10px] font-bold text-gray-400 uppercase">
+                            {STATUS_CFG[e.status as CampaignStatus]?.label ?? e.status}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[10px] text-gray-400">{new Date(e.createdAt).toLocaleString()}</p>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {e.action === "created" &&
+                        `Campaña creada · ${e.details?.messages ?? 0} mensajes · modo ${e.details?.mode ?? "multi"}`}
+                      {e.action === "updated" && "Contenido y ajustes modificados"}
+                      {e.action === "deleted" && "Campaña eliminada (el historial se conserva)"}
+                      {e.action === "relaunched" &&
+                        `Relanzada · ${e.details?.recipientsCount ?? 0} destinatarios re-segmentados · modo ${e.details?.mode ?? "multi"}`}
+                      {e.action === "scheduled" && `Programada para ${e.details?.scheduledAt ?? "—"}`}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditCampaignModal({
+  id,
+  onClose,
+  onSaved,
+}: {
+  id: number;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [campaign, setCampaign] = useState<ApiCampaign | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [msgs, setMsgs] = useState<Record<string, { subject: string; content: string }>>({});
+  const [scheduled, setScheduled] = useState(false);
+  const [date, setDate] = useState("");
+  const [time, setTime] = useState("09:00");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    campaignsService
+      .get(id)
+      .then((c) => {
+        if (cancelled) return;
+        setCampaign(c);
+        setName(c.name);
+        const m: Record<string, { subject: string; content: string }> = {};
+        for (const msg of c.messages) {
+          m[msg.channel] = { subject: msg.subject ?? "", content: msg.content ?? "" };
+        }
+        setMsgs(m);
+        setScheduled(!!c.scheduledAt);
+        if (c.scheduledAt) {
+          const d = new Date(c.scheduledAt);
+          setDate(d.toISOString().slice(0, 10));
+          setTime(d.toISOString().slice(11, 16));
+        }
+        setLoading(false);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setError(e instanceof Error ? e.message : "No se pudo cargar la campaña");
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
+
+  const save = async () => {
+    if (!campaign) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const messages = campaign.channels.map((ch) => ({
+        channel: ch,
+        subject: ch === "email" ? msgs[ch]?.subject ?? "" : undefined,
+        content: msgs[ch]?.content ?? "",
+      }));
+      await campaignsService.update(id, {
+        name,
+        messages,
+        ...(scheduled
+          ? { scheduledAt: `${date || new Date().toISOString().slice(0, 10)}T${time || "09:00"}:00`, status: "programada" as const }
+          : {}),
+      });
+      onSaved();
+      onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error guardando la campaña");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <Pencil size={17} className="text-amber-600" /> Editar campaña
+          </h3>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+          {loading ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-xs text-gray-400">
+              <RefreshCw size={14} className="animate-spin" /> Cargando…
+            </div>
+          ) : error ? (
+            <div className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">⚠ {error}</div>
+          ) : campaign ? (
+            <>
+              <div>
+                <label className="text-xs text-gray-500 mb-1 block">Nombre</label>
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                />
+              </div>
+
+              <div className="space-y-3">
+                {campaign.channels.map((ch) => {
+                  const cfg = CHANNEL_CFG[ch as keyof typeof CHANNEL_CFG];
+                  return (
+                    <div key={ch} className="rounded-xl border border-gray-100 p-3">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`w-6 h-6 rounded-lg flex items-center justify-center ${cfg.bg}`}>
+                          <cfg.icon size={12} className="text-white" />
+                        </span>
+                        <span className="text-xs font-bold text-gray-700">{cfg.label}</span>
+                      </div>
+                      {ch === "email" && (
+                        <input
+                          value={msgs[ch]?.subject ?? ""}
+                          onChange={(e) => setMsgs((prev) => ({ ...prev, [ch]: { ...prev[ch], subject: e.target.value } }))}
+                          placeholder="Asunto"
+                          className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl mb-2 focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                        />
+                      )}
+                      <textarea
+                        value={msgs[ch]?.content ?? ""}
+                        onChange={(e) => setMsgs((prev) => ({ ...prev, [ch]: { ...prev[ch], content: e.target.value } }))}
+                        placeholder="Contenido del mensaje…"
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white resize-y"
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-800">¿Programar el envío?</p>
+                <div className="flex items-center bg-gray-100 rounded-xl p-1">
+                  <button onClick={() => setScheduled(false)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${!scheduled ? "bg-white shadow-sm text-gray-800" : "text-gray-500"}`}>
+                    Ahora
+                  </button>
+                  <button onClick={() => setScheduled(true)} className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${scheduled ? "bg-white shadow-sm text-gray-800" : "text-gray-500"}`}>
+                    Programar
+                  </button>
+                </div>
+              </div>
+              {scheduled && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Fecha</label>
+                    <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 mb-1 block">Hora</label>
+                    <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white" />
+                  </div>
+                </div>
+              )}
+            </>
+          ) : null}
+        </div>
+
+        <div className="shrink-0 px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-2">
+          {error && <p className="text-xs font-semibold text-red-600 flex-1">⚠ {error}</p>}
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 text-xs font-bold text-gray-500 hover:bg-gray-100 rounded-xl transition-colors">
+              Cancelar
+            </button>
+            <button
+              onClick={() => void save()}
+              disabled={saving || loading}
+              className="px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-all disabled:opacity-50"
+            >
+              {saving ? "Guardando…" : "Guardar cambios"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Campaign list ─────────────────────────────── */
+function CampaignCard({
+  c,
+  onViewClients,
+  onManualSeg,
+  onEdit,
+  onRelaunch,
+  onHistory,
+  onDelete,
+}: {
+  c: CampaignCardData;
+  onViewClients: () => void;
+  onManualSeg: () => void;
+  onEdit: () => void;
+  onRelaunch: () => void;
+  onHistory: () => void;
+  onDelete: () => void;
+}) {
+  const cfg = STATUS_CFG[c.status];
+  const openRate = c.sent > 0 ? Math.round((c.opens / c.sent) * 100) : 0;
+  const [menu, setMenu] = useState(false);
+
+  return (
+    <div className="relative bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-3">
         <div className="flex-1 min-w-0 pr-3">
           <p className="font-bold text-gray-900 truncate">{c.name}</p>
@@ -1954,11 +2932,48 @@ function CampaignCard({ c, onViewClients }: { c: CampaignCardData; onViewClients
           <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
             {cfg.label}
           </span>
-          <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors">
+          <button
+            onClick={() => setMenu((m) => !m)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+            title="Acciones"
+          >
             <MoreHorizontal size={14} />
           </button>
         </div>
       </div>
+
+      {menu && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
+          <div className="absolute right-3 top-12 z-40 w-44 bg-white rounded-xl border border-gray-100 shadow-xl py-1.5">
+            <button
+              onClick={() => { setMenu(false); onEdit(); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Pencil size={12} /> Editar
+            </button>
+            <button
+              onClick={() => { setMenu(false); onRelaunch(); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <RotateCw size={12} /> Relanzar
+            </button>
+            <button
+              onClick={() => { setMenu(false); onHistory(); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <History size={12} /> Historial
+            </button>
+            <div className="my-1 border-t border-gray-100" />
+            <button
+              onClick={() => { setMenu(false); onDelete(); }}
+              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <Trash2 size={12} /> Eliminar
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Channels */}
       <div className="flex items-center gap-1.5 mb-4">
@@ -1976,6 +2991,13 @@ function CampaignCard({ c, onViewClients }: { c: CampaignCardData; onViewClients
           title="Ver clientes segmentados"
         >
           <Users size={12} /> {c.audience.toLocaleString()} clientes
+        </button>
+        <button
+          onClick={onManualSeg}
+          className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600 font-semibold transition-colors"
+          title="Segmentar clientes manualmente por filtros"
+        >
+          <Filter size={12} /> Segmentar
         </button>
         {c.date && <span className="text-xs text-gray-400 ml-auto">{c.date}</span>}
       </div>
@@ -2026,6 +3048,17 @@ export default function Campaigns() {
   const [statusFilter, setStatusFilter] = useState<CampaignStatus | "todos">("todos");
   const [search, setSearch] = useState("");
   const [clientsModal, setClientsModal] = useState<CampaignCardData | null>(null);
+  const [manualSeg, setManualSeg] = useState<CampaignCardData | null>(null);
+
+  // Acciones: editar / eliminar / relanzar / historial
+  const [editing, setEditing] = useState<CampaignCardData | null>(null);
+  const [deleting, setDeleting] = useState<CampaignCardData | null>(null);
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [relaunching, setRelaunching] = useState<CampaignCardData | null>(null);
+  const [relaunchBusy, setRelaunchBusy] = useState(false);
+  const [historyOf, setHistoryOf] = useState<CampaignCardData | null>(null);
+  const [historyEntries, setHistoryEntries] = useState<CampaignHistoryEntry[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const load = async () => {
     try {
@@ -2046,6 +3079,46 @@ export default function Campaigns() {
 
   const handleCreated = (c: CampaignCardData) => {
     setCampaigns((prev) => [c, ...prev]);
+  };
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setDeleteBusy(true);
+    try {
+      await campaignsService.remove(deleting.id);
+      setCampaigns((prev) => prev.filter((c) => c.id !== deleting.id));
+      setDeleting(null);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "No se pudo eliminar la campaña");
+    } finally {
+      setDeleteBusy(false);
+    }
+  };
+
+  const handleRelaunch = async () => {
+    if (!relaunching) return;
+    setRelaunchBusy(true);
+    try {
+      const updated = await campaignsService.relaunch(relaunching.id);
+      setCampaigns((prev) => prev.map((c) => (c.id === updated.id ? apiToCard(updated) : c)));
+      setRelaunching(null);
+    } catch (e) {
+      window.alert(e instanceof Error ? e.message : "No se pudo relanzar la campaña");
+    } finally {
+      setRelaunchBusy(false);
+    }
+  };
+
+  const handleOpenHistory = async (c: CampaignCardData) => {
+    setHistoryOf(c);
+    setHistoryLoading(true);
+    try {
+      setHistoryEntries(await campaignsService.history(c.id));
+    } catch {
+      setHistoryEntries([]);
+    } finally {
+      setHistoryLoading(false);
+    }
   };
 
   const filtered = campaigns.filter((c) => {
@@ -2159,7 +3232,18 @@ export default function Campaigns() {
           </div>
         ) : filtered.length > 0 ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((c) => <CampaignCard key={c.id} c={c} onViewClients={() => setClientsModal(c)} />)}
+            {filtered.map((c) => (
+              <CampaignCard
+                key={c.id}
+                c={c}
+                onViewClients={() => setClientsModal(c)}
+                onManualSeg={() => setManualSeg(c)}
+                onEdit={() => setEditing(c)}
+                onRelaunch={() => setRelaunching(c)}
+                onHistory={() => void handleOpenHistory(c)}
+                onDelete={() => setDeleting(c)}
+              />
+            ))}
           </div>
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
@@ -2187,7 +3271,59 @@ export default function Campaigns() {
           title="Clientes segmentados"
           subtitle={clientsModal.name}
           campaignId={clientsModal.id}
+          onManualSeg={() => {
+            setManualSeg(clientsModal);
+            setClientsModal(null);
+          }}
           onClose={() => setClientsModal(null)}
+        />
+      )}
+
+      {manualSeg && (
+        <ManualSegModal
+          campaignId={manualSeg.id}
+          campaignName={manualSeg.name}
+          onAdded={() => void load()}
+          onClose={() => setManualSeg(null)}
+        />
+      )}
+
+      {editing && (
+        <EditCampaignModal
+          id={editing.id}
+          onClose={() => setEditing(null)}
+          onSaved={() => void load()}
+        />
+      )}
+
+      {deleting && (
+        <ConfirmModal
+          title="Eliminar campaña"
+          message={`¿Seguro que quieres eliminar "${deleting.name}"? Se quitará de la lista, pero su historial se conserva.`}
+          confirmLabel="Eliminar"
+          danger
+          busy={deleteBusy}
+          onConfirm={() => void handleDelete()}
+          onClose={() => setDeleting(null)}
+        />
+      )}
+
+      {relaunching && (
+        <ConfirmModal
+          title="Relanzar campaña"
+          message={`Se re-segmentará el público de "${relaunching.name}" (mismos productos y modo) y se registrará un nuevo envío. El historial anterior se conserva.`}
+          confirmLabel="Relanzar"
+          busy={relaunchBusy}
+          onConfirm={() => void handleRelaunch()}
+          onClose={() => setRelaunching(null)}
+        />
+      )}
+
+      {historyOf && (
+        <HistoryModal
+          entries={historyEntries}
+          loading={historyLoading}
+          onClose={() => setHistoryOf(null)}
         />
       )}
     </>

@@ -3786,6 +3786,8 @@ export const campaigns = pgTable(
     prompt: text('prompt'),
     tone: varchar({ length: 50 }),
     channels: jsonb('channels').notNull().default(sql`'[]'::jsonb`).$type<string[]>(),
+    // Modo de segmentación al recomendar el público: 'multi' | 'bundle'
+    mode: varchar('mode', { length: 10 }).default('multi').notNull(),
     status: campaignStatusEnum('status').default('borrador').notNull(),
     // Público: lo llena la recomendación de clientes (aleatoria por ahora,
     // segmentación inteligente después)
@@ -3853,6 +3855,10 @@ export const campaignMessages = pgTable(
   },
   (table) => [
     index('idx_campaign_messages_campaign').on(table.campaignId),
+    uniqueIndex('uq_campaign_messages_campaign_channel').on(
+      table.campaignId,
+      table.channel,
+    ),
   ],
 );
 
@@ -3876,5 +3882,30 @@ export const campaignRecipients = pgTable(
   (table) => [
     index('idx_campaign_recipients_campaign').on(table.campaignId),
     index('idx_campaign_recipients_status').using('btree', table.status),
+  ],
+);
+
+/**
+ * Historial inmutable de la campaña: cada evento de su ciclo de vida
+ * (created / updated / deleted / relaunched / scheduled ...) queda
+ * registrado con un snapshot, sin modificar registros previos.
+ */
+export const campaignHistory = pgTable(
+  'campaign_history',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    campaignId: bigint('campaign_id', { mode: 'number' }).notNull(),
+    action: varchar({ length: 30 }).notNull(),
+    // Estado de la campaña después de la acción (si aplica)
+    status: varchar({ length: 20 }),
+    // Snapshot: nombre, canales, modo, mensajes, público, etc.
+    details: jsonb('details'),
+    createdBy: bigint('created_by', { mode: 'number' }),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_campaign_history_campaign').on(table.campaignId),
   ],
 );

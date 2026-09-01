@@ -16,10 +16,12 @@ import { Observable } from 'rxjs';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CampaignsService } from './campaigns.service';
 import {
+  AddManualRecipientsDto,
   CreateCampaignDto,
   GenerateContentDto,
   GenerateRecipientsDto,
   InterpretSegmentDto,
+  ScoreClientsDto,
   UpdateCampaignDto,
 } from './dto/campaign.dto';
 
@@ -76,6 +78,27 @@ export class CampaignsController {
     );
   }
 
+  @Post('clients/score')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Clientes con probabilidad de compra (filtros + score XGBoost/uplift) para analítica y segmentación manual',
+  })
+  @ApiResponse({ status: 200, description: 'Clientes puntuados (paginados)' })
+  scoreClients(@Body() dto: ScoreClientsDto) {
+    return this.campaignsService.scoreClients(dto);
+  }
+
+  @Post(':id/recipients/manual')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Añadir clientes manualmente (por cédula) a los destinatarios de la campaña',
+  })
+  @ApiResponse({ status: 200, description: 'Cantidad añadida' })
+  addManualRecipients(@Param('id') id: string, @Body() dto: AddManualRecipientsDto) {
+    return this.campaignsService.addManualRecipients(Number(id), dto.cedulas);
+  }
+
   @Post('interpret-segment')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
@@ -85,6 +108,24 @@ export class CampaignsController {
   @ApiResponse({ status: 200, description: 'Explicación en lenguaje natural' })
   interpretSegment(@Body() dto: InterpretSegmentDto) {
     return this.campaignsService.interpretSegment(dto);
+  }
+
+  @Post(':id/relaunch')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Relanzar campaña: re-segmenta el público y registra el envío (historial intacto)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaña relanzada' })
+  relaunch(@Param('id') id: string) {
+    return this.campaignsService.relaunch(Number(id));
+  }
+
+  @Get(':id/history')
+  @ApiOperation({ summary: 'Historial inmutable de eventos de la campaña' })
+  @ApiResponse({ status: 200, description: 'Lista de eventos' })
+  history(@Param('id') id: string) {
+    return this.campaignsService.history(Number(id));
   }
 
   @Get(':id')

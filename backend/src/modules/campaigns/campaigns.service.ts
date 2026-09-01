@@ -9,6 +9,7 @@ import { Observable } from 'rxjs';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
+  campaignHistory,
   campaignMessages,
   campaignProducts,
   campaignRecipients,
@@ -107,6 +108,23 @@ export class CampaignsService {
       id: Number(row.id),
       customerId: row.customerId == null ? null : Number(row.customerId),
     };
+  }
+
+  /** Registra un evento en el historial inmutable de la campaña. */
+  private async logHistory(
+    campaignId: number,
+    action: string,
+    status: string | null = null,
+    details: Record<string, unknown> = {},
+    createdBy: number | null = null,
+  ) {
+    await this.db.insert(campaignHistory).values({
+      campaignId,
+      action,
+      status,
+      details: details as object,
+      createdBy,
+    });
   }
 
   /* ── CRUD ───────────────────────────────────────────── */
@@ -231,12 +249,26 @@ export class CampaignsService {
         prompt: dto.prompt ?? null,
         tone: dto.tone ?? null,
         channels: dto.channels ?? [],
+        mode: dto.mode ?? 'multi',
         createdBy: userId ?? null,
       })
       .returning();
 
     await this.upsertCampaignProducts(Number(row.id), productIds);
     await this.upsertMessages(Number(row.id), dto.messages ?? []);
+    await this.logHistory(
+      Number(row.id),
+      'created',
+      'borrador',
+      {
+        name: dto.name,
+        productIds,
+        channels: dto.channels ?? [],
+        mode: dto.mode ?? 'multi',
+        messages: dto.messages?.length ?? 0,
+      },
+      userId,
+    );
     return this.findOne(Number(row.id));
   }
 
@@ -258,6 +290,7 @@ export class CampaignsService {
         prompt: dto.prompt ?? existing.prompt,
         tone: dto.tone ?? existing.tone,
         channels: dto.channels ?? existing.channels,
+        mode: (dto.mode as never) ?? existing.mode,
         status: (dto.status as never) ?? existing.status,
         scheduledAt: dto.scheduledAt ?? existing.scheduledAt,
         updatedAt: new Date().toISOString(),
@@ -267,16 +300,81 @@ export class CampaignsService {
     if (!row) throw new NotFoundException('Campaña no encontrada');
 
     if (dto.messages) await this.upsertMessages(id, dto.messages);
+    await this.logHistory(id, 'updated', (dto.status as never) ?? existing.status, {
+      name: dto.name ?? existing.name,
+      productIds: dto.productIds ?? undefined,
+      channels: dto.channels ?? undefined,
+      mode: dto.mode ?? undefined,
+      status: (dto.status as never) ?? existing.status,
+      scheduledAt: dto.scheduledAt ?? undefined,
+      messages: dto.messages?.length ?? undefined,
+    });
     return this.findOne(id);
   }
 
   async remove(id: number) {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
+    await this.logHistory(id, 'deleted', existing.status, {
+      name: existing.name,
+      productId: existing.productId,
+      mode: existing.mode,
+    });
     await this.db
       .update(campaigns)
       .set({ deletedAt: new Date().toISOString() })
       .where(eq(campaigns.id, BigInt(id)));
     return { success: true };
+  }
+
+  /**
+   * Relanza una campaña: re-segmenta el público (mismos productos y modo),
+   * reinicia las métricas y deja el envío registrado. El historial anterior
+   * se conserva intacto (nueva entrada 'relaunched').
+   */
+  async relaunch(id: number) {
+    const existing = await this.findOne(id);
+    const gen = await this.generateRecipients(
+      id,
+      100000,
+      undefined,
+      undefined,
+      (existing.mode ?? 'multi') as 'multi' | 'bundle',
+    ).catch(() => null);
+    const sentAt = new Date().toISOString();
+    await this.db
+      .update(campaigns)
+      .set({
+        status: 'enviada',
+        sentAt,
+        sentCount: 0,
+        openedCount: 0,
+        convertedCount: 0,
+        updatedAt: sentAt,
+      })
+      .where(eq(campaigns.id, BigInt(id)));
+    await this.logHistory(id, 'relaunched', 'enviada', {
+      name: existing.name,
+      mode: existing.mode ?? 'multi',
+      recipientsCount: gen?.total ?? 0,
+    });
+    return this.findOne(id);
+  }
+
+  /** Historial inmutable de eventos de la campaña (accesible aunque esté borrada). */
+  async history(id: number) {
+    const rows = await this.db
+      .select()
+      .from(campaignHistory)
+      .where(eq(campaignHistory.campaignId, id))
+      .orderBy(desc(campaignHistory.id));
+    return rows.map((r) => ({
+      id: Number(r.id),
+      campaignId: Number(r.campaignId),
+      action: r.action,
+      status: r.status,
+      details: r.details,
+      createdAt: r.createdAt,
+    }));
   }
 
   /* ── Mensajes por canal ─────────────────────────────── */
@@ -293,7 +391,16 @@ export class CampaignsService {
           html: m.html ?? null,
           emailBlocks: (m.emailBlocks as object) ?? null,
         })
-        .onConflictDoNothing();
+        .onConflictDoUpdate({
+          target: [campaignMessages.campaignId, campaignMessages.channel],
+          set: {
+            subject: sql`EXCLUDED.subject`,
+            content: sql`EXCLUDED.content`,
+            html: sql`EXCLUDED.html`,
+            emailBlocks: sql`EXCLUDED.email_blocks`,
+            updatedAt: sql`now()`,
+          },
+        });
     }
   }
 
@@ -353,6 +460,225 @@ export class CampaignsService {
       .where(eq(campaignRecipients.campaignId, id))
       .orderBy(asc(campaignRecipients.id));
     return rows.map((r) => this.toRecipient(r));
+  }
+
+  /* ── Clientes con score (analítica / segmentación manual) ── */
+
+  private scoreCache: {
+    key: string;
+    at: number;
+    scores: Map<string, { propensity: number; uplift: number; percentile: number }>;
+  } | null = null;
+  private readonly SCORE_CACHE_TTL = 5 * 60 * 1000; // 5 min
+
+  private async fetchSegmentClients(
+    filters: Record<string, unknown>,
+    offset = 0,
+    limit = 100,
+    withContacts = true,
+  ) {
+    return (await this.postToClustering('/segment-clients', {
+      model_name: this.clusteringModelName(),
+      filters,
+      offset,
+      limit,
+      with_contacts: withContacts,
+    })) as {
+      total: number;
+      clients: {
+        cedula: string;
+        segment: number;
+        features: {
+          frecuencia: number;
+          monetario: number;
+          ticket_promedio: number;
+          categorias_distintas: number;
+        };
+        name?: string | null;
+        email?: string | null;
+        phone?: string | null;
+        consent_email?: boolean;
+        consent_whatsapp?: boolean;
+        consent_sms?: boolean;
+      }[];
+    };
+  }
+
+  /**
+   * Clientes con probabilidad de compra (XGBoost) y persuasibilidad (uplift).
+   * Puntúa el conjunto filtrado completo (con caché corta) y pagina/ordena.
+   */
+  async scoreClients(dto: {
+    filters?: {
+      segment?: number;
+      minFrecuencia?: number;
+      maxFrecuencia?: number;
+      minMonetario?: number;
+      maxMonetario?: number;
+      minTicketPromedio?: number;
+      maxTicketPromedio?: number;
+      minCategoriasDistintas?: number;
+      maxCategoriasDistintas?: number;
+    };
+    minPropensity?: number;
+    sort?: 'propensity' | 'uplift' | 'segment' | 'cedula';
+    dir?: 'asc' | 'desc';
+    limit?: number;
+    offset?: number;
+  }) {
+    const filters = dto.filters ?? {};
+    const limit = Math.min(Math.max(dto.limit ?? 100, 1), 500);
+    const offset = Math.max(dto.offset ?? 0, 0);
+
+    // 1) Todos los que cumplen los filtros (sin contacto) para puntuar.
+    const all = await this.fetchSegmentClients(
+      filters as Record<string, unknown>,
+      0,
+      100000,
+      false,
+    );
+
+    // 2) Scores con caché corta (el conjunto depende de los filtros).
+    const key = JSON.stringify({ f: filters, m: this.clusteringModelName() });
+    if (
+      !this.scoreCache ||
+      this.scoreCache.key !== key ||
+      Date.now() - this.scoreCache.at > this.SCORE_CACHE_TTL
+    ) {
+      // Scoring por lotes: cuando el conjunto filtrado es grande (p. ej. toda
+      // la base) se puntúa en chunks para acotar la memoria pico de los
+      // servicios de análisis y de este proceso.
+      const SCORE_CHUNK = 5000;
+      const scores = new Map<string, { propensity: number; uplift: number; percentile: number }>();
+      for (let i = 0; i < all.clients.length; i += SCORE_CHUNK) {
+        const chunk = all.clients.slice(i, i + SCORE_CHUNK);
+        const recipients: SegRecipient[] = chunk.map((c) => ({
+          cedula: c.cedula,
+          segment: c.segment,
+          features: c.features,
+          name: null,
+          email: null,
+          phone: null,
+        }));
+        const propensity = await this.scorePropensity(recipients);
+        const uplift = await this.scoreUplift(recipients);
+        chunk.forEach((c, j) => {
+          scores.set(c.cedula, {
+            propensity: propensity ? (propensity[j] ?? 0) : 0,
+            uplift: uplift ? (uplift[j]?.uplift ?? 0) : 0,
+            percentile: uplift ? (uplift[j]?.percentile ?? 0) : 0,
+          });
+        });
+      }
+      this.scoreCache = { key, at: Date.now(), scores };
+    }
+    const scores = this.scoreCache.scores;
+
+    // 3) Filtro por propensión mínima + orden + paginación.
+    let rows = all.clients
+      .map((c) => ({
+        ...c,
+        ...(scores.get(c.cedula) ?? { propensity: 0, uplift: 0, percentile: 0 }),
+      }))
+      .filter((r) => dto.minPropensity == null || r.propensity >= dto.minPropensity);
+
+    const dir = dto.dir === 'asc' ? 1 : -1;
+    switch (dto.sort ?? 'propensity') {
+      case 'uplift':
+        rows.sort((a, b) => (a.uplift - b.uplift) * dir);
+        break;
+      case 'segment':
+        rows.sort((a, b) => (a.segment - b.segment) * dir);
+        break;
+      case 'cedula':
+        rows.sort((a, b) => a.cedula.localeCompare(b.cedula) * dir);
+        break;
+      default:
+        rows.sort((a, b) => (a.propensity - b.propensity) * dir);
+    }
+
+    const total = rows.length;
+    const page = rows.slice(offset, offset + limit);
+
+    // 4) Contactos solo de la página.
+    let contacts = new Map<string, Record<string, unknown>>();
+    if (page.length) {
+      const c = await this.fetchSegmentClients(
+        { cedulas: page.map((r) => r.cedula) },
+        0,
+        100000,
+        true,
+      );
+      contacts = new Map(c.clients.map((x) => [x.cedula, x]));
+    }
+
+    return {
+      total,
+      clients: page.map((r) => {
+        const ct = contacts.get(r.cedula) ?? {};
+        return {
+          cedula: r.cedula,
+          segment: r.segment,
+          features: r.features,
+          propensity: r.propensity,
+          uplift: r.uplift,
+          percentile: r.percentile,
+          name: ct.name ?? null,
+          email: ct.email ?? null,
+          phone: ct.phone ?? null,
+          consent_email: ct.consent_email ?? false,
+          consent_whatsapp: ct.consent_whatsapp ?? false,
+          consent_sms: ct.consent_sms ?? false,
+        };
+      }),
+    };
+  }
+
+  /**
+   * Añade clientes (por cédula) a los destinatarios de una campaña.
+   * Evita duplicados por email/teléfono contra los ya guardados.
+   */
+  async addManualRecipients(campaignId: number, cedulas: string[]) {
+    await this.findOne(campaignId);
+    const list = [...new Set((cedulas ?? []).filter((c) => c && c.trim()))].slice(0, 5000);
+    if (!list.length) return { added: 0 };
+
+    const data = await this.fetchSegmentClients({ cedulas: list }, 0, 100000, true);
+    if (!data.clients.length) return { added: 0 };
+
+    const existing = await this.db
+      .select({ email: campaignRecipients.email, phone: campaignRecipients.phone })
+      .from(campaignRecipients)
+      .where(eq(campaignRecipients.campaignId, campaignId));
+    const seenEmails = new Set(
+      existing.map((r) => r.email?.toLowerCase()).filter(Boolean),
+    );
+    const seenPhones = new Set(
+      existing.map((r) => r.phone?.toLowerCase()).filter(Boolean),
+    );
+
+    const toInsert = data.clients.filter((c) => {
+      const em = c.email?.toLowerCase();
+      const ph = c.phone?.toLowerCase();
+      if (em && seenEmails.has(em)) return false;
+      if (ph && seenPhones.has(ph)) return false;
+      if (em) seenEmails.add(em);
+      if (ph) seenPhones.add(ph);
+      return true;
+    });
+
+    if (toInsert.length) {
+      await this.db.insert(campaignRecipients).values(
+        toInsert.map((c) => ({
+          campaignId,
+          customerId: null,
+          name: c.name ?? null,
+          email: c.email ?? null,
+          phone: c.phone ?? null,
+        })),
+      );
+    }
+    return { added: toInsert.length };
   }
 
   /**
@@ -694,6 +1020,7 @@ export class CampaignsService {
     segment?: number,
     modelName?: string,
     mode?: 'multi' | 'bundle',
+    manualCedulas?: string[],
   ) {
     await this.findOne(id);
     const cap = Math.min(Math.max(limit, 1), 100000);
@@ -816,6 +1143,36 @@ export class CampaignsService {
       }));
       segInfo = { segment, buyers: cedulas.length };
       note = `Segmentación inteligente: cluster ${segment} (${cedulas.length} clientes en el segmento, ${pool.length} con contacto)`;
+    }
+
+    // ── Añade clientes elegidos manualmente (segmentación manual) ──
+    if (manualCedulas?.length) {
+      const extra = await this.fetchSegmentClients(
+        { cedulas: [...new Set(manualCedulas)] },
+        0,
+        100000,
+        true,
+      );
+      const have = new Set([
+        ...items.map((r) => r.email?.toLowerCase()).filter(Boolean),
+        ...items.map((r) => r.phone?.toLowerCase()).filter(Boolean),
+      ]);
+      for (const c of extra.clients) {
+        const em = c.email?.toLowerCase();
+        const ph = c.phone?.toLowerCase();
+        if ((em && have.has(em)) || (ph && have.has(ph))) continue;
+        if (em) have.add(em);
+        if (ph) have.add(ph);
+        items.push({
+          name: c.name ?? null,
+          email: c.email ?? null,
+          phone: c.phone ?? null,
+          customerId: null,
+        });
+      }
+      if (extra.clients.length) {
+        note = `${note} · ${extra.clients.length} añadidos manualmente`;
+      }
     }
 
     if (!items.length) {

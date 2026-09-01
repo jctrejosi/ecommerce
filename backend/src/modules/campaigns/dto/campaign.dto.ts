@@ -55,6 +55,10 @@ export class CreateCampaignDto {
   tone?: string;
 
   @IsOptional()
+  @IsIn(['multi', 'bundle'])
+  mode?: 'multi' | 'bundle';
+
+  @IsOptional()
   @IsArray()
   @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
   channels?: ('whatsapp' | 'email' | 'sms')[];
@@ -90,6 +94,10 @@ export class UpdateCampaignDto {
   @IsOptional()
   @IsString()
   tone?: string;
+
+  @IsOptional()
+  @IsIn(['multi', 'bundle'])
+  mode?: 'multi' | 'bundle';
 
   @IsOptional()
   @IsArray()
@@ -133,6 +141,11 @@ export class GenerateRecipientsDto {
   @IsOptional()
   @IsIn(['multi', 'bundle'])
   mode?: 'multi' | 'bundle';
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  manualCedulas?: string[];
 }
 
 export class GenerateContentDto {
@@ -225,4 +238,77 @@ export class InterpretSegmentDto {
   @IsOptional()
   @IsNumber()
   avgUplift?: number;
+}
+
+export class ScoreClientsFiltersDto {
+  @IsOptional()
+  @IsInt()
+  segment?: number;
+
+  @IsOptional()
+  @IsNumber()
+  minFrecuencia?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxFrecuencia?: number;
+
+  @IsOptional()
+  @IsNumber()
+  minMonetario?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxMonetario?: number;
+
+  @IsOptional()
+  @IsNumber()
+  minTicketPromedio?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxTicketPromedio?: number;
+
+  @IsOptional()
+  @IsNumber()
+  minCategoriasDistintas?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxCategoriasDistintas?: number;
+}
+
+export class ScoreClientsDto {
+  @IsOptional()
+  @IsObject()
+  @Type(() => ScoreClientsFiltersDto)
+  filters?: ScoreClientsFiltersDto;
+
+  @IsOptional()
+  @IsNumber()
+  minPropensity?: number;
+
+  @IsOptional()
+  @IsIn(['propensity', 'uplift', 'segment', 'cedula'])
+  sort?: 'propensity' | 'uplift' | 'segment' | 'cedula';
+
+  @IsOptional()
+  @IsIn(['asc', 'desc'])
+  dir?: 'asc' | 'desc';
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  limit?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  offset?: number;
+}
+
+export class AddManualRecipientsDto {
+  @IsArray()
+  @IsString({ each: true })
+  cedulas: string[];
 }

@@ -23,6 +23,7 @@ export interface Campaign {
   productId: number | null;
   prompt: string | null;
   tone: string | null;
+  mode?: "multi" | "bundle";
   channels: CampaignChannel[];
   status: CampaignStatus;
   audienceCount: number;
@@ -38,12 +39,30 @@ export interface Campaign {
   products?: { id: number; name: string }[];
 }
 
+export interface CampaignHistoryEntry {
+  id: number;
+  campaignId: number;
+  action: string;
+  status: string | null;
+  details: {
+    name?: string;
+    productIds?: number[];
+    channels?: string[];
+    mode?: string;
+    messages?: number;
+    recipientsCount?: number;
+    scheduledAt?: string;
+  } | null;
+  createdAt: string;
+}
+
 export interface CreateCampaignPayload {
   name: string;
   productId?: number;
   productIds?: number[];
   prompt?: string;
   tone?: string;
+  mode?: "multi" | "bundle";
   channels?: CampaignChannel[];
   scheduledAt?: string;
   messages?: {
@@ -144,6 +163,45 @@ export interface InterpretSegmentPayload {
   avgUplift?: number;
 }
 
+export interface ScoredClient {
+  cedula: string;
+  segment: number;
+  features: {
+    frecuencia: number;
+    monetario: number;
+    ticket_promedio: number;
+    categorias_distintas: number;
+  };
+  propensity: number;
+  uplift: number;
+  percentile: number;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  consent_email: boolean;
+  consent_whatsapp: boolean;
+  consent_sms: boolean;
+}
+
+export interface ScoreClientsPayload {
+  filters?: {
+    segment?: number;
+    minFrecuencia?: number;
+    maxFrecuencia?: number;
+    minMonetario?: number;
+    maxMonetario?: number;
+    minTicketPromedio?: number;
+    maxTicketPromedio?: number;
+    minCategoriasDistintas?: number;
+    maxCategoriasDistintas?: number;
+  };
+  minPropensity?: number;
+  sort?: "propensity" | "uplift" | "segment" | "cedula";
+  dir?: "asc" | "desc";
+  limit?: number;
+  offset?: number;
+}
+
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE_URL}${input}`, {
     credentials: "include",
@@ -194,10 +252,11 @@ export const campaignsService = {
     segment?: number,
     modelName?: string,
     mode?: "multi" | "bundle",
+    manualCedulas?: string[],
   ) =>
     fetchJson<GenerateRecipientsResult>(`/admin/campaigns/${id}/recipients/generate`, {
       method: "POST",
-      body: JSON.stringify({ limit, segment, modelName, mode }),
+      body: JSON.stringify({ limit, segment, modelName, mode, manualCedulas }),
     }),
 
   segmentPreviewStream: (
@@ -244,9 +303,29 @@ export const campaignsService = {
   getRecipients: (id: number) =>
     fetchJson<Recipient[]>(`/admin/campaigns/${id}/recipients`),
 
+  relaunch: (id: number) =>
+    fetchJson<Campaign>(`/admin/campaigns/${id}/relaunch`, {
+      method: "POST",
+    }),
+
+  history: (id: number) =>
+    fetchJson<CampaignHistoryEntry[]>(`/admin/campaigns/${id}/history`),
+
   interpretSegment: (payload: InterpretSegmentPayload) =>
     fetchJson<{ explicacion: string }>("/admin/campaigns/interpret-segment", {
       method: "POST",
       body: JSON.stringify(payload),
+    }),
+
+  scoreClients: (payload: ScoreClientsPayload) =>
+    fetchJson<{ total: number; clients: ScoredClient[] }>("/admin/campaigns/clients/score", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  addManualRecipients: (id: number, cedulas: string[]) =>
+    fetchJson<{ added: number }>(`/admin/campaigns/${id}/recipients/manual`, {
+      method: "POST",
+      body: JSON.stringify({ cedulas }),
     }),
 };
