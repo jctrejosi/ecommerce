@@ -3,10 +3,10 @@
  * MercAldas — lanzador de servicios.
  *
  * Uso:
- *   node dev.js            # DEV: levanta PostgreSQL + los 7 servicios en
- *                          #   segundo plano, espera a que el backend esté
- *                          #   listo, imprime las URLs y termina (la terminal
- *                          #   queda libre para cerrarla).
+ *   node dev.js            # DEV: instala dependencias faltantes, levanta
+ *                          #   PostgreSQL + los 7 servicios en segundo plano,
+ *                          #   espera a que el backend esté listo, imprime las
+ *                          #   URLs y termina (la terminal queda libre).
  *   node dev.js --prod     # PRODUCCIÓN ("en vivo"): comandos de producción.
  *                          #   Requiere builds previos (backend: npm run build,
  *                          #   webs: npm run build). Los logs quedan en logs/*.log.
@@ -33,6 +33,36 @@ const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev"
 const STOP = ARGS.includes("--stop");
 const HELP = ARGS.includes("--help");
 
+// Dependencias por servicio: `marker` es lo que se comprueba para saber si ya
+// están instaladas; `install` son los comandos que las instalan si faltan.
+const NPM_DEPS = {
+  marker: ["node_modules"],
+  markerType: "dir",
+  install: [["npm", "install"]],
+};
+const PYTHON_DEPS = {
+  marker: [".venv", "bin", "python"],
+  markerType: "file",
+  install: [
+    ["python3", "-m", "venv", ".venv"],
+    [".venv", "bin", "pip", "install", "-r", "requirements.txt"],
+  ],
+};
+
+function hasBin(cmd) {
+  const r = spawnSync(cmd, ["--version"], { stdio: "ignore" });
+  return r.status === 0;
+}
+
+// pnpm puede no estar instalado; se cae a npm (el package.json de picking
+// expone los scripts "dev" y "preview", así que npm funciona igual).
+const PICKING_PM = hasBin("pnpm") ? "pnpm" : "npm";
+const PICKING_DEPS = {
+  marker: ["node_modules"],
+  markerType: "dir",
+  install: [[PICKING_PM, "install"]],
+};
+
 const C = {
   db: "\x1b[36m",
   backend: "\x1b[31m",
@@ -53,6 +83,7 @@ const SERVICES = [
     url: "http://localhost:3000",
     dev: ["npm", "run", "dev"],
     prod: ["npm", "run", "start:prod"],
+    deps: NPM_DEPS,
   },
   {
     name: "web",
@@ -60,6 +91,7 @@ const SERVICES = [
     url: "http://localhost:5173",
     dev: ["npm", "run", "dev"],
     prod: ["npx", "vite", "preview"],
+    deps: NPM_DEPS,
   },
   {
     name: "admin",
@@ -67,6 +99,7 @@ const SERVICES = [
     url: "http://localhost:8443",
     dev: ["npm", "run", "dev"],
     prod: ["npm", "run", "preview"],
+    deps: NPM_DEPS,
   },
   {
     name: "analytics",
@@ -74,13 +107,15 @@ const SERVICES = [
     url: "http://localhost:8444",
     dev: ["npm", "run", "dev"],
     prod: ["npm", "run", "preview"],
+    deps: NPM_DEPS,
   },
   {
     name: "picking",
     dir: "Interface web picking",
     url: "http://localhost:8445",
-    dev: ["pnpm", "dev"],
-    prod: ["pnpm", "run", "preview"],
+    dev: [PICKING_PM, "dev"],
+    prod: [PICKING_PM, "run", "preview"],
+    deps: PICKING_DEPS,
   },
   {
     name: "picking-admin",
@@ -88,6 +123,7 @@ const SERVICES = [
     url: "http://localhost:8446",
     dev: ["npm", "run", "dev"],
     prod: ["npm", "run", "preview"],
+    deps: NPM_DEPS,
   },
   {
     name: "bot",
@@ -95,6 +131,7 @@ const SERVICES = [
     url: "http://localhost:8000",
     dev: ["bash", "dev.sh"],
     prod: null, // se resuelve en resolveCmd()
+    deps: PYTHON_DEPS,
   },
   {
     name: "ia",
@@ -102,6 +139,7 @@ const SERVICES = [
     url: "http://localhost:8002",
     dev: ["bash", "dev.sh"],
     prod: null, // se resuelve en resolveCmd()
+    deps: PYTHON_DEPS,
   },
 ];
 
@@ -213,7 +251,12 @@ function startDatabase() {
     console.log(`${C.db}[db]${C.reset} ✅ Contenedor arrancado. Esperando :5432...`);
     return true;
   }
-  console.warn(`${C.db}[db]${C.reset} ⚠️  No se pudo levantar PostgreSQL (detalle en logs/db.log).`);
+  console.warn(
+    `${C.db}[db]${C.reset} ⚠️  No se pudo levantar PostgreSQL (detalle en logs/db.log).`,
+  );
+  console.warn(
+    `${C.db}[db]${C.reset} 💡 Docker no está disponible: arranca el daemon (sudo systemctl start docker o sudo service docker start) y, si hace falta, añade tu usuario al grupo docker (sudo usermod -aG docker $USER) y reinicia sesión.`,
+  );
   return false;
 }
 
@@ -242,8 +285,48 @@ function startDatabaseCampaigns() {
     console.log(`${C.db}[db-campaigns]${C.reset} ✅ Contenedor arrancado. Esperando :5436...`);
     return true;
   }
-  console.warn(`${C.db}[db-campaigns]${C.reset} ⚠️  No se pudo levantar PostgreSQL analytics (detalle en logs/db.log).`);
+  console.warn(
+    `${C.db}[db-campaigns]${C.reset} ⚠️  No se pudo levantar PostgreSQL analytics (detalle en logs/db.log).`,
+  );
+  console.warn(
+    `${C.db}[db-campaigns]${C.reset} 💡 Docker no está disponible: arranca el daemon (sudo systemctl start docker o sudo service docker start) y, si hace falta, añade tu usuario al grupo docker (sudo usermod -aG docker $USER) y reinicia sesión.`,
+  );
   return false;
+}
+
+// ── Dependencias ───────────────────────────────────────────
+
+function dirHasContent(p) {
+  try {
+    return fs.readdirSync(p).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Instala las dependencias de un servicio si no están (node_modules/.venv). */
+function ensureDeps(svc) {
+  const color = C[svc.name] || "";
+  const cwd = path.join(ROOT, svc.dir);
+  const markerPath = path.join(cwd, ...svc.deps.marker);
+  const installed =
+    svc.deps.markerType === "file"
+      ? fs.existsSync(markerPath)
+      : dirHasContent(markerPath);
+  if (installed) return true;
+
+  console.log(`${color}[${svc.name}]${C.reset} 📦 instalando dependencias...`);
+  for (const step of svc.deps.install) {
+    const r = spawnSync(step[0], step.slice(1), { cwd, stdio: "inherit" });
+    if (r.status !== 0) {
+      console.error(
+        `${color}[${svc.name}]${C.reset} ✘ falló la instalación: ${step.join(" ")} — se omite este servicio`,
+      );
+      return false;
+    }
+  }
+  console.log(`${color}[${svc.name}]${C.reset} ✅ dependencias listas`);
+  return true;
 }
 
 // ── Arranque de servicios ───────────────────────────────────
@@ -380,6 +463,18 @@ async function main() {
 
   fs.mkdirSync(LOGS_DIR, { recursive: true });
   console.log(`🧪 MercAldas — modo ${MODE.toUpperCase()}  (logs → logs/*.log)`);
+  if (PICKING_PM === "npm")
+    console.warn(
+      `${C.picking}[picking]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes.`,
+    );
+  console.log("");
+
+  // 1. Instalar dependencias faltantes ANTES de tocar la BD: si un servicio
+  //    falla la instalación, se omite al arrancar más abajo.
+  const sinDeps = new Set();
+  for (const svc of SERVICES) {
+    if (!ensureDeps(svc)) sinDeps.add(svc.name);
+  }
   console.log("");
 
   startDatabase();
@@ -398,6 +493,7 @@ async function main() {
 
   const pids = {};
   for (const svc of SERVICES) {
+    if (sinDeps.has(svc.name)) continue; // falló la instalación de dependencias
     const pid = startService(svc);
     if (pid) pids[svc.name] = pid;
   }
