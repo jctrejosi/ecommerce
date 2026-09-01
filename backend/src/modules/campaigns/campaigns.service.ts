@@ -540,7 +540,9 @@ export class CampaignsService {
     limit = 500,
     mode: 'multi' | 'bundle' = 'multi',
   ): Observable<MessageEvent> {
-    const cap = Math.min(Math.max(limit, 1), 5000);
+    // El tope ya no es una muestra: se puntúa el segmento completo para poder
+    // filtrar por probabilidad de compra (≥70%) con números reales.
+    const cap = Math.min(Math.max(limit, 1), 100000);
     return new Observable<MessageEvent>((subscriber) => {
       let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
       let closed = false;
@@ -614,6 +616,16 @@ export class CampaignsService {
                   });
                   const uplift = await this.scoreUplift(recipients);
 
+                  // Capa 4 — Elegibilidad: solo clientes con ≥70% de probabilidad
+                  // de compra, ordenados por score (propensión ↓, luego uplift ↓).
+                  subscriber.next({
+                    data: {
+                      stage: 'filter',
+                      message: 'Seleccionando clientes con ≥70% de probabilidad de compra…',
+                      progress: 97,
+                    },
+                  });
+                  const MIN_PROPENSITY = 0.7;
                   const enriched = recipients.map((rc, i) => ({
                     cedula: rc.cedula,
                     name: rc.name,
@@ -624,12 +636,13 @@ export class CampaignsService {
                     uplift: uplift ? (uplift[i]?.uplift ?? null) : null,
                     percentile: uplift ? (uplift[i]?.percentile ?? null) : null,
                   }));
-
-                  // Ranking: persuasibles primero (uplift), luego propensión.
-                  enriched.sort((a, b) => {
-                    const du = (b.uplift ?? -Infinity) - (a.uplift ?? -Infinity);
-                    if (du !== 0) return du;
-                    return (b.propensity ?? -Infinity) - (a.propensity ?? -Infinity);
+                  const eligible = propensity
+                    ? enriched.filter((r) => (r.propensity ?? 0) >= MIN_PROPENSITY)
+                    : enriched; // sin scores (servicio caído): no filtrar
+                  eligible.sort((a, b) => {
+                    const dp = (b.propensity ?? -Infinity) - (a.propensity ?? -Infinity);
+                    if (dp !== 0) return dp;
+                    return (b.uplift ?? -Infinity) - (a.uplift ?? -Infinity);
                   });
 
                   subscriber.next({
@@ -639,12 +652,14 @@ export class CampaignsService {
                       result: {
                         segment: r.best_segment,
                         segmentTotal: r.segment_total,
-                        total: r.total,
+                        total: eligible.length,
                         buyers: r.buyers,
                         mode: r.mode ?? 'multi',
                         bundleFallback: r.bundle_fallback ?? false,
                         note: r.affinity_note,
-                        recipients: enriched,
+                        ranking: r.ranking ?? [],
+                        categories: r.categories ?? [],
+                        recipients: eligible,
                       },
                     },
                   });
@@ -681,7 +696,7 @@ export class CampaignsService {
     mode?: 'multi' | 'bundle',
   ) {
     await this.findOne(id);
-    const cap = Math.min(Math.max(limit, 1), 5000);
+    const cap = Math.min(Math.max(limit, 1), 100000);
 
     let items: {
       name: string | null;
@@ -704,17 +719,32 @@ export class CampaignsService {
             'El mejor segmento para estos productos no tiene clientes',
           );
         }
-        items = [...seg.recipients]
-          .sort(() => Math.random() - 0.5)
-          .slice(0, cap)
-          .map((r) => ({
-            name: r.name,
-            email: r.email,
-            phone: r.phone,
-            customerId: null,
-          }));
+        // Elegibilidad: solo clientes con ≥70% de probabilidad de compra,
+        // ordenados por score (propensión ↓).
+        const MIN_PROPENSITY = 0.7;
+        const propensity = await this.scorePropensity(seg.recipients);
+        let ranked = seg.recipients.map((r, i) => ({
+          ...r,
+          _propensity: propensity ? (propensity[i] ?? null) : null,
+        }));
+        if (propensity) {
+          ranked = ranked
+            .filter((r) => (r._propensity ?? 0) >= MIN_PROPENSITY)
+            .sort((a, b) => (b._propensity ?? -Infinity) - (a._propensity ?? -Infinity));
+        }
+        if (!ranked.length) {
+          throw new BadRequestException(
+            'Ningún cliente del segmento supera el 70% de probabilidad de compra',
+          );
+        }
+        items = ranked.slice(0, cap).map((r) => ({
+          name: r.name,
+          email: r.email,
+          phone: r.phone,
+          customerId: null,
+        }));
         segInfo = { segment: seg.best_segment, buyers: seg.buyers };
-        note = `Segmentación automática: segmento ${seg.best_segment} (${seg.total} clientes, ${seg.buyers} con afinidad a los productos; ${items.length} destinatarios)`;
+        note = `Segmentación automática: segmento ${seg.best_segment} (${seg.total} clientes en el segmento, ${seg.buyers} con afinidad; ${items.length} con ≥70% de probabilidad de compra)`;
       } else {
         // La campaña no tiene productos con external_id → aleatorio desde customers.
         const pool = await this.db
@@ -915,6 +945,47 @@ export class CampaignsService {
       this.logger.error(`ia-service respondió ${resp.status}: ${text}`);
       throw new BadRequestException(
         'El servicio de IA no pudo generar el contenido',
+      );
+    }
+    return resp.json();
+  }
+
+  /* ── Interpretación IA de la segmentación (/ia-service) ── */
+
+  async interpretSegment(dto: {
+    mode?: 'multi' | 'bundle';
+    productNames?: string[];
+    categories?: string[];
+    bestSegment?: number;
+    ranking?: { segment?: number; total?: number; buyers?: number; share?: number }[];
+    segmentTotal?: number;
+    total?: number;
+    buyers?: number;
+    features?: string[];
+    bundleFallback?: boolean;
+    note?: string;
+    avgPropensity?: number;
+    avgUplift?: number;
+  }) {
+    const url = `${this.iaServiceUrl()}/interpret`;
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dto),
+      });
+    } catch (e) {
+      this.logger.error(`No se pudo contactar ia-service en ${url}: ${e}`);
+      throw new BadRequestException(
+        'El servicio de IA (/ia-service) no está disponible',
+      );
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      this.logger.error(`ia-service respondió ${resp.status}: ${text}`);
+      throw new BadRequestException(
+        'El servicio de IA no pudo interpretar la segmentación',
       );
     }
     return resp.json();

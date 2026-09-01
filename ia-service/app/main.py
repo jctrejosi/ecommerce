@@ -2,6 +2,7 @@
 
 POST /generate  → recomienda el contenido (whatsapp / email / sms) usando
                   DeepSeek con function calling (ver app/tools.py).
+POST /interpret → explica con IA por qué se seleccionó un público (segmentación).
 GET  /health    → estado del servicio.
 """
 import logging
@@ -41,6 +42,46 @@ class GenerateRequest(BaseModel):
     prompt: str = ""
     tono: str = "cercano"
     canales: list[str] = Field(default_factory=lambda: ["whatsapp", "email", "sms"])
+
+
+class InterpretRequest(BaseModel):
+    """Contexto numérico de una segmentación para explicarla con IA."""
+
+    modo: str = "multi"
+    productos: list[str] = Field(default_factory=list)
+    categorias: list[str] = Field(default_factory=list)
+    mejor_segmento: int | None = None
+    ranking: list[dict] = Field(
+        default_factory=list,
+        description="[{segmento, total, compradores, afinidad}] por segmento",
+    )
+    segmento_total: int | None = None
+    total_seleccionados: int | None = None
+    compradores_afinidad: int | None = None
+    features: list[str] = Field(default_factory=list)
+    fallback: bool = False
+    nota: str = ""
+    promedio_propension: float | None = None
+    promedio_uplift: float | None = None
+
+
+@app.post("/interpret")
+async def interpret(req: InterpretRequest):
+    """Explica con IA por qué se seleccionó ese público objetivo."""
+    if not config.DEEPSEEK_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="DEEPSEEK_API_KEY no está configurada en el servicio ia-service",
+        )
+    try:
+        return await deepseek.interpretar_segmentacion(req.model_dump())
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error interpretando la segmentación: {e}",
+        )
 
 
 @app.get("/health")

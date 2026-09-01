@@ -195,3 +195,68 @@ async def generar_contenido(
     return {
         "error": "El modelo no terminó de generar el contenido en las rondas permitidas."
     }
+
+
+# ─── Interpretación de la segmentación ────────────────────────────────
+
+SYSTEM_PROMPT_INTERPRET = """Eres un analista de datos de marketing de Mercaldas, un supermercado en línea.
+
+Te dan los RESULTADOS NUMÉRICOS de una segmentación de clientes y debes explicarlos en español, de forma clara y accionable, para un equipo de marketing (no técnico).
+
+Estructura tu respuesta en 3 partes, cada una con su encabezado en negrita (sin usar tablas):
+1. **Qué se evaluó** — qué datos y modelos se usaron: características RFM de cada cliente (frecuencia, monetario/gasto total, ticket promedio y categorías distintas), la afinidad de compra con los productos/categorías de la campaña, la propensión de compra (XGBoost) y la persuasibilidad (modelo de uplift).
+2. **Resultados numéricos** — interpreta los números del ranking de segmentos (cuántos clientes tiene cada uno, cuántos compraron los productos/categorías y el % de afinidad) y explica por qué se eligió el segmento ganador.
+3. **Por qué se seleccionaron estos clientes** — en lenguaje simple, qué caracteriza al segmento elegido y por qué es el público objetivo ideal para la campaña (productos y modo indicados).
+
+REGLAS:
+- Usa SIEMPRE los números reales que te dan. NUNCA inventes cifras ni nombres.
+- Explica qué significan las métricas en lenguaje simple: la propensión promedio (probabilidad estimada de que compren si ven la campaña) y el uplift promedio (cuánto cambia esa probabilidad si reciben la campaña: si es NEGATIVO, no son persuasibles y comprarían igual; si es POSITIVO, la campaña puede inclinar su decisión).
+- Si un dato falta (p. ej. propensión o uplift), no lo inventes: limítate a lo que tienes.
+- Sé concreto y breve (máximo ~250 palabras). Usa viñetas cortas.
+- No menciones términos internos ni claves de modelo."""
+
+
+async def interpretar_segmentacion(contexto: dict) -> dict:
+    """Explica con IA por qué se seleccionó un público de una segmentación.
+
+    Recibe el contexto numérico de la segmentación y devuelve
+    `{"explicacion": "..."}` en lenguaje natural.
+    """
+    if not config.DEEPSEEK_API_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY no está configurada")
+
+    user = json.dumps(contexto, ensure_ascii=False, indent=2)
+    messages: list[dict] = [
+        {"role": "system", "content": SYSTEM_PROMPT_INTERPRET},
+        {"role": "user", "content": "Resultados de la segmentación:\n" + user},
+    ]
+    body: dict = {
+        "model": config.DEEPSEEK_MODEL,
+        "messages": messages,
+        "temperature": 0.4,
+        # El modelo razona antes de responder (reasoning_content): necesita
+        # presupuesto suficiente para la respuesta final, si no queda vacía.
+        "max_tokens": config.MAX_TOKENS,
+    }
+    try:
+        async with httpx.AsyncClient(
+            headers={
+                "Authorization": f"Bearer {config.DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            timeout=config.DEEPSEEK_TIMEOUT,
+        ) as client:
+            resp = await client.post(
+                f"{config.DEEPSEEK_API_URL}/chat/completions",
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        log.exception("interpretar_segmentacion: error llamando al modelo")
+        return {"error": f"No se pudo contactar el modelo de IA: {exc}"}
+
+    content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    if not content.strip():
+        return {"error": "El modelo no produjo una interpretación. Reintenta."}
+    return {"explicacion": content.strip()}

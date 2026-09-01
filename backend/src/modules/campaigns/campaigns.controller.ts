@@ -19,6 +19,7 @@ import {
   CreateCampaignDto,
   GenerateContentDto,
   GenerateRecipientsDto,
+  InterpretSegmentDto,
   UpdateCampaignDto,
 } from './dto/campaign.dto';
 
@@ -73,6 +74,17 @@ export class CampaignsController {
       limit ? Number(limit) : undefined,
       mode === 'bundle' ? 'bundle' : 'multi',
     );
+  }
+
+  @Post('interpret-segment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Interpreta con IA por qué se seleccionó ese público objetivo (vía /ia-service)',
+  })
+  @ApiResponse({ status: 200, description: 'Explicación en lenguaje natural' })
+  interpretSegment(@Body() dto: InterpretSegmentDto) {
+    return this.campaignsService.interpretSegment(dto);
   }
 
   @Get(':id')

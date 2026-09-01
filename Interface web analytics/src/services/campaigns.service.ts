@@ -106,6 +106,15 @@ export interface SegmentPreviewRecipient {
   percentile?: number | null;
 }
 
+export interface SegmentRankingRow {
+  segment: number;
+  total: number;
+  buyers: number;
+  share: number;
+  /** Promedios de las features RFM del segmento (perfil de comportamiento). */
+  means?: Record<string, number>;
+}
+
 export interface SegmentPreviewResult {
   segment: number;
   segmentTotal: number;
@@ -114,7 +123,25 @@ export interface SegmentPreviewResult {
   mode?: "multi" | "bundle";
   bundleFallback?: boolean;
   note?: string;
+  ranking?: SegmentRankingRow[];
+  categories?: string[];
   recipients: SegmentPreviewRecipient[];
+}
+
+export interface InterpretSegmentPayload {
+  mode?: "multi" | "bundle";
+  productNames?: string[];
+  categories?: string[];
+  bestSegment?: number;
+  ranking?: SegmentRankingRow[];
+  segmentTotal?: number;
+  total?: number;
+  buyers?: number;
+  features?: string[];
+  bundleFallback?: boolean;
+  note?: string;
+  avgPropensity?: number;
+  avgUplift?: number;
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
@@ -183,7 +210,7 @@ export const campaignsService = {
     mode: "multi" | "bundle" = "multi",
   ) => {
     const es = new EventSource(
-      `${API_BASE_URL}/admin/campaigns/segment-preview?productIds=${productIds.join(",")}&limit=500&mode=${mode}`,
+      `${API_BASE_URL}/admin/campaigns/segment-preview?productIds=${productIds.join(",")}&limit=100000&mode=${mode}`,
     );
     es.addEventListener("message", (e) => {
       try {
@@ -216,4 +243,10 @@ export const campaignsService = {
 
   getRecipients: (id: number) =>
     fetchJson<Recipient[]>(`/admin/campaigns/${id}/recipients`),
+
+  interpretSegment: (payload: InterpretSegmentPayload) =>
+    fetchJson<{ explicacion: string }>("/admin/campaigns/interpret-segment", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
 };

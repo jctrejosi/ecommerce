@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CatalogCategory } from "../types";
-import footerLogo from "../../assets/logo.bmp";
+import footerLogo from "../../assets/logo.png";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 

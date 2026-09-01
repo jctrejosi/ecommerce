@@ -17,6 +17,7 @@ import {
   type CampaignChannel,
   type Recipient,
   type SegmentPreviewResult,
+  type SegmentRankingRow,
 } from "../services/campaigns.service";
 import { catalogService, type CatalogProduct, type CatalogCategory } from "../services/catalog.service";
 
@@ -941,6 +942,33 @@ function Step3({
   }, []);
 
   const totalReach = seg?.total ?? ESTIMATED_AUDIENCE;
+  // Universo total de clientes analizado (suma de todos los segmentos).
+  const totalPool = (seg?.ranking ?? []).reduce((a, r) => a + r.total, 0);
+  // Público objetivo real: clientes con ≥70% de probabilidad de compra (tras el filtro).
+  const audience = seg?.total ?? totalReach;
+
+  const scored = (seg?.recipients ?? []).filter((r) => r.propensity != null);
+  const uplifted = (seg?.recipients ?? []).filter((r) => r.uplift != null);
+  const explainCtx: ExplainContext | null = seg
+    ? {
+        mode: seg.mode ?? "multi",
+        productNames: products.map((p) => p.name),
+        categories: seg.categories ?? [],
+        ranking: seg.ranking ?? [],
+        bestSegment: seg.segment,
+        segmentTotal: seg.segmentTotal,
+        total: seg.total,
+        buyers: seg.buyers,
+        note: seg.note,
+        bundleFallback: seg.bundleFallback,
+        avgPropensity: scored.length
+          ? scored.reduce((a, r) => a + (r.propensity ?? 0), 0) / scored.length
+          : null,
+        avgUplift: uplifted.length
+          ? uplifted.reduce((a, r) => a + (r.uplift ?? 0), 0) / uplifted.length
+          : null,
+      }
+    : null;
 
   if (sent) {
     return (
@@ -950,15 +978,15 @@ function Step3({
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Campaña lanzada! 🎉</h2>
         <p className="text-gray-500 mb-1">
-          <strong className="text-gray-800">{totalReach.toLocaleString()} mensajes</strong> están en cola de envío.
+          <strong className="text-gray-800">{audience.toLocaleString()} mensajes</strong> están en cola de envío.
         </p>
         <p className="text-sm text-gray-400 mb-8">
           Canales: {activeChannels.map((c) => CHANNEL_CFG[c as keyof typeof CHANNEL_CFG].label).join(", ")}
         </p>
         <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
           {[
-            { label: "Estimados abiertos", value: Math.round(totalReach * 0.6).toLocaleString() },
-            { label: "Conversiones est.", value: Math.round(totalReach * ESTIMATED_CONV_RATE / 100).toLocaleString() },
+            { label: "Estimados abiertos", value: Math.round(audience * 0.6).toLocaleString() },
+            { label: "Conversiones est.", value: Math.round(audience * ESTIMATED_CONV_RATE / 100).toLocaleString() },
             { label: "ROI esperado", value: `${(ESTIMATED_CONV_RATE * 4.2).toFixed(0)}%` },
           ].map((s) => (
             <div key={s.label} className="bg-gray-50 rounded-2xl p-4 text-center">
@@ -1009,7 +1037,7 @@ function Step3({
                   ) : (
                     <span className="text-sm font-bold text-gray-900">
                       {seg
-                        ? `Seleccionados ${totalReach.toLocaleString()} clientes de ${seg.segmentTotal.toLocaleString()}`
+                        ? `Seleccionados ${seg.total.toLocaleString()} clientes${totalPool > 0 ? ` de ${totalPool.toLocaleString()} en total` : ""}`
                         : `${totalReach.toLocaleString()} clientes`}
                     </span>
                   )}
@@ -1054,7 +1082,7 @@ function Step3({
               </div>
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Conversiones estimadas</span>
-                <span className="text-sm font-bold text-green-600">~{Math.round(totalReach * ESTIMATED_CONV_RATE / 100)}</span>
+                <span className="text-sm font-bold text-green-600">~{Math.round(audience * ESTIMATED_CONV_RATE / 100)}</span>
               </div>
             </div>
           </div>
@@ -1062,8 +1090,9 @@ function Step3({
           {clientsOpen && seg && (
             <RecipientsModal
               title="Clientes segmentados"
-              subtitle={`Segmento ${seg.segment} — mostrando ${seg.total.toLocaleString()} de ${seg.segmentTotal.toLocaleString()} clientes que cumplen el estándar`}
+              subtitle={`Seleccionados ${seg.total.toLocaleString()} clientes${totalPool > 0 ? ` de ${totalPool.toLocaleString()} en total` : ""}`}
               recipients={seg.recipients}
+              explain={explainCtx}
               onClose={() => setClientsOpen(false)}
             />
           )}
@@ -1277,7 +1306,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
       });
 
       // Recomendación de clientes (segmentación vía clustering-api según el modo).
-      const gen = await campaignsService.generateRecipients(created.id, 500, undefined, undefined, mode).catch(() => null);
+      const gen = await campaignsService.generateRecipients(created.id, 100000, undefined, undefined, mode).catch(() => null);
 
       setSent(true);
       const card = apiToCard(created);
@@ -1407,11 +1436,307 @@ function scoreColor(p: number): string {
   return "bg-gray-100 text-gray-600";
 }
 
+/** Formatea un promedio: enteros con separador de miles; decimales si es < 100. */
+const fmt1 = (v: number) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1));
+/** Formatea un monto promedio en unidades (sin decimales). */
+const fmtMoney = (v: number) => Math.round(v).toLocaleString();
+
+type ExplainContext = {
+  mode?: "multi" | "bundle";
+  productNames: string[];
+  categories: string[];
+  ranking: SegmentRankingRow[];
+  bestSegment: number;
+  segmentTotal: number;
+  total: number;
+  buyers: number;
+  note?: string;
+  bundleFallback?: boolean;
+  avgPropensity?: number | null;
+  avgUplift?: number | null;
+};
+
+const EXPLAIN_FEATURES = [
+  { key: "frecuencia", label: "Frecuencia de compra" },
+  { key: "monetario", label: "Monetario (gasto total)" },
+  { key: "ticket_promedio", label: "Ticket promedio" },
+  { key: "categorias_distintas", label: "Categorías distintas" },
+];
+
+/** Renderiza texto plano convirtiendo **negrita** en <strong> (sin HTML crudo). */
+function renderBold(text: string) {
+  return text.split("**").map((part, i) =>
+    i % 2 === 1 ? (
+      <strong key={i} className="font-bold text-gray-900">{part}</strong>
+    ) : (
+      <span key={i}>{part}</span>
+    ),
+  );
+}
+
+function ExplainModal({ ctx, onClose }: { ctx: ExplainContext; onClose: () => void }) {
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const explain = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await campaignsService.interpretSegment({
+        mode: ctx.mode,
+        productNames: ctx.productNames,
+        categories: ctx.categories,
+        bestSegment: ctx.bestSegment,
+        ranking: ctx.ranking,
+        segmentTotal: ctx.segmentTotal,
+        total: ctx.total,
+        buyers: ctx.buyers,
+        features: EXPLAIN_FEATURES.map((f) => f.key),
+        bundleFallback: ctx.bundleFallback,
+        note: ctx.note,
+        avgPropensity: ctx.avgPropensity ?? undefined,
+        avgUplift: ctx.avgUplift ?? undefined,
+      });
+      setExplanation(res.explicacion);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo interpretar la segmentación");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Genera la interpretación con IA automáticamente al abrir el modal.
+  useEffect(() => {
+    void explain();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const sorted = [...ctx.ranking].sort((a, b) => b.share - a.share);
+  const totalPool = ctx.ranking.reduce((a, r) => a + r.total, 0);
+  const bestRow = ctx.ranking.find((r) => r.segment === ctx.bestSegment);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+          <div className="min-w-0 pr-3">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <span className="w-6 h-6 rounded-full bg-gradient-to-br from-amber-400 to-orange-400 text-white flex items-center justify-center text-sm font-black shrink-0 shadow-sm">?</span>
+              ¿Cómo se escogieron los clientes?
+            </h3>
+            <p className="text-sm text-gray-500 mt-0.5">El paso a paso de cómo se eligió este público</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {/* Cómo se seleccionaron los clientes */}
+          <section>
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Cómo se seleccionaron los clientes</h4>
+            <div className="space-y-3 text-sm text-gray-700 leading-relaxed">
+              <p>
+                La segmentación se realiza en varias etapas. Cada etapa reduce la base de clientes hasta identificar
+                aquellos con mayor potencial para la campaña.
+              </p>
+
+              <div>
+                <p className="font-bold text-gray-900">1. Identificación de tipos de clientes</p>
+                <p className="mt-1">
+                  Primero se analiza el comportamiento histórico de compra de cada cliente: qué tan frecuentemente compra,
+                  cuánto gasta, cuánto suele gastar por compra y qué tan variadas son sus compras.
+                </p>
+                <p className="mt-1">
+                  Con esta información, el sistema <strong>agrupa automáticamente a los clientes que tienen comportamientos similares</strong>.
+                  Se generan 6 grupos diferentes. Por ejemplo, un grupo puede estar compuesto principalmente por clientes
+                  frecuentes y de alto gasto, mientras otro puede reunir clientes ocasionales y de menor gasto.
+                </p>
+                <blockquote className="mt-2 border-l-2 border-amber-300 pl-3 text-xs text-gray-500 italic">
+                  En esta etapa no se definen manualmente reglas como "si compra más de 10 veces pertenece al grupo A".
+                  El sistema identifica los grupos a partir de las similitudes encontradas entre los clientes.
+                </blockquote>
+              </div>
+
+              <div>
+                <p className="font-bold text-gray-900">2. Identificación del grupo más relacionado con la campaña</p>
+                <p className="mt-1">Después se analiza cuáles de esos grupos tienen mayor afinidad con los productos que queremos promocionar:</p>
+                <ul className="mt-1 list-disc list-inside">
+                  {ctx.productNames.map((n) => <li key={n}>{n}</li>)}
+                </ul>
+                <p className="mt-2">Para cada grupo se calcula qué proporción de sus clientes ya compró productos de esas categorías:</p>
+                {sorted.length ? (
+                  <div className="mt-2 rounded-xl border border-gray-100 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="text-[10px] font-bold text-gray-400 uppercase tracking-wide bg-gray-50">
+                          <th className="text-left px-3 py-2">Segmento</th>
+                          <th className="text-right px-3 py-2">Clientes</th>
+                          <th className="text-right px-3 py-2">% que compraron</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {sorted.map((r) => {
+                          const best = r.segment === ctx.bestSegment;
+                          return (
+                            <tr key={r.segment} className={best ? "bg-amber-50" : ""}>
+                              <td className="px-3 py-2">
+                                <span className="font-bold whitespace-nowrap">
+                                  {best ? "⭐ " : ""}Segmento {r.segment}
+                                  {best && (
+                                    <span className="ml-1.5 text-[10px] font-bold text-amber-700 bg-amber-100 rounded-full px-1.5 py-0.5">elegido</span>
+                                  )}
+                                </span>
+                                {r.means &&
+                                  (r.means.frecuencia != null || r.means.monetario != null || r.means.ticket_promedio != null || r.means.categorias_distintas != null) && (
+                                    <div className="flex flex-wrap gap-x-2 mt-0.5 text-[10px] font-medium text-gray-500">
+                                      {r.means.frecuencia != null && <span>frec {fmt1(r.means.frecuencia)}</span>}
+                                      {r.means.monetario != null && <span>gasto {fmtMoney(r.means.monetario)}</span>}
+                                      {r.means.ticket_promedio != null && <span>ticket {fmtMoney(r.means.ticket_promedio)}</span>}
+                                      {r.means.categorias_distintas != null && <span>{fmt1(r.means.categorias_distintas)} cat.</span>}
+                                    </div>
+                                  )}
+                              </td>
+                              <td className="px-3 py-2 text-right">{r.total.toLocaleString()}</td>
+                              <td className="px-3 py-2 text-right font-semibold">{(r.share * 100).toFixed(0)}%</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : null}
+                {bestRow && (
+                  <p className="mt-2">
+                    En esta segmentación, el <strong>segmento {ctx.bestSegment}</strong> presenta la mayor concentración de
+                    compradores ({(bestRow.share * 100).toFixed(1)}% de sus {ctx.segmentTotal.toLocaleString()} clientes) y, por
+                    tanto, es el grupo con mayor afinidad histórica con la campaña.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <p className="font-bold text-gray-900">3. Priorización según probabilidad de compra</p>
+                <p className="mt-1">Una vez identificado el grupo de mayor interés, se analiza individualmente a sus clientes.</p>
+                <p className="mt-1">
+                  El modelo estima, para cada cliente, <strong>qué tan probable es que compre los productos de la campaña</strong>.
+                </p>
+                <p className="mt-1">
+                  Así, en lugar de tratar a todos los clientes del segmento por igual, podemos priorizar aquellos con mayor
+                  probabilidad de compra.
+                </p>
+                <p className="mt-1">
+                  Para esta campaña, el criterio es seleccionar <strong>solo clientes con 70% o más de probabilidad de compra</strong>,
+                  ordenados de mayor a menor score.
+                </p>
+              </div>
+
+              <div>
+                <p className="font-bold text-gray-900">4. Identificación de quién puede ser influenciado por la campaña</p>
+                <p className="mt-1">
+                  Finalmente, se estima algo diferente: <strong>si enviar la campaña realmente puede cambiar la decisión del cliente</strong>.
+                </p>
+                <p className="mt-1">El modelo compara dos escenarios:</p>
+                <ul className="list-disc list-inside">
+                  <li>qué probabilidad tendría de comprar <strong>si recibe la campaña</strong>;</li>
+                  <li>qué probabilidad tendría de comprar <strong>si no la recibe</strong>.</li>
+                </ul>
+                <p className="mt-1">La diferencia entre ambos escenarios indica el potencial de la campaña para influir en ese cliente.</p>
+                <div className="mt-2 space-y-1.5 text-xs">
+                  <p className="bg-gray-50 rounded-lg px-3 py-2">
+                    Cliente A: 70% de probabilidad con campaña vs. 30% sin campaña →{" "}
+                    <strong className="text-green-700">alta oportunidad de persuasión</strong>.
+                  </p>
+                  <p className="bg-gray-50 rounded-lg px-3 py-2">
+                    Cliente B: 95% con campaña vs. 93% sin campaña →{" "}
+                    <strong className="text-gray-500">baja oportunidad de persuasión</strong>, porque probablemente compraría de todas formas.
+                  </p>
+                </div>
+                <p className="mt-2">
+                  De esta manera, la segmentación no se limita a buscar clientes que compran mucho. Busca identificar{" "}
+                  <strong>
+                    qué tipo de clientes son más afines al producto, cuáles tienen mayor probabilidad de comprar y,
+                    especialmente, en cuáles la campaña puede generar un cambio real en su comportamiento
+                  </strong>.
+                </p>
+              </div>
+
+              {/* Resumen numérico de esta segmentación */}
+              <div className="mt-1 space-y-1 rounded-xl bg-gray-50 p-3 text-[11px] text-gray-500">
+                <p>
+                  👥 Se analizaron <strong className="text-gray-700">{totalPool.toLocaleString()}</strong> clientes en total.
+                </p>
+                <p>
+                  🎯 <strong className="text-gray-700">{ctx.buyers.toLocaleString()} clientes</strong> en toda la base compraron productos de las categorías relacionadas.
+                </p>
+                {ctx.avgPropensity != null && (
+                  <p>
+                    📈 <strong className="text-gray-700">Propensión promedio {(ctx.avgPropensity * 100).toFixed(1)}%</strong>: probabilidad estimada de que compren si ven la campaña.
+                  </p>
+                )}
+                {ctx.avgUplift != null && (
+                  <p>
+                    ⚡ <strong className="text-gray-700">Uplift promedio {ctx.avgUplift >= 0 ? "+" : ""}{ctx.avgUplift.toFixed(3)}</strong>: cuánto aumenta la probabilidad de compra si reciben la campaña.{" "}
+                    {ctx.avgUplift < 0
+                      ? "Negativo: no son muy persuasibles, comprarían igual aunque no reciban la campaña."
+                      : "Positivo: la campaña puede inclinar su decisión de compra."}
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* Interpretación IA */}
+          <section>
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Interpretación con IA</h4>
+            {loading || (!explanation && !error) ? (
+              <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                <RefreshCw size={14} className="animate-spin" /> Generando interpretación…
+              </div>
+            ) : error ? (
+              <div className="flex flex-col items-start gap-2">
+                <div className="text-xs font-semibold text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">⚠ {error}</div>
+                <button
+                  onClick={() => void explain()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+                >
+                  <RefreshCw size={12} /> Reintentar
+                </button>
+              </div>
+            ) : explanation ? (
+              <div>
+                <div className="text-sm text-gray-700 bg-gray-50 rounded-xl p-4 leading-relaxed">
+                  {explanation.split("\n\n").map((p, i) => (
+                    <p key={i} className={i > 0 ? "mt-2" : ""}>{renderBold(p)}</p>
+                  ))}
+                </div>
+                <button
+                  onClick={() => {
+                    setExplanation(null);
+                    void explain();
+                  }}
+                  className="mt-2 text-[11px] text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  ↻ Regenerar explicación
+                </button>
+              </div>
+            ) : null}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RecipientsModal({
   title,
   subtitle,
   recipients: preset,
   campaignId,
+  explain,
   onClose,
 }: {
   title: string;
@@ -1426,12 +1751,24 @@ function RecipientsModal({
     percentile?: number | null;
   }[];
   campaignId?: number;
+  explain?: ExplainContext | null;
   onClose: () => void;
 }) {
   const [recipients, setRecipients] = useState<SegClientRow[]>([]);
   const [loading, setLoading] = useState(campaignId != null && preset == null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [explainOpen, setExplainOpen] = useState(false);
+
+  // Lazy-load: se renderizan bloques de PAGE filas; al llegar al final (scroll)
+  // se cargan las siguientes. `visible` se reinicia al buscar.
+  const PAGE = 50;
+  const [visible, setVisible] = useState(PAGE);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setVisible(PAGE);
+  }, [query]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1465,6 +1802,22 @@ function RecipientsModal({
     (r.email ?? "").toLowerCase().includes(q) ||
     (r.phone ?? "").toLowerCase().includes(q),
   );
+  const shown = filtered.slice(0, visible);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          setVisible((v) => v + PAGE);
+        }
+      },
+      { rootMargin: "200px" },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [filtered.length]);
 
   const initials = (name: string | null) => {
     if (!name) return "?";
@@ -1481,6 +1834,16 @@ function RecipientsModal({
           <div className="min-w-0 pr-3">
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Users size={18} className="text-amber-600" /> {title}
+              {explain && (
+                <button
+                  onClick={() => setExplainOpen(true)}
+                  title="¿Cómo se escogieron los clientes?"
+                  className="animate-soft-pulse group flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-3 py-1.5 text-[11px] font-bold text-amber-950 shadow-sm transition-all hover:shadow-md hover:scale-105 active:scale-95"
+                >
+                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/85 text-[10px] font-black">?</span>
+                  ¿Cómo se escogieron los clientes?
+                </button>
+              )}
             </h3>
             {subtitle && <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitle}</p>}
           </div>
@@ -1500,9 +1863,6 @@ function RecipientsModal({
               className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
             />
           </div>
-          <span className="text-xs text-gray-400 font-semibold whitespace-nowrap">
-            {filtered.length.toLocaleString()} de {recipients.length.toLocaleString()}
-          </span>
         </div>
 
         {/* List */}
@@ -1535,7 +1895,7 @@ function RecipientsModal({
                 <span>Score</span>
               </div>
               <ul className="divide-y divide-gray-100">
-                {filtered.map((r) => (
+                {shown.map((r) => (
                 <li key={r.id} className="flex items-center gap-3 py-3">
                   <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">
                     {initials(r.name)}
@@ -1561,10 +1921,19 @@ function RecipientsModal({
                 </li>
               ))}
               </ul>
+              {visible < filtered.length && (
+                <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                  <RefreshCw size={13} className="animate-spin" /> Cargando más clientes…
+                </div>
+              )}
             </div>
           )}
         </div>
       </div>
+
+      {explainOpen && explain && (
+        <ExplainModal ctx={explain} onClose={() => setExplainOpen(false)} />
+      )}
     </div>
   );
 }

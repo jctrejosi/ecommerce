@@ -1,5 +1,6 @@
 import {
   IsArray,
+  IsBoolean,
   IsEnum,
   IsIn,
   IsInt,
@@ -167,4 +168,61 @@ export class GenerateContentDto {
   @IsArray()
   @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
   channels: ('whatsapp' | 'email' | 'sms')[];
+}
+
+export class InterpretSegmentDto {
+  @IsOptional()
+  @IsIn(['multi', 'bundle'])
+  mode?: 'multi' | 'bundle';
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  productNames?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  categories?: string[];
+
+  @IsOptional()
+  @IsInt()
+  bestSegment?: number;
+
+  @IsOptional()
+  @IsArray()
+  ranking?: { segment?: number; total?: number; buyers?: number; share?: number }[];
+
+  @IsOptional()
+  @IsInt()
+  segmentTotal?: number;
+
+  @IsOptional()
+  @IsInt()
+  total?: number;
+
+  @IsOptional()
+  @IsInt()
+  buyers?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  features?: string[];
+
+  @IsOptional()
+  @IsBoolean()
+  bundleFallback?: boolean;
+
+  @IsOptional()
+  @IsString()
+  note?: string;
+
+  @IsOptional()
+  @IsNumber()
+  avgPropensity?: number;
+
+  @IsOptional()
+  @IsNumber()
+  avgUplift?: number;
 }

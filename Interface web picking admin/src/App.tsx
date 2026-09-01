@@ -3,7 +3,7 @@ import { api, ApiError } from './services/api'
 import type { Branch, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
-import footerLogo from './assets/logo.bmp'
+import footerLogo from './assets/logo.png'
 import headerLogo from './assets/logo.png'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -209,15 +209,15 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/8 px-5 py-4">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-x-6 gap-y-2 text-center">
+      <footer className="shrink-0" style={{ background: '#111827' }}>
+        <div className="flex flex-col md:flex-row items-center justify-center gap-x-6 gap-y-2 px-4 py-3 text-center">
           <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
-            <img src={footerLogo} alt="MercAldas" className="h-8 w-auto object-contain" />
+            <img src={footerLogo} alt="MercAldas" className="h-10 w-auto object-contain" />
           </a>
-          <p className="text-xs text-white/40">
+          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.4)' }}>
             © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
           </p>
-          <p className="text-xs text-white/30">
+          <p className="text-sm" style={{ color: 'rgba(255,255,255,0.3)' }}>
             Manizales, Caldas, Colombia
           </p>
         </div>

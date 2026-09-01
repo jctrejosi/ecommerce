@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import footerLogo from "./assets/logo.bmp";
+import footerLogo from "./assets/logo.png";
 import sidebarLogo from "./assets/logo.png";
 import {
   LayoutDashboard,
@@ -762,27 +762,23 @@ export default function App() {
         <main className="flex-1 overflow-y-auto">
           <ViewRenderer view={view} user={user} onNavigate={(v) => navigate(v as ViewId)} />
         </main>
-        <footer className="shrink-0 border-t border-gray-100 bg-white px-6 py-2.5 relative flex items-center justify-center">
-          <a
-            href="https://dsi.com.co"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="absolute left-6 flex items-center hover:opacity-80 transition-opacity"
-          >
-            <img
-              src={footerLogo}
-              alt="MercAldas"
-              className="h-8 w-auto object-contain"
-            />
-          </a>
-          <p className="text-[11px] text-gray-400">
-            © 2026 Desarrollado por{" "}
-            <span className="font-bold text-gray-600">DSI SA</span> · Todos los
-            derechos reservados
-          </p>
-          <p className="absolute right-6 text-[11px] text-gray-400">
-            Manizales, Caldas, Colombia
-          </p>
+        <footer className="shrink-0" style={{ background: "#111827" }}>
+          <div className="flex flex-col md:flex-row items-center justify-center gap-x-6 gap-y-2 px-4 py-3 text-center">
+            <a
+              href="https://dsi.com.co"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center hover:opacity-80 transition-opacity"
+            >
+              <img src={footerLogo} alt="MercAldas" className="h-10 w-auto object-contain" />
+            </a>
+            <p className="text-sm" style={{ color: "rgba(255,255,255,0.4)" }}>
+              © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
+            </p>
+            <p className="text-sm" style={{ color: "rgba(255,255,255,0.3)" }}>
+              Manizales, Caldas, Colombia
+            </p>
+          </div>
         </footer>
       </div>
 
