@@ -103,8 +103,11 @@ export class CampaignsService {
   }
 
   private toRecipient(row: typeof campaignRecipients.$inferSelect) {
+    const { segmento, ...rest } = row;
     return {
-      ...row,
+      ...rest,
+      // Nombre amigable en la API: segment (no segmento, como la columna).
+      segment: segmento ?? null,
       id: Number(row.id),
       customerId: row.customerId == null ? null : Number(row.customerId),
     };
@@ -654,17 +657,50 @@ export class CampaignsService {
     };
   }
 
-  /**
-   * Añade clientes (por cédula) a los destinatarios de una campaña.
-   * Evita duplicados por email/teléfono contra los ya guardados.
-   */
-  async addManualRecipients(campaignId: number, cedulas: string[]) {
-    await this.findOne(campaignId);
-    const list = [...new Set((cedulas ?? []).filter((c) => c && c.trim()))].slice(0, 5000);
-    if (!list.length) return { added: 0 };
+  /** Resuelve el conjunto de clientes de la segmentación manual: o bien las
+   *  cédulas explícitas, o bien TODOS los que cumplen los filtros de
+   *  perfil/RFM (los "clientes con esas características" que muestra la UI). */
+  private async resolveManualAudience(
+    cedulas?: string[],
+    filters?: Record<string, unknown>,
+  ) {
+    let query: Record<string, unknown>;
+    if (filters && Object.keys(filters).length > 0) {
+      query = this.toSnakeFilters(filters);
+    } else if (cedulas?.length) {
+      const list = [...new Set(cedulas.filter((c) => c && c.trim()))].slice(0, 10000);
+      if (!list.length) {
+        throw new BadRequestException('No se recibieron cédulas válidas');
+      }
+      query = { cedulas: list };
+    } else {
+      throw new BadRequestException(
+        'Para la audiencia manual define filtros o envía la lista de cédulas',
+      );
+    }
+    const data = await this.fetchSegmentClients(query, 0, 100000, true);
+    if (!data.clients.length) {
+      throw new BadRequestException(
+        filters && Object.keys(filters).length > 0
+          ? 'Ningún cliente cumple los filtros seleccionados'
+          : 'Ninguna cédula coincide con la base de clientes',
+      );
+    }
+    return data.clients;
+  }
 
-    const data = await this.fetchSegmentClients({ cedulas: list }, 0, 100000, true);
-    if (!data.clients.length) return { added: 0 };
+  /**
+   * Añade clientes a los destinatarios de una campaña (por cédulas o por
+   * filtros manuales). Evita duplicados por email/teléfono contra los ya
+   * guardados. Deja la audiencia 'mixed' si había recomendación, si no 'manual'.
+   */
+  async addManualRecipients(
+    campaignId: number,
+    cedulas?: string[],
+    filters?: Record<string, unknown>,
+  ) {
+    await this.findOne(campaignId);
+    const clients = await this.resolveManualAudience(cedulas, filters);
 
     const existing = await this.db
       .select({ email: campaignRecipients.email, phone: campaignRecipients.phone })
@@ -677,7 +713,7 @@ export class CampaignsService {
       existing.map((r) => r.phone?.toLowerCase()).filter(Boolean),
     );
 
-    const toInsert = data.clients.filter((c) => {
+    const toInsert = clients.filter((c) => {
       const em = c.email?.toLowerCase();
       const ph = c.phone?.toLowerCase();
       if (em && seenEmails.has(em)) return false;
@@ -692,13 +728,122 @@ export class CampaignsService {
         toInsert.map((c) => ({
           campaignId,
           customerId: null,
+          cedula: c.cedula ?? null,
+          segmento: c.segment ?? null,
+          frecuencia: c.features?.frecuencia ?? null,
+          monetario: c.features?.monetario ?? null,
+          ticketPromedio: c.features?.ticket_promedio ?? null,
+          categoriasDistintas: c.features?.categorias_distintas ?? null,
+          propensity: null,
           name: c.name ?? null,
           email: c.email ?? null,
           phone: c.phone ?? null,
         })),
       );
+      // Origen de la audiencia tras añadir manuales.
+      const row = await this.db
+        .select({ audienceMode: campaigns.audienceMode })
+        .from(campaigns)
+        .where(eq(campaigns.id, BigInt(campaignId)));
+      const prev = row[0]?.audienceMode ?? 'auto';
+      const next = prev === 'manual' ? 'manual' : 'mixed';
+      await this.db
+        .update(campaigns)
+        .set({
+          audienceMode: next,
+          audienceCount: existing.length + toInsert.length,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(campaigns.id, BigInt(campaignId)));
     }
-    return { added: toInsert.length };
+    return this.findOne(campaignId);
+  }
+
+  /**
+   * Reemplaza TODO el público de la campaña por una audiencia manual (cédulas
+   * o filtros). Deja la audiencia en modo 'manual'.
+   */
+  async replaceManualRecipients(
+    campaignId: number,
+    cedulas?: string[],
+    filters?: Record<string, unknown>,
+  ) {
+    await this.findOne(campaignId);
+    const clients = await this.resolveManualAudience(cedulas, filters);
+
+    await this.db
+      .delete(campaignRecipients)
+      .where(eq(campaignRecipients.campaignId, campaignId));
+    await this.db.insert(campaignRecipients).values(
+      clients.map((c) => ({
+        campaignId,
+        customerId: null,
+        cedula: c.cedula ?? null,
+        segmento: c.segment ?? null,
+        frecuencia: c.features?.frecuencia ?? null,
+        monetario: c.features?.monetario ?? null,
+        ticketPromedio: c.features?.ticket_promedio ?? null,
+        categoriasDistintas: c.features?.categorias_distintas ?? null,
+        propensity: null,
+        name: c.name ?? null,
+        email: c.email ?? null,
+        phone: c.phone ?? null,
+      })),
+    );
+    await this.db
+      .update(campaigns)
+      .set({
+        audienceCount: clients.length,
+        audienceMode: 'manual',
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(campaigns.id, BigInt(campaignId)));
+    return this.findOne(campaignId);
+  }
+
+  /** Aplica el origen del público objetivo elegido en la UI:
+   *  'auto' → solo recomendación por producto (re-segmenta),
+   *  'manual' → reemplaza TODO el público por la audiencia manual,
+   *  'mixed' → recomendación por producto + audiencia manual (dedupe).
+   *  Devuelve la campaña actualizada. */
+  async applyAudience(
+    campaignId: number,
+    mode: 'auto' | 'manual' | 'mixed',
+    cedulas?: string[],
+    filters?: Record<string, unknown>,
+  ) {
+    const existing = await this.findOne(campaignId);
+    if (mode === 'manual') {
+      await this.replaceManualRecipients(campaignId, cedulas, filters);
+    } else {
+      await this.generateRecipients(
+        campaignId,
+        100000,
+        undefined,
+        undefined,
+        existing.mode === 'bundle' ? 'bundle' : 'multi',
+      );
+      if (mode === 'mixed') {
+        await this.addManualRecipients(campaignId, cedulas, filters);
+      }
+    }
+    return this.findOne(campaignId);
+  }
+
+  /**
+   * Usa (de nuevo) la recomendación por producto: re-segmenta y reemplaza
+   * el público, dejando la audiencia en modo 'auto'. No registra envío.
+   */
+  async useRecommendedAudience(id: number) {
+    const existing = await this.findOne(id);
+    await this.generateRecipients(
+      id,
+      100000,
+      undefined,
+      undefined,
+      existing.mode === 'bundle' ? 'bundle' : 'multi',
+    );
+    return this.findOne(id);
   }
 
   /**
@@ -1047,6 +1192,10 @@ export class CampaignsService {
                     email: rc.email,
                     phone: rc.phone,
                     segment: rc.segment,
+                    frecuencia: rc.features?.frecuencia ?? null,
+                    monetario: rc.features?.monetario ?? null,
+                    ticketPromedio: rc.features?.ticket_promedio ?? null,
+                    categoriasDistintas: rc.features?.categorias_distintas ?? null,
                     propensity: propensity ? (propensity[i] ?? null) : null,
                     uplift: uplift ? (uplift[i]?.uplift ?? null) : null,
                     percentile: uplift ? (uplift[i]?.percentile ?? null) : null,
@@ -1119,6 +1268,14 @@ export class CampaignsService {
       email: string | null;
       phone: string | null;
       customerId: number | null;
+      // Snapshot RFM (réplica de analytics) para la tabla del público.
+      cedula?: string | null;
+      segmento?: number | null;
+      frecuencia?: number | null;
+      monetario?: number | null;
+      ticketPromedio?: number | null;
+      categoriasDistintas?: number | null;
+      propensity?: number | null;
     }[];
     let note: string;
     let segInfo: { segment: number; buyers: number } | null = null;
@@ -1158,6 +1315,13 @@ export class CampaignsService {
           email: r.email,
           phone: r.phone,
           customerId: null,
+          cedula: r.cedula ?? null,
+          segmento: r.segment ?? seg.best_segment ?? null,
+          frecuencia: r.features?.frecuencia ?? null,
+          monetario: r.features?.monetario ?? null,
+          ticketPromedio: r.features?.ticket_promedio ?? null,
+          categoriasDistintas: r.features?.categorias_distintas ?? null,
+          propensity: r._propensity ?? null,
         }));
         segInfo = { segment: seg.best_segment, buyers: seg.buyers };
         note = `Segmentación automática: segmento ${seg.best_segment} (${seg.total} clientes en el segmento, ${seg.buyers} con afinidad; ${items.length} con ≥70% de probabilidad de compra)`;
@@ -1166,6 +1330,7 @@ export class CampaignsService {
         const pool = await this.db
           .select({
             id: customers.id,
+            documentNumber: customers.documentNumber,
             name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
             email: customers.email,
             phone: customers.phone,
@@ -1190,6 +1355,13 @@ export class CampaignsService {
           email: c.email,
           phone: c.phone || null,
           customerId: Number(c.id),
+          cedula: c.documentNumber ?? null,
+          segmento: null,
+          frecuencia: null,
+          monetario: null,
+          ticketPromedio: null,
+          categoriasDistintas: null,
+          propensity: null,
         }));
         note = 'Recomendación aleatoria (la campaña no tiene productos con external_id)';
       }
@@ -1204,6 +1376,7 @@ export class CampaignsService {
       const pool = await this.db
         .select({
           id: customers.id,
+          documentNumber: customers.documentNumber,
           name: sql<string>`concat_ws(' ', ${customers.firstName}, ${customers.lastName})`,
           email: customers.email,
           phone: customers.phone,
@@ -1229,6 +1402,13 @@ export class CampaignsService {
         email: c.email,
         phone: c.phone || null,
         customerId: Number(c.id),
+        cedula: c.documentNumber ?? null,
+        segmento: segment,
+        frecuencia: null,
+        monetario: null,
+        ticketPromedio: null,
+        categoriasDistintas: null,
+        propensity: null,
       }));
       segInfo = { segment, buyers: cedulas.length };
       note = `Segmentación inteligente: cluster ${segment} (${cedulas.length} clientes en el segmento, ${pool.length} con contacto)`;
@@ -1257,6 +1437,13 @@ export class CampaignsService {
           email: c.email ?? null,
           phone: c.phone ?? null,
           customerId: null,
+          cedula: c.cedula ?? null,
+          segmento: c.segment ?? null,
+          frecuencia: c.features?.frecuencia ?? null,
+          monetario: c.features?.monetario ?? null,
+          ticketPromedio: c.features?.ticket_promedio ?? null,
+          categoriasDistintas: c.features?.categorias_distintas ?? null,
+          propensity: null,
         });
       }
       if (extra.clients.length) {
@@ -1278,6 +1465,13 @@ export class CampaignsService {
       items.map((r) => ({
         campaignId: id,
         customerId: r.customerId,
+        cedula: r.cedula ?? null,
+        segmento: r.segmento ?? null,
+        frecuencia: r.frecuencia ?? null,
+        monetario: r.monetario ?? null,
+        ticketPromedio: r.ticketPromedio ?? null,
+        categoriasDistintas: r.categoriasDistintas ?? null,
+        propensity: r.propensity ?? null,
         name: r.name,
         email: r.email,
         phone: r.phone,
@@ -1286,7 +1480,11 @@ export class CampaignsService {
 
     await this.db
       .update(campaigns)
-      .set({ audienceCount: items.length, updatedAt: new Date().toISOString() })
+      .set({
+        audienceCount: items.length,
+        audienceMode: manualCedulas?.length ? 'mixed' : 'auto',
+        updatedAt: new Date().toISOString(),
+      })
       .where(eq(campaigns.id, BigInt(id)));
 
     this.logger.log(`Campaña ${id}: ${items.length} destinatarios recomendados`);

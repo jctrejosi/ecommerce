@@ -24,6 +24,7 @@ import {
   primaryKey,
   pgView,
   pgEnum,
+  doublePrecision,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
@@ -3788,6 +3789,11 @@ export const campaigns = pgTable(
     channels: jsonb('channels').notNull().default(sql`'[]'::jsonb`).$type<string[]>(),
     // Modo de segmentación al recomendar el público: 'multi' | 'bundle'
     mode: varchar('mode', { length: 10 }).default('multi').notNull(),
+    // Origen del público objetivo: 'auto' (recomendación por producto),
+    // 'manual' (filtros manuales) o 'mixed' (recomendada + manual).
+    audienceMode: varchar('audience_mode', { length: 10 })
+      .default('auto')
+      .notNull(),
     status: campaignStatusEnum('status').default('borrador').notNull(),
     // Público: lo llena la recomendación de clientes (aleatoria por ahora,
     // segmentación inteligente después)
@@ -3869,6 +3875,16 @@ export const campaignRecipients = pgTable(
     campaignId: bigint('campaign_id', { mode: 'number' }).notNull(),
     // Snapshot del cliente destino (id nullable: puede ser suscriptor sin cuenta)
     customerId: bigint('customer_id', { mode: 'number' }),
+    // Snapshot del perfil RFM del cliente (réplica de analytics): permite
+    // mostrar la tabla completa del público (segmento, frecuencia, monetario,
+    // ticket, categorías y propensión) sin consultas extra al clustering.
+    cedula: varchar('cedula', { length: 50 }),
+    segmento: integer('segmento'),
+    frecuencia: doublePrecision('frecuencia'),
+    monetario: doublePrecision('monetario'),
+    ticketPromedio: doublePrecision('ticket_promedio'),
+    categoriasDistintas: doublePrecision('categorias_distintas'),
+    propensity: doublePrecision('propensity'),
     name: varchar({ length: 200 }),
     email: varchar({ length: 255 }),
     phone: varchar({ length: 50 }),

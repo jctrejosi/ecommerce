@@ -27,6 +27,7 @@ export interface Campaign {
   channels: CampaignChannel[];
   status: CampaignStatus;
   audienceCount: number;
+  audienceMode?: "auto" | "manual" | "mixed";
   scheduledAt: string | null;
   sentAt: string | null;
   sentCount: number;
@@ -104,6 +105,13 @@ export interface Recipient {
   email: string | null;
   phone: string | null;
   status: string;
+  cedula?: string | null;
+  segment?: number | null;
+  frecuencia?: number | null;
+  monetario?: number | null;
+  ticketPromedio?: number | null;
+  categoriasDistintas?: number | null;
+  propensity?: number | null;
 }
 
 export interface GenerateRecipientsResult {
@@ -120,6 +128,10 @@ export interface SegmentPreviewRecipient {
   email: string | null;
   phone: string | null;
   segment?: number;
+  frecuencia?: number | null;
+  monetario?: number | null;
+  ticketPromedio?: number | null;
+  categoriasDistintas?: number | null;
   propensity?: number | null;
   uplift?: number | null;
   percentile?: number | null;
@@ -229,6 +241,15 @@ export interface ClientFilterOptions {
   estadosCiviles: string[];
   sucursales: string[];
   sexos: string[];
+}
+
+export type AudienceMode = "auto" | "manual" | "mixed";
+
+/** Audiencia manual: lista de cédulas o los filtros que la definen (el
+ *  backend resuelve todos los clientes que cumplen esas características). */
+export interface ManualAudiencePayload {
+  cedulas?: string[];
+  filters?: NonNullable<ScoreClientsPayload["filters"]>;
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
@@ -355,9 +376,30 @@ export const campaignsService = {
   getFilterOptions: () =>
     fetchJson<ClientFilterOptions>("/admin/campaigns/clients/filter-options"),
 
-  addManualRecipients: (id: number, cedulas: string[]) =>
-    fetchJson<{ added: number }>(`/admin/campaigns/${id}/recipients/manual`, {
+  addManualRecipients: (id: number, payload: ManualAudiencePayload) =>
+    fetchJson<Campaign>(`/admin/campaigns/${id}/recipients/manual`, {
       method: "POST",
-      body: JSON.stringify({ cedulas }),
+      body: JSON.stringify(payload),
+    }),
+
+  replaceManualAudience: (id: number, payload: ManualAudiencePayload) =>
+    fetchJson<Campaign>(`/admin/campaigns/${id}/audience/manual-replace`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
+  applyAudience: (
+    id: number,
+    mode: AudienceMode,
+    payload: ManualAudiencePayload = {},
+  ) =>
+    fetchJson<Campaign>(`/admin/campaigns/${id}/audience`, {
+      method: "POST",
+      body: JSON.stringify({ mode, ...payload }),
+    }),
+
+  useRecommendedAudience: (id: number) =>
+    fetchJson<Campaign>(`/admin/campaigns/${id}/audience/recommended`, {
+      method: "POST",
     }),
 };

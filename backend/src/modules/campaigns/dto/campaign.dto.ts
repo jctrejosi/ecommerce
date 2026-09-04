@@ -400,8 +400,33 @@ export class ScoreClientsDto {
   offset?: number;
 }
 
-export class AddManualRecipientsDto {
+/** Lista manual de clientes para la audiencia: por cédulas o por filtros.
+ *  Con `filters` el backend resuelve todos los clientes que cumplen esas
+ *  características (los "clientes con esas características" de la UI). */
+export class ManualAudienceDto {
+  @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  cedulas: string[];
+  cedulas?: string[];
+
+  @IsOptional()
+  @IsObject()
+  @Type(() => ScoreClientsFiltersDto)
+  filters?: ScoreClientsFiltersDto;
+}
+
+/** Define el origen del público objetivo de una campaña ya creada. */
+export class ApplyAudienceDto {
+  @IsIn(['auto', 'manual', 'mixed'])
+  mode: 'auto' | 'manual' | 'mixed';
+
+  @IsOptional()
+  @IsObject()
+  @Type(() => ScoreClientsFiltersDto)
+  filters?: ScoreClientsFiltersDto;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  cedulas?: string[];
 }

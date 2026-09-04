@@ -78,6 +78,7 @@ interface CampaignCardData {
   product: string;
   channels: (keyof typeof CHANNEL_CFG)[];
   audience: number;
+  audienceMode?: "auto" | "manual" | "mixed";
   status: CampaignStatus;
   sent: number;
   opens: number;
@@ -97,6 +98,7 @@ function apiToCard(c: ApiCampaign): CampaignCardData {
       .map((ch) => CHANNEL_FROM_API[ch])
       .filter(Boolean),
     audience: c.audienceCount,
+    audienceMode: c.audienceMode,
     status: c.status,
     sent: c.sentCount,
     opens: c.openedCount,
@@ -978,7 +980,13 @@ function Step3({
   sent,
   sending,
   sendError,
+  sentAudience,
   mode,
+  audSource,
+  onAudSourceChange,
+  audMix,
+  onAudMixChange,
+  manualF,
 }: {
   products: Product[];
   channels: Record<string, boolean>;
@@ -987,7 +995,14 @@ function Step3({
   sent: boolean;
   sending: boolean;
   sendError: string | null;
+  /** Nº real de mensajes en cola devuelto por el backend al lanzar. */
+  sentAudience: number | null;
   mode: "multi" | "bundle";
+  audSource: "auto" | "manual";
+  onAudSourceChange: (v: "auto" | "manual") => void;
+  audMix: boolean;
+  onAudMixChange: (v: boolean) => void;
+  manualF: ReturnType<typeof useManualFilters>;
 }) {
   const [scheduled, setScheduled] = useState(false);
   const activeChannels = Object.entries(channels).filter(([, v]) => v).map(([k]) => k);
@@ -1002,6 +1017,11 @@ function Step3({
   });
   const [segError, setSegError] = useState<string | null>(null);
   const [clientsOpen, setClientsOpen] = useState(false);
+  // Explorador de segmentación manual (abre la base en la pestaña "manual").
+  const [explorerOpen, setExplorerOpen] = useState(false);
+  // Total de clientes que cumplen los filtros manuales: lo reporta el
+  // explorador cada vez que puntúa y alimenta el contador de la revisión.
+  const [manualTotal, setManualTotal] = useState<number | null>(null);
 
   useEffect(() => {
     const ids = products.map((p) => p.id).filter((x): x is number => x != null);
@@ -1037,6 +1057,10 @@ function Step3({
   const totalPool = (seg?.ranking ?? []).reduce((a, r) => a + r.total, 0);
   // Público objetivo real: clientes con ≥70% de probabilidad de compra (tras el filtro).
   const audience = seg?.total ?? totalReach;
+  // Nº de mensajes que se mostrará: el real tras lanzar, o la estimación según
+  // el origen elegido (recomendada = segmento; manual = los que cumplen filtros).
+  const displayAudience =
+    sentAudience ?? (audSource === "manual" ? (manualTotal ?? audience) : audience);
 
   const scored = (seg?.recipients ?? []).filter((r) => r.propensity != null);
   const uplifted = (seg?.recipients ?? []).filter((r) => r.uplift != null);
@@ -1069,15 +1093,15 @@ function Step3({
         </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">¡Campaña lanzada! 🎉</h2>
         <p className="text-gray-500 mb-1">
-          <strong className="text-gray-800">{audience.toLocaleString()} mensajes</strong> están en cola de envío.
+          <strong className="text-gray-800">{displayAudience.toLocaleString()} mensajes</strong> están en cola de envío.
         </p>
         <p className="text-sm text-gray-400 mb-8">
           Canales: {activeChannels.map((c) => CHANNEL_CFG[c as keyof typeof CHANNEL_CFG].label).join(", ")}
         </p>
         <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
           {[
-            { label: "Estimados abiertos", value: Math.round(audience * 0.6).toLocaleString() },
-            { label: "Conversiones est.", value: Math.round(audience * ESTIMATED_CONV_RATE / 100).toLocaleString() },
+            { label: "Estimados abiertos", value: Math.round(displayAudience * 0.6).toLocaleString() },
+            { label: "Conversiones est.", value: Math.round(displayAudience * ESTIMATED_CONV_RATE / 100).toLocaleString() },
             { label: "ROI esperado", value: `${(ESTIMATED_CONV_RATE * 4.2).toFixed(0)}%` },
           ].map((s) => (
             <div key={s.label} className="bg-gray-50 rounded-2xl p-4 text-center">
@@ -1118,46 +1142,155 @@ function Step3({
                   </p>
                 </div>
               </div>
-              <div className="flex items-center justify-between py-2 border-t border-gray-100">
-                <span className="text-sm text-gray-600">Público objetivo</span>
-                <div className="flex items-center gap-2.5">
-                  {segLoading ? (
-                    <span className="text-sm text-gray-400">segmentando…</span>
-                  ) : segError ? (
-                    <span className="text-sm font-bold text-red-600">—</span>
-                  ) : (
-                    <span className="text-sm font-bold text-gray-900">
-                      {seg
-                        ? `Seleccionados ${seg.total.toLocaleString()} clientes${totalPool > 0 ? ` de ${totalPool.toLocaleString()} en total` : ""}`
-                        : `${totalReach.toLocaleString()} clientes`}
-                    </span>
-                  )}
-                  <button
-                    onClick={() => setClientsOpen(true)}
-                    disabled={!seg || seg.recipients.length === 0}
-                    className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                    title="Ver qué clientes cumplen el estándar"
-                  >
-                    <Users size={13} /> Ver clientes
-                  </button>
+              {/* Público objetivo: recomendación por producto vs. segmentación manual */}
+              <div className="py-2 border-t border-gray-100 space-y-2.5">
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-sm text-gray-600">Público objetivo</span>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => onAudSourceChange("auto")}
+                      title="El sistema elige el mejor segmento según los productos seleccionados"
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border-2 transition-all cursor-pointer ${
+                        audSource === "auto"
+                          ? "border-blue-300 bg-blue-50 text-blue-800 shadow-sm"
+                          : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                      }`}
+                    >
+                      <Sparkles size={12} /> Recomendada
+                    </button>
+                    <button
+                      onClick={() => onAudSourceChange("manual")}
+                      title="Elige tú los clientes por filtros (ubicación, género, edad, perfil de compra…)"
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border-2 transition-all cursor-pointer ${
+                        audSource === "manual"
+                          ? "border-amber-400 bg-amber-50 text-amber-900 shadow-sm"
+                          : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                      }`}
+                    >
+                      <SlidersHorizontal size={12} /> Manual
+                    </button>
+                  </div>
                 </div>
+
+                {audSource === "auto" ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2">
+                      {segLoading ? (
+                        <span className="text-xs text-gray-400">segmentando…</span>
+                      ) : segError ? (
+                        <span className="text-xs font-bold text-red-600">—</span>
+                      ) : (
+                        <span className="text-xs font-bold text-gray-800">
+                          {seg
+                            ? `Seleccionados ${seg.total.toLocaleString()} clientes${totalPool > 0 ? ` de ${totalPool.toLocaleString()} en total` : ""}`
+                            : `${totalReach.toLocaleString()} clientes`}
+                        </span>
+                      )}
+                      <button
+                        onClick={() => setClientsOpen(true)}
+                        disabled={!seg || seg.recipients.length === 0}
+                        className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
+                        title="Ver qué clientes cumplen el estándar"
+                      >
+                        <Users size={13} /> Ver clientes
+                      </button>
+                    </div>
+                    {segError && (
+                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        ⚠ No se pudo ejecutar la segmentación: {segError}
+                      </p>
+                    )}
+                    {seg && !segError && (
+                      <div className="space-y-1">
+                        <p className="text-[11px] text-gray-400">
+                          {seg.mode === "bundle" ? "🧩 Combo (van juntos)" : "🏷️ Descuento (independientes)"} · Segmento {seg.segment} · {seg.buyers.toLocaleString()} clientes con afinidad a los productos
+                        </p>
+                        {seg.note && <p className="text-[11px] text-gray-500">{seg.note}</p>}
+                        {seg.bundleFallback && (
+                          <p className="text-[11px] text-amber-600">⚠ La co-compra de estos productos es casi nula; se usaron sus categorías como respaldo.</p>
+                        )}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 space-y-2.5">
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <p className="text-xs font-semibold text-amber-900">
+                        {manualF.hasFilters
+                          ? `${countActiveFilters(manualF.snapshot)} filtro${countActiveFilters(manualF.snapshot) !== 1 ? "s" : ""} activo${countActiveFilters(manualF.snapshot) !== 1 ? "s" : ""}`
+                          : "Sin filtros definidos todavía"}
+                      </p>
+                      <button
+                        onClick={() => setExplorerOpen(true)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors shadow-sm shrink-0"
+                        title="Explora la base y define la segmentación manual con filtros"
+                      >
+                        <SlidersHorizontal size={12} />
+                        {manualF.hasFilters ? "Editar segmentación" : "Definir con filtros"}
+                      </button>
+                    </div>
+
+                    {/* Contador de clientes con esas características */}
+                    {manualF.hasFilters && (
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div
+                          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 shadow-sm"
+                          style={{ background: "#FFF200" }}
+                        >
+                          {manualTotal != null ? (
+                            <span className="text-sm font-black text-[#1A1A2E] leading-tight">
+                              {manualTotal.toLocaleString()}{" "}
+                              <span className="font-semibold text-[#1A1A2E]/70">
+                                cliente{manualTotal !== 1 ? "s" : ""} con esas características
+                              </span>
+                            </span>
+                          ) : (
+                            <span className="text-xs font-bold text-[#1A1A2E]">Aún sin calcular</span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => setExplorerOpen(true)}
+                          className="flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
+                        >
+                          <Users size={13} /> Ver clientes
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Combinar con la recomendación o reemplazarla */}
+                    <div className="flex items-center gap-4 flex-wrap text-[11px]">
+                      <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer select-none">
+                        <input
+                          type="radio"
+                          name="wizard-aud-mix"
+                          checked={!audMix}
+                          onChange={() => onAudMixChange(false)}
+                          className="accent-amber-500 w-3.5 h-3.5"
+                        />
+                        Reemplazar la recomendación por estos clientes
+                      </label>
+                      <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer select-none">
+                        <input
+                          type="radio"
+                          name="wizard-aud-mix"
+                          checked={audMix}
+                          onChange={() => onAudMixChange(true)}
+                          className="accent-amber-500 w-3.5 h-3.5"
+                        />
+                        Sumarlos a la recomendación
+                        {seg && !segError && manualTotal != null && (
+                          <span className="text-gray-400">({seg.total.toLocaleString()} + {manualTotal.toLocaleString()})</span>
+                        )}
+                      </label>
+                    </div>
+                    {!manualF.hasFilters && (
+                      <p className="text-[11px] text-amber-700">
+                        Define los filtros para elegir los clientes de la campaña, o vuelve a la recomendación por producto.
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
-              {segError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  ⚠ No se pudo ejecutar la segmentación: {segError}
-                </p>
-              )}
-              {seg && !segError && (
-                <div className="space-y-1">
-                  <p className="text-[11px] text-gray-400">
-                    {seg.mode === "bundle" ? "🧩 Combo (van juntos)" : "🏷️ Descuento (independientes)"} · Segmento {seg.segment} · {seg.buyers.toLocaleString()} clientes con afinidad a los productos
-                  </p>
-                  {seg.note && <p className="text-[11px] text-gray-500">{seg.note}</p>}
-                  {seg.bundleFallback && (
-                    <p className="text-[11px] text-amber-600">⚠ La co-compra de estos productos es casi nula; se usaron sus categorías como respaldo.</p>
-                  )}
-                </div>
-              )}
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Canales</span>
                 <div className="flex gap-1.5">
@@ -1173,7 +1306,7 @@ function Step3({
               </div>
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Conversiones estimadas</span>
-                <span className="text-sm font-bold text-green-600">~{Math.round(audience * ESTIMATED_CONV_RATE / 100)}</span>
+                <span className="text-sm font-bold text-green-600">~{Math.round(displayAudience * ESTIMATED_CONV_RATE / 100)}</span>
               </div>
             </div>
           </div>
@@ -1185,6 +1318,17 @@ function Step3({
               recipients={seg.recipients}
               explain={explainCtx}
               onClose={() => setClientsOpen(false)}
+            />
+          )}
+
+          {explorerOpen && (
+            <RecipientsModal
+              title="Segmentación manual"
+              subtitle={`${products.map((p) => p.name).join(", ") || "Campaña nueva"} · filtra por características (ubicación, género, edad, perfil de compra…)`}
+              initialTab="all"
+              filtersHook={manualF}
+              onTotalLive={(t) => setManualTotal(t)}
+              onClose={() => setExplorerOpen(false)}
             />
           )}
 
@@ -1233,8 +1377,8 @@ function Step3({
         </button>
       </div>
 
-      {/* ── Pantalla de carga de la segmentación ── */}
-      {segLoading && (
+      {/* ── Pantalla de carga de la segmentación (solo si el público elegido es la recomendada) ── */}
+      {segLoading && audSource === "auto" && (
         <div className="fixed inset-0 z-60 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
           <div className="w-16 h-16 rounded-2xl bg-amber-400 flex items-center justify-center shadow-lg animate-pulse">
             <RefreshCw size={28} className="text-amber-900 animate-spin" />
@@ -1300,6 +1444,16 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   const [emailDesignOpen, setEmailDesignOpen] = useState(false);
   const [emailBlocks, setEmailBlocks] = useState<EmailBlock[] | null>(null);
   const [emailHtml, setEmailHtml] = useState<string | null>(null);
+
+  // ── Origen del público objetivo al lanzar la campaña ──
+  // 'auto' → recomendación por producto · 'manual' → filtros manuales
+  // (con audMix = sumar los manuales a la recomendación en lugar de reemplazar).
+  const [audSource, setAudSource] = useState<"auto" | "manual">("auto");
+  const [audMix, setAudMix] = useState(false);
+  const manualF = useManualFilters();
+  // Nº real de destinatarios que quedaron en cola (lo devuelve el backend al
+  // lanzar; alimenta la vista de éxito del paso 3).
+  const [sentAudience, setSentAudience] = useState<number | null>(null);
 
   const toggleChannel = (c: string) =>
     setChannels((prev) => {
@@ -1404,12 +1558,31 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
         messages,
       });
 
-      // Recomendación de clientes (segmentación vía clustering-api según el modo).
-      const gen = await campaignsService.generateRecipients(created.id, 100000, undefined, undefined, mode).catch(() => null);
+      let card: CampaignCardData;
+      if (audSource === "auto") {
+        // Recomendación de clientes (segmentación vía clustering-api según el modo).
+        const gen = await campaignsService
+          .generateRecipients(created.id, 100000, undefined, undefined, mode)
+          .catch(() => null);
+        card = apiToCard(created);
+        if (gen) card.audience = gen.total;
+      } else {
+        // Segmentación manual: los clientes que cumplen los filtros definidos.
+        if (!manualF.hasFilters) {
+          throw new Error(
+            "Para enviar con segmentación manual define al menos un filtro (o vuelve a la recomendación por producto).",
+          );
+        }
+        const updated = await campaignsService.applyAudience(
+          created.id,
+          audMix ? "mixed" : "manual",
+          { filters: manualF.buildFilters() },
+        );
+        card = apiToCard(updated);
+      }
 
+      setSentAudience(card.audience);
       setSent(true);
-      const card = apiToCard(created);
-      if (gen) card.audience = gen.total;
       onCreated(card);
       setTimeout(onClose, 1800);
     } catch (e) {
@@ -1488,7 +1661,13 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
             sent={sent}
             sending={sending}
             sendError={sendError}
+            sentAudience={sentAudience}
             mode={mode}
+            audSource={audSource}
+            onAudSourceChange={setAudSource}
+            audMix={audMix}
+            onAudMixChange={setAudMix}
+            manualF={manualF}
           />
         )}
       </div>
@@ -1520,11 +1699,16 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
 /* ─── Modal de clientes segmentados ──────────────── */
 type SegClientRow = {
   id: number | string;
+  cedula?: string | null;
   name: string | null;
   email: string | null;
   phone: string | null;
   status?: string;
-  segment?: number;
+  segment?: number | null;
+  frecuencia?: number | null;
+  monetario?: number | null;
+  ticketPromedio?: number | null;
+  categoriasDistintas?: number | null;
   propensity?: number | null;
   uplift?: number | null;
   percentile?: number | null;
@@ -1540,6 +1724,217 @@ function scoreColor(p: number): string {
 const fmt1 = (v: number) => (v >= 100 ? Math.round(v).toLocaleString() : v.toFixed(1));
 /** Formatea un monto promedio en unidades (sin decimales). */
 const fmtMoney = (v: number) => Math.round(v).toLocaleString();
+
+/* ─── Tabla unificada de clientes ────────────────── */
+// Misma presentación para cualquier listado de clientes (recomendados por
+// producto, segmentación manual o destinatarios): cabeceras descriptivas con
+// un tooltip que explica cada columna al pasar el cursor.
+
+type ClientTableRow = {
+  key: string;
+  name: string | null;
+  /** Línea secundaria bajo el nombre (cédula · email · teléfono). */
+  sub?: string | null;
+  frecuencia?: number | null;
+  monetario?: number | null;
+  ticketPromedio?: number | null;
+  categorias?: number | null;
+  propensity?: number | null;
+  status?: string | null;
+};
+
+const CLIENT_COLUMNS: { label: string; help: string; numeric?: boolean; wide?: boolean }[] = [
+  { label: "Cliente", help: "Nombre del cliente con su documento o datos de contacto.", wide: true },
+  { label: "Frecuencia de compra", help: "Número de compras que el cliente ha realizado en la historia registrada.", numeric: true },
+  { label: "Monetario (gasto total)", help: "Total acumulado (en COP) de todo lo que el cliente ha gastado en la tienda.", numeric: true },
+  { label: "Ticket promedio", help: "Valor promedio (en COP) que el cliente gasta en cada compra.", numeric: true },
+  { label: "Categorías distintas", help: "Cuántas categorías de productos diferentes ha comprado el cliente.", numeric: true },
+  { label: "Probabilidad de compra", help: "Probabilidad estimada (modelo XGBoost) de que el cliente compre si recibe la campaña.", numeric: true },
+];
+
+/** Convierte una fila puntuada (clustering + score) a la fila de la tabla. */
+function scoredToTableRow(c: ScoredClient): ClientTableRow {
+  return {
+    key: c.cedula,
+    name: c.name,
+    sub: c.cedula,
+    frecuencia: c.features.frecuencia,
+    monetario: c.features.monetario,
+    ticketPromedio: c.features.ticket_promedio,
+    categorias: c.features.categorias_distintas,
+    propensity: c.propensity,
+  };
+}
+
+/** Tabla de clientes con cabeceras descriptivas y tooltip por columna.
+ *  `selectable` agrega un checkbox por fila (para segmentación manual fina).
+ *  `showStatus` muestra la columna "Estado del envío" cuando las filas la traen. */
+function ClientDataTable({
+  rows,
+  selectable,
+  showStatus = false,
+}: {
+  rows: ClientTableRow[];
+  selectable?: {
+    allSelected: boolean;
+    onToggleAll: () => void;
+    isSelected: (key: string) => boolean;
+    onToggle: (key: string) => void;
+  };
+  showStatus?: boolean;
+}) {
+  const [tip, setTip] = useState<{ x: number; y: number; text: string } | null>(null);
+
+  const hasStatus = showStatus && rows.some((r) => Boolean(r.status));
+
+  const showTip = (e: React.MouseEvent<HTMLTableCellElement>, text: string) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const W = 250;
+    const x = Math.min(Math.max(r.left + r.width / 2 - W / 2, 10), window.innerWidth - W - 10);
+    const H = 74;
+    const y = r.bottom + 8 + H > window.innerHeight ? Math.max(8, r.top - H - 8) : r.bottom + 8;
+    setTip({ x, y, text });
+  };
+
+  if (rows.length === 0) {
+    return (
+      <div className="py-14 text-center">
+        <Users size={24} className="text-gray-300 mb-3 mx-auto" />
+        <p className="text-sm font-semibold text-gray-700">Sin clientes</p>
+      </div>
+    );
+  }
+
+  const Th = ({
+    children,
+    help,
+    right,
+    className = "",
+  }: {
+    children: React.ReactNode;
+    help?: string;
+    right?: boolean;
+    className?: string;
+  }) => (
+    <th
+      scope="col"
+      onMouseEnter={help ? (e) => showTip(e, help) : undefined}
+      onMouseLeave={() => help && setTip(null)}
+      className={`py-2 pr-3 select-none leading-tight ${right ? "text-right " : ""}${help ? "cursor-help " : ""}${className}`}
+    >
+      <span className="inline-flex items-center gap-1">
+        {children}
+        {help && (
+          <span className="w-3.5 h-3.5 rounded-full bg-gray-200 text-gray-500 text-[9px] font-black flex items-center justify-center">
+            ?
+          </span>
+        )}
+      </span>
+    </th>
+  );
+
+  return (
+    <>
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide border-b border-gray-100">
+            {selectable && (
+              <th className="py-2 pr-3 w-8">
+                <input
+                  type="checkbox"
+                  checked={selectable.allSelected}
+                  onChange={selectable.onToggleAll}
+                  className="accent-amber-500 w-3.5 h-3.5"
+                />
+              </th>
+            )}
+            {CLIENT_COLUMNS.map((c) => (
+              <Th key={c.label} help={c.help} right={c.numeric} className={c.wide ? "w-52" : ""}>
+                {c.label}
+              </Th>
+            ))}
+            {hasStatus && (
+              <Th
+                help="Estado del mensaje para este cliente dentro de la campaña (pendiente, enviado, fallido…)."
+                right
+              >
+                Estado del envío
+              </Th>
+            )}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {rows.map((r) => {
+            const sel = selectable && selectable.isSelected(r.key);
+            return (
+              <tr
+                key={r.key}
+                onClick={selectable ? () => selectable.onToggle(r.key) : undefined}
+                className={`transition-colors ${sel ? "bg-amber-50" : "hover:bg-amber-50/40"} ${selectable ? "cursor-pointer" : ""}`}
+              >
+                {selectable && (
+                  <td className="py-2.5 pr-3">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(sel)}
+                      onChange={() => selectable.onToggle(r.key)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="accent-amber-500 w-3.5 h-3.5 shrink-0"
+                    />
+                  </td>
+                )}
+                <td className="py-2.5 pr-3">
+                  <p className="text-xs font-bold text-gray-900 truncate max-w-52">{r.name ?? "Sin nombre"}</p>
+                  {r.sub ? <p className="text-[10px] text-gray-400 truncate max-w-52">{r.sub}</p> : null}
+                </td>
+                <td className="py-2.5 pr-3 text-right text-xs text-gray-600 whitespace-nowrap">
+                  {r.frecuencia != null ? Math.round(r.frecuencia).toLocaleString() : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="py-2.5 pr-3 text-right text-xs text-gray-600 whitespace-nowrap">
+                  {r.monetario != null ? fmtMoney(r.monetario) : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="py-2.5 pr-3 text-right text-xs text-gray-600 whitespace-nowrap">
+                  {r.ticketPromedio != null ? fmtMoney(r.ticketPromedio) : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="py-2.5 pr-3 text-right text-xs text-gray-600 whitespace-nowrap">
+                  {r.categorias != null ? Math.round(r.categorias).toLocaleString() : <span className="text-gray-300">—</span>}
+                </td>
+                <td className="py-2.5 text-right">
+                  {r.propensity != null ? (
+                    <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${scoreColor(r.propensity)}`}>
+                      {Math.round(r.propensity * 100)}%
+                    </span>
+                  ) : (
+                    <span className="text-gray-300">—</span>
+                  )}
+                </td>
+                {hasStatus && (
+                  <td className="py-2.5 text-right">
+                    {r.status ? (
+                      <span className="inline-block text-[10px] font-bold text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full capitalize whitespace-nowrap">
+                        {r.status}
+                      </span>
+                    ) : (
+                      <span className="text-gray-300">—</span>
+                    )}
+                  </td>
+                )}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {tip && (
+        <div
+          className="fixed z-[95] pointer-events-none rounded-lg bg-gray-900 text-white text-[11px] leading-snug px-3 py-2 shadow-xl"
+          style={{ left: tip.x, top: tip.y, width: 250 }}
+        >
+          {tip.text}
+        </div>
+      )}
+    </>
+  );
+}
 
 type ExplainContext = {
   mode?: "multi" | "bundle";
@@ -1837,8 +2232,12 @@ function RecipientsModal({
   recipients: preset,
   campaignId,
   explain,
-  onManualSeg,
   onClose,
+  audienceMode,
+  onAudienceChange,
+  initialTab = "seg",
+  filtersHook,
+  onTotalLive,
 }: {
   title: string;
   subtitle?: string;
@@ -1853,13 +2252,43 @@ function RecipientsModal({
   }[];
   campaignId?: number;
   explain?: ExplainContext | null;
-  onManualSeg?: () => void;
   onClose: () => void;
+  audienceMode?: "auto" | "manual" | "mixed" | null;
+  onAudienceChange?: (
+    mode: "auto" | "manual" | "mixed" | null,
+    count: number,
+  ) => void;
+  /** Pestaña inicial (el wizard manual abre directo en "Segmentación manual"). */
+  initialTab?: "seg" | "all";
+  /** Hook de filtros externo (compartido con el wizard); si no viene, uno propio. */
+  filtersHook?: ReturnType<typeof useManualFilters>;
+  /** Reporta al padre el total de clientes que cumplen los filtros (en vivo). */
+  onTotalLive?: (total: number | null) => void;
 }) {
-  const [tab, setTab] = useState<"seg" | "all">("seg");
+  // Origen del público actual de la campaña (para campañas ya creadas).
+  const [mode, setMode] = useState<"auto" | "manual" | "mixed" | null>(
+    audienceMode ?? null,
+  );
+  // Fuerza recarga de destinatarios tras una acción (reemplazar / añadir / usar recomendada).
+  const [tick, setTick] = useState(0);
+  const [busyAud, setBusyAud] = useState(false);
+  const [audMsg, setAudMsg] = useState<string | null>(null);
+  const [tab, setTab] = useState<"seg" | "all">(initialTab);
+
+  const AUD_LABEL: Record<string, string> = {
+    auto: "Recomendada por producto",
+    manual: "Manual (filtros)",
+    mixed: "Recomendada + manual",
+  };
+
+  const notifyAudience = (m: "auto" | "manual" | "mixed" | null, count: number) => {
+    setMode(m);
+    onAudienceChange?.(m, count);
+  };
 
   // Filtros manuales del tab "Todos los clientes" (perfil + RFM).
-  const f = useManualFilters();
+  const ownF = useManualFilters();
+  const f = filtersHook ?? ownF;
   const filtersRef = useRef<NonNullable<ScoreClientsPayload["filters"]>>({});
   filtersRef.current = f.buildFilters();
   const loadedFiltersRef = useRef<string>("");
@@ -1917,8 +2346,11 @@ function RecipientsModal({
   };
 
   // Al abrir la pestaña "todos" se puntúa desde cero (solo la primera vez).
+  // Sin filtros activos no se puntúa toda la base (sería lento e inútil);
+  // la vista invita a abrir los filtros de segmentación.
   useEffect(() => {
     if (tab !== "all") return;
+    if (!f.hasFilters) return;
     if (allRows.length > 0 || allLoading || allTotal != null) return;
     void loadAllPage(0, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1927,7 +2359,17 @@ function RecipientsModal({
   // Al cambiar un filtro (con la pestaña "todos" abierta) se recarga la lista.
   useEffect(() => {
     if (tab !== "all") return;
-    if (JSON.stringify(filtersRef.current) === loadedFiltersRef.current) return;
+    const key = JSON.stringify(filtersRef.current);
+    if (!f.hasFilters) {
+      // Limpió los filtros: sin puntuación de la base completa.
+      if (allRows.length || allTotal != null) {
+        setAllRows([]);
+        setAllTotal(null);
+        loadedFiltersRef.current = key;
+      }
+      return;
+    }
+    if (key === loadedFiltersRef.current) return;
     const t = setTimeout(() => {
       setAllRows([]);
       setAllTotal(null);
@@ -1964,7 +2406,54 @@ function RecipientsModal({
     return () => {
       cancelled = true;
     };
-  }, [campaignId, preset]);
+  }, [campaignId, preset, tick]);
+
+  // ── Acciones sobre la audiencia de la campaña ──
+  const useRecommendedNow = async () => {
+    if (!campaignId || busyAud) return;
+    setBusyAud(true);
+    setAudMsg(null);
+    try {
+      const c = await campaignsService.useRecommendedAudience(campaignId);
+      notifyAudience(c.audienceMode ?? "auto", c.audienceCount);
+      setAudMsg(`Público reemplazado por la recomendación por producto (${c.audienceCount.toLocaleString()} clientes).`);
+      setTick((t) => t + 1);
+    } catch (e) {
+      setAudMsg(`⚠ ${e instanceof Error ? e.message : "No se pudo usar la recomendación"}`);
+    } finally {
+      setBusyAud(false);
+    }
+  };
+
+  // Añade / reemplaza la audiencia con TODOS los clientes que cumplen los
+  // filtros manuales activos (el backend resuelve el conjunto completo:
+  // los "clientes con esas características" que muestra el contador).
+  const applyManualAudience = async (replace: boolean) => {
+    if (!campaignId || busyAud || !f.hasFilters) return;
+    setBusyAud(true);
+    setAudMsg(null);
+    try {
+      const payload = { filters: f.buildFilters() };
+      if (replace) {
+        const c = await campaignsService.replaceManualAudience(campaignId, payload);
+        notifyAudience(c.audienceMode ?? "manual", c.audienceCount);
+        setAudMsg(
+          `Público reemplazado por la segmentación manual: ${c.audienceCount.toLocaleString()} clientes.`,
+        );
+      } else {
+        const c = await campaignsService.addManualRecipients(campaignId, payload);
+        notifyAudience(c.audienceMode ?? "mixed", c.audienceCount);
+        setAudMsg(
+          `Audiencia actualizada: ${c.audienceCount.toLocaleString()} clientes (se añadieron los que cumplen los filtros).`,
+        );
+      }
+      setTick((t) => t + 1);
+    } catch (e) {
+      setAudMsg(`⚠ ${e instanceof Error ? e.message : "No se pudo actualizar la audiencia"}`);
+    } finally {
+      setBusyAud(false);
+    }
+  };
 
   const q = query.trim().toLowerCase();
   const filtered = recipients.filter((r) =>
@@ -1998,6 +2487,13 @@ function RecipientsModal({
     (c.phone ?? "").toLowerCase().includes(q),
   );
 
+  // Reporta al padre el total de clientes que cumplen los filtros (en vivo),
+  // para que la revisión del wizard muestre el mismo número del contador.
+  useEffect(() => {
+    onTotalLive?.(allTotal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allTotal]);
+
   // Scroll infinito en "todos": pide la siguiente página al llegar al final.
   useEffect(() => {
     const el = allSentinelRef.current;
@@ -2020,11 +2516,19 @@ function RecipientsModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTotal, allRows.length, q]);
 
-  const initials = (name: string | null) => {
-    if (!name) return "?";
-    const parts = name.trim().split(/\s+/);
-    return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase();
-  };
+  // Convierte una fila de la pestaña "Recomendados / destinatarios" al
+  // formato unificado de la tabla (los datos de RFM se muestran si existen).
+  const segRowToTable = (r: SegClientRow): ClientTableRow => ({
+    key: String(r.id),
+    name: r.name,
+    sub: r.cedula ?? ([r.email, r.phone].filter(Boolean).join(" · ") || null),
+    frecuencia: r.frecuencia ?? null,
+    monetario: r.monetario ?? null,
+    ticketPromedio: r.ticketPromedio ?? null,
+    categorias: r.categoriasDistintas ?? null,
+    propensity: r.propensity ?? null,
+    status: r.status,
+  });
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -2047,27 +2551,45 @@ function RecipientsModal({
               )}
             </h3>
             {subtitle && <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitle}</p>}
+            {campaignId && mode && (
+              <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                <span className="font-semibold">Segmentación actual:</span>
+                <span
+                  className={`px-2 py-0.5 rounded-full font-bold ${
+                    mode === "auto"
+                      ? "bg-blue-50 text-blue-700 border border-blue-200"
+                      : mode === "manual"
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "bg-purple-50 text-purple-700 border border-purple-200"
+                  }`}
+                >
+                  {AUD_LABEL[mode] ?? mode}
+                </span>
+              </p>
+            )}
           </div>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
             <X size={16} />
           </button>
         </div>
 
-        {/* Toolbar: pestañas + búsqueda + segmentación manual */}
+        {/* Toolbar: pestañas + búsqueda */}
         <div className="px-6 py-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
               <button
                 onClick={() => setTab("seg")}
+                title="Clientes recomendados según el producto seleccionado"
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "seg" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
               >
-                Segmentados
+                Recomendados por producto
               </button>
               <button
                 onClick={() => setTab("all")}
+                title="Explora toda la base y segmenta manualmente por filtros"
                 className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "all" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
               >
-                Todos los clientes
+                Segmentación manual
               </button>
             </div>
             <div className="relative flex-1">
@@ -2079,19 +2601,14 @@ function RecipientsModal({
                 className="w-full pl-9 pr-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
               />
             </div>
-            {onManualSeg && (
-              <button
-                onClick={onManualSeg}
-                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors shadow-sm shrink-0"
-                title="Segmentar clientes manualmente por filtros y añadirlos a la campaña"
-              >
-                <SlidersHorizontal size={13} /> Segmentar manualmente
-              </button>
-            )}
           </div>
-          {tab === "all" && allTotal != null && (
+          {tab === "all" && (
             <p className="text-[11px] text-gray-400 mt-2">
-              {allTotal.toLocaleString()} clientes en la base · ordenados por probabilidad de compra
+              {!f.hasFilters
+                ? "Aplica filtros (ubicación, género, edad, perfil de compra…) para segmentar manualmente."
+                : allTotal == null || allLoading
+                  ? "Calculando cuántos clientes cumplen los filtros…"
+                  : `${allTotal.toLocaleString()} clientes cumplen los filtros actuales · ordenados por probabilidad de compra`}
             </p>
           )}
         </div>
@@ -2138,6 +2655,36 @@ function RecipientsModal({
 
         {/* List / tabla */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
+          {/* Mensajes y acciones de audiencia (campañas existentes) */}
+          {campaignId && (
+            <div className="mb-3 space-y-2">
+              {audMsg && (
+                <p
+                  className={`text-xs font-semibold rounded-xl px-3 py-2 ${
+                    audMsg.startsWith("⚠")
+                      ? "text-red-700 bg-red-50 border border-red-200"
+                      : "text-green-700 bg-green-50 border border-green-200"
+                  }`}
+                >
+                  {audMsg}
+                </p>
+              )}
+              {tab === "seg" && mode && mode !== "auto" && (
+                <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                  <p className="text-[11px] text-amber-800">
+                    El público actual es {AUD_LABEL[mode] ?? mode}. ¿Quieres volver a la recomendación por producto?
+                  </p>
+                  <button
+                    onClick={() => void useRecommendedNow()}
+                    disabled={busyAud}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw size={12} className={busyAud ? "animate-spin" : ""} /> Usar recomendación
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {tab === "seg" ? (
             loading ? (
               <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -2162,34 +2709,9 @@ function RecipientsModal({
               </div>
             ) : (
               <div>
-                <div className="flex items-center justify-between text-[10px] font-bold text-gray-400 uppercase tracking-wide pb-2">
-                  <span>Cliente</span>
-                  <span>Probabilidad</span>
+                <div className="overflow-x-auto">
+                  <ClientDataTable rows={shown.map(segRowToTable)} showStatus />
                 </div>
-                <ul className="divide-y divide-gray-100">
-                  {shown.map((r) => (
-                  <li key={r.id} className="flex items-center gap-3 py-3">
-                    <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center text-xs font-bold shrink-0">
-                      {initials(r.name)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{r.name ?? "Sin nombre"}</p>
-                      <p className="text-xs text-gray-400 truncate">{r.email ?? "Sin email"}</p>
-                    </div>
-                    <div className="text-right shrink-0 min-w-20">
-                      <p className="text-xs text-gray-500">{r.phone ?? "—"}</p>
-                      {r.propensity != null ? (
-                        <span className={`inline-block mt-1 text-[11px] font-bold px-2 py-0.5 rounded-full ${scoreColor(r.propensity)}`}>
-                          Prob. {Math.round(r.propensity * 100)}%
-                        </span>
-                      ) : (
-                        <span className="inline-block mt-1 text-[11px] font-semibold text-gray-300">—</span>
-                      )}
-                      {r.status && <p className="text-[10px] font-bold text-gray-400 uppercase">{r.status}</p>}
-                    </div>
-                  </li>
-                ))}
-                </ul>
                 {visible < filtered.length && (
                   <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
                     <RefreshCw size={13} className="animate-spin" /> Cargando más clientes…
@@ -2200,9 +2722,11 @@ function RecipientsModal({
           ) : allLoading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <RefreshCw size={22} className="text-amber-400 animate-spin" />
-              <p className="text-sm font-semibold text-gray-700">Puntuando toda la base de clientes…</p>
+              <p className="text-sm font-semibold text-gray-700">
+                Puntuando {f.hasFilters ? "los clientes que cumplen los filtros" : "toda la base de clientes"}…
+              </p>
               <p className="text-xs text-gray-400 max-w-xs">
-                La primera vez puede tardar un par de minutos (XGBoost + Uplift sobre toda la base); después queda en caché.
+                La primera vez puede tardar un par de minutos (XGBoost + Uplift sobre la base); después queda en caché.
               </p>
             </div>
           ) : allError ? (
@@ -2215,6 +2739,23 @@ function RecipientsModal({
                 Reintentar
               </button>
             </div>
+          ) : !f.hasFilters ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mb-3">
+                <Filter size={22} className="text-amber-500" />
+              </div>
+              <p className="text-sm font-semibold text-gray-700">Define la segmentación manual con filtros</p>
+              <p className="text-xs text-gray-400 mt-1 max-w-xs">
+                Aplica filtros de ubicación, demografía, perfil económico o de compra para ver cuántos clientes
+                cumplen esas características y usarlos como público.
+              </p>
+              <button
+                onClick={() => setFilterModalOpen(true)}
+                className="mt-4 flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 rounded-xl hover:bg-amber-500 transition-colors shadow-sm"
+              >
+                <SlidersHorizontal size={13} /> Abrir filtros de segmentación
+              </button>
+            </div>
           ) : allFiltered.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <Users size={24} className="text-gray-300 mb-3" />
@@ -2224,45 +2765,58 @@ function RecipientsModal({
           ) : (
             <div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide border-b border-gray-100">
-                      <th className="py-2 pr-3">Cliente</th>
-                      <th className="py-2 pr-3">Seg</th>
-                      <th className="py-2 pr-3">Frec</th>
-                      <th className="py-2 pr-3">Monetario</th>
-                      <th className="py-2 pr-3">Ticket</th>
-                      <th className="py-2 pr-3">Cat</th>
-                      <th className="py-2 text-right">Probabilidad</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {allFiltered.map((c) => (
-                      <tr key={c.cedula} className="hover:bg-amber-50/40">
-                        <td className="py-2.5 pr-3">
-                          <p className="text-xs font-bold text-gray-900 truncate max-w-44">{c.name ?? "Sin nombre"}</p>
-                          <p className="text-[10px] text-gray-400">{c.cedula}</p>
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <span className="inline-block text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-md">S{c.segment}</span>
-                        </td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.frecuencia).toLocaleString()}</td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.monetario)}</td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.ticket_promedio)}</td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.categorias_distintas)}</td>
-                        <td className="py-2.5 text-right">
-                          <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${scoreColor(c.propensity)}`}>
-                            {Math.round(c.propensity * 100)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ClientDataTable rows={allFiltered.map(scoredToTableRow)} />
               </div>
               {allTotal != null && allRows.length < allTotal && (
                 <div ref={allSentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
                   <RefreshCw size={13} className="animate-spin" /> {allLoadingMore ? "Cargando más clientes…" : "…"}
+                </div>
+              )}
+              {campaignId && (
+                <div className="sticky bottom-0 mt-2 -mx-1 flex items-center justify-between gap-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-amber-900">
+                      {!f.hasFilters ? (
+                        "Activa filtros (ubicación, género, edad, perfil de compra…) para definir la audiencia manual."
+                      ) : allTotal == null || allLoading ? (
+                        "Calculando cuántos clientes cumplen los filtros…"
+                      ) : (
+                        `Los ${allTotal.toLocaleString()} clientes que cumplen los filtros serán tu segmentación manual.`
+                      )}
+                    </p>
+                    {f.hasFilters && mode && (
+                      <p className="text-[11px] text-amber-700 mt-0.5">
+                        Audiencia actual: {AUD_LABEL[mode] ?? mode}. Elige si reemplazarla o sumar los filtrados.
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      onClick={() => void applyManualAudience(false)}
+                      disabled={!f.hasFilters || busyAud}
+                      title={
+                        f.hasFilters
+                          ? "Suma los clientes que cumplen los filtros a la audiencia actual"
+                          : "Define filtros primero"
+                      }
+                      className="px-3 py-1.5 text-xs font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus size={12} className="inline -mt-0.5 mr-1" />Añadir a la audiencia
+                    </button>
+                    <button
+                      onClick={() => void applyManualAudience(true)}
+                      disabled={!f.hasFilters || busyAud}
+                      title={
+                        f.hasFilters
+                          ? "Reemplaza TODO el público actual por los clientes que cumplen los filtros"
+                          : "Define filtros primero"
+                      }
+                      className="px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg shadow-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <RefreshCw size={12} className={`inline -mt-0.5 mr-1 ${busyAud ? "animate-spin" : ""}`} />
+                      {busyAud ? "Aplicando…" : "Reemplazar audiencia"}
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -2275,15 +2829,14 @@ function RecipientsModal({
       )}
 
       {/* Modal de filtros de segmentación (tab "Todos los clientes") */}
-      <SegmentFiltersModal
-        open={filterModalOpen}
-        initial={f.snapshot}
-        onClose={() => setFilterModalOpen(false)}
-        onApply={(vals) => {
-          f.apply(vals);
-          setFilterModalOpen(false);
-        }}
-      />
+      {filterModalOpen && (
+        <SegmentFiltersModal
+          f={f}
+          total={allTotal}
+          loading={allLoading || (allRows.length === 0 && allTotal == null)}
+          onClose={() => setFilterModalOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -2780,27 +3333,21 @@ function countActiveFilters(v: ManualFilterValues): number {
   );
 }
 
-/** Modal de filtros de segmentación (borrador + botón "Aplicar"). */
+/** Modal de filtros de segmentación (aplicación en vivo + contador).
+ *  Edita directamente el hook de filtros del tab "Todos los clientes": cada
+ *  cambio se aplica de inmediato (la lista se recarga sola) y el header
+ *  muestra cuántos clientes cumplen las características elegidas. */
 function SegmentFiltersModal({
-  open,
-  initial,
+  f,
+  total,
+  loading,
   onClose,
-  onApply,
 }: {
-  open: boolean;
-  initial: ManualFilterValues;
+  f: ReturnType<typeof useManualFilters>;
+  total: number | null;
+  loading: boolean;
   onClose: () => void;
-  onApply: (v: ManualFilterValues) => void;
 }) {
-  const f = useManualFilters();
-
-  // Al abrir, el borrador parte de los filtros ya aplicados.
-  useEffect(() => {
-    if (open) f.apply(initial);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  if (!open) return null;
   const n = countActiveFilters(f.snapshot);
 
   return (
@@ -2812,10 +3359,38 @@ function SegmentFiltersModal({
           <div className="min-w-0 pr-3">
             <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <SlidersHorizontal size={18} className="text-amber-600" /> Filtros de segmentación
+              {n > 0 && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-bold">
+                  {n}
+                </span>
+              )}
             </h3>
             <p className="text-xs text-gray-500 mt-0.5">
-              Afina la base por ubicación, demografía, perfil económico y de compra. Los cambios se aplican al pulsar “Aplicar filtros”.
+              Cada cambio se aplica al instante sobre la lista de segmentación manual.
             </p>
+            {/* Contador destacado de clientes con esas características */}
+            <div
+              className="mt-3 inline-flex items-center gap-2.5 rounded-xl px-3.5 py-2 shadow-sm"
+              style={{ background: "#FFF200" }}
+            >
+              {loading ? (
+                <RefreshCw size={15} className="text-[#1A1A2E] animate-spin shrink-0" />
+              ) : (
+                <Users size={15} className="text-[#1A1A2E] shrink-0" />
+              )}
+              {loading ? (
+                <span className="text-xs font-bold text-[#1A1A2E] whitespace-nowrap">Calculando clientes…</span>
+              ) : total != null ? (
+                <span className="text-sm font-black text-[#1A1A2E] leading-tight">
+                  {total.toLocaleString()}{" "}
+                  <span className="font-semibold text-[#1A1A2E]/70">
+                    cliente{total !== 1 ? "s" : ""} con esas características
+                  </span>
+                </span>
+              ) : (
+                <span className="text-xs font-bold text-[#1A1A2E] whitespace-nowrap">Sin resultados aún</span>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -2839,22 +3414,13 @@ function SegmentFiltersModal({
           >
             Limpiar todo
           </button>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              onClick={() => onApply(f.snapshot)}
-              disabled={n === 0}
-              className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl shadow-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            >
-              <Zap size={13} />
-              {n > 0 ? `Aplicar filtros (${n})` : "Aplicar filtros"}
-            </button>
-          </div>
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 px-6 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl shadow-sm transition-colors"
+          >
+            <CheckSquare size={13} />
+            Listo
+          </button>
         </div>
       </div>
     </div>
@@ -2938,17 +3504,25 @@ function ManualSegModal({
     });
   };
 
-  const handleAdd = async () => {
+  const handleAdd = async (replace = false) => {
     if (!selected.size) return;
     setAdding(true);
     setAddedMsg(null);
     try {
-      const res = await campaignsService.addManualRecipients(campaignId, [...selected]);
-      setAddedMsg(`Se añadieron ${res.added} clientes a la campaña.`);
+      const cedulas = [...selected];
+      if (replace) {
+        const c = await campaignsService.replaceManualAudience(campaignId, { cedulas });
+        setAddedMsg(`Audiencia reemplazada: ${c.audienceCount.toLocaleString()} clientes manuales.`);
+      } else {
+        const c = await campaignsService.addManualRecipients(campaignId, { cedulas });
+        setAddedMsg(
+          `Audiencia actualizada: ${c.audienceCount.toLocaleString()} clientes en la campaña.`,
+        );
+      }
       setSelected(new Set());
-      onAdded(res.added);
+      onAdded(0);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudieron añadir los clientes");
+      setError(e instanceof Error ? e.message : "No se pudieron actualizar los clientes");
     } finally {
       setAdding(false);
     }
@@ -3053,67 +3627,21 @@ function ManualSegModal({
           ) : rows.length > 0 ? (
             <div>
               <div className="flex items-center justify-between pb-2">
-                <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={allSelected}
-                    onChange={toggleAll}
-                    className="accent-amber-500 w-3.5 h-3.5"
-                  />
-                  <strong>{selected.size.toLocaleString()}</strong> seleccionados de {total?.toLocaleString() ?? rows.length.toLocaleString()} resultados
-                </label>
+                <p className="text-xs text-gray-600">
+                  <strong>{selected.size.toLocaleString()}</strong> seleccionados de{" "}
+                  {total?.toLocaleString() ?? rows.length.toLocaleString()} resultados
+                </p>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-[10px] font-bold text-gray-400 uppercase tracking-wide border-b border-gray-100">
-                      <th className="py-2 pr-3">Cliente</th>
-                      <th className="py-2 pr-3">Seg</th>
-                      <th className="py-2 pr-3">Frec</th>
-                      <th className="py-2 pr-3">Monetario</th>
-                      <th className="py-2 pr-3">Ticket</th>
-                      <th className="py-2 pr-3">Cat</th>
-                      <th className="py-2 text-right">Probabilidad</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {rows.map((c) => (
-                      <tr
-                        key={c.cedula}
-                        onClick={() => toggleRow(c.cedula)}
-                        className={`cursor-pointer transition-colors ${selected.has(c.cedula) ? "bg-amber-50" : "hover:bg-amber-50/40"}`}
-                      >
-                        <td className="py-2.5 pr-3">
-                          <div className="flex items-center gap-2">
-                            <input
-                              type="checkbox"
-                              checked={selected.has(c.cedula)}
-                              onChange={() => toggleRow(c.cedula)}
-                              onClick={(e) => e.stopPropagation()}
-                              className="accent-amber-500 w-3.5 h-3.5 shrink-0"
-                            />
-                            <div className="min-w-0">
-                              <p className="text-xs font-bold text-gray-900 truncate max-w-40">{c.name ?? "Sin nombre"}</p>
-                              <p className="text-[10px] text-gray-400">{c.cedula}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="py-2.5 pr-3">
-                          <span className="inline-block text-[10px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-md">S{c.segment}</span>
-                        </td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.frecuencia).toLocaleString()}</td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.monetario)}</td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{fmtMoney(c.features.ticket_promedio)}</td>
-                        <td className="py-2.5 pr-3 text-xs text-gray-600 whitespace-nowrap">{Math.round(c.features.categorias_distintas)}</td>
-                        <td className="py-2.5 text-right">
-                          <span className={`inline-block text-[11px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${scoreColor(c.propensity)}`}>
-                            {Math.round(c.propensity * 100)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                <ClientDataTable
+                  rows={rows.map(scoredToTableRow)}
+                  selectable={{
+                    allSelected,
+                    onToggleAll: toggleAll,
+                    isSelected: (k) => selected.has(k),
+                    onToggle: toggleRow,
+                  }}
+                />
               </div>
               {total != null && rows.length < total && (
                 <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
@@ -3124,20 +3652,30 @@ function ManualSegModal({
           ) : null}
         </div>
 
-        {/* Footer: añadir a la campaña */}
+        {/* Footer: añadir / reemplazar audiencia de la campaña */}
         <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-gray-50/60 flex items-center justify-between gap-3">
           <p className="text-xs text-gray-500">
             {selected.size > 0
-              ? `${selected.size.toLocaleString()} cliente${selected.size === 1 ? "" : "s"} por añadir a los destinatarios de la campaña.`
-              : "Selecciona clientes de los resultados para añadirlos a la campaña."}
+              ? `${selected.size.toLocaleString()} cliente${selected.size === 1 ? "" : "s"} seleccionado${selected.size === 1 ? "" : "s"}.`
+              : "Selecciona clientes de los resultados para actualizar la audiencia de la campaña."}
           </p>
-          <button
-            onClick={() => void handleAdd()}
-            disabled={selected.size === 0 || adding}
-            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-          >
-            <Plus size={14} /> {adding ? "Añadiendo…" : `Añadir ${selected.size.toLocaleString()} a la campaña`}
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => void handleAdd(true)}
+              disabled={selected.size === 0 || adding}
+              title="Reemplaza TODO el público actual por los seleccionados"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-gray-700 bg-white border border-gray-300 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <RefreshCw size={14} /> Reemplazar audiencia
+            </button>
+            <button
+              onClick={() => void handleAdd()}
+              disabled={selected.size === 0 || adding}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Plus size={14} /> {adding ? "Aplicando…" : `Añadir ${selected.size.toLocaleString()} a la audiencia`}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -3544,6 +4082,18 @@ function CampaignCard({
         >
           <Users size={12} /> {c.audience.toLocaleString()} clientes
         </button>
+        {c.audienceMode && c.audienceMode !== "auto" && (
+          <span
+            title="Origen del público actual"
+            className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+              c.audienceMode === "manual"
+                ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                : "text-purple-700 bg-purple-50 border-purple-200"
+            }`}
+          >
+            {c.audienceMode === "manual" ? "Manual" : "Recom. + manual"}
+          </span>
+        )}
         <button
           onClick={onManualSeg}
           className="flex items-center gap-1 text-xs text-gray-500 hover:text-amber-600 font-semibold transition-colors"
@@ -3820,12 +4370,18 @@ export default function Campaigns() {
 
       {clientsModal && (
         <RecipientsModal
-          title="Clientes segmentados"
+          title="Público de la campaña"
           subtitle={clientsModal.name}
           campaignId={clientsModal.id}
-          onManualSeg={() => {
-            setManualSeg(clientsModal);
-            setClientsModal(null);
+          audienceMode={clientsModal.audienceMode ?? "auto"}
+          onAudienceChange={(m, count) => {
+            // Refleja en la tarjeta y en el modal el público elegido.
+            const apply = (c: CampaignCardData) =>
+              c.id === clientsModal.id
+                ? { ...c, audience: count, audienceMode: (m ?? "auto") as "auto" | "manual" | "mixed" }
+                : c;
+            setCampaigns((prev) => prev.map(apply));
+            setClientsModal((prev) => (prev ? apply(prev) : prev));
           }}
           onClose={() => setClientsModal(null)}
         />

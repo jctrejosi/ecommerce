@@ -16,11 +16,12 @@ import { Observable } from 'rxjs';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { CampaignsService } from './campaigns.service';
 import {
-  AddManualRecipientsDto,
+  ApplyAudienceDto,
   CreateCampaignDto,
   GenerateContentDto,
   GenerateRecipientsDto,
   InterpretSegmentDto,
+  ManualAudienceDto,
   ScoreClientsDto,
   UpdateCampaignDto,
 } from './dto/campaign.dto';
@@ -102,11 +103,58 @@ export class CampaignsController {
   @Post(':id/recipients/manual')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: 'Añadir clientes manualmente (por cédula) a los destinatarios de la campaña',
+    summary:
+      'Añadir clientes manualmente (por cédula o por filtros) a los destinatarios de la campaña',
   })
-  @ApiResponse({ status: 200, description: 'Cantidad añadida' })
-  addManualRecipients(@Param('id') id: string, @Body() dto: AddManualRecipientsDto) {
-    return this.campaignsService.addManualRecipients(Number(id), dto.cedulas);
+  @ApiResponse({ status: 200, description: 'Campaña con la audiencia actualizada' })
+  addManualRecipients(@Param('id') id: string, @Body() dto: ManualAudienceDto) {
+    return this.campaignsService.addManualRecipients(
+      Number(id),
+      dto.cedulas,
+      dto.filters as unknown as Record<string, unknown> | undefined,
+    );
+  }
+
+  @Post(':id/audience/manual-replace')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Reemplazar TODO el público de la campaña por una audiencia manual (cédulas o filtros); la audiencia pasa a modo manual',
+  })
+  @ApiResponse({ status: 200, description: 'Campaña con el nuevo público' })
+  replaceManualRecipients(@Param('id') id: string, @Body() dto: ManualAudienceDto) {
+    return this.campaignsService.replaceManualRecipients(
+      Number(id),
+      dto.cedulas,
+      dto.filters as unknown as Record<string, unknown> | undefined,
+    );
+  }
+
+  @Post(':id/audience/recommended')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Usar (de nuevo) la recomendación por producto: re-segmenta y reemplaza el público (audiencia modo auto)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaña con el público recomendado' })
+  useRecommendedAudience(@Param('id') id: string) {
+    return this.campaignsService.useRecommendedAudience(Number(id));
+  }
+
+  @Post(':id/audience')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      'Define el origen del público objetivo: auto (recomendación por producto), manual (solo la audiencia manual) o mixed (recomendada + manual)',
+  })
+  @ApiResponse({ status: 200, description: 'Campaña con la audiencia aplicada' })
+  applyAudience(@Param('id') id: string, @Body() dto: ApplyAudienceDto) {
+    return this.campaignsService.applyAudience(
+      Number(id),
+      dto.mode,
+      dto.cedulas,
+      dto.filters as unknown as Record<string, unknown> | undefined,
+    );
   }
 
   @Post('interpret-segment')

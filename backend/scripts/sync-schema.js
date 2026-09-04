@@ -36,6 +36,24 @@ const COLUMNS = [
   // picking: revisión de pedidos en la cola (complementa a picked_qty)
   `ALTER TABLE orders
      ADD COLUMN IF NOT EXISTS reviewed_at timestamptz`,
+  // campañas: origen del público objetivo ('auto' | 'manual' | 'mixed')
+  `ALTER TABLE campaigns
+     ADD COLUMN IF NOT EXISTS audience_mode varchar(10) NOT NULL DEFAULT 'auto'`,
+  // campañas: snapshot RFM del destinatario (público con tabla completa)
+  `ALTER TABLE campaign_recipients
+     ADD COLUMN IF NOT EXISTS cedula varchar(50)`,
+  `ALTER TABLE campaign_recipients
+     ADD COLUMN IF NOT EXISTS segmento integer`,
+  `ALTER TABLE campaign_recipients
+     ADD COLUMN IF NOT EXISTS frecuencia double precision`,
+  `ALTER TABLE campaign_recipients
+     ADD COLUMN IF NOT EXISTS monetario double precision`,
+  `ALTER TABLE campaign_recipients
+     ADD COLUMN IF NOT EXISTS ticket_promedio double precision`,
+  `ALTER TABLE campaign_recipients
+     ADD COLUMN IF NOT EXISTS categorias_distintas double precision`,
+  `ALTER TABLE campaign_recipients
+     ADD COLUMN IF NOT EXISTS propensity double precision`,
 ];
 
 function splitSQL(sql) {
