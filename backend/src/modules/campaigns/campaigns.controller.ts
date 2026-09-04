@@ -89,6 +89,16 @@ export class CampaignsController {
     return this.campaignsService.scoreClients(dto);
   }
 
+  @Get('clients/filter-options')
+  @ApiOperation({
+    summary:
+      'Opciones de filtros de segmentación manual (ciudades, barrios, profesiones…) desde la réplica de analytics',
+  })
+  @ApiResponse({ status: 200, description: 'Opciones de filtro' })
+  clientFilterOptions() {
+    return this.campaignsService.clientFilterOptions();
+  }
+
   @Post(':id/recipients/manual')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({

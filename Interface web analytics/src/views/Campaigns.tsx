@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Search, MessageCircle, Mail, Smartphone, Zap,
-  ArrowRight, ChevronLeft, RefreshCw, Send, Clock,
+  ArrowRight, ChevronLeft, ChevronDown, RefreshCw, Send, Clock,
   CheckCircle, Users, TrendingUp, Eye, Edit3, X,
   Sparkles, Target, BarChart2, Calendar, MoreHorizontal,
   Palette, ShoppingBag, Pencil, Trash2, History, RotateCw,
-  Filter, CheckSquare, SlidersHorizontal,
+  Filter, CheckSquare, SlidersHorizontal, MapPin, Wallet, ShieldCheck,
+  PawPrint,
 } from "lucide-react";
 import EmailEditor, {
   newBlock,
@@ -22,6 +23,7 @@ import {
   type SegmentRankingRow,
   type ScoredClient,
   type ScoreClientsPayload,
+  type ClientFilterOptions,
 } from "../services/campaigns.service";
 import { catalogService, type CatalogProduct, type CatalogCategory } from "../services/catalog.service";
 
@@ -1856,6 +1858,13 @@ function RecipientsModal({
 }) {
   const [tab, setTab] = useState<"seg" | "all">("seg");
 
+  // Filtros manuales del tab "Todos los clientes" (perfil + RFM).
+  const f = useManualFilters();
+  const filtersRef = useRef<NonNullable<ScoreClientsPayload["filters"]>>({});
+  filtersRef.current = f.buildFilters();
+  const loadedFiltersRef = useRef<string>("");
+  const [filterModalOpen, setFilterModalOpen] = useState(false);
+
   // ── Pestaña "Segmentados" (recomendados / destinatarios) ──
   const [recipients, setRecipients] = useState<SegClientRow[]>([]);
   const [loading, setLoading] = useState(campaignId != null && preset == null);
@@ -1888,6 +1897,7 @@ function RecipientsModal({
     setAllError(null);
     try {
       const res = await campaignsService.scoreClients({
+        filters: filtersRef.current,
         sort: "propensity",
         dir: "desc",
         // Páginas de 20: el resto se carga con el scroll (lazy).
@@ -1896,6 +1906,7 @@ function RecipientsModal({
       });
       setAllRows((prev) => (append ? [...prev, ...res.clients] : res.clients));
       setAllTotal(res.total);
+      if (!append) loadedFiltersRef.current = JSON.stringify(filtersRef.current);
     } catch (e) {
       if (!append) setAllError(e instanceof Error ? e.message : "No se pudieron puntuar los clientes");
     } finally {
@@ -1912,6 +1923,19 @@ function RecipientsModal({
     void loadAllPage(0, false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab]);
+
+  // Al cambiar un filtro (con la pestaña "todos" abierta) se recarga la lista.
+  useEffect(() => {
+    if (tab !== "all") return;
+    if (JSON.stringify(filtersRef.current) === loadedFiltersRef.current) return;
+    const t = setTimeout(() => {
+      setAllRows([]);
+      setAllTotal(null);
+      void loadAllPage(0, false);
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, ...f.deps]);
 
   useEffect(() => {
     setVisible(PAGE);
@@ -2072,6 +2096,46 @@ function RecipientsModal({
           )}
         </div>
 
+        {/* Barra de filtros del tab "Todos los clientes" */}
+        {tab === "all" && (
+          <div className="px-6 py-2.5 border-b border-gray-100 shrink-0 flex items-center gap-2 flex-wrap">
+            <button
+              onClick={() => setFilterModalOpen(true)}
+              className={`flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl border-2 transition-all cursor-pointer ${
+                f.hasFilters
+                  ? "border-amber-400 bg-amber-50 text-amber-900 shadow-sm"
+                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-800"
+              }`}
+            >
+              <SlidersHorizontal size={13} />
+              Filtros de segmentación
+              {f.hasFilters && (
+                <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-bold">
+                  {countActiveFilters(f.snapshot)}
+                </span>
+              )}
+            </button>
+            {f.hasFilters ? (
+              <>
+                <span className="text-[11px] text-gray-400">
+                  {countActiveFilters(f.snapshot)} filtro{countActiveFilters(f.snapshot) !== 1 ? "s" : ""} activo{countActiveFilters(f.snapshot) !== 1 ? "s" : ""}
+                </span>
+                <button
+                  onClick={() => {
+                    f.reset();
+                    setFilterModalOpen(false);
+                  }}
+                  className="text-[11px] font-semibold text-gray-400 hover:text-red-600 underline underline-offset-2"
+                >
+                  Limpiar filtros
+                </button>
+              </>
+            ) : (
+              <span className="text-[11px] text-gray-400">Define filtros manuales (ubicación, género, edad, perfil de compra…) para afinar la base.</span>
+            )}
+          </div>
+        )}
+
         {/* List / tabla */}
         <div className="flex-1 overflow-y-auto px-6 py-4">
           {tab === "seg" ? (
@@ -2209,6 +2273,17 @@ function RecipientsModal({
       {explainOpen && explain && (
         <ExplainModal ctx={explain} onClose={() => setExplainOpen(false)} />
       )}
+
+      {/* Modal de filtros de segmentación (tab "Todos los clientes") */}
+      <SegmentFiltersModal
+        open={filterModalOpen}
+        initial={f.snapshot}
+        onClose={() => setFilterModalOpen(false)}
+        onApply={(vals) => {
+          f.apply(vals);
+          setFilterModalOpen(false);
+        }}
+      />
     </div>
   );
 }
@@ -2223,6 +2298,8 @@ function RangeInputs({
   onMin,
   onMax,
   step = 1,
+  disabled = false,
+  hint,
 }: {
   label: string;
   min: string;
@@ -2230,12 +2307,14 @@ function RangeInputs({
   onMin: (v: string) => void;
   onMax: (v: string) => void;
   step?: number;
+  disabled?: boolean;
+  hint?: string;
 }) {
   const inputCls =
-    "w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white";
+    "w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white disabled:bg-gray-50 disabled:text-gray-300 disabled:cursor-not-allowed";
   return (
-    <div>
-      <label className="block text-[11px] font-semibold text-gray-500 mb-1">{label}</label>
+    <div title={disabled ? hint : undefined}>
+      <label className={`block text-[11px] font-semibold mb-1 ${disabled ? "text-gray-300" : "text-gray-500"}`}>{label}</label>
       <div className="flex items-center gap-1.5">
         <input
           type="number"
@@ -2244,6 +2323,7 @@ function RangeInputs({
           value={min}
           onChange={(e) => onMin(e.target.value)}
           placeholder="Mín"
+          disabled={disabled}
           className={inputCls}
         />
         <span className="text-gray-300 text-xs">—</span>
@@ -2254,8 +2334,476 @@ function RangeInputs({
           value={max}
           onChange={(e) => onMax(e.target.value)}
           placeholder="Máx"
+          disabled={disabled}
           className={inputCls}
         />
+      </div>
+    </div>
+  );
+}
+
+/** Tarjeta de sección de filtros (ícono + título + grid de controles). */
+function FilterSection({ icon: Icon, title, children }: { icon: React.ElementType; title: string; children: React.ReactNode }) {
+  return (
+    <section className="rounded-xl border border-gray-200 bg-white p-3">
+      <header className="flex items-center gap-2 mb-3">
+        <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+          <Icon size={13} />
+        </span>
+        <h4 className="text-[11px] font-bold text-gray-700 uppercase tracking-wider">{title}</h4>
+      </header>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-3">{children}</div>
+    </section>
+  );
+}
+
+/** Multi-select compacto con búsqueda (dropdown anclado, sin recortes). */
+function MultiSelect({
+  label,
+  options,
+  values,
+  onChange,
+  placeholder = "Todos",
+  disabled = false,
+  hint,
+}: {
+  label: string;
+  options: string[];
+  values: string[];
+  onChange: (v: string[]) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  hint?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState("");
+  const [pos, setPos] = useState<{ top: number; left: number; width: number; openUp: boolean } | null>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const PANEL_MAX_H = 232;
+
+  const close = () => {
+    setOpen(false);
+    setQ("");
+    setPos(null);
+  };
+
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (open) return close();
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const margin = 8;
+    const spaceBelow = window.innerHeight - r.bottom - margin;
+    const openUp = spaceBelow < PANEL_MAX_H && r.top - margin > PANEL_MAX_H;
+    setPos({
+      top: openUp ? Math.max(margin, r.top - PANEL_MAX_H - margin) : r.bottom + 4,
+      left: r.left,
+      width: r.width,
+      openUp,
+    });
+    setOpen(true);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (btnRef.current && btnRef.current.contains(t)) return;
+      const panel = document.getElementById("multiselect-panel");
+      if (panel && panel.contains(t)) return;
+      close();
+    };
+    const onScroll = () => close();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") close();
+    };
+    document.addEventListener("mousedown", onDown);
+    window.addEventListener("scroll", onScroll, true);
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      window.removeEventListener("scroll", onScroll, true);
+      window.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  const toggle = (o: string) => {
+    onChange(values.includes(o) ? values.filter((x) => x !== o) : [...values, o]);
+  };
+
+  const filtered = options.filter((o) => o.toLowerCase().includes(q.toLowerCase()));
+  const shown = q ? filtered : options.slice(0, 80);
+
+  return (
+    <div title={disabled ? hint : undefined}>
+      <label className={`block text-[11px] font-semibold mb-1 ${disabled ? "text-gray-300" : "text-gray-500"}`}>{label}</label>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={toggleOpen}
+        disabled={disabled}
+        className={`w-full flex items-center justify-between gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border bg-white focus:outline-none transition-colors ${
+          disabled
+            ? "border-gray-100 text-gray-300 cursor-not-allowed"
+            : values.length
+              ? "border-amber-400 bg-amber-50 text-amber-900 font-semibold shadow-sm"
+              : "border-gray-200 text-gray-600 hover:border-gray-300"
+        }`}
+      >
+        <span className="truncate text-left">
+          {disabled
+            ? "Sin datos suficientes"
+            : values.length
+              ? `${values.length} seleccionado${values.length !== 1 ? "s" : ""}`
+              : placeholder}
+        </span>
+        <ChevronDown size={12} className={`text-gray-300 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+    </div>
+  );
+}
+
+/** Checkbox booleano de filtro (marcado = filtrar por true). */
+function BoolCheck({
+  label,
+  checked,
+  onChange,
+  disabled = false,
+  hint,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  disabled?: boolean;
+  hint?: string;
+}) {
+  return (
+    <label
+      title={disabled ? hint : undefined}
+      className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg border bg-white text-xs cursor-pointer select-none ${
+        disabled
+          ? "border-gray-100 text-gray-300 cursor-not-allowed opacity-70"
+          : "border-gray-200 text-gray-600 hover:border-gray-300"
+      }`}
+    >
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        disabled={disabled}
+        className="accent-amber-500 w-3.5 h-3.5 disabled:opacity-40"
+      />
+      {label}
+    </label>
+  );
+}
+
+/* ─── Estado compartido de filtros manuales (perfil + RFM) ── */
+
+interface ManualFilterValues {
+  segment: string;
+  minF: string; maxF: string; minM: string; maxM: string;
+  minT: string; maxT: string; minC: string; maxC: string;
+  ciudades: string[]; barrios: string[]; direccion: string;
+  sexos: string[]; minEdad: string; maxEdad: string;
+  estadosCiviles: string[]; minHijos: string; maxHijos: string;
+  profesiones: string[];
+  minValor: string; maxValor: string; minPuntos: string; maxPuntos: string;
+  tieneMascota: boolean; tieneCarro: boolean; esEmpleado: boolean;
+  clubs: string[]; consentimientos: string[];
+}
+
+const DEFAULT_FILTER_VALUES: ManualFilterValues = {
+  segment: "",
+  minF: "", maxF: "", minM: "", maxM: "", minT: "", maxT: "", minC: "", maxC: "",
+  ciudades: [], barrios: [], direccion: "",
+  sexos: [], minEdad: "", maxEdad: "",
+  estadosCiviles: [], minHijos: "", maxHijos: "", profesiones: [],
+  minValor: "", maxValor: "", minPuntos: "", maxPuntos: "",
+  tieneMascota: false, tieneCarro: false, esEmpleado: false,
+  clubs: [], consentimientos: [],
+};
+
+function useManualFilters() {
+  const [values, setValues] = useState<ManualFilterValues>(DEFAULT_FILTER_VALUES);
+  const [options, setOptions] = useState<ClientFilterOptions | null>(null);
+
+  useEffect(() => {
+    campaignsService
+      .getFilterOptions()
+      .then(setOptions)
+      .catch(() => {});
+  }, []);
+
+  const set = useCallback(
+    <K extends keyof ManualFilterValues>(k: K, v: ManualFilterValues[K]) =>
+      setValues((prev) => ({ ...prev, [k]: v })),
+    [],
+  );
+  const reset = useCallback(() => setValues(DEFAULT_FILTER_VALUES), []);
+
+  const buildFilters = useCallback((): NonNullable<ScoreClientsPayload["filters"]> => {
+    const f: NonNullable<ScoreClientsPayload["filters"]> = {};
+    if (values.segment) f.segment = Number(values.segment);
+    if (values.minF) f.minFrecuencia = Number(values.minF);
+    if (values.maxF) f.maxFrecuencia = Number(values.maxF);
+    if (values.minM) f.minMonetario = Number(values.minM);
+    if (values.maxM) f.maxMonetario = Number(values.maxM);
+    if (values.minT) f.minTicketPromedio = Number(values.minT);
+    if (values.maxT) f.maxTicketPromedio = Number(values.maxT);
+    if (values.minC) f.minCategoriasDistintas = Number(values.minC);
+    if (values.maxC) f.maxCategoriasDistintas = Number(values.maxC);
+    if (values.ciudades.length) f.ciudades = values.ciudades;
+    if (values.barrios.length) f.barrios = values.barrios;
+    if (values.direccion.trim()) f.direccionContiene = values.direccion.trim();
+    if (values.sexos.length) f.sexos = values.sexos;
+    if (values.minEdad) f.minEdad = Number(values.minEdad);
+    if (values.maxEdad) f.maxEdad = Number(values.maxEdad);
+    if (values.estadosCiviles.length) f.estadosCiviles = values.estadosCiviles;
+    if (values.minHijos) f.minHijos = Number(values.minHijos);
+    if (values.maxHijos) f.maxHijos = Number(values.maxHijos);
+    if (values.profesiones.length) f.profesiones = values.profesiones;
+    if (values.minValor) f.minValorTotal = Number(values.minValor);
+    if (values.maxValor) f.maxValorTotal = Number(values.maxValor);
+    if (values.minPuntos) f.minPuntos = Number(values.minPuntos);
+    if (values.maxPuntos) f.maxPuntos = Number(values.maxPuntos);
+    if (values.tieneMascota) f.tieneMascota = true;
+    if (values.tieneCarro) f.tieneCarro = true;
+    if (values.esEmpleado) f.esEmpleado = true;
+    if (values.clubs.length) f.clubs = values.clubs;
+    if (values.consentimientos.length) f.consentimientos = values.consentimientos;
+    return f;
+  }, [values]);
+
+  const deps = [
+    values.segment, values.minF, values.maxF, values.minM, values.maxM,
+    values.minT, values.maxT, values.minC, values.maxC,
+    values.ciudades, values.barrios, values.direccion, values.sexos,
+    values.minEdad, values.maxEdad, values.estadosCiviles,
+    values.minHijos, values.maxHijos, values.profesiones,
+    values.minValor, values.maxValor, values.minPuntos, values.maxPuntos,
+    values.tieneMascota, values.tieneCarro, values.esEmpleado,
+    values.clubs, values.consentimientos,
+  ];
+
+  return {
+    values,
+    set,
+    reset,
+    options,
+    buildFilters,
+    apply: setValues,
+    snapshot: values,
+    hasFilters: Object.keys(buildFilters()).length > 0,
+    deps,
+  };
+}
+
+/** Panel de filtros manuales (perfil + RFM), compartido por los modales. */
+function ManualFiltersPanel({ f }: { f: ReturnType<typeof useManualFilters> }) {
+  const v = f.values;
+  const set = f.set;
+  const inputCls =
+    "w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 transition-shadow";
+  return (
+    <div className="space-y-3">
+      <FilterSection icon={MapPin} title="Ubicación">
+        <MultiSelect label="Ciudad" options={f.options?.ciudades ?? []} values={v.ciudades} onChange={(x) => set("ciudades", x)} />
+        <MultiSelect label="Barrio" options={f.options?.barrios ?? []} values={v.barrios} onChange={(x) => set("barrios", x)} />
+        <div>
+          <label className="block text-[11px] font-semibold text-gray-500 mb-1">Dirección contiene</label>
+          <input
+            type="text"
+            value={v.direccion}
+            onChange={(e) => set("direccion", e.target.value)}
+            placeholder="Ej: Cra 23"
+            className={inputCls}
+          />
+        </div>
+      </FilterSection>
+
+      <FilterSection icon={Users} title="Demografía">
+        <MultiSelect label="Sexo" options={f.options?.sexos ?? ["F", "M"]} values={v.sexos} onChange={(x) => set("sexos", x)} />
+        <RangeInputs label="Edad (años)" min={v.minEdad} max={v.maxEdad} onMin={(x) => set("minEdad", x)} onMax={(x) => set("maxEdad", x)} />
+        <MultiSelect
+          label="Estado civil"
+          options={f.options?.estadosCiviles ?? ["Soltero(a)", "Casado(a)", "Union Libre", "Separado(a)", "Viudo(a)"]}
+          values={v.estadosCiviles}
+          onChange={(x) => set("estadosCiviles", x)}
+        />
+        <RangeInputs label="Hijos" min={v.minHijos} max={v.maxHijos} onMin={(x) => set("minHijos", x)} onMax={(x) => set("maxHijos", x)} />
+        <MultiSelect label="Profesión" options={f.options?.profesiones ?? []} values={v.profesiones} onChange={(x) => set("profesiones", x)} />
+      </FilterSection>
+
+      <FilterSection icon={Wallet} title="Económico (proxy de ingresos)">
+        <RangeInputs label="Valor total histórico (compras)" min={v.minValor} max={v.maxValor} onMin={(x) => set("minValor", x)} onMax={(x) => set("maxValor", x)} step={50000} />
+        <RangeInputs label="Puntos de fidelidad" min={v.minPuntos} max={v.maxPuntos} onMin={(x) => set("minPuntos", x)} onMax={(x) => set("maxPuntos", x)} step={1000} />
+      </FilterSection>
+
+      <FilterSection icon={PawPrint} title="Estilo de vida">
+        <MultiSelect
+          label="Clubs (alguno)"
+          options={["vino", "parrilla", "salud", "mascotas", "amas_de_casa"]}
+          values={v.clubs}
+          onChange={(x) => set("clubs", x)}
+        />
+        <div className="flex flex-wrap items-end gap-2 pb-0.5">
+          <BoolCheck
+            label="Tiene mascota"
+            checked={v.tieneMascota}
+            onChange={(x) => set("tieneMascota", x)}
+            disabled
+            hint="Sin datos suficientes: solo ~9 % de la base puntuada registra este atributo."
+          />
+          <BoolCheck
+            label="Tiene carro"
+            checked={v.tieneCarro}
+            onChange={(x) => set("tieneCarro", x)}
+            disabled
+            hint="Sin datos suficientes: solo ~8 % de la base puntuada registra este atributo."
+          />
+          <BoolCheck
+            label="Es empleado"
+            checked={v.esEmpleado}
+            onChange={(x) => set("esEmpleado", x)}
+            disabled
+            hint="Sin datos suficientes: menos del 1 % de la base puntuada es empleado de la empresa."
+          />
+        </div>
+      </FilterSection>
+
+      <FilterSection icon={ShieldCheck} title="Consentimiento">
+        <MultiSelect
+          label="Con consentimiento para (alguno)"
+          options={["email", "whatsapp", "sms"]}
+          values={v.consentimientos}
+          onChange={(x) => set("consentimientos", x)}
+        />
+      </FilterSection>
+
+      <FilterSection icon={BarChart2} title="RFM">
+        <div>
+          <label className="block text-[11px] font-semibold text-gray-500 mb-1">Segmento</label>
+          <select value={v.segment} onChange={(e) => set("segment", e.target.value)} className={inputCls}>
+            <option value="">Todos</option>
+            {[0, 1, 2, 3, 4, 5].map((s) => (
+              <option key={s} value={s}>Segmento {s}</option>
+            ))}
+          </select>
+        </div>
+        <RangeInputs label="Frecuencia (compras)" min={v.minF} max={v.maxF} onMin={(x) => set("minF", x)} onMax={(x) => set("maxF", x)} />
+        <RangeInputs label="Monetario (gasto)" min={v.minM} max={v.maxM} onMin={(x) => set("minM", x)} onMax={(x) => set("maxM", x)} step={10000} />
+        <RangeInputs label="Ticket promedio" min={v.minT} max={v.maxT} onMin={(x) => set("minT", x)} onMax={(x) => set("maxT", x)} step={1000} />
+        <RangeInputs label="Categorías distintas" min={v.minC} max={v.maxC} onMin={(x) => set("minC", x)} onMax={(x) => set("maxC", x)} />
+      </FilterSection>
+    </div>
+  );
+}
+
+/** Nº de criterios activos (para el badge de la barra de filtros). */
+function countActiveFilters(v: ManualFilterValues): number {
+  const ranged = (a: string, b: string) => (a ? 1 : 0) + (b ? 1 : 0);
+  return (
+    (v.segment ? 1 : 0) +
+    ranged(v.minF, v.maxF) +
+    ranged(v.minM, v.maxM) +
+    ranged(v.minT, v.maxT) +
+    ranged(v.minC, v.maxC) +
+    (v.ciudades.length ? 1 : 0) +
+    (v.barrios.length ? 1 : 0) +
+    (v.direccion.trim() ? 1 : 0) +
+    (v.sexos.length ? 1 : 0) +
+    ranged(v.minEdad, v.maxEdad) +
+    (v.estadosCiviles.length ? 1 : 0) +
+    ranged(v.minHijos, v.maxHijos) +
+    (v.profesiones.length ? 1 : 0) +
+    ranged(v.minValor, v.maxValor) +
+    ranged(v.minPuntos, v.maxPuntos) +
+    (v.tieneMascota ? 1 : 0) +
+    (v.tieneCarro ? 1 : 0) +
+    (v.esEmpleado ? 1 : 0) +
+    (v.clubs.length ? 1 : 0) +
+    (v.consentimientos.length ? 1 : 0)
+  );
+}
+
+/** Modal de filtros de segmentación (borrador + botón "Aplicar"). */
+function SegmentFiltersModal({
+  open,
+  initial,
+  onClose,
+  onApply,
+}: {
+  open: boolean;
+  initial: ManualFilterValues;
+  onClose: () => void;
+  onApply: (v: ManualFilterValues) => void;
+}) {
+  const f = useManualFilters();
+
+  // Al abrir, el borrador parte de los filtros ya aplicados.
+  useEffect(() => {
+    if (open) f.apply(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  if (!open) return null;
+  const n = countActiveFilters(f.snapshot);
+
+  return (
+    <div className="fixed inset-0 z-[85] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-gray-50 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 bg-white border-b border-gray-200 shrink-0">
+          <div className="min-w-0 pr-3">
+            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <SlidersHorizontal size={18} className="text-amber-600" /> Filtros de segmentación
+            </h3>
+            <p className="text-xs text-gray-500 mt-0.5">
+              Afina la base por ubicación, demografía, perfil económico y de compra. Los cambios se aplican al pulsar “Aplicar filtros”.
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Cuerpo */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <ManualFiltersPanel f={f} />
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 px-6 py-3 bg-white border-t border-gray-200 shrink-0">
+          <button
+            onClick={() => f.reset()}
+            disabled={n === 0}
+            className="text-xs font-semibold text-gray-500 hover:text-red-600 underline underline-offset-2 disabled:opacity-40 disabled:no-underline disabled:cursor-default"
+          >
+            Limpiar todo
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-bold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={() => onApply(f.snapshot)}
+              disabled={n === 0}
+              className="flex items-center gap-1.5 px-5 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl shadow-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Zap size={13} />
+              {n > 0 ? `Aplicar filtros (${n})` : "Aplicar filtros"}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -2272,18 +2820,12 @@ function ManualSegModal({
   onAdded: (n: number) => void;
   onClose: () => void;
 }) {
-  // Filtros sobre atributos RFM de la base (analytics).
-  const [segment, setSegment] = useState("");
-  const [minF, setMinF] = useState("");
-  const [maxF, setMaxF] = useState("");
-  const [minM, setMinM] = useState("");
-  const [maxM, setMaxM] = useState("");
-  const [minT, setMinT] = useState("");
-  const [maxT, setMaxT] = useState("");
-  const [minC, setMinC] = useState("");
-  const [maxC, setMaxC] = useState("");
   // Solo clientes con ≥70% de probabilidad de compra (estándar de la campaña).
   const [onlyHigh, setOnlyHigh] = useState(true);
+
+  // Filtros manuales compartidos (perfil + RFM) con opciones de la réplica.
+  const f = useManualFilters();
+  const { buildFilters, hasFilters } = f;
 
   const [rows, setRows] = useState<ScoredClient[]>([]);
   const [total, setTotal] = useState<number | null>(null);
@@ -2295,22 +2837,6 @@ function ManualSegModal({
   const [addedMsg, setAddedMsg] = useState<string | null>(null);
   const fetchRef = useRef(false);
   const sentinelRef = useRef<HTMLDivElement | null>(null);
-
-  const buildFilters = (): NonNullable<ScoreClientsPayload["filters"]> => {
-    const f: NonNullable<ScoreClientsPayload["filters"]> = {};
-    if (segment) f.segment = Number(segment);
-    if (minF) f.minFrecuencia = Number(minF);
-    if (maxF) f.maxFrecuencia = Number(maxF);
-    if (minM) f.minMonetario = Number(minM);
-    if (maxM) f.maxMonetario = Number(maxM);
-    if (minT) f.minTicketPromedio = Number(minT);
-    if (maxT) f.maxTicketPromedio = Number(maxT);
-    if (minC) f.minCategoriasDistintas = Number(minC);
-    if (maxC) f.maxCategoriasDistintas = Number(maxC);
-    return f;
-  };
-
-  const hasFilters = Object.keys(buildFilters()).length > 0;
 
   const runAnalysis = async (offset = 0, append = false) => {
     if (fetchRef.current) return;
@@ -2391,7 +2917,7 @@ function ManualSegModal({
     io.observe(el);
     return () => io.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [total, rows.length, onlyHigh, segment, minF, maxF, minM, maxM, minT, maxT, minC, maxC]);
+  }, [total, rows.length, onlyHigh, ...f.deps]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -2414,24 +2940,8 @@ function ManualSegModal({
 
         {/* Filtros */}
         <div className="px-6 py-4 border-b border-gray-100 shrink-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-            <div>
-              <label className="block text-[11px] font-semibold text-gray-500 mb-1">Segmento</label>
-              <select
-                value={segment}
-                onChange={(e) => setSegment(e.target.value)}
-                className="w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-              >
-                <option value="">Todos</option>
-                {[1, 2, 3, 4, 5, 6].map((s) => (
-                  <option key={s} value={s}>Segmento {s}</option>
-                ))}
-              </select>
-            </div>
-            <RangeInputs label="Frecuencia (compras)" min={minF} max={maxF} onMin={setMinF} onMax={setMaxF} />
-            <RangeInputs label="Monetario (gasto)" min={minM} max={maxM} onMin={setMinM} onMax={setMaxM} step={10000} />
-            <RangeInputs label="Ticket promedio" min={minT} max={maxT} onMin={setMinT} onMax={setMaxT} step={1000} />
-            <RangeInputs label="Categorías distintas" min={minC} max={maxC} onMin={setMinC} onMax={setMaxC} />
+          <div className="max-h-[46vh] overflow-y-auto pr-1">
+            <ManualFiltersPanel f={f} />
           </div>
           <div className="flex items-center justify-between mt-3 flex-wrap gap-2">
             <label className="flex items-center gap-2 text-xs text-gray-600 cursor-pointer select-none">

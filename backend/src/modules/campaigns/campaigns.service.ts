@@ -519,6 +519,26 @@ export class CampaignsService {
       maxTicketPromedio?: number;
       minCategoriasDistintas?: number;
       maxCategoriasDistintas?: number;
+      ciudades?: string[];
+      barrios?: string[];
+      direccionContiene?: string;
+      minEdad?: number;
+      maxEdad?: number;
+      sexos?: string[];
+      estadosCiviles?: string[];
+      minHijos?: number;
+      maxHijos?: number;
+      profesiones?: string[];
+      minValorTotal?: number;
+      maxValorTotal?: number;
+      minPuntos?: number;
+      maxPuntos?: number;
+      tieneMascota?: boolean;
+      tieneCarro?: boolean;
+      esEmpleado?: boolean;
+      clubs?: string[];
+      consentimientos?: string[];
+      sucursales?: string[];
     };
     minPropensity?: number;
     sort?: 'propensity' | 'uplift' | 'segment' | 'cedula';
@@ -532,7 +552,7 @@ export class CampaignsService {
 
     // 1) Todos los que cumplen los filtros (sin contacto) para puntuar.
     const all = await this.fetchSegmentClients(
-      filters as Record<string, unknown>,
+      this.toSnakeFilters(filters),
       0,
       100000,
       false,
@@ -679,6 +699,75 @@ export class CampaignsService {
       );
     }
     return { added: toInsert.length };
+  }
+
+  /**
+   * Convierte los filtros del DTO (camelCase) a las claves snake_case
+   * que espera clustering-api (/segment-clients). Omite undefined/null.
+   */
+  private toSnakeFilters(f: Record<string, unknown>): Record<string, unknown> {
+    const mapping: Record<string, string> = {
+      minFrecuencia: 'min_frecuencia',
+      maxFrecuencia: 'max_frecuencia',
+      minMonetario: 'min_monetario',
+      maxMonetario: 'max_monetario',
+      minTicketPromedio: 'min_ticket_promedio',
+      maxTicketPromedio: 'max_ticket_promedio',
+      minCategoriasDistintas: 'min_categorias_distintas',
+      maxCategoriasDistintas: 'max_categorias_distintas',
+      direccionContiene: 'direccion_contiene',
+      minEdad: 'min_edad',
+      maxEdad: 'max_edad',
+      estadosCiviles: 'estados_civiles',
+      minHijos: 'min_hijos',
+      maxHijos: 'max_hijos',
+      minValorTotal: 'min_valor_total',
+      maxValorTotal: 'max_valor_total',
+      minPuntos: 'min_puntos',
+      maxPuntos: 'max_puntos',
+      tieneMascota: 'tiene_mascota',
+      tieneCarro: 'tiene_carro',
+      esEmpleado: 'es_empleado',
+    };
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(f)) {
+      if (v === undefined || v === null || v === '') continue;
+      if (Array.isArray(v) && v.length === 0) continue;
+      out[mapping[k] ?? k] = v;
+    }
+    return out;
+  }
+
+  /** Opciones de los selects de segmentación manual (proxy a clustering-api). */
+  async clientFilterOptions() {
+    return this.getFromClustering('/client-filter-options');
+  }
+
+  /**
+   * GET genérico a clustering-api (protegido con X-Admin-Key).
+   */
+  private async getFromClustering(path: string) {
+    const url = `${this.clusteringApiUrl()}${path}`;
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'GET',
+        headers: { 'X-Admin-Key': this.clusteringApiKey() },
+      });
+    } catch (e) {
+      this.logger.error(`No se pudo contactar clustering-api en ${url}: ${e}`);
+      throw new BadRequestException(
+        'El servicio de segmentación (clustering-api) no está disponible',
+      );
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      this.logger.error(`clustering-api respondió ${resp.status}: ${text}`);
+      throw new BadRequestException(
+        'El servicio de segmentación no pudo completar la operación',
+      );
+    }
+    return resp.json();
   }
 
   /**

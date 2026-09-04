@@ -276,6 +276,99 @@ export class ScoreClientsFiltersDto {
   @IsOptional()
   @IsNumber()
   maxCategoriasDistintas?: number;
+
+  // ── Ubicación ──
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  ciudades?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  barrios?: string[];
+
+  @IsOptional()
+  @IsString()
+  direccionContiene?: string;
+
+  // ── Demografía ──
+  @IsOptional()
+  @IsNumber()
+  minEdad?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxEdad?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sexos?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  estadosCiviles?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  minHijos?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxHijos?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  profesiones?: string[];
+
+  // ── Económico (proxy de ingresos: gasto histórico y puntos) ──
+  @IsOptional()
+  @IsNumber()
+  minValorTotal?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxValorTotal?: number;
+
+  @IsOptional()
+  @IsNumber()
+  minPuntos?: number;
+
+  @IsOptional()
+  @IsNumber()
+  maxPuntos?: number;
+
+  // ── Estilo de vida ──
+  @IsOptional()
+  @IsBoolean()
+  tieneMascota?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  tieneCarro?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  esEmpleado?: boolean;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  clubs?: string[];
+
+  // ── Contacto legal ──
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  consentimientos?: string[];
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  sucursales?: string[];
 }
 
 export class ScoreClientsDto {

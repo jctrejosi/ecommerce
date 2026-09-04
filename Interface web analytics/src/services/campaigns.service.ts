@@ -194,12 +194,41 @@ export interface ScoreClientsPayload {
     maxTicketPromedio?: number;
     minCategoriasDistintas?: number;
     maxCategoriasDistintas?: number;
+    ciudades?: string[];
+    barrios?: string[];
+    direccionContiene?: string;
+    minEdad?: number;
+    maxEdad?: number;
+    sexos?: string[];
+    estadosCiviles?: string[];
+    minHijos?: number;
+    maxHijos?: number;
+    profesiones?: string[];
+    minValorTotal?: number;
+    maxValorTotal?: number;
+    minPuntos?: number;
+    maxPuntos?: number;
+    tieneMascota?: boolean;
+    tieneCarro?: boolean;
+    esEmpleado?: boolean;
+    clubs?: string[];
+    consentimientos?: string[];
+    sucursales?: string[];
   };
   minPropensity?: number;
   sort?: "propensity" | "uplift" | "segment" | "cedula";
   dir?: "asc" | "desc";
   limit?: number;
   offset?: number;
+}
+
+export interface ClientFilterOptions {
+  ciudades: string[];
+  barrios: string[];
+  profesiones: string[];
+  estadosCiviles: string[];
+  sucursales: string[];
+  sexos: string[];
 }
 
 async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
@@ -322,6 +351,9 @@ export const campaignsService = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
+
+  getFilterOptions: () =>
+    fetchJson<ClientFilterOptions>("/admin/campaigns/clients/filter-options"),
 
   addManualRecipients: (id: number, cedulas: string[]) =>
     fetchJson<{ added: number }>(`/admin/campaigns/${id}/recipients/manual`, {
