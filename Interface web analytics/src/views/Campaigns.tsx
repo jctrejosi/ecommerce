@@ -2460,6 +2460,46 @@ function MultiSelect({
         </span>
         <ChevronDown size={12} className={`text-gray-300 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
+      {!disabled && open && pos && (
+        <div
+          id="multiselect-panel"
+          style={{
+            position: "fixed",
+            top: pos.top,
+            left: pos.left,
+            width: Math.max(pos.width, 200),
+            maxHeight: PANEL_MAX_H,
+            zIndex: 9999,
+          }}
+          className="overflow-y-auto bg-white border border-gray-200 rounded-xl shadow-xl p-1.5"
+        >
+          <input
+            autoFocus
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Buscar…"
+            className="w-full px-2 py-1.5 text-xs border border-gray-200 rounded-lg mb-1 focus:outline-none focus:ring-2 focus:ring-amber-300 sticky top-0 bg-white"
+          />
+          {shown.length === 0 ? (
+            <p className="px-2 py-2 text-xs text-gray-400">Sin opciones</p>
+          ) : (
+            shown.map((o) => (
+              <label
+                key={o}
+                className="flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs text-gray-700 hover:bg-amber-50 cursor-pointer"
+              >
+                <input
+                  type="checkbox"
+                  checked={values.includes(o)}
+                  onChange={() => toggle(o)}
+                  className="accent-amber-500 w-3.5 h-3.5 shrink-0"
+                />
+                <span className="truncate">{o}</span>
+              </label>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -2601,16 +2641,28 @@ function useManualFilters() {
 }
 
 /** Panel de filtros manuales (perfil + RFM), compartido por los modales. */
+// Listas de respaldo con valores reales de la réplica: si el endpoint de
+// opciones no responde, los selects igual muestran opciones útiles.
+const FALLBACK_CIUDADES = ["MANIZALES", "VILLAMARIA", "PEREIRA", "BOGOTA, D.C.", "MEDELLIN", "CALI", "NEIRA", "CHINCHINA", "DOSQUEBRADAS", "ARMENIA", "BOGOTA", "IBAGUE", "CARTAGO", "LA DORADA", "ENVIGADO"];
+const FALLBACK_BARRIOS = ["PALERMO", "ENEA", "CENTRO", "CHIPRE", "SULTANA", "FATIMA", "SAN JORGE", "LA SULTANA", "VILLA PILAR", "LA ENEA", "NEIRA", "COMUNA UNIVERSITARIA"];
+const FALLBACK_PROFESIONES = ["Ama de casa", "Independiente", "Empleado", "Estudiante", "Jubilado(a)", "Comerciante", "Docente", "Ingeniero(a)", "Abogado(a)", "Enfermero(a)", "Auxiliar", "Administrador(a)", "Otra"];
+const FALLBACK_ESTADOS_CIVILES = ["Soltero(a)", "Casado(a)", "Union Libre", "Separado(a)", "Viudo(a)"];
+
 function ManualFiltersPanel({ f }: { f: ReturnType<typeof useManualFilters> }) {
   const v = f.values;
   const set = f.set;
+  const optCiudades = f.options?.ciudades?.length ? f.options.ciudades : FALLBACK_CIUDADES;
+  const optBarrios = f.options?.barrios?.length ? f.options.barrios : FALLBACK_BARRIOS;
+  const optProfesiones = f.options?.profesiones?.length ? f.options.profesiones : FALLBACK_PROFESIONES;
+  const optEstados = f.options?.estadosCiviles?.length ? f.options.estadosCiviles : FALLBACK_ESTADOS_CIVILES;
+  const optSexos = f.options?.sexos?.length ? f.options.sexos : ["F", "M"];
   const inputCls =
     "w-full px-2.5 py-1.5 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300 transition-shadow";
   return (
     <div className="space-y-3">
       <FilterSection icon={MapPin} title="Ubicación">
-        <MultiSelect label="Ciudad" options={f.options?.ciudades ?? []} values={v.ciudades} onChange={(x) => set("ciudades", x)} />
-        <MultiSelect label="Barrio" options={f.options?.barrios ?? []} values={v.barrios} onChange={(x) => set("barrios", x)} />
+        <MultiSelect label="Ciudad" options={optCiudades} values={v.ciudades} onChange={(x) => set("ciudades", x)} />
+        <MultiSelect label="Barrio" options={optBarrios} values={v.barrios} onChange={(x) => set("barrios", x)} />
         <div>
           <label className="block text-[11px] font-semibold text-gray-500 mb-1">Dirección contiene</label>
           <input
@@ -2624,16 +2676,16 @@ function ManualFiltersPanel({ f }: { f: ReturnType<typeof useManualFilters> }) {
       </FilterSection>
 
       <FilterSection icon={Users} title="Demografía">
-        <MultiSelect label="Sexo" options={f.options?.sexos ?? ["F", "M"]} values={v.sexos} onChange={(x) => set("sexos", x)} />
+        <MultiSelect label="Sexo" options={optSexos} values={v.sexos} onChange={(x) => set("sexos", x)} />
         <RangeInputs label="Edad (años)" min={v.minEdad} max={v.maxEdad} onMin={(x) => set("minEdad", x)} onMax={(x) => set("maxEdad", x)} />
         <MultiSelect
           label="Estado civil"
-          options={f.options?.estadosCiviles ?? ["Soltero(a)", "Casado(a)", "Union Libre", "Separado(a)", "Viudo(a)"]}
+          options={optEstados}
           values={v.estadosCiviles}
           onChange={(x) => set("estadosCiviles", x)}
         />
         <RangeInputs label="Hijos" min={v.minHijos} max={v.maxHijos} onMin={(x) => set("minHijos", x)} onMax={(x) => set("maxHijos", x)} />
-        <MultiSelect label="Profesión" options={f.options?.profesiones ?? []} values={v.profesiones} onChange={(x) => set("profesiones", x)} />
+        <MultiSelect label="Profesión" options={optProfesiones} values={v.profesiones} onChange={(x) => set("profesiones", x)} />
       </FilterSection>
 
       <FilterSection icon={Wallet} title="Económico (proxy de ingresos)">
