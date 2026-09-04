@@ -36,13 +36,11 @@ interface GeneratedContent {
 }
 
 type CampaignStatus = "borrador" | "programada" | "enviando" | "enviada" | "fallida";
-type Step = 1 | 2 | 3;
+type Step = 1 | 2 | 3 | 4;
 
 /* ─── Placeholders de segmentación ──────────────── */
-// La segmentación inteligente de clientes aún no está conectada;
-// mientras tanto usamos estimaciones fijas para los paneles del wizard.
+// Respaldo del público objetivo mientras la segmentación no ha respondido.
 const ESTIMATED_AUDIENCE = 500;
-const ESTIMATED_CONV_RATE = 3;
 
 const STATUS_CFG: Record<CampaignStatus, { label: string; color: string; bg: string; border: string }> = {
   borrador:   { label: "Borrador",   color: "text-gray-600",  bg: "bg-gray-100",   border: "border-gray-200" },
@@ -700,6 +698,7 @@ function Step2({
   onNext,
   onBack,
   onToggleChannel,
+  reviewUpToDate,
 }: {
   products: Product[];
   channels: Record<string, boolean>;
@@ -723,6 +722,8 @@ function Step2({
   onNext: () => void;
   onBack: () => void;
   onToggleChannel: (c: string) => void;
+  /** true si ya revisaste con estos productos: avanzar no vuelve a segmentar. */
+  reviewUpToDate?: boolean;
 }) {
   const activeChannelCount = Object.values(channels).filter(Boolean).length;
 
@@ -963,8 +964,20 @@ function Step2({
           <ChevronLeft size={15} /> Atrás
         </button>
         {generated && (
-          <button onClick={onNext} className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all">
-            Revisar y programar <ArrowRight size={15} />
+          <button
+            onClick={onNext}
+            title={
+              reviewUpToDate
+                ? "La revisión ya está lista con estos productos (no se vuelve a segmentar)"
+                : "Se ejecutará la segmentación del público al revisar"
+            }
+            className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all"
+          >
+            {reviewUpToDate ? (
+              <>Siguiente <ArrowRight size={15} /></>
+            ) : (
+              <>Público objetivo <ArrowRight size={15} /></>
+            )}
           </button>
         )}
       </div>
@@ -972,16 +985,15 @@ function Step2({
   );
 }
 
-function Step3({
+function AudienceStep({
   products,
   channels,
-  onSend,
   onBack,
-  sent,
-  sending,
-  sendError,
-  sentAudience,
+  onContinue,
   mode,
+  segKey,
+  active,
+  onSegmented,
   audSource,
   onAudSourceChange,
   audMix,
@@ -990,25 +1002,24 @@ function Step3({
 }: {
   products: Product[];
   channels: Record<string, boolean>;
-  onSend: () => void;
   onBack: () => void;
-  sent: boolean;
-  sending: boolean;
-  sendError: string | null;
-  /** Nº real de mensajes en cola devuelto por el backend al lanzar. */
-  sentAudience: number | null;
+  onContinue: (chosen: { count: number | null; label: string }) => void;
   mode: "multi" | "bundle";
+  /** Clave de la segmentación (productos+modo): si no cambia, no se re-segmenta. */
+  segKey: string;
+  /** El paso "Público objetivo" está visible. Oculta no lanza segmentaciones. */
+  active: boolean;
+  /** Avisa al wizard que la segmentación quedó lista para esta segKey. */
+  onSegmented: () => void;
   audSource: "auto" | "manual";
   onAudSourceChange: (v: "auto" | "manual") => void;
   audMix: boolean;
   onAudMixChange: (v: boolean) => void;
   manualF: ReturnType<typeof useManualFilters>;
 }) {
-  const [scheduled, setScheduled] = useState(false);
-  const activeChannels = Object.entries(channels).filter(([, v]) => v).map(([k]) => k);
-
-  // Previsualización de la segmentación (analytics / clustering-api) vía SSE:
-  // corre al entrar al paso, muestra el progreso por etapas y el resultado.
+  // Previsualización de la segmentación (analytics / clustering-api) vía SSE.
+  // Se ejecuta una sola vez por combinación de productos+modo: si vuelves al
+  // paso sin cambiar nada, se conserva el resultado y NO se vuelve a segmentar.
   const [seg, setSeg] = useState<SegmentPreviewResult | null>(null);
   const [segLoading, setSegLoading] = useState(true);
   const [segStage, setSegStage] = useState<{ message: string; progress: number }>({
@@ -1016,17 +1027,24 @@ function Step3({
     progress: 3,
   });
   const [segError, setSegError] = useState<string | null>(null);
-  const [clientsOpen, setClientsOpen] = useState(false);
-  // Explorador de segmentación manual (abre la base en la pestaña "manual").
-  const [explorerOpen, setExplorerOpen] = useState(false);
+  const segRunKeyRef = useRef<string>("");
+  // Pestaña del panel de público objetivo (recomendados / segmentación manual).
+  const [audTab, setAudTab] = useState<"seg" | "all">("seg");
   // Total de clientes que cumplen los filtros manuales: lo reporta el
-  // explorador cada vez que puntúa y alimenta el contador de la revisión.
+  // panel cada vez que puntúa y alimenta el contador.
   const [manualTotal, setManualTotal] = useState<number | null>(null);
 
   useEffect(() => {
     const ids = products.map((p) => p.id).filter((x): x is number => x != null);
     if (!ids.length) {
       setSegError("La campaña no tiene productos seleccionados");
+      setSegLoading(false);
+      return;
+    }
+    // Paso oculto (volviste a Generar Campaña): no lanzar ni relanzar.
+    if (!active) return;
+    // Ya segmentamos exactamente esta combinación de productos/modo.
+    if (segRunKeyRef.current === segKey && seg) {
       setSegLoading(false);
       return;
     }
@@ -1038,8 +1056,10 @@ function Step3({
       {
         onStage: (s) => setSegStage(s),
         onResult: (r) => {
+          segRunKeyRef.current = segKey;
           setSeg(r);
           setSegLoading(false);
+          onSegmented();
         },
         onError: (msg) => {
           setSegError(msg);
@@ -1050,17 +1070,18 @@ function Step3({
     );
     return () => es.close();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [segKey, active]);
+
+  // En segmentación manual no corre el SSE: la audiencia queda lista en cuanto
+  // se abre (los filtros viven en el wizard y se aplican al enviar).
+  useEffect(() => {
+    if (audSource === "manual") onSegmented();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [audSource]);
 
   const totalReach = seg?.total ?? ESTIMATED_AUDIENCE;
   // Universo total de clientes analizado (suma de todos los segmentos).
   const totalPool = (seg?.ranking ?? []).reduce((a, r) => a + r.total, 0);
-  // Público objetivo real: clientes con ≥70% de probabilidad de compra (tras el filtro).
-  const audience = seg?.total ?? totalReach;
-  // Nº de mensajes que se mostrará: el real tras lanzar, o la estimación según
-  // el origen elegido (recomendada = segmento; manual = los que cumplen filtros).
-  const displayAudience =
-    sentAudience ?? (audSource === "manual" ? (manualTotal ?? audience) : audience);
 
   const scored = (seg?.recipients ?? []).filter((r) => r.propensity != null);
   const uplifted = (seg?.recipients ?? []).filter((r) => r.uplift != null);
@@ -1085,6 +1106,288 @@ function Step3({
       }
     : null;
 
+  const handleContinue = () => {
+    const autoCount = seg?.total ?? null;
+    let count: number | null;
+    let label: string;
+    if (audSource === "auto") {
+      count = autoCount;
+      label = "Recomendada por producto";
+    } else if (audMix) {
+      count = autoCount != null || manualTotal != null ? (autoCount ?? 0) + (manualTotal ?? 0) : null;
+      label = "Recomendada + manual";
+    } else {
+      count = manualTotal;
+      label = "Manual (filtros)";
+    }
+    onContinue({ count, label });
+  };
+
+  return (
+    <div className="flex flex-col h-full">
+      <div className="flex-1 overflow-y-auto p-6">
+        <div className="max-w-5xl mx-auto">
+          <h2 className="text-xl font-bold text-gray-900 mb-1">Público objetivo</h2>
+          <p className="text-sm text-gray-500 mb-5">
+            Elige quién recibirá la campaña: la recomendación por producto o una segmentación manual con filtros.
+          </p>
+
+          <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-4">
+            <div className="space-y-3">
+              {/* Selector de origen del público */}
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-sm text-gray-600">Público objetivo</span>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => onAudSourceChange("auto")}
+                    title="El sistema elige el mejor segmento según los productos seleccionados"
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border-2 transition-all cursor-pointer ${
+                      audSource === "auto"
+                        ? "border-blue-300 bg-blue-50 text-blue-800 shadow-sm"
+                        : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                    }`}
+                  >
+                    <Sparkles size={12} /> Recomendada
+                  </button>
+                  <button
+                    onClick={() => onAudSourceChange("manual")}
+                    title="Elige tú los clientes por filtros (ubicación, género, edad, perfil de compra…)"
+                    className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border-2 transition-all cursor-pointer ${
+                      audSource === "manual"
+                        ? "border-amber-400 bg-amber-50 text-amber-900 shadow-sm"
+                        : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                    }`}
+                  >
+                    <SlidersHorizontal size={12} /> Manual
+                  </button>
+                </div>
+              </div>
+
+              {audSource === "auto" ? (
+                <>
+                  <div className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2">
+                    {segLoading ? (
+                      <span className="text-xs text-gray-400">segmentando…</span>
+                    ) : segError ? (
+                      <span className="text-xs font-bold text-red-600">—</span>
+                    ) : (
+                      <span className="text-xs font-bold text-gray-800">
+                        {seg
+                          ? `Seleccionados ${seg.total.toLocaleString()} clientes${totalPool > 0 ? ` de ${totalPool.toLocaleString()} en total` : ""}`
+                          : `${totalReach.toLocaleString()} clientes`}
+                      </span>
+                    )}
+                  </div>
+                  {segError && (
+                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      ⚠ No se pudo ejecutar la segmentación: {segError}
+                    </p>
+                  )}
+                  {seg && !segError && (
+                    <div className="space-y-1">
+                      <p className="text-[11px] text-gray-400">
+                        {seg.mode === "bundle" ? "🧩 Combo (van juntos)" : "🏷️ Descuento (independientes)"} · Segmento {seg.segment} · {seg.buyers.toLocaleString()} clientes con afinidad a los productos
+                      </p>
+                      {seg.note && <p className="text-[11px] text-gray-500">{seg.note}</p>}
+                      {seg.bundleFallback && (
+                        <p className="text-[11px] text-amber-600">⚠ La co-compra de estos productos es casi nula; se usaron sus categorías como respaldo.</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 space-y-2.5">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-xs font-semibold text-amber-900">
+                      {manualF.hasFilters
+                        ? `${countActiveFilters(manualF.snapshot)} filtro${countActiveFilters(manualF.snapshot) !== 1 ? "s" : ""} activo${countActiveFilters(manualF.snapshot) !== 1 ? "s" : ""}`
+                        : "Sin filtros definidos todavía"}
+                    </p>
+                    <button
+                      onClick={() => setAudTab("all")}
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors shadow-sm shrink-0"
+                      title="Explora la base y define la segmentación manual con filtros"
+                    >
+                      <SlidersHorizontal size={12} />
+                      {manualF.hasFilters ? "Editar segmentación" : "Definir con filtros"}
+                    </button>
+                  </div>
+
+                  {manualF.hasFilters && (
+                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                      <div
+                        className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 shadow-sm"
+                        style={{ background: "#FFF200" }}
+                      >
+                        {manualTotal != null ? (
+                          <span className="text-sm font-black text-[#1A1A2E] leading-tight">
+                            {manualTotal.toLocaleString()}{" "}
+                            <span className="font-semibold text-[#1A1A2E]/70">
+                              cliente{manualTotal !== 1 ? "s" : ""} con esas características
+                            </span>
+                          </span>
+                        ) : (
+                          <span className="text-xs font-bold text-[#1A1A2E]">Aún sin calcular</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Combinar con la recomendación o reemplazarla: cada opción
+                      muestra cuántos clientes quedarán como público objetivo. */}
+                  <div className="space-y-1.5 text-[11px]">
+                    <label
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer select-none transition-all ${
+                        !audMix
+                          ? "border-amber-400 bg-amber-50 shadow-sm"
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="wizard-aud-mix"
+                        checked={!audMix}
+                        onChange={() => onAudMixChange(false)}
+                        className="accent-amber-500 w-3.5 h-3.5 shrink-0"
+                      />
+                      <span className="flex-1 min-w-0 text-gray-700">
+                        Reemplazar la recomendación por estos clientes
+                      </span>
+                      {manualTotal != null ? (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
+                          {manualTotal.toLocaleString()} clientes
+                        </span>
+                      ) : (
+                        <span className="shrink-0 text-[10px] text-gray-400">Sin calcular</span>
+                      )}
+                    </label>
+                    <label
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer select-none transition-all ${
+                        audMix
+                          ? "border-amber-400 bg-amber-50 shadow-sm"
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="wizard-aud-mix"
+                        checked={audMix}
+                        onChange={() => onAudMixChange(true)}
+                        className="accent-amber-500 w-3.5 h-3.5 shrink-0"
+                      />
+                      <span className="flex-1 min-w-0 text-gray-700">
+                        Sumarlos a la recomendación
+                        {seg && !segError && manualTotal != null && (
+                          <span className="block text-[10px] text-gray-400">
+                            {seg.total.toLocaleString()} recomendados + {manualTotal.toLocaleString()} manuales
+                          </span>
+                        )}
+                      </span>
+                      {seg && !segError && manualTotal != null ? (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
+                          {(seg.total + manualTotal).toLocaleString()} clientes
+                        </span>
+                      ) : manualTotal != null ? (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
+                          {manualTotal.toLocaleString()} clientes
+                        </span>
+                      ) : (
+                        <span className="shrink-0 text-[10px] text-gray-400">Sin calcular</span>
+                      )}
+                    </label>
+                  </div>
+                  {!manualF.hasFilters && (
+                    <p className="text-[11px] text-amber-700">
+                      Define los filtros para elegir los clientes de la campaña, o vuelve a la recomendación por producto.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Panel embebido (antes era un modal): pestañas Recomendados / Manual. */}
+          <div className="h-[62vh] min-h-[420px]">
+            <RecipientsModal
+              inline
+              title="Público objetivo"
+              subtitle={
+                audTab === "seg"
+                  ? `Recomendación por producto${seg ? ` · ${seg.total.toLocaleString()} clientes` : ""}`
+                  : `${products.map((p) => p.name).join(", ") || "Campaña nueva"} · define tu audiencia con filtros`
+              }
+              recipients={seg?.recipients}
+              explain={audTab === "seg" ? explainCtx : null}
+              controlledTab={audTab}
+              onTabChange={setAudTab}
+              filtersHook={manualF}
+              onTotalLive={(t) => setManualTotal(t)}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between">
+        <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+          <ChevronLeft size={15} /> Atrás
+        </button>
+        <button
+          onClick={handleContinue}
+          disabled={audSource === "auto" && segLoading}
+          className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Continuar a Revisión <ArrowRight size={15} />
+        </button>
+      </div>
+
+      {/* ── Pantalla de carga de la segmentación (solo si el público elegido es la recomendada) ── */}
+      {segLoading && audSource === "auto" && (
+        <div className="fixed inset-0 z-60 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
+          <div className="w-16 h-16 rounded-2xl bg-amber-400 flex items-center justify-center shadow-lg animate-pulse">
+            <RefreshCw size={28} className="text-amber-900 animate-spin" />
+          </div>
+          <h3 className="mt-6 text-lg font-bold text-gray-900 text-center">Trabajando en la segmentación…</h3>
+          <p className="mt-2 text-sm text-gray-500 text-center max-w-sm">{segStage.message}</p>
+          <div className="mt-6 w-64 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-amber-400 rounded-full transition-all duration-500"
+              style={{ width: `${Math.min(segStage.progress, 99)}%` }}
+            />
+          </div>
+          <p className="mt-2 text-xs text-gray-400 font-semibold">{Math.round(segStage.progress)}%</p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Step 4: Revisar y Enviar ─────────────────── */
+function ReviewStep({
+  products,
+  channels,
+  onSend,
+  onBack,
+  sent,
+  sending,
+  sendError,
+  sentAudience,
+  chosen,
+}: {
+  products: Product[];
+  channels: Record<string, boolean>;
+  onSend: () => void;
+  onBack: () => void;
+  sent: boolean;
+  sending: boolean;
+  sendError: string | null;
+  /** Nº real de mensajes en cola devuelto por el backend al lanzar. */
+  sentAudience: number | null;
+  chosen: { count: number | null; label: string };
+}) {
+  const [scheduled, setScheduled] = useState(false);
+  const activeChannels = Object.entries(channels).filter(([, v]) => v).map(([k]) => k);
+  const displayAudience = sentAudience ?? chosen.count ?? 0;
+
   if (sent) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-10 text-center">
@@ -1095,21 +1398,12 @@ function Step3({
         <p className="text-gray-500 mb-1">
           <strong className="text-gray-800">{displayAudience.toLocaleString()} mensajes</strong> están en cola de envío.
         </p>
-        <p className="text-sm text-gray-400 mb-8">
+        <p className="text-sm text-gray-400 mb-2">
           Canales: {activeChannels.map((c) => CHANNEL_CFG[c as keyof typeof CHANNEL_CFG].label).join(", ")}
         </p>
-        <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
-          {[
-            { label: "Estimados abiertos", value: Math.round(displayAudience * 0.6).toLocaleString() },
-            { label: "Conversiones est.", value: Math.round(displayAudience * ESTIMATED_CONV_RATE / 100).toLocaleString() },
-            { label: "ROI esperado", value: `${(ESTIMATED_CONV_RATE * 4.2).toFixed(0)}%` },
-          ].map((s) => (
-            <div key={s.label} className="bg-gray-50 rounded-2xl p-4 text-center">
-              <p className="text-lg font-bold text-gray-900">{s.value}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">{s.label}</p>
-            </div>
-          ))}
-        </div>
+        <p className="text-xs text-gray-300">
+          La campaña quedó en el listado; desde allí puedes ver su público y su historial.
+        </p>
       </div>
     );
   }
@@ -1142,154 +1436,14 @@ function Step3({
                   </p>
                 </div>
               </div>
-              {/* Público objetivo: recomendación por producto vs. segmentación manual */}
-              <div className="py-2 border-t border-gray-100 space-y-2.5">
-                <div className="flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-sm text-gray-600">Público objetivo</span>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => onAudSourceChange("auto")}
-                      title="El sistema elige el mejor segmento según los productos seleccionados"
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border-2 transition-all cursor-pointer ${
-                        audSource === "auto"
-                          ? "border-blue-300 bg-blue-50 text-blue-800 shadow-sm"
-                          : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                      }`}
-                    >
-                      <Sparkles size={12} /> Recomendada
-                    </button>
-                    <button
-                      onClick={() => onAudSourceChange("manual")}
-                      title="Elige tú los clientes por filtros (ubicación, género, edad, perfil de compra…)"
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-bold rounded-xl border-2 transition-all cursor-pointer ${
-                        audSource === "manual"
-                          ? "border-amber-400 bg-amber-50 text-amber-900 shadow-sm"
-                          : "border-gray-200 text-gray-400 hover:border-gray-300 hover:text-gray-600"
-                      }`}
-                    >
-                      <SlidersHorizontal size={12} /> Manual
-                    </button>
-                  </div>
+              <div className="flex items-center justify-between py-2 border-t border-gray-100">
+                <span className="text-sm text-gray-600">Público objetivo</span>
+                <div className="text-right">
+                  <span className="inline-block text-[11px] font-bold text-gray-500 mb-0.5">{chosen.label}</span>
+                  <p className="text-sm font-bold text-gray-900">
+                    {chosen.count != null ? `${chosen.count.toLocaleString()} clientes` : "—"}
+                  </p>
                 </div>
-
-                {audSource === "auto" ? (
-                  <>
-                    <div className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2">
-                      {segLoading ? (
-                        <span className="text-xs text-gray-400">segmentando…</span>
-                      ) : segError ? (
-                        <span className="text-xs font-bold text-red-600">—</span>
-                      ) : (
-                        <span className="text-xs font-bold text-gray-800">
-                          {seg
-                            ? `Seleccionados ${seg.total.toLocaleString()} clientes${totalPool > 0 ? ` de ${totalPool.toLocaleString()} en total` : ""}`
-                            : `${totalReach.toLocaleString()} clientes`}
-                        </span>
-                      )}
-                      <button
-                        onClick={() => setClientsOpen(true)}
-                        disabled={!seg || seg.recipients.length === 0}
-                        className="flex items-center gap-1 text-xs font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shrink-0"
-                        title="Ver qué clientes cumplen el estándar"
-                      >
-                        <Users size={13} /> Ver clientes
-                      </button>
-                    </div>
-                    {segError && (
-                      <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                        ⚠ No se pudo ejecutar la segmentación: {segError}
-                      </p>
-                    )}
-                    {seg && !segError && (
-                      <div className="space-y-1">
-                        <p className="text-[11px] text-gray-400">
-                          {seg.mode === "bundle" ? "🧩 Combo (van juntos)" : "🏷️ Descuento (independientes)"} · Segmento {seg.segment} · {seg.buyers.toLocaleString()} clientes con afinidad a los productos
-                        </p>
-                        {seg.note && <p className="text-[11px] text-gray-500">{seg.note}</p>}
-                        {seg.bundleFallback && (
-                          <p className="text-[11px] text-amber-600">⚠ La co-compra de estos productos es casi nula; se usaron sus categorías como respaldo.</p>
-                        )}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div className="rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2.5 space-y-2.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <p className="text-xs font-semibold text-amber-900">
-                        {manualF.hasFilters
-                          ? `${countActiveFilters(manualF.snapshot)} filtro${countActiveFilters(manualF.snapshot) !== 1 ? "s" : ""} activo${countActiveFilters(manualF.snapshot) !== 1 ? "s" : ""}`
-                          : "Sin filtros definidos todavía"}
-                      </p>
-                      <button
-                        onClick={() => setExplorerOpen(true)}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors shadow-sm shrink-0"
-                        title="Explora la base y define la segmentación manual con filtros"
-                      >
-                        <SlidersHorizontal size={12} />
-                        {manualF.hasFilters ? "Editar segmentación" : "Definir con filtros"}
-                      </button>
-                    </div>
-
-                    {/* Contador de clientes con esas características */}
-                    {manualF.hasFilters && (
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <div
-                          className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 shadow-sm"
-                          style={{ background: "#FFF200" }}
-                        >
-                          {manualTotal != null ? (
-                            <span className="text-sm font-black text-[#1A1A2E] leading-tight">
-                              {manualTotal.toLocaleString()}{" "}
-                              <span className="font-semibold text-[#1A1A2E]/70">
-                                cliente{manualTotal !== 1 ? "s" : ""} con esas características
-                              </span>
-                            </span>
-                          ) : (
-                            <span className="text-xs font-bold text-[#1A1A2E]">Aún sin calcular</span>
-                          )}
-                        </div>
-                        <button
-                          onClick={() => setExplorerOpen(true)}
-                          className="flex items-center gap-1 text-xs font-semibold text-amber-700 hover:text-amber-800 transition-colors"
-                        >
-                          <Users size={13} /> Ver clientes
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Combinar con la recomendación o reemplazarla */}
-                    <div className="flex items-center gap-4 flex-wrap text-[11px]">
-                      <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer select-none">
-                        <input
-                          type="radio"
-                          name="wizard-aud-mix"
-                          checked={!audMix}
-                          onChange={() => onAudMixChange(false)}
-                          className="accent-amber-500 w-3.5 h-3.5"
-                        />
-                        Reemplazar la recomendación por estos clientes
-                      </label>
-                      <label className="flex items-center gap-1.5 text-gray-600 cursor-pointer select-none">
-                        <input
-                          type="radio"
-                          name="wizard-aud-mix"
-                          checked={audMix}
-                          onChange={() => onAudMixChange(true)}
-                          className="accent-amber-500 w-3.5 h-3.5"
-                        />
-                        Sumarlos a la recomendación
-                        {seg && !segError && manualTotal != null && (
-                          <span className="text-gray-400">({seg.total.toLocaleString()} + {manualTotal.toLocaleString()})</span>
-                        )}
-                      </label>
-                    </div>
-                    {!manualF.hasFilters && (
-                      <p className="text-[11px] text-amber-700">
-                        Define los filtros para elegir los clientes de la campaña, o vuelve a la recomendación por producto.
-                      </p>
-                    )}
-                  </div>
-                )}
               </div>
               <div className="flex items-center justify-between py-2 border-t border-gray-100">
                 <span className="text-sm text-gray-600">Canales</span>
@@ -1304,33 +1458,8 @@ function Step3({
                   })}
                 </div>
               </div>
-              <div className="flex items-center justify-between py-2 border-t border-gray-100">
-                <span className="text-sm text-gray-600">Conversiones estimadas</span>
-                <span className="text-sm font-bold text-green-600">~{Math.round(displayAudience * ESTIMATED_CONV_RATE / 100)}</span>
-              </div>
             </div>
           </div>
-
-          {clientsOpen && seg && (
-            <RecipientsModal
-              title="Clientes segmentados"
-              subtitle={`Seleccionados ${seg.total.toLocaleString()} clientes${totalPool > 0 ? ` de ${totalPool.toLocaleString()} en total` : ""}`}
-              recipients={seg.recipients}
-              explain={explainCtx}
-              onClose={() => setClientsOpen(false)}
-            />
-          )}
-
-          {explorerOpen && (
-            <RecipientsModal
-              title="Segmentación manual"
-              subtitle={`${products.map((p) => p.name).join(", ") || "Campaña nueva"} · filtra por características (ubicación, género, edad, perfil de compra…)`}
-              initialTab="all"
-              filtersHook={manualF}
-              onTotalLive={(t) => setManualTotal(t)}
-              onClose={() => setExplorerOpen(false)}
-            />
-          )}
 
           {/* Schedule option */}
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-6">
@@ -1376,50 +1505,86 @@ function Step3({
           <Send size={15} /> {sending ? "Creando campaña…" : scheduled ? "Programar Campaña" : "Enviar Ahora"}
         </button>
       </div>
-
-      {/* ── Pantalla de carga de la segmentación (solo si el público elegido es la recomendada) ── */}
-      {segLoading && audSource === "auto" && (
-        <div className="fixed inset-0 z-60 bg-white/95 backdrop-blur-sm flex flex-col items-center justify-center px-6">
-          <div className="w-16 h-16 rounded-2xl bg-amber-400 flex items-center justify-center shadow-lg animate-pulse">
-            <RefreshCw size={28} className="text-amber-900 animate-spin" />
-          </div>
-          <h3 className="mt-6 text-lg font-bold text-gray-900 text-center">Trabajando en la segmentación…</h3>
-          <p className="mt-2 text-sm text-gray-500 text-center max-w-sm">{segStage.message}</p>
-          <div className="mt-6 w-64 h-2 bg-gray-100 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-amber-400 rounded-full transition-all duration-500"
-              style={{ width: `${Math.min(segStage.progress, 99)}%` }}
-            />
-          </div>
-          <p className="mt-2 text-xs text-gray-400 font-semibold">{Math.round(segStage.progress)}%</p>
-        </div>
-      )}
     </div>
   );
 }
 
-/* ─── Step progress bar ─────────────────────────── */
-function StepBar({ step }: { step: Step }) {
-  const steps = [
+/* ─── Step progress bar (clicable) ──────────────── */
+function StepBar({
+  step,
+  canGo,
+  onGo,
+}: {
+  step: Step;
+  /** Qué pasos pueden recibir clic (según lo que falte por completar). */
+  canGo: Record<Step, boolean>;
+  onGo: (s: Step) => void;
+}) {
+  const steps: { n: Step; label: string }[] = [
     { n: 1, label: "Seleccionar Producto" },
     { n: 2, label: "Generar Campaña" },
-    { n: 3, label: "Revisar y Enviar" },
+    { n: 3, label: "Público Objetivo" },
+    { n: 4, label: "Revisar y Enviar" },
   ];
   return (
-    <div className="flex items-center gap-0 px-8 py-4 border-b border-gray-100 bg-white shrink-0">
-      {steps.map((s, i) => (
-        <div key={s.n} className="flex items-center flex-1 last:flex-none">
-          <div className="flex items-center gap-2.5">
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all ${step > s.n ? "bg-green-500 text-white" : step === s.n ? "bg-amber-400 text-amber-900" : "bg-gray-200 text-gray-500"}`}>
-              {step > s.n ? <CheckCircle size={14} /> : s.n}
-            </div>
-            <span className={`text-xs font-semibold ${step === s.n ? "text-gray-900" : "text-gray-400"}`}>{s.label}</span>
+    <div className="flex items-center gap-0 px-6 py-3 border-b border-gray-100 bg-white shrink-0">
+      {steps.map((s, i) => {
+        const current = step === s.n;
+        const done = step > s.n;
+        const allowed = canGo[s.n];
+        const clickable = allowed && !current;
+        return (
+          <div key={s.n} className="flex items-center flex-1 last:flex-none">
+            <button
+              type="button"
+              onClick={() => clickable && onGo(s.n)}
+              disabled={!clickable}
+              title={
+                current
+                  ? undefined
+                  : allowed
+                    ? `Ir a "${s.label}"`
+                    : s.n === 2
+                      ? "Selecciona al menos un producto para continuar"
+                      : s.n === 3
+                        ? "Genera el contenido de la campaña para continuar"
+                        : "Define el público objetivo para continuar"
+              }
+              className={`group flex items-center gap-2.5 text-left rounded-lg ${
+                clickable ? "cursor-pointer" : "cursor-default"
+              }`}
+            >
+              <div
+                className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-all shrink-0 ${
+                  done
+                    ? "bg-green-500 text-white"
+                    : current
+                      ? "bg-amber-400 text-amber-900"
+                      : allowed
+                        ? "bg-gray-200 text-gray-500 group-hover:bg-amber-200 group-hover:text-amber-800"
+                        : "bg-gray-100 text-gray-300"
+                }`}
+              >
+                {done ? <CheckCircle size={14} /> : s.n}
+              </div>
+              <span
+                className={`text-xs font-semibold ${
+                  current
+                    ? "text-gray-900"
+                    : allowed
+                      ? "text-gray-500 group-hover:text-gray-800"
+                      : "text-gray-300"
+                }`}
+              >
+                {s.label}
+              </span>
+            </button>
+            {i < steps.length - 1 && (
+              <div className={`flex-1 h-px mx-4 ${step > s.n ? "bg-green-400" : "bg-gray-200"}`} />
+            )}
           </div>
-          {i < steps.length - 1 && (
-            <div className={`flex-1 h-px mx-4 ${step > s.n ? "bg-green-400" : "bg-gray-200"}`} />
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -1445,6 +1610,20 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   const [emailBlocks, setEmailBlocks] = useState<EmailBlock[] | null>(null);
   const [emailHtml, setEmailHtml] = useState<string | null>(null);
 
+  // ── Audiencia / segmentación ──
+  // El paso "Público objetivo" corre la segmentación una sola vez por
+  // combinación de productos+modo: si vas atrás y vuelves sin cambios, se
+  // conserva el resultado (botón "Siguiente"). Si cambias productos/modo, se
+  // re-segmenta al volver (botón "Público objetivo").
+  const segKey = `${mode}|${selectedProducts.map((p) => p.id).sort((a, b) => a - b).join(",")}`;
+  const [visitedAudience, setVisitedAudience] = useState(false);
+  const [reviewedSegKey, setReviewedSegKey] = useState<string | null>(null);
+  const audienceUpToDate = visitedAudience && reviewedSegKey === segKey;
+  const goToAudience = () => {
+    setVisitedAudience(true);
+    setStep(3);
+  };
+
   // ── Origen del público objetivo al lanzar la campaña ──
   // 'auto' → recomendación por producto · 'manual' → filtros manuales
   // (con audMix = sumar los manuales a la recomendación en lugar de reemplazar).
@@ -1452,8 +1631,13 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   const [audMix, setAudMix] = useState(false);
   const manualF = useManualFilters();
   // Nº real de destinatarios que quedaron en cola (lo devuelve el backend al
-  // lanzar; alimenta la vista de éxito del paso 3).
+  // lanzar; alimenta la vista de éxito de la revisión).
   const [sentAudience, setSentAudience] = useState<number | null>(null);
+  // Público elegido en el paso "Público objetivo" para mostrarlo en la revisión.
+  const [audienceChosen, setAudienceChosen] = useState<{ count: number | null; label: string }>({
+    count: null,
+    label: "Recomendada por producto",
+  });
 
   const toggleChannel = (c: string) =>
     setChannels((prev) => {
@@ -1607,7 +1791,21 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
         </button>
       </div>
 
-      <StepBar step={step} />
+      <StepBar
+        step={step}
+        canGo={{
+          1: true,
+          2: selectedProducts.length > 0,
+          3: selectedProducts.length > 0 && generated,
+          4: false,
+        }}
+        onGo={(s) => {
+          if (s === step) return;
+          if (s === 1) setStep(1);
+          else if (s === 2 && selectedProducts.length > 0) setStep(2);
+          else if (s === 3 && selectedProducts.length > 0 && generated) goToAudience();
+        }}
+      />
 
       <div className="flex-1 overflow-hidden flex flex-col">
         {step === 1 && (
@@ -1647,27 +1845,53 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
             onOpenDesigner={() => setEmailDesignOpen(true)}
             emailHtml={emailHtml}
             genError={genError}
-            onNext={() => setStep(3)}
+            onNext={goToAudience}
             onBack={() => setStep(1)}
             onToggleChannel={toggleChannel}
+            reviewUpToDate={audienceUpToDate}
           />
         )}
-        {step === 3 && selectedProducts.length > 0 && (
-          <Step3
+        {/* El paso "Público objetivo" queda montado (oculto) una vez visitado
+            para no re-segmentar si vuelves sin cambiar los productos. */}
+        {(step === 3 || visitedAudience) && selectedProducts.length > 0 && (
+          <div
+            className={
+              step === 3
+                ? "flex-1 overflow-hidden flex flex-col"
+                : "hidden"
+            }
+          >
+            <AudienceStep
+              products={selectedProducts}
+              channels={channels}
+              onBack={() => setStep(2)}
+              onContinue={(chosen) => {
+                setAudienceChosen(chosen);
+                setStep(4);
+              }}
+              mode={mode}
+              segKey={segKey}
+              active={step === 3}
+              onSegmented={() => setReviewedSegKey(segKey)}
+              audSource={audSource}
+              onAudSourceChange={setAudSource}
+              audMix={audMix}
+              onAudMixChange={setAudMix}
+              manualF={manualF}
+            />
+          </div>
+        )}
+        {step === 4 && selectedProducts.length > 0 && (
+          <ReviewStep
             products={selectedProducts}
             channels={channels}
             onSend={handleSend}
-            onBack={() => setStep(2)}
+            onBack={() => setStep(3)}
             sent={sent}
             sending={sending}
             sendError={sendError}
             sentAudience={sentAudience}
-            mode={mode}
-            audSource={audSource}
-            onAudSourceChange={setAudSource}
-            audMix={audMix}
-            onAudMixChange={setAudMix}
-            manualF={manualF}
+            chosen={audienceChosen}
           />
         )}
       </div>
@@ -2238,6 +2462,9 @@ function RecipientsModal({
   initialTab = "seg",
   filtersHook,
   onTotalLive,
+  controlledTab,
+  onTabChange,
+  inline = false,
 }: {
   title: string;
   subtitle?: string;
@@ -2252,7 +2479,7 @@ function RecipientsModal({
   }[];
   campaignId?: number;
   explain?: ExplainContext | null;
-  onClose: () => void;
+  onClose?: () => void;
   audienceMode?: "auto" | "manual" | "mixed" | null;
   onAudienceChange?: (
     mode: "auto" | "manual" | "mixed" | null,
@@ -2264,6 +2491,11 @@ function RecipientsModal({
   filtersHook?: ReturnType<typeof useManualFilters>;
   /** Reporta al padre el total de clientes que cumplen los filtros (en vivo). */
   onTotalLive?: (total: number | null) => void;
+  /** Pestaña controlada desde el padre (persistencia del modal en el wizard). */
+  controlledTab?: "seg" | "all";
+  onTabChange?: (tab: "seg" | "all") => void;
+  /** Renderiza como panel embebido (paso "Público objetivo"), sin overlay. */
+  inline?: boolean;
 }) {
   // Origen del público actual de la campaña (para campañas ya creadas).
   const [mode, setMode] = useState<"auto" | "manual" | "mixed" | null>(
@@ -2273,7 +2505,13 @@ function RecipientsModal({
   const [tick, setTick] = useState(0);
   const [busyAud, setBusyAud] = useState(false);
   const [audMsg, setAudMsg] = useState<string | null>(null);
-  const [tab, setTab] = useState<"seg" | "all">(initialTab);
+  // Pestaña: controlada por el padre si vino `controlledTab`; si no, interna.
+  const [internalTab, setInternalTab] = useState<"seg" | "all">(initialTab);
+  const tab = controlledTab ?? internalTab;
+  const setTab = (t: "seg" | "all") => {
+    if (controlledTab !== undefined) onTabChange?.(t);
+    else setInternalTab(t);
+  };
 
   const AUD_LABEL: Record<string, string> = {
     auto: "Recomendada por producto",
@@ -2531,9 +2769,19 @@ function RecipientsModal({
   });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
+    <div
+      className={
+        inline
+          ? "h-full flex flex-col overflow-hidden bg-white rounded-2xl border border-gray-200 shadow-sm"
+          : "fixed inset-0 z-50 flex items-center justify-center p-4"
+      }
+    >
+      {!inline && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />}
+      <div
+        className={`relative bg-white rounded-2xl flex flex-col overflow-hidden ${
+          inline ? "w-full h-full border-0 shadow-none" : "w-full max-w-4xl max-h-[85vh] shadow-2xl"
+        }`}
+      >
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <div className="min-w-0 pr-3">
@@ -2568,9 +2816,11 @@ function RecipientsModal({
               </p>
             )}
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
-            <X size={16} />
-          </button>
+          {!inline && (
+            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
+              <X size={16} />
+            </button>
+          )}
         </div>
 
         {/* Toolbar: pestañas + búsqueda */}
