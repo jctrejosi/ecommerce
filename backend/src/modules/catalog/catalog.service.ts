@@ -40,6 +40,30 @@ import {
 } from '../../../drizzle/schema';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
 import { CreateProductDto } from './dto/create-product.dto';
+import { ResolvePluDto } from './dto/resolve-plu.dto';
+
+/** Alias aceptados para la columna que trae el PLU en archivos de importación. */
+const PLU_KEYS = new Set([
+  'plu',
+  'codigo',
+  'cod',
+  'code',
+  'articulo_cod',
+  'articulo',
+  'articulocod',
+  'sku',
+  'external_id',
+  'externalid',
+  'ean',
+]);
+
+/** Normaliza un texto de cabecera para comparar contra los alias (sin tildes/ñ/espacios). */
+const normalizeKey = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
 
 type CatalogCategoryResponse = {
   id: number;
@@ -2262,6 +2286,297 @@ export class CatalogService {
       priority: Number(row.priority ?? 0),
       image: row.image,
     }));
+  }
+
+  /* ── Resolución de productos por PLU (campañas / importación) ────── */
+
+  /** Busca productos del catálogo por su PLU (activos). Devuelve los
+   *  encontrados en la misma forma de GET /catalog/products y los PLU que no
+   *  existen en el catálogo. */
+  async resolveProductsByPlu(plus: string[]) {
+    const codes = [
+      ...new Set((plus ?? []).map((c) => String(c).trim()).filter(Boolean)),
+    ];
+    if (codes.length === 0) return { matched: [], missing: [] };
+    if (codes.length > 5000)
+      throw new BadRequestException('Máximo 5.000 PLUs por consulta');
+
+    const rows = await this.drizzleService.db
+      .select({
+        id: products.id,
+        externalId: products.externalId,
+        slug: products.slug,
+        name: products.name,
+        description: products.description,
+        isActive: products.isActive,
+        isFeatured: products.featured,
+        isPublic: products.isPublic,
+        categoryId: categories.id,
+        categoryName: categories.name,
+        brandId: products.brandId,
+        brandName: brands.name,
+        price: productVariants.currentPrice,
+        originalPrice: productVariants.currentComparePrice,
+        image: media.path,
+        productTypeCode: productTypes.code,
+        productTypeName: productTypes.name,
+        plu: products.plu,
+        barcode: productVariants.barcode,
+      })
+      .from(products)
+      .innerJoin(productVariants, eq(productVariants.productId, products.id))
+      .leftJoin(productCategories, eq(productCategories.productId, products.id))
+      .leftJoin(categories, eq(categories.id, productCategories.categoryId))
+      .leftJoin(brands, eq(brands.id, products.brandId))
+      .leftJoin(
+        productTypeAssignments,
+        eq(productTypeAssignments.productId, products.id),
+      )
+      .leftJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
+      .leftJoin(
+        productImages,
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
+      )
+      .leftJoin(media, eq(media.id, productImages.mediaId))
+      .where(
+        and(
+          inArray(products.plu, codes),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .orderBy(asc(products.name));
+
+    const matched = new Map<number, CatalogProductResponse>();
+    for (const row of rows) {
+      const productId = Number(row.id);
+      if (matched.has(productId)) continue; // LEFT JOINs pueden duplicar filas
+      const price = Number(row.price ?? 0);
+      const originalPrice = row.originalPrice
+        ? Number(row.originalPrice)
+        : undefined;
+      matched.set(productId, {
+        id: productId,
+        externalId: row.externalId,
+        slug: row.slug,
+        name: row.name,
+        description: row.description,
+        price,
+        ...(originalPrice ? { originalPrice } : {}),
+        image: row.image,
+        images: row.image ? [row.image] : [],
+        category: row.categoryName ?? '',
+        categoryId: row.categoryId ? Number(row.categoryId) : 0,
+        brandId: row.brandId ? Number(row.brandId) : null,
+        brandName: row.brandName ?? null,
+        plu: row.plu ?? null,
+        barcode: row.barcode ?? null,
+        productTypeCode: row.productTypeCode,
+        productTypeName: row.productTypeName,
+        isActive: row.isActive,
+        isFeatured: row.isFeatured,
+        isPublic: row.isPublic,
+        stock: 0,
+      });
+    }
+    const found = new Set(
+      [...matched.values()]
+        .map((p) => p.plu)
+        .filter((p): p is string => !!p),
+    );
+    return {
+      matched: [...matched.values()],
+      missing: codes.filter((c) => !found.has(c)),
+    };
+  }
+
+  /** Extrae los códigos PLU de un archivo subido (JSON, CSV, XLSX o XLS) y los
+   *  valida contra el catálogo. Devuelve los productos encontrados y los no
+   *  existentes para mostrarlos en la UI. */
+  async importPluFile(file: any) {
+    if (!file?.buffer || file.buffer.length === 0)
+      throw new BadRequestException('Archivo vacío');
+
+    const name: string = file.originalname ?? 'archivo';
+    const ext = name.split('.').pop()?.toLowerCase() ?? '';
+    let codes: string[] = [];
+
+    if (ext === 'json') {
+      let raw: string;
+      try {
+        raw = new TextDecoder('utf-8', { fatal: true }).decode(file.buffer);
+      } catch {
+        raw = new TextDecoder('windows-1252').decode(file.buffer);
+      }
+      let data: unknown;
+      try {
+        data = JSON.parse(raw);
+      } catch {
+        throw new BadRequestException('El archivo JSON no es válido');
+      }
+      codes = this.pluCodesFromJson(data);
+    } else if (ext === 'csv') {
+      let raw: string;
+      try {
+        raw = new TextDecoder('utf-8', { fatal: true }).decode(file.buffer);
+      } catch {
+        raw = new TextDecoder('windows-1252').decode(file.buffer);
+      }
+      codes = this.pluCodesFromRows(this.parseCsv(raw));
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      try {
+        const workbook = new ExcelJS.Workbook();
+        await workbook.xlsx.load(file.buffer);
+        const sheet = workbook.worksheets[0];
+        if (!sheet) throw new BadRequestException('El archivo no tiene hojas');
+        const rows: string[][] = [];
+        sheet.eachRow({ includeEmpty: false }, (row) => {
+          // values puede venir como arreglo o como objeto por clave de columna.
+          const vals: unknown[] = Array.isArray(row.values)
+            ? row.values
+            : Object.values(row.values ?? {});
+          rows.push(vals.map((v) => (v == null ? '' : String(v).trim())));
+        });
+        codes = this.pluCodesFromRows(rows);
+      } catch (err) {
+        if (err instanceof BadRequestException) throw err;
+        if (ext === 'xls')
+          throw new BadRequestException(
+            'No se pudo leer el .xls (formato Excel antiguo). Guárdalo como .xlsx o .csv y vuelve a intentarlo.',
+          );
+        throw new BadRequestException('No se pudo leer el archivo Excel');
+      }
+    } else {
+      throw new BadRequestException(
+        'Formato no soportado. Usa .json, .csv, .xls o .xlsx',
+      );
+    }
+
+    const total = codes.length;
+    const unique = [...new Set(codes)];
+    const { matched, missing } = await this.resolveProductsByPlu(unique);
+    return {
+      fileName: name,
+      total,
+      duplicates: total - unique.length,
+      matched,
+      missing,
+    };
+  }
+
+  /** Extrae códigos de un JSON: arreglo de strings o de objetos con clave PLU. */
+  private pluCodesFromJson(data: unknown): string[] {
+    let arr: unknown = data;
+    if (data && typeof data === 'object' && !Array.isArray(data)) {
+      const o = data as Record<string, unknown>;
+      arr =
+        o.PRODUCTOS ??
+        o.productos ??
+        o.plu ??
+        o.PLU ??
+        o.codigos ??
+        o.codes ??
+        o.plus ??
+        [];
+    }
+    if (!Array.isArray(arr)) {
+      throw new BadRequestException(
+        'El JSON debe ser un arreglo de códigos o de objetos con la clave PLU/código',
+      );
+    }
+    const out: string[] = [];
+    for (const item of arr) {
+      if (typeof item === 'string') {
+        const t = item.trim();
+        if (t) out.push(t);
+        continue;
+      }
+      if (item && typeof item === 'object') {
+        const o = item as Record<string, unknown>;
+        const key = Object.keys(o).find((k) => PLU_KEYS.has(normalizeKey(k)));
+        const v = key ? o[key] : undefined;
+        if (v != null) {
+          const t = String(v).trim();
+          if (t) out.push(t);
+        }
+      }
+    }
+    return out;
+  }
+
+  /** Detecta la columna de PLU en una hoja/CSV y devuelve los códigos. */
+  private pluCodesFromRows(rows: string[][]): string[] {
+    const limit = Math.min(rows.length, 10);
+    let col = 0;
+    let header = -1; // -1: no hay fila de encabezados
+    for (let r = 0; r < limit; r++) {
+      const idx = (rows[r] ?? []).findIndex((cell) =>
+        !!cell && PLU_KEYS.has(normalizeKey(cell)),
+      );
+      if (idx >= 0) {
+        col = idx;
+        header = r;
+        break;
+      }
+    }
+    // Sin encabezado reconocido: primera columna; si la primera celda no es un
+    // código numérico, se asume que es el encabezado y se omite.
+    if (header < 0 && rows[0]?.[0] && !/^[\d\s]+$/.test(rows[0][0])) {
+      header = 0;
+    }
+    const out: string[] = [];
+    for (let r = header + 1; r < rows.length; r++) {
+      const cell = (rows[r] ?? [])[col];
+      if (cell != null) {
+        const t = String(cell).trim();
+        if (t && !/^[\s\-]+$/.test(t)) out.push(t);
+      }
+    }
+    if (out.length === 0 && rows.length > 0) {
+      throw new BadRequestException(
+        'No se encontraron códigos: busca una columna llamada PLU, código o similar',
+      );
+    }
+    return out;
+  }
+
+  /** Parser CSV sencillo (respeta comillas dobles y saltos dentro de campos). */
+  private parseCsv(raw: string): string[][] {
+    const rows: string[][] = [];
+    let cur = '';
+    let row: string[] = [];
+    let inQuotes = false;
+    for (let i = 0; i < raw.length; i++) {
+      const ch = raw[i];
+      if (inQuotes) {
+        if (ch === '"') {
+          if (raw[i + 1] === '"') {
+            cur += '"';
+            i++;
+          } else inQuotes = false;
+        } else cur += ch;
+      } else if (ch === '"') inQuotes = true;
+      else if (ch === ',') {
+        row.push(cur.trim());
+        cur = '';
+      } else if (ch === '\n') {
+        row.push(cur.trim());
+        cur = '';
+        if (row.some((c) => c.length > 0)) rows.push(row);
+        row = [];
+      } else if (ch !== '\r') cur += ch;
+    }
+    row.push(cur.trim());
+    if (row.some((c) => c.length > 0)) rows.push(row);
+    return rows;
   }
 
   private buildPriceRangeCondition(priceRange?: string) {

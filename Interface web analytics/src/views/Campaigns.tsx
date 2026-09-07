@@ -6,7 +6,7 @@ import {
   Sparkles, Target, BarChart2, Calendar, MoreHorizontal,
   Palette, ShoppingBag, Pencil, Trash2, History, RotateCw,
   Filter, CheckSquare, SlidersHorizontal, MapPin, Wallet, ShieldCheck,
-  PawPrint,
+  PawPrint, Upload,
 } from "lucide-react";
 import EmailEditor, {
   newBlock,
@@ -25,7 +25,7 @@ import {
   type ScoreClientsPayload,
   type ClientFilterOptions,
 } from "../services/campaigns.service";
-import { catalogService, type CatalogProduct, type CatalogCategory } from "../services/catalog.service";
+import { catalogService, type CatalogProduct, type CatalogCategory, type PluFileImportResult } from "../services/catalog.service";
 
 /* ─── Types ─────────────────────────────────────── */
 /** Producto del catálogo real (alias del tipo del servicio de catálogo). */
@@ -55,6 +55,9 @@ const CHANNEL_CFG = {
   email: { label: "Email",    bg: "bg-blue-500",   icon: Mail },
   sms:   { label: "SMS",      bg: "bg-purple-500", icon: Smartphone },
 };
+
+/** Orden por defecto del canal prioritario (whatsapp → email → sms). */
+const CHANNEL_ORDER: (keyof typeof CHANNEL_CFG)[] = ["wa", "email", "sms"];
 
 /** Claves del wizard (wa/email/sms) ↔ canales de la API (whatsapp/email/sms). */
 const CHANNEL_TO_API: Record<keyof typeof CHANNEL_CFG, CampaignChannel> = {
@@ -331,7 +334,7 @@ function SmsPreview({ text, editable, onEdit }: { text: string; editable: boolea
 /* ─── Step components ───────────────────────────── */
 function Step1({
   selectedProducts, onToggle, onClear, channels, onToggleChannel, onNext,
-  mode, onModeChange,
+  mode, onModeChange, onOpenImport,
 }: {
   selectedProducts: Product[];
   onToggle: (p: Product) => void;
@@ -341,6 +344,7 @@ function Step1({
   onNext: () => void;
   mode: "multi" | "bundle";
   onModeChange: (m: "multi" | "bundle") => void;
+  onOpenImport: () => void;
 }) {
   const [search, setSearch] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
@@ -410,15 +414,25 @@ function Step1({
               <h2 className="text-xl font-bold text-gray-900">¿Qué producto(s) quieres promocionar?</h2>
               <p className="text-sm text-gray-500 mt-1">Puedes seleccionar varios productos para una misma campaña.</p>
             </div>
-            {selectedProducts.length > 0 && (
+            <div className="shrink-0 flex items-center gap-2">
               <button
-                onClick={() => setShowSelected(true)}
-                className="shrink-0 flex items-center gap-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold px-3 py-2 rounded-full transition-colors"
+                onClick={onOpenImport}
+                className="flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold px-3 py-2 rounded-full transition-colors"
+                title="Cargar productos desde un archivo (JSON/CSV/XLSX) validando su PLU"
               >
-                <ShoppingBag size={13} />
-                Ver seleccionados ({selectedProducts.length})
+                <Upload size={13} />
+                Cargar por PLU
               </button>
-            )}
+              {selectedProducts.length > 0 && (
+                <button
+                  onClick={() => setShowSelected(true)}
+                  className="flex items-center gap-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold px-3 py-2 rounded-full transition-colors"
+                >
+                  <ShoppingBag size={13} />
+                  Ver seleccionados ({selectedProducts.length})
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="relative mb-5">
@@ -678,6 +692,8 @@ function ChannelSwitch({ active, onToggle }: { active: boolean; onToggle: () => 
 function Step2({
   products,
   channels,
+  priorityChannel,
+  onPriorityChange,
   prompt,
   setPrompt,
   generating,
@@ -702,6 +718,8 @@ function Step2({
 }: {
   products: Product[];
   channels: Record<string, boolean>;
+  priorityChannel: keyof typeof CHANNEL_CFG;
+  onPriorityChange: (k: keyof typeof CHANNEL_CFG) => void;
   prompt: string;
   setPrompt: (s: string) => void;
   generating: boolean;
@@ -841,6 +859,41 @@ function Step2({
               >
                 <RefreshCw size={12} /> Regenerar
               </button>
+            </div>
+
+            {/* Canal prioritario de envío: si el destinatario tiene varios
+                canales disponibles recibe UN solo mensaje, por este canal. */}
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mb-5 rounded-2xl border border-amber-200 bg-amber-50/70 px-4 py-3">
+              <div className="flex items-center gap-2">
+                <Zap size={14} className="text-amber-500" />
+                <p className="text-xs font-bold text-gray-800">Envío prioritario</p>
+                <p className="text-[11px] text-gray-500">Cada cliente recibe 1 solo mensaje por este canal.</p>
+              </div>
+              <div className="flex gap-1.5">
+                {CHANNEL_ORDER.filter((k) => channels[k]).map((k) => {
+                  const cfg = CHANNEL_CFG[k];
+                  const active = priorityChannel === k;
+                  return (
+                    <button
+                      key={k}
+                      type="button"
+                      onClick={() => onPriorityChange(k)}
+                      title={`Enviar por ${cfg.label} como canal prioritario`}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border-2 text-[11px] font-semibold transition-all ${
+                        active
+                          ? "border-amber-400 bg-white shadow-sm text-gray-900"
+                          : "border-transparent text-gray-500 hover:bg-white/70"
+                      }`}
+                    >
+                      <span className={`w-4 h-4 rounded flex items-center justify-center shrink-0 ${cfg.bg}`}>
+                        <cfg.icon size={9} className="text-white" />
+                      </span>
+                      {cfg.label}
+                      {active && <CheckCircle size={11} className="text-amber-500" />}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             <div className={`grid gap-4 ${gridCls}`}>
@@ -1410,6 +1463,7 @@ function AudienceStep({
 function ReviewStep({
   products,
   channels,
+  priorityChannel,
   onSend,
   onBack,
   sent,
@@ -1420,6 +1474,7 @@ function ReviewStep({
 }: {
   products: Product[];
   channels: Record<string, boolean>;
+  priorityChannel: keyof typeof CHANNEL_CFG;
   onSend: () => void;
   onBack: () => void;
   sent: boolean;
@@ -1444,7 +1499,7 @@ function ReviewStep({
           <strong className="text-gray-800">{displayAudience.toLocaleString()} mensajes</strong> están en cola de envío.
         </p>
         <p className="text-sm text-gray-400 mb-2">
-          Canales: {activeChannels.map((c) => CHANNEL_CFG[c as keyof typeof CHANNEL_CFG].label).join(", ")}
+          Canales: {activeChannels.map((c) => CHANNEL_CFG[c as keyof typeof CHANNEL_CFG].label).join(", ")} · Envío prioritario: {CHANNEL_CFG[priorityChannel].label}
         </p>
         <p className="text-xs text-gray-300">
           La campaña quedó en el listado; desde allí puedes ver su público y su historial.
@@ -1501,6 +1556,19 @@ function ReviewStep({
                       </span>
                     );
                   })}
+                </div>
+              </div>
+              <div className="flex items-center justify-between py-2 border-t border-gray-100">
+                <span className="text-sm text-gray-600">Envío prioritario</span>
+                <div className="flex items-center gap-1.5">
+                  {(() => {
+                    const cfg = CHANNEL_CFG[priorityChannel];
+                    return (
+                      <span className={`inline-flex items-center gap-1 text-[10px] font-bold text-white px-2 py-0.5 rounded-full ${cfg.bg}`}>
+                        <Zap size={9} /> {cfg.label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1634,11 +1702,219 @@ function StepBar({
   );
 }
 
+/* ─── Modal: cargar productos por PLU desde archivo ──────── */
+function ImportPluModal({
+  onClose,
+  onAdd,
+}: {
+  onClose: () => void;
+  onAdd: (products: Product[]) => void;
+}) {
+  const [file, setFile] = useState<File | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<PluFileImportResult | null>(null);
+
+  const pick = (f: File | undefined | null) => {
+    if (!f) return;
+    setFile(f);
+    setError(null);
+    setResult(null);
+    setLoading(true);
+    catalogService
+      .importProductsFromFile(f)
+      .then(setResult)
+      .catch((e) =>
+        setError(e instanceof Error ? e.message : "No se pudo leer el archivo"),
+      )
+      .finally(() => setLoading(false));
+  };
+
+  const matchedCount = result?.matched.length ?? 0;
+
+  return (
+    <div
+      className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-2xl shadow-xl w-full max-w-2xl flex flex-col max-h-[85vh] overflow-hidden"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+          <div>
+            <p className="font-bold text-gray-900 text-sm">Cargar productos por PLU</p>
+            <p className="text-[11px] text-gray-400 mt-0.5">
+              JSON, CSV, XLSX o XLS · el archivo debe traer el PLU en una columna llamada PLU / código
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-5">
+          {!result && !loading && (
+            <label className="block cursor-pointer border-2 border-dashed border-gray-200 hover:border-amber-300 rounded-2xl p-8 text-center transition-colors">
+              <input
+                type="file"
+                accept=".json,.csv,.xls,.xlsx,application/json,text/csv"
+                className="hidden"
+                onChange={(e) => pick(e.target.files?.[0])}
+              />
+              <Upload className="mx-auto mb-2 text-gray-300" size={28} />
+              <p className="text-sm font-semibold text-gray-700 mb-1">
+                {file ? file.name : "Haz clic para elegir un archivo"}
+              </p>
+              <p className="text-xs text-gray-400">
+                Cada fila indica un PLU. Se validan contra el catálogo y solo se agregan los que existen.
+              </p>
+            </label>
+          )}
+
+          {loading && (
+            <div className="py-10 text-center">
+              <div className="w-8 h-8 border-2 border-amber-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-sm text-gray-500">Leyendo archivo y validando PLUs…</p>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-3">
+              ⚠ {error}
+            </div>
+          )}
+
+          {result && !loading && (
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                <span className="text-[11px] font-bold text-gray-600 bg-gray-100 px-2.5 py-1 rounded-full">
+                  {result.total} fila{result.total !== 1 ? "s" : ""} leída{result.total !== 1 ? "s" : ""}
+                </span>
+                <span className="text-[11px] font-bold text-green-700 bg-green-50 border border-green-200 px-2.5 py-1 rounded-full">
+                  ✓ {matchedCount} encontrado{matchedCount !== 1 ? "s" : ""}
+                </span>
+                {result.duplicates > 0 && (
+                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full">
+                    {result.duplicates} duplicado{result.duplicates !== 1 ? "s" : ""} omitido{result.duplicates !== 1 ? "s" : ""}
+                  </span>
+                )}
+                {result.missing.length > 0 && (
+                  <span className="text-[11px] font-bold text-red-700 bg-red-50 border border-red-200 px-2.5 py-1 rounded-full">
+                    ✗ {result.missing.length} no existe
+                    {result.missing.length !== 1 ? "n" : ""} en el catálogo
+                  </span>
+                )}
+              </div>
+
+              {matchedCount > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">
+                    Productos que se agregarán a la campaña
+                  </p>
+                  <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                    {result.matched.map((p) => (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-xl p-2.5"
+                      >
+                        <div className="w-10 h-10 rounded-lg overflow-hidden bg-gray-200 flex items-center justify-center shrink-0">
+                          {p.image ? (
+                            <img src={p.image} alt={p.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <span className="text-base">🛒</span>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-800 truncate">{p.name}</p>
+                          <p className="text-xs text-gray-400 truncate">
+                            {p.category || "Catálogo Mercaldas"}
+                            {p.brandName ? ` · ${p.brandName}` : ""}
+                          </p>
+                        </div>
+                        <span className="shrink-0 text-[10px] font-bold bg-white border border-gray-200 text-gray-500 px-2 py-0.5 rounded-md">
+                          PLU {p.plu}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {result.missing.length > 0 && (
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 mb-2">
+                    No encontrados en el catálogo ({result.missing.length})
+                  </p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {result.missing.map((plu) => (
+                      <span
+                        key={plu}
+                        className="text-[10px] font-semibold text-red-600 bg-red-50 border border-red-100 px-2 py-0.5 rounded-md"
+                      >
+                        {plu}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="shrink-0 px-5 py-3 border-t border-gray-100 bg-white flex items-center justify-between gap-3">
+          {result && !loading ? (
+            <button
+              onClick={() => {
+                setResult(null);
+                setFile(null);
+              }}
+              className="text-xs font-semibold text-gray-500 hover:text-gray-700 transition-colors"
+            >
+              Elegir otro archivo
+            </button>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center gap-2 ml-auto">
+            {!result && (
+              <button
+                onClick={onClose}
+                className="px-4 py-2 text-xs font-bold text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancelar
+              </button>
+            )}
+            <button
+              onClick={() => onAdd(result?.matched ?? [])}
+              disabled={loading || !result || matchedCount === 0}
+              className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <ShoppingBag size={12} />
+              {matchedCount > 0
+                ? `Agregar ${matchedCount} producto${matchedCount !== 1 ? "s" : ""} a la campaña`
+                : "Agregar productos"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Wizard overlay ────────────────────────────── */
 function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated: (c: CampaignCardData) => void }) {
   const [step, setStep] = useState<Step>(1);
   const [selectedProducts, setSelectedProducts] = useState<Product[]>([]);
   const [channels, setChannels] = useState<Record<string, boolean>>({ wa: true, email: true, sms: true });
+  // Canal prioritario de envío: el destinatario recibe un solo mensaje por él.
+  // Por defecto whatsapp → email → sms (según el orden de activación).
+  const [priorityChannel, setPriorityChannel] = useState<keyof typeof CHANNEL_CFG>("wa");
+  // Modal de carga de productos por PLU (archivo JSON/CSV/XLSX).
+  const [importOpen, setImportOpen] = useState(false);
   const [mode, setMode] = useState<"multi" | "bundle">("multi");
   const [prompt, setPrompt] = useState("");
   const [generating, setGenerating] = useState(false);
@@ -1690,6 +1966,15 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
       if (prev[c] && Object.values(prev).filter(Boolean).length === 1) return prev;
       return { ...prev, [c]: !prev[c] };
     });
+
+  // Si el canal prioritario se desactiva, cae al siguiente activo en el orden
+  // por defecto (whatsapp → email → sms); si se reactiva otro, no cambia solo.
+  useEffect(() => {
+    setPriorityChannel((prev) => {
+      if (channels[prev]) return prev;
+      return CHANNEL_ORDER.find((k) => channels[k]) ?? "wa";
+    });
+  }, [channels]);
 
   const toggleProduct = (p: Product) =>
     setSelectedProducts((prev) =>
@@ -1784,6 +2069,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
         prompt,
         mode,
         channels: active.map((k) => CHANNEL_TO_API[k]),
+        priorityChannel: CHANNEL_TO_API[priorityChannel],
         messages,
       });
 
@@ -1863,12 +2149,15 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
             onNext={() => setStep(2)}
             mode={mode}
             onModeChange={setMode}
+            onOpenImport={() => setImportOpen(true)}
           />
         )}
         {step === 2 && selectedProducts.length > 0 && (
           <Step2
             products={selectedProducts}
             channels={channels}
+            priorityChannel={priorityChannel}
+            onPriorityChange={(k) => setPriorityChannel(k)}
             prompt={prompt}
             setPrompt={setPrompt}
             generating={generating}
@@ -1930,6 +2219,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
           <ReviewStep
             products={selectedProducts}
             channels={channels}
+            priorityChannel={priorityChannel}
             onSend={handleSend}
             onBack={() => setStep(3)}
             sent={sent}
@@ -1959,6 +2249,22 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
             setEmailDesignOpen(false);
           }}
           onClose={() => setEmailDesignOpen(false)}
+        />
+      )}
+
+      {/* Modal: cargar productos por PLU desde un archivo */}
+      {importOpen && (
+        <ImportPluModal
+          onClose={() => setImportOpen(false)}
+          onAdd={(list) => {
+            if (!list.length) return;
+            setSelectedProducts((prev) => {
+              const byId = new Map(prev.map((p) => [p.id, p] as const));
+              for (const p of list) byId.set(p.id, p);
+              return [...byId.values()];
+            });
+            setImportOpen(false);
+          }}
         />
       )}
     </div>

@@ -63,6 +63,11 @@ export class CreateCampaignDto {
   @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
   channels?: ('whatsapp' | 'email' | 'sms')[];
 
+  /** Canal prioritario de envío: el destinatario recibe un solo mensaje por este canal. */
+  @IsOptional()
+  @IsEnum(['whatsapp', 'email', 'sms'])
+  priorityChannel?: 'whatsapp' | 'email' | 'sms';
+
   @IsOptional()
   @IsString()
   scheduledAt?: string;
@@ -103,6 +108,11 @@ export class UpdateCampaignDto {
   @IsArray()
   @IsEnum(['whatsapp', 'email', 'sms'], { each: true })
   channels?: ('whatsapp' | 'email' | 'sms')[];
+
+  /** Canal prioritario de envío: el destinatario recibe un solo mensaje por este canal. */
+  @IsOptional()
+  @IsEnum(['whatsapp', 'email', 'sms'])
+  priorityChannel?: 'whatsapp' | 'email' | 'sms';
 
   @IsOptional()
   @IsEnum(['borrador', 'programada', 'enviando', 'enviada', 'fallida'])

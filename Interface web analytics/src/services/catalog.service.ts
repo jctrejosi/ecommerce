@@ -10,6 +10,7 @@ export type CatalogProduct = {
   originalPrice?: number | null;
   image?: string | null;
   images?: string[];
+  plu?: string | null;
   category: string;
   categoryId?: number | null;
   brandId?: number | null;
@@ -85,6 +86,38 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   return response.json();
 }
 
+/** Resultado de validar/importar un archivo de PLUs contra el catálogo. */
+export interface PluFileImportResult {
+  fileName: string;
+  total: number;
+  duplicates: number;
+  matched: CatalogProduct[];
+  missing: string[];
+}
+
+/** Sube un archivo (JSON/CSV/XLSX/XLS) de PLUs y devuelve los productos
+ *  encontrados y los no existentes (multipart: no fija Content-Type). */
+async function uploadPluFile(file: File): Promise<PluFileImportResult> {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(
+    `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/catalog/products/from-file`,
+    { method: "POST", body: form, credentials: "include" },
+  );
+  if (!res.ok) {
+    let message = `Error ${res.status}`;
+    try {
+      const data = await res.json();
+      if (typeof data?.message === "string") message = data.message;
+      else if (Array.isArray(data?.message)) message = data.message.join(", ");
+    } catch {
+      /* noop */
+    }
+    throw new Error(message);
+  }
+  return res.json();
+}
+
 export const catalogService = {
   async getProducts(params?: ProductsQuery): Promise<CatalogProduct[]> {
     return fetchJson<CatalogProduct[]>(`${API_BASE_URL}/catalog/products`, {
@@ -110,6 +143,9 @@ export const catalogService = {
   async getProductTypes(): Promise<ProductType[]> {
     return fetchJson<ProductType[]>(`${API_BASE_URL}/catalog/product-types`);
   },
+
+  /** Valida un archivo de PLUs (JSON/CSV/XLSX/XLS) contra el catálogo. */
+  importProductsFromFile: (file: File) => uploadPluFile(file),
 
   async getBranches(): Promise<
     { id: number; name: string; address: string }[]

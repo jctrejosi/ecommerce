@@ -39,6 +39,9 @@ const COLUMNS = [
   // campañas: origen del público objetivo ('auto' | 'manual' | 'mixed')
   `ALTER TABLE campaigns
      ADD COLUMN IF NOT EXISTS audience_mode varchar(10) NOT NULL DEFAULT 'auto'`,
+  // campañas: canal prioritario de envío (whatsapp | email | sms)
+  `ALTER TABLE campaigns
+     ADD COLUMN IF NOT EXISTS priority_channel campaign_channel_enum`,
   // campañas: snapshot RFM del destinatario (público con tabla completa)
   `ALTER TABLE campaign_recipients
      ADD COLUMN IF NOT EXISTS cedula varchar(50)`,

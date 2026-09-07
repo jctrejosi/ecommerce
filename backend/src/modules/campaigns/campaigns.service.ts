@@ -26,6 +26,25 @@ import {
 const CHANNELS = ['whatsapp', 'email', 'sms'] as const;
 type Channel = (typeof CHANNELS)[number];
 
+/** Orden por defecto del canal prioritario: whatsapp → email → sms. */
+const CHANNEL_PRIORITY_ORDER: Channel[] = ['whatsapp', 'email', 'sms'];
+
+/**
+ * Resuelve el canal prioritario de una campaña: devuelve el preferido si está
+ * entre los canales activos; si no, el primer canal activo en el orden por
+ * defecto (whatsapp → email → sms). Sin canales activos devuelve null.
+ */
+function resolvePriorityChannel(
+  channels: readonly string[] | null | undefined,
+  preferred: Channel | null | undefined,
+): Channel | null {
+  const active = (channels ?? []).filter((c): c is Channel =>
+    CHANNELS.includes(c as Channel),
+  );
+  if (preferred && active.includes(preferred)) return preferred;
+  return CHANNEL_PRIORITY_ORDER.find((c) => active.includes(c)) ?? null;
+}
+
 interface SegRecipient {
   cedula: string;
   name: string | null;
@@ -244,6 +263,8 @@ export class CampaignsService {
       : dto.productId != null
         ? [dto.productId]
         : [];
+    const channels = dto.channels ?? [];
+    const priorityChannel = resolvePriorityChannel(channels, dto.priorityChannel);
     const [row] = await this.db
       .insert(campaigns)
       .values({
@@ -251,7 +272,8 @@ export class CampaignsService {
         productId: productIds[0] ?? null,
         prompt: dto.prompt ?? null,
         tone: dto.tone ?? null,
-        channels: dto.channels ?? [],
+        channels,
+        priorityChannel,
         mode: dto.mode ?? 'multi',
         createdBy: userId ?? null,
       })
@@ -293,6 +315,10 @@ export class CampaignsService {
         prompt: dto.prompt ?? existing.prompt,
         tone: dto.tone ?? existing.tone,
         channels: dto.channels ?? existing.channels,
+        priorityChannel: resolvePriorityChannel(
+          dto.channels ?? existing.channels,
+          dto.priorityChannel ?? (existing.priorityChannel as Channel | null),
+        ),
         mode: (dto.mode as never) ?? existing.mode,
         status: (dto.status as never) ?? existing.status,
         scheduledAt: dto.scheduledAt ?? existing.scheduledAt,

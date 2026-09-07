@@ -18,6 +18,7 @@ import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
 import { CatalogProductsQueryDto } from './dto/catalog-products-query.dto';
+import { ResolvePluDto } from './dto/resolve-plu.dto';
 import { CreateProductDto } from './dto/create-product.dto';
 import { CustomerJwtAuthGuard } from '../customer-auth/guards/customer-jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -86,6 +87,26 @@ export class CatalogController {
   async importProducts(@UploadedFile() file: any) {
     if (!file) throw new BadRequestException('Archivo requerido');
     return this.catalogService.importProducts(file);
+  }
+
+  @Public()
+  @Post('products/resolve-plu')
+  @ApiOperation({
+    summary: 'Validar PLUs contra el catálogo (productos encontrados y faltantes)',
+  })
+  resolvePlu(@Body() dto: ResolvePluDto) {
+    return this.catalogService.resolveProductsByPlu(dto.plus);
+  }
+
+  @Public()
+  @Post('products/from-file')
+  @ApiOperation({
+    summary: 'Cargar productos por PLU desde un archivo JSON/CSV/XLSX/XLS',
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  importPluFile(@UploadedFile() file: any) {
+    if (!file) throw new BadRequestException('Archivo requerido');
+    return this.catalogService.importPluFile(file);
   }
 
   @Public()

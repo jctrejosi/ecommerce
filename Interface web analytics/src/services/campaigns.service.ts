@@ -25,6 +25,8 @@ export interface Campaign {
   tone: string | null;
   mode?: "multi" | "bundle";
   channels: CampaignChannel[];
+  /** Canal prioritario de envío: el destinatario recibe un solo mensaje por este canal. */
+  priorityChannel?: CampaignChannel | null;
   status: CampaignStatus;
   audienceCount: number;
   audienceMode?: "auto" | "manual" | "mixed";
@@ -65,6 +67,7 @@ export interface CreateCampaignPayload {
   tone?: string;
   mode?: "multi" | "bundle";
   channels?: CampaignChannel[];
+  priorityChannel?: CampaignChannel;
   scheduledAt?: string;
   messages?: {
     channel: CampaignChannel;

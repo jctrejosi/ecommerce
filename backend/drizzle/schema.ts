@@ -3787,6 +3787,10 @@ export const campaigns = pgTable(
     prompt: text('prompt'),
     tone: varchar({ length: 50 }),
     channels: jsonb('channels').notNull().default(sql`'[]'::jsonb`).$type<string[]>(),
+    // Canal prioritario de envío (whatsapp → email → sms por defecto). Si el
+    // destinatario tiene varios canales disponibles recibe UN solo mensaje por
+    // este canal; si no lo tiene disponible, el emisor usa el siguiente activo.
+    priorityChannel: campaignChannelEnum('priority_channel'),
     // Modo de segmentación al recomendar el público: 'multi' | 'bundle'
     mode: varchar('mode', { length: 10 }).default('multi').notNull(),
     // Origen del público objetivo: 'auto' (recomendación por producto),
