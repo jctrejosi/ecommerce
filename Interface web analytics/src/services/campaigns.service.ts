@@ -228,6 +228,9 @@ export interface ScoreClientsPayload {
     sucursales?: string[];
   };
   minPropensity?: number;
+  /** Cédulas a excluir del conteo/resultado (p. ej. los ya recomendados al
+   *  "Sumar a la recomendación", para no contar clientes repetidos). */
+  excludeCedulas?: string[];
   sort?: "propensity" | "uplift" | "segment" | "cedula";
   dir?: "asc" | "desc";
   limit?: number;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   Plus, Search, MessageCircle, Mail, Smartphone, Zap,
   ArrowRight, ChevronLeft, ChevronDown, RefreshCw, Send, Clock,
@@ -1030,9 +1030,29 @@ function AudienceStep({
   const segRunKeyRef = useRef<string>("");
   // Pestaña del panel de público objetivo (recomendados / segmentación manual).
   const [audTab, setAudTab] = useState<"seg" | "all">("seg");
+  // Modal de filtros (lo abre el botón "Definir con filtros" del bloque manual).
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // Total de clientes que cumplen los filtros manuales: lo reporta el
   // panel cada vez que puntúa y alimenta el contador.
   const [manualTotal, setManualTotal] = useState<number | null>(null);
+  // Manuales que NO están en la recomendación por producto: el panel los
+  // reporta aparte (score restando `excludeCedulas`) para que al elegir
+  // "Sumarlos a la recomendación" no se cuenten dos veces los repetidos.
+  const [mixTotal, setMixTotal] = useState<number | null>(null);
+
+  // Cédulas de la recomendación actual: se restan del conteo manual en el
+  // modo mezcla (dedupe de clientes repetidos entre recomendación y filtros).
+  const recCedulas = useMemo(() => {
+    const list: string[] = [];
+    const seen = new Set<string>();
+    for (const r of seg?.recipients ?? []) {
+      if (r.cedula && !seen.has(r.cedula)) {
+        seen.add(r.cedula);
+        list.push(r.cedula);
+      }
+    }
+    return list;
+  }, [seg]);
 
   useEffect(() => {
     const ids = products.map((p) => p.id).filter((x): x is number => x != null);
@@ -1079,6 +1099,12 @@ function AudienceStep({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audSource]);
 
+  // El panel refleja la decisión: en Manual muestra la lista de los filtrados
+  // (o la mezcla si se elige "Sumar"); en Recomendada muestra el segmento.
+  useEffect(() => {
+    setAudTab(audSource === "auto" ? "seg" : "all");
+  }, [audSource]);
+
   const totalReach = seg?.total ?? ESTIMATED_AUDIENCE;
   // Universo total de clientes analizado (suma de todos los segmentos).
   const totalPool = (seg?.ranking ?? []).reduce((a, r) => a + r.total, 0);
@@ -1106,6 +1132,20 @@ function AudienceStep({
       }
     : null;
 
+  // Público objetivo si se elige "Sumarlos a la recomendación": la
+  // recomendación (seg.total) + los manuales que NO ya están recomendados
+  // (mixTotal). Cada cliente se cuenta una sola vez (sin repetidos). Si la
+  // recomendación no tiene clientes que restar (recCedulas vacío), el total
+  // es simplemente el de los manuales.
+  const sumarTotal =
+    seg && !segError
+      ? mixTotal != null
+        ? seg.total + mixTotal
+        : recCedulas.length === 0 && manualTotal != null
+          ? manualTotal
+          : null
+      : manualTotal;
+
   const handleContinue = () => {
     const autoCount = seg?.total ?? null;
     let count: number | null;
@@ -1114,7 +1154,7 @@ function AudienceStep({
       count = autoCount;
       label = "Recomendada por producto";
     } else if (audMix) {
-      count = autoCount != null || manualTotal != null ? (autoCount ?? 0) + (manualTotal ?? 0) : null;
+      count = sumarTotal;
       label = "Recomendada + manual";
     } else {
       count = manualTotal;
@@ -1204,9 +1244,12 @@ function AudienceStep({
                         : "Sin filtros definidos todavía"}
                     </p>
                     <button
-                      onClick={() => setAudTab("all")}
+                      onClick={() => {
+                        setAudTab("all");
+                        setFiltersOpen(true);
+                      }}
                       className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors shadow-sm shrink-0"
-                      title="Explora la base y define la segmentación manual con filtros"
+                      title="Abre los filtros para definir la segmentación manual"
                     >
                       <SlidersHorizontal size={12} />
                       {manualF.hasFilters ? "Editar segmentación" : "Definir con filtros"}
@@ -1277,19 +1320,16 @@ function AudienceStep({
                       />
                       <span className="flex-1 min-w-0 text-gray-700">
                         Sumarlos a la recomendación
-                        {seg && !segError && manualTotal != null && (
+                        {seg && !segError && mixTotal != null && manualTotal != null && (
                           <span className="block text-[10px] text-gray-400">
-                            {seg.total.toLocaleString()} recomendados + {manualTotal.toLocaleString()} manuales
+                            {seg.total.toLocaleString()} recomendados + {mixTotal.toLocaleString()} manuales{" "}
+                            que no estaban recomendados
                           </span>
                         )}
                       </span>
-                      {seg && !segError && manualTotal != null ? (
+                      {sumarTotal != null ? (
                         <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
-                          {(seg.total + manualTotal).toLocaleString()} clientes
-                        </span>
-                      ) : manualTotal != null ? (
-                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
-                          {manualTotal.toLocaleString()} clientes
+                          {sumarTotal.toLocaleString()} clientes
                         </span>
                       ) : (
                         <span className="shrink-0 text-[10px] text-gray-400">Sin calcular</span>
@@ -1322,6 +1362,11 @@ function AudienceStep({
               onTabChange={setAudTab}
               filtersHook={manualF}
               onTotalLive={(t) => setManualTotal(t)}
+              onMixTotalLive={setMixTotal}
+              excludeCedulas={recCedulas}
+              externalFiltersOpen={filtersOpen}
+              onCloseExternalFilters={() => setFiltersOpen(false)}
+              mixRecommended={audSource === "manual" && audMix}
             />
           </div>
         </div>
@@ -2465,6 +2510,11 @@ function RecipientsModal({
   controlledTab,
   onTabChange,
   inline = false,
+  externalFiltersOpen = false,
+  onCloseExternalFilters,
+  mixRecommended = false,
+  excludeCedulas,
+  onMixTotalLive,
 }: {
   title: string;
   subtitle?: string;
@@ -2496,6 +2546,18 @@ function RecipientsModal({
   onTabChange?: (tab: "seg" | "all") => void;
   /** Renderiza como panel embebido (paso "Público objetivo"), sin overlay. */
   inline?: boolean;
+  /** Señal externa para abrir el modal de filtros (p. ej. botón "Definir con filtros"). */
+  externalFiltersOpen?: boolean;
+  onCloseExternalFilters?: () => void;
+  /** En la pestaña manual, incluye los recomendados junto a los filtrados
+   *  (público "Recomendada + manual"). */
+  mixRecommended?: boolean;
+  /** Cédulas de la recomendación por producto: se restan del conteo manual
+   *  para que "Sumar a la recomendación" no cuente clientes repetidos. */
+  excludeCedulas?: string[];
+  /** Reporta al padre el total de manuales NUEVOS (filtrados que no están en
+   *  `excludeCedulas`), usado por el total de la opción "Sumar". */
+  onMixTotalLive?: (total: number | null) => void;
 }) {
   // Origen del público actual de la campaña (para campañas ya creadas).
   const [mode, setMode] = useState<"auto" | "manual" | "mixed" | null>(
@@ -2532,6 +2594,17 @@ function RecipientsModal({
   const loadedFiltersRef = useRef<string>("");
   const [filterModalOpen, setFilterModalOpen] = useState(false);
 
+  // El padre puede abrir el modal de filtros (botón "Definir con filtros"):
+  // se sincroniza con el estado interno para no abrir dos instancias.
+  useEffect(() => {
+    if (externalFiltersOpen) setFilterModalOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalFiltersOpen]);
+  const closeFilters = () => {
+    setFilterModalOpen(false);
+    onCloseExternalFilters?.();
+  };
+
   // ── Pestaña "Segmentados" (recomendados / destinatarios) ──
   const [recipients, setRecipients] = useState<SegClientRow[]>([]);
   const [loading, setLoading] = useState(campaignId != null && preset == null);
@@ -2555,6 +2628,14 @@ function RecipientsModal({
   const [allError, setAllError] = useState<string | null>(null);
   const allFetchingRef = useRef(false);
   const allSentinelRef = useRef<HTMLDivElement | null>(null);
+  // Manuales NUEVOS al "Sumar a la recomendación": puntuación con las cédulas
+  // recomendadas excluidas. El backend la resuelve sin volver a puntuar
+  // (comparte la caché del score por filtros); aquí solo se pide el total.
+  const [mixTotal, setMixTotal] = useState<number | null>(null);
+  const excludeKey = useMemo(
+    () => JSON.stringify(excludeCedulas ?? null),
+    [excludeCedulas],
+  );
 
   const loadAllPage = async (offset: number, append: boolean) => {
     if (allFetchingRef.current) return;
@@ -2616,6 +2697,36 @@ function RecipientsModal({
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, ...f.deps]);
+
+  // Conteo "sin repetidos" para la opción "Sumar a la recomendación": puntúa
+  // los filtros RESTANDO las cédulas ya recomendadas (excludeCedulas).
+  useEffect(() => {
+    const excl = excludeCedulas ?? [];
+    if (!f.hasFilters || !excl.length) {
+      setMixTotal(null);
+      return;
+    }
+    setMixTotal(null);
+    const t = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await campaignsService.scoreClients({
+            filters: filtersRef.current,
+            excludeCedulas: excl,
+            limit: 1,
+            sort: "propensity",
+            dir: "desc",
+            offset: 0,
+          });
+          setMixTotal(res.total);
+        } catch {
+          setMixTotal(null);
+        }
+      })();
+    }, 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.hasFilters, excludeKey, ...f.deps]);
 
   useEffect(() => {
     setVisible(PAGE);
@@ -2731,6 +2842,12 @@ function RecipientsModal({
     onTotalLive?.(allTotal);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allTotal]);
+
+  // Ídem para el total de manuales nuevos (dedupe contra los recomendados).
+  useEffect(() => {
+    onMixTotalLive?.(mixTotal);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mixTotal]);
 
   // Scroll infinito en "todos": pide la siguiente página al llegar al final.
   useEffect(() => {
@@ -2969,6 +3086,100 @@ function RecipientsModal({
                 )}
               </div>
             )
+          ) : mixRecommended ? (
+            <div className="space-y-6">
+              {/* 1) Recomendados por producto (forman parte del público sumado) */}
+              <section>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">
+                    Recomendados por producto
+                  </h4>
+                  <span className="text-[11px] text-gray-500">
+                    {recipients.length > 0 ? `${recipients.length.toLocaleString()} clientes` : "segmentando…"}
+                  </span>
+                </div>
+                {loading ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-xs text-gray-400">
+                    <RefreshCw size={14} className="animate-spin" /> Cargando recomendados…
+                  </div>
+                ) : error ? (
+                  <p className="text-xs font-semibold text-red-600">{error}</p>
+                ) : filtered.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-4 text-center">
+                    {recipients.length === 0
+                      ? "Aún no hay recomendados (la segmentación está en curso)."
+                      : "Ningún recomendado coincide con la búsqueda."}
+                  </p>
+                ) : (
+                  <div>
+                    <div className="overflow-x-auto">
+                      <ClientDataTable rows={shown.map(segRowToTable)} />
+                    </div>
+                    {visible < filtered.length && (
+                      <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                        <RefreshCw size={13} className="animate-spin" /> Cargando más clientes…
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+
+              {/* 2) Manuales con tus filtros */}
+              <section>
+                <div className="flex items-center justify-between gap-2 mb-2">
+                  <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-wide">
+                    Con tus filtros manuales
+                  </h4>
+                  <span className="text-[11px] text-gray-500">
+                    {f.hasFilters
+                      ? allTotal != null
+                        ? `${allTotal.toLocaleString()} clientes`
+                        : "calculando…"
+                      : "sin filtros"}
+                  </span>
+                </div>
+                {allLoading ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-xs text-gray-400">
+                    <RefreshCw size={14} className="text-amber-400 animate-spin" /> Puntuando los clientes que cumplen los filtros…
+                  </div>
+                ) : allError ? (
+                  <div className="flex flex-col items-center py-6 text-center">
+                    <p className="text-xs font-semibold text-red-600">{allError}</p>
+                    <button
+                      onClick={() => void loadAllPage(0, false)}
+                      className="mt-3 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 rounded-lg hover:bg-amber-500 transition-colors"
+                    >
+                      Reintentar
+                    </button>
+                  </div>
+                ) : !f.hasFilters ? (
+                  <div className="flex flex-col items-center py-6 text-center">
+                    <p className="text-xs text-gray-500 max-w-xs">
+                      Aplica filtros para elegir los clientes manuales que se sumarán a la recomendación.
+                    </p>
+                    <button
+                      onClick={() => setFilterModalOpen(true)}
+                      className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors shadow-sm"
+                    >
+                      <SlidersHorizontal size={13} /> Abrir filtros de segmentación
+                    </button>
+                  </div>
+                ) : allFiltered.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-6 text-center">Ningún cliente cumple los filtros.</p>
+                ) : (
+                  <div>
+                    <div className="overflow-x-auto">
+                      <ClientDataTable rows={allFiltered.map(scoredToTableRow)} />
+                    </div>
+                    {allTotal != null && allRows.length < allTotal && (
+                      <div ref={allSentinelRef} className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                        <RefreshCw size={13} className="animate-spin" /> {allLoadingMore ? "Cargando más clientes…" : "…"}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </section>
+            </div>
           ) : allLoading ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3 text-center">
               <RefreshCw size={22} className="text-amber-400 animate-spin" />
@@ -3084,7 +3295,7 @@ function RecipientsModal({
           f={f}
           total={allTotal}
           loading={allLoading || (allRows.length === 0 && allTotal == null)}
-          onClose={() => setFilterModalOpen(false)}
+          onClose={closeFilters}
         />
       )}
     </div>

@@ -544,6 +544,7 @@ export class CampaignsService {
       sucursales?: string[];
     };
     minPropensity?: number;
+    excludeCedulas?: string[];
     sort?: 'propensity' | 'uplift' | 'segment' | 'cedula';
     dir?: 'asc' | 'desc';
     limit?: number;
@@ -597,13 +598,19 @@ export class CampaignsService {
     }
     const scores = this.scoreCache.scores;
 
-    // 3) Filtro por propensión mínima + orden + paginación.
+    // 3) Filtro por propensión mínima + orden + paginación. Los clientes en
+    //    `excludeCedulas` (p. ej. los ya recomendados cuando el público es
+    //    "Recomendada + manual") se restan para no contar repetidos.
+    const exclude = new Set(
+      (dto.excludeCedulas ?? []).map((c) => String(c).trim()).filter(Boolean),
+    );
     let rows = all.clients
       .map((c) => ({
         ...c,
         ...(scores.get(c.cedula) ?? { propensity: 0, uplift: 0, percentile: 0 }),
       }))
-      .filter((r) => dto.minPropensity == null || r.propensity >= dto.minPropensity);
+      .filter((r) => dto.minPropensity == null || r.propensity >= dto.minPropensity)
+      .filter((r) => !exclude.has(r.cedula));
 
     const dir = dto.dir === 'asc' ? 1 : -1;
     switch (dto.sort ?? 'propensity') {
@@ -703,7 +710,11 @@ export class CampaignsService {
     const clients = await this.resolveManualAudience(cedulas, filters);
 
     const existing = await this.db
-      .select({ email: campaignRecipients.email, phone: campaignRecipients.phone })
+      .select({
+        email: campaignRecipients.email,
+        phone: campaignRecipients.phone,
+        cedula: campaignRecipients.cedula,
+      })
       .from(campaignRecipients)
       .where(eq(campaignRecipients.campaignId, campaignId));
     const seenEmails = new Set(
@@ -712,12 +723,19 @@ export class CampaignsService {
     const seenPhones = new Set(
       existing.map((r) => r.phone?.toLowerCase()).filter(Boolean),
     );
+    const seenCedulas = new Set(
+      existing.map((r) => r.cedula).filter((c): c is string => Boolean(c)),
+    );
 
     const toInsert = clients.filter((c) => {
       const em = c.email?.toLowerCase();
       const ph = c.phone?.toLowerCase();
+      // Un cliente ya guardado (p. ej. llegó por la recomendación) no se suma
+      // dos veces: ni por cédula ni por email/teléfono.
+      if (c.cedula && seenCedulas.has(c.cedula)) return false;
       if (em && seenEmails.has(em)) return false;
       if (ph && seenPhones.has(ph)) return false;
+      if (c.cedula) seenCedulas.add(c.cedula);
       if (em) seenEmails.add(em);
       if (ph) seenPhones.add(ph);
       return true;

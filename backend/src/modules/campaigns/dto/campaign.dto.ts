@@ -382,6 +382,11 @@ export class ScoreClientsDto {
   minPropensity?: number;
 
   @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  excludeCedulas?: string[];
+
+  @IsOptional()
   @IsIn(['propensity', 'uplift', 'segment', 'cedula'])
   sort?: 'propensity' | 'uplift' | 'segment' | 'cedula';
 
