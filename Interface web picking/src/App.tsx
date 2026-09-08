@@ -10,7 +10,7 @@ import {
   type ScanResult,
 } from "./services/picking.service";
 import { Html5Qrcode, Html5QrcodeSupportedFormats } from "html5-qrcode";
-import logo from "./assets/logo.bmp";
+import logo from "./assets/logo.png";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
