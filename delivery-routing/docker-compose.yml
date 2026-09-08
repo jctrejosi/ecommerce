@@ -1,0 +1,17 @@
+name: delivery-routing
+
+# Motor de rutas OSRM para el delivery.
+#
+# Preparar los datos primero con: ./prepare.sh
+# (descarga Geofabrik → recorta Manizales → osrm-extract/partition/customize).
+# Luego: docker compose up -d  →  escucha en http://localhost:5000
+services:
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: delivery_osrm
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    command: ["osrm-routed", "--algorithm", "mld", "/data/manizales.osrm"]
+    volumes:
+      - ./data:/data

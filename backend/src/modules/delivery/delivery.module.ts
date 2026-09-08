@@ -1,0 +1,16 @@
+import { Module } from '@nestjs/common';
+import { AuthModule } from '../auth/auth.module';
+import { DeliveryAuthController } from './delivery-auth.controller';
+import { DeliveryAuthService } from './delivery-auth.service';
+import { DeliveryController } from './delivery.controller';
+import { DeliveryService } from './delivery.service';
+import { DeliveryGateway } from './delivery.gateway';
+import { DeliveryOrdersController } from './delivery-orders.controller';
+import { DeliveryOrdersService } from './delivery-orders.service';
+
+@Module({
+  imports: [AuthModule],
+  controllers: [DeliveryAuthController, DeliveryController, DeliveryOrdersController],
+  providers: [DeliveryAuthService, DeliveryService, DeliveryOrdersService, DeliveryGateway],
+})
+export class DeliveryModule {}

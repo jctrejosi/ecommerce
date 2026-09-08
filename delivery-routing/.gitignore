@@ -1,0 +1,6 @@
+# Los extractos OSM (.osm.pbf) y el grafo preprocesado de OSRM (.osrm.*)
+# pesan cientos de MB y se regeneran con ./prepare.sh — no se versionan.
+data/
+*.osm.pbf
+*.osrm
+*.osrm.*

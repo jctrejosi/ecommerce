@@ -220,6 +220,11 @@ export const mockApi: DeliveryApi = {
     return clone(history);
   },
 
+  async getRoute() {
+    // En mock no hay motor de rutas: la app usa la línea recta.
+    return null;
+  },
+
   async transition(orderId, action, payload?: TransitionPayload) {
     await delay(600);
     const num = Number(orderId);

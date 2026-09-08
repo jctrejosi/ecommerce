@@ -26,6 +26,7 @@ import { ShelvesModule } from './modules/shelves/shelves.module';
 import { PickersModule } from './modules/pickers/pickers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
+import { DeliveryModule } from './modules/delivery/delivery.module';
 import { StatusGateway } from './modules/status/status.gateway';
 import { SettingsController } from './modules/settings/settings.controller';
 import {
@@ -80,6 +81,7 @@ import {
     PickersModule,
     DashboardModule,
     InventoryModule,
+    DeliveryModule,
   ],
   controllers: [AppController, SettingsController],
   providers: [AppService, StatusGateway],

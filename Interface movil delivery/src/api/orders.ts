@@ -35,6 +35,22 @@ export function useHistory() {
   });
 }
 
+/** Ruta recomendada (OSRM) para un pedido. Recálculo cada 60 s.
+ *  `from` es opcional: sin él, el backend usa la última posición conocida. */
+export function useOrderRoute(
+  orderId: number | string | undefined,
+  from: string | undefined,
+) {
+  return useQuery({
+    queryKey: ["delivery", "orders", "route", orderId ?? "", from ?? ""] as const,
+    queryFn: () => api.getRoute(orderId!, from),
+    enabled: orderId !== undefined,
+    refetchInterval: 60_000,
+    retry: 1,
+    staleTime: 15_000,
+  });
+}
+
 /**
  * Ejecuta una transición de estado contra el backend. Al éxito, actualiza la
  * cache (pedido + listas). El `expectedStatus` se maneja server-side; aquí el

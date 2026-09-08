@@ -23,6 +23,12 @@ export interface TransitionPayload {
   note?: string;
 }
 
+export interface RouteResult {
+  polyline: string;
+  distanceM: number;
+  durationS: number;
+}
+
 /**
  * Contrato del backend delivery (mismo que docs/maquina-de-estados.md).
  * `mock.ts` implementa la misma interfaz para desarrollo sin backend.
@@ -39,6 +45,9 @@ export interface DeliveryApi {
   getActiveOrders(): Promise<DeliveryOrder[]>;
   getOrder(id: number | string): Promise<DeliveryOrder>;
   getHistory(): Promise<HistoryEntry[]>;
+
+  // ruta (OSRM): devuelve null cuando no hay ruta disponible (se degrada a línea recta)
+  getRoute(orderId: number | string, from?: string): Promise<RouteResult | null>;
 
   // transiciones de estado
   transition(

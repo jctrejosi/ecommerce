@@ -29,6 +29,8 @@ const LOGS_DIR = path.join(ROOT, "logs");
 const PIDS_FILE = path.join(LOGS_DIR, ".pids.json");
 const DELIVERY_DIR = path.join(ROOT, "Interface movil delivery");
 const DELIVERY_PORT = 8081;
+const OSRM_DIR = path.join(ROOT, "delivery-routing");
+const OSRM_PORT = 5000;
 
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
@@ -76,6 +78,7 @@ const C = {
   bot: "\x1b[35m",
   ia: "\x1b[33m",
   delivery: "\x1b[92m",
+  osrm: "\x1b[90m",
   reset: "\x1b[0m",
 };
 
@@ -160,6 +163,7 @@ const APP_ALIASES = {
   "picking-admin": "picking-admin",
   bot: "bot",
   delivery: "delivery",
+  osrm: "osrm",
 };
 
 const APP_DEPENDS = {
@@ -171,7 +175,8 @@ const APP_DEPENDS = {
   "picking-admin": ["backend"],
   bot: ["backend"],
   ia: ["db-campaigns"],
-  delivery: [], // modo mock no necesita backend; agrega --backend para API real
+  delivery: ["osrm"], // en mock no usa el backend; OSRM es para la ruta (fase real)
+  osrm: [],
 };
 
 const NO_SELECTOR_FLAGS = new Set(["--prod", "--live", "--stop", "--help", "--all"]);
@@ -188,7 +193,7 @@ function resolveSelection() {
   const seen = new Set();
   const add = (n) => {
     for (const dep of APP_DEPENDS[n] ?? []) {
-      if (dep === "db" || dep === "db-campaigns") {
+      if (dep === "db" || dep === "db-campaigns" || dep === "osrm") {
         if (!seen.has(dep)) {
           seen.add(dep);
           out.push(dep);
@@ -208,7 +213,7 @@ function resolveSelection() {
 
 function selectionLabel(plan) {
   if (!plan) return "todo";
-  const apps = plan.filter((n) => n !== "db" && n !== "db-campaigns");
+  const apps = plan.filter((n) => n !== "db" && n !== "db-campaigns" && n !== "osrm");
   return apps.length ? apps.join(" + ") : "solo bases de datos";
 }
 
@@ -365,6 +370,35 @@ function startDatabaseCampaigns() {
 
 // ── Dependencias ───────────────────────────────────────────
 
+/** Motor de rutas OSRM (delivery, :5000) — delivery-routing/. */
+function startOsrm() {
+  console.log(`${C.osrm}[osrm]${C.reset} 🗺️  OSRM Manizales (docker compose up -d) → logs/db.log`);
+
+  const { fd } = openLog("db");
+  const run = (args) =>
+    spawnSync("docker", args, {
+      cwd: OSRM_DIR,
+      stdio: ["ignore", fd, fd],
+      timeout: 120000,
+    });
+
+  const r = run(["compose", "up", "-d"]);
+  fs.closeSync(fd);
+  if (r.status === 0) {
+    console.log(`${C.osrm}[osrm]${C.reset} ✅ Contenedor arrancado. Esperando :${OSRM_PORT}...`);
+    return true;
+  }
+  console.warn(
+    `${C.osrm}[osrm]${C.reset} ⚠️  No se pudo levantar OSRM (detalle en logs/db.log).`,
+  );
+  console.warn(
+    `${C.osrm}[osrm]${C.reset} 💡 Si aún no has preparado el grafo: cd delivery-routing && ./prepare.sh`,
+  );
+  return false;
+}
+
+// ── Dependencias ───────────────────────────────────────────
+
 function dirHasContent(p) {
   try {
     return fs.readdirSync(p).length > 0;
@@ -457,7 +491,7 @@ function startService(svc) {
   return child.pid;
 }
 
-function printUrls(services, showDb, showCampaigns) {
+function printUrls(services, showDb, showCampaigns, showOsrm) {
   console.log("\n━━━━━━━━━━━━━ MercAldas — URLs ━━━━━━━━━━━━━");
   for (const svc of services) {
     if (!svc.url) continue;
@@ -465,6 +499,7 @@ function printUrls(services, showDb, showCampaigns) {
   }
   if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
   if (showCampaigns) console.log("  DB-CAMPAIGNS   → PostgreSQL localhost:5436 (docker, analytics)");
+  if (showOsrm) console.log("  OSRM           → Rutas http://localhost:5000 (docker, Manizales)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   const started = services.map((s) => s.name).join(", ");
   console.log(`Logs: logs/*.log  (${started || "sin servicios"}). El DELIVERY imprime en esta terminal.`);
@@ -559,6 +594,9 @@ function stopAll() {
   }
   killPort(DELIVERY_PORT); // expo/delivery (no queda registrado en pids)
 
+  // OSRM corre como contenedor (no como proceso node): se detiene aparte.
+  spawnSync("docker", ["compose", "stop"], { cwd: OSRM_DIR, stdio: "ignore" });
+
   try {
     fs.unlinkSync(PIDS_FILE);
   } catch {
@@ -566,6 +604,7 @@ function stopAll() {
   }
   console.log("\n💡 La BD (docker) sigue corriendo. Para detenerla: cd db/docker && docker compose stop");
   console.log("   La BD de analytics (campañas): cd db-campaigns && docker compose stop");
+  console.log("   OSRM (rutas): cd delivery-routing && docker compose stop");
 }
 
 // ── Main ────────────────────────────────────────────────────
@@ -577,14 +616,16 @@ async function main() {
         "  node dev.js                    → todo (dev; termina con el QR del DELIVERY app)\n" +
         "  node dev.js --client           → solo web client + sus dependencias\n" +
         "  node dev.js --analytics        → solo analytics + backend + BDs\n" +
-        "  node dev.js --delivery         → solo el QR del delivery (mock; agrega --backend para API real)\n" +
+        "  node dev.js --delivery         → solo el QR del delivery + OSRM (mock; agrega --backend para API real)\n" +
+        "  node dev.js --osrm             → solo el motor de rutas OSRM (Manizales)\n" +
         "  node dev.js --admin --picking  → combina aplicativos\n" +
-        "  Flags: --backend --client --admin --analytics --picking --picking-admin --bot --ia --delivery --all\n" +
+        "  Flags: --backend --client --admin --analytics --picking --picking-admin --bot --ia --delivery --osrm --all\n" +
         "  node dev.js --prod [flags]     → producción (requiere builds previos)\n" +
         "  node dev.js --stop             → detiene los servicios\n" +
         "  node dev.js --help             → esta ayuda\n" +
         "  cd db/docker && docker compose stop → detener PostgreSQL\n" +
-        "  cd db-campaigns && docker compose stop → detener PostgreSQL analytics (:5436)\n",
+        "  cd db-campaigns && docker compose stop → detener PostgreSQL analytics (:5436)\n" +
+        "  cd delivery-routing && docker compose stop → detener OSRM (rutas)\n",
     );
     return;
   }
@@ -595,10 +636,11 @@ async function main() {
   const plan = resolveSelection(); // null ⇒ todo
   const wantDb = plan === null || plan.includes("db");
   const wantCampaigns = plan === null || plan.includes("db-campaigns");
+  const wantOsrm = plan === null || plan.includes("osrm");
   const svcNames =
     plan === null
       ? SERVICES.map((s) => s.name)
-      : plan.filter((n) => n !== "db" && n !== "db-campaigns");
+      : plan.filter((n) => n !== "db" && n !== "db-campaigns" && n !== "osrm");
   const services = SERVICES.filter((s) => svcNames.includes(s.name));
   const wantDelivery = plan === null || plan.includes("delivery");
 
@@ -637,6 +679,15 @@ async function main() {
   if (!wantDb && !wantCampaigns)
     console.log(`${C.db}[db]${C.reset} 🚫 PostgreSQL no iniciado (esta selección no lo necesita).`);
 
+  if (wantOsrm) {
+    startOsrm();
+    const osrmUp = await waitForPort(OSRM_PORT, 90000);
+    if (!osrmUp)
+      console.warn(
+        `${C.osrm}[osrm]${C.reset} ⚠️  OSRM no responde en :${OSRM_PORT} — ¿corriste delivery-routing/prepare.sh?`,
+      );
+  }
+
   const pids = {};
   for (const svc of services) {
     if (sinDeps.has(svc.name)) continue; // falló la instalación de dependencias
@@ -671,7 +722,7 @@ async function main() {
     }
   }
 
-  printUrls(services, wantDb, wantCampaigns);
+  printUrls(services, wantDb, wantCampaigns, wantOsrm);
 
   if (MODE === "dev") {
     if (wantDelivery) {

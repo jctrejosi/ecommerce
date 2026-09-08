@@ -6,6 +6,7 @@ import {
   getCachedUser,
   getTokens,
   saveCachedUser,
+  setTokens,
 } from "@/auth/storage";
 
 interface AuthState {
@@ -32,9 +33,12 @@ export const useAuthStore = create<AuthState>()((set, get) => ({
   async login(username, password) {
     set({ error: null });
     try {
-      const { user } = await api.login(username, password);
-      await saveCachedUser(JSON.stringify(user));
-      set({ user, isAvailable: user.isAvailable ?? true });
+      const res = await api.login(username, password);
+      // Persistir tokens ANTES de pintar la UI: sin esto, las peticiones
+      // autenticadas usarían tokens viejos (o de una sesión mock previa).
+      await setTokens(res);
+      await saveCachedUser(JSON.stringify(res.user));
+      set({ user: res.user, isAvailable: res.user.isAvailable ?? true });
     } catch (err) {
       set({ error: messageFrom(err) });
       throw err;

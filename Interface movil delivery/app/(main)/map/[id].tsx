@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
-import { useOrder } from "@/api/orders";
+import { useOrder, useOrderRoute } from "@/api/orders";
 import { DeliveryMap } from "@/maps/DeliveryMap";
 import { openExternalNavigation, openGenericNavigation } from "@/maps/navigation";
 import { getCurrentPosition, startDeliveryTracking, stopDeliveryTracking } from "@/tracking/location";
@@ -23,12 +23,24 @@ function haversineKm(a: LatLng, b: LatLng): number {
   return 2 * R * Math.asin(Math.sqrt(s));
 }
 
+function formatDuration(seconds: number): string {
+  const min = Math.round(seconds / 60);
+  if (min < 60) return `≈ ${min} min`;
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `≈ ${h} h ${m} min` : `≈ ${h} h`;
+}
+
 export default function MapScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: order, isLoading, isError, error } = useOrder(id);
 
   const [origin, setOrigin] = useState<LatLng | null>(null);
   const [locating, setLocating] = useState(false);
+
+  // Ruta recomendada (OSRM) desde la posición actual del repartidor.
+  const from = origin ? `${origin.lng},${origin.lat}` : undefined;
+  const { data: route } = useOrderRoute(order?.id, from);
 
   const refreshPosition = async () => {
     setLocating(true);
@@ -79,11 +91,20 @@ export default function MapScreen() {
       : null;
 
   const distance =
-    origin && destination ? haversineKm(origin, destination) : null;
+    route?.distanceM != null
+      ? route.distanceM / 1000
+      : origin && destination
+        ? haversineKm(origin, destination)
+        : null;
 
   return (
     <View style={styles.container}>
-      <DeliveryMap destination={destination} origin={origin} pickup={pickup} />
+      <DeliveryMap
+        destination={destination}
+        origin={origin}
+        pickup={pickup}
+        routePolyline={route?.polyline}
+      />
 
       {/* Barra de información */}
       <View style={styles.infoCard}>
@@ -96,7 +117,17 @@ export default function MapScreen() {
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Distancia</Text>
           <Text style={styles.infoValue}>
-            {distance != null ? `≈ ${distance.toFixed(1)} km (línea recta)` : "Calculando…"}
+            {distance != null
+              ? route?.distanceM != null
+                ? `${distance.toFixed(1)} km (ruta real)`
+                : `≈ ${distance.toFixed(1)} km (línea recta)`
+              : "Calculando…"}
+          </Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Tiempo estimado</Text>
+          <Text style={styles.infoValue}>
+            {route?.durationS != null ? formatDuration(route.durationS) : "—"}
           </Text>
         </View>
         <View style={styles.infoRow}>

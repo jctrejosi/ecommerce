@@ -1,5 +1,5 @@
 import { http, unwrap, apiErrorMessage } from "./client";
-import type { DeliveryApi, TransitionPayload, TransitionKey } from "./contract";
+import type { DeliveryApi, RouteResult, TransitionPayload, TransitionKey } from "./contract";
 import type {
   DeliveryOrder,
   DriverUser,
@@ -72,6 +72,18 @@ export const realApi: DeliveryApi = {
       return unwrap<HistoryEntry[]>(res.data);
     } catch (err) {
       throw new Error(apiErrorMessage(err, "No se pudo cargar el historial."));
+    }
+  },
+
+  async getRoute(orderId, from) {
+    try {
+      const res = await http.get(`/orders/${orderId}/route`, {
+        params: from ? { from } : undefined,
+      });
+      return unwrap<RouteResult>(res.data);
+    } catch {
+      // Sin ruta (OSRM caído / sin coordenadas) la app degrada a línea recta.
+      return null;
     }
   },
 

@@ -40,7 +40,8 @@
         "expo-location",
         {
           "locationWhenInUsePermission": "La app usa tu ubicación para mostrar tu posición y registrar la entrega del pedido.",
-          "locationAlwaysAndWhenInUsePermission": "La app usa tu ubicación en segundo plano para actualizar el avance del pedido (fase 2)."
+          "locationAlwaysAndWhenInUsePermission": "La app usa tu ubicación en segundo plano para actualizar el avance del pedido.",
+          "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [

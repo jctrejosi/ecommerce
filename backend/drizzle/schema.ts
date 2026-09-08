@@ -61,7 +61,18 @@ export const customerTypeEnum = pgEnum('customer_type_enum', [
 ]);
 export const deliveryAssignmentStatusEnum = pgEnum(
   'delivery_assignment_status_enum',
-  ['ASSIGNED', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERED', 'FAILED', 'CANCELLED'],
+  [
+    'ASSIGNED',
+    'PICKED_UP',
+    'IN_DELIVERY',
+    'DELIVERED',
+    'FAILED',
+    'CANCELLED',
+    'ACCEPTED',
+    'READY_FOR_PICKUP',
+    'REJECTED',
+    'FAILED_DELIVERY',
+  ],
 );
 export const deliveryEventTypeEnum = pgEnum('delivery_event_type_enum', [
   'ASSIGNED',
@@ -2426,6 +2437,8 @@ export const deliveryDrivers = pgTable(
     phone: varchar({ length: 50 }).notNull(),
     // TODO: failed to parse database type 'citext'
     email: text('email'),
+    // Cuenta de acceso (users) vinculada al repartidor.
+    authUserId: bigint('auth_user_id', { mode: 'number' }),
     vehicleType: varchar('vehicle_type', { length: 50 }),
     vehiclePlate: varchar('vehicle_plate', { length: 20 }),
     vehicleBrand: varchar('vehicle_brand', { length: 100 }),
@@ -2433,6 +2446,8 @@ export const deliveryDrivers = pgTable(
     vehicleColor: varchar('vehicle_color', { length: 50 }),
     isAvailable: boolean('is_available').default(true).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
+    // Token push del dispositivo (FCM/expo) — se registra desde la app.
+    pushToken: text('push_token'),
     // TODO: failed to parse database type 'text'
     currentLocation: text('current_location'),
     lastLocationAt: timestamp('last_location_at', {
@@ -2518,6 +2533,14 @@ export const deliveryAssignments = pgTable(
     assignedAt: timestamp('assigned_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    acceptedAt: timestamp('accepted_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    readyForPickupAt: timestamp('ready_for_pickup_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
     estimatedArrival: timestamp('estimated_arrival', {
       withTimezone: true,
       mode: 'string',
@@ -2526,7 +2549,19 @@ export const deliveryAssignments = pgTable(
       withTimezone: true,
       mode: 'string',
     }),
+    inDeliveryAt: timestamp('in_delivery_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
     completedAt: timestamp('completed_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    rejectedAt: timestamp('rejected_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    failedAt: timestamp('failed_at', {
       withTimezone: true,
       mode: 'string',
     }),
@@ -2535,6 +2570,7 @@ export const deliveryAssignments = pgTable(
       mode: 'string',
     }),
     cancelReason: text('cancel_reason'),
+    rejectReason: text('reject_reason'),
     status: deliveryAssignmentStatusEnum().default('ASSIGNED').notNull(),
   },
   (table) => [

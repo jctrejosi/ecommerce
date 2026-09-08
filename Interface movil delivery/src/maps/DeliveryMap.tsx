@@ -3,6 +3,7 @@ import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-nativ
 import { Ionicons } from "@expo/vector-icons";
 import { isRunningInExpoGo } from "expo";
 import type { LatLng } from "@/api/types";
+import { decodePolyline } from "./polyline";
 import { colors, spacing } from "@/theme";
 
 type MapLibreModule = typeof import("@maplibre/maplibre-react-native");
@@ -22,6 +23,8 @@ export interface DeliveryMapProps {
   origin?: LatLng | null;
   /** Punto de recogida (tienda). */
   pickup?: LatLng | null;
+  /** Polyline (OSRM) de la ruta recomendada; si falta se dibuja línea recta. */
+  routePolyline?: string | null;
 }
 
 /**
@@ -31,7 +34,12 @@ export interface DeliveryMapProps {
  * si no está disponible (Expo Go), se muestra un fallback informativo. Para
  * ver el mapa real: dev build (`npx expo run:android`).
  */
-export function DeliveryMap({ destination, origin, pickup }: DeliveryMapProps) {
+export function DeliveryMap({
+  destination,
+  origin,
+  pickup,
+  routePolyline,
+}: DeliveryMapProps) {
   const [ml, setMl] = useState<MapLibreModule | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -70,20 +78,7 @@ export function DeliveryMap({ destination, origin, pickup }: DeliveryMapProps) {
       ? [origin.lng, origin.lat]
       : [-74.07209, 4.71099]; // Bogotá
 
-  const route: GeoJSON.GeoJSON | null =
-    origin && destination
-      ? {
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              [origin.lng, origin.lat],
-              [destination.lng, destination.lat],
-            ],
-          },
-          properties: {},
-        }
-      : null;
+  const route: GeoJSON.GeoJSON | null = buildRoute(routePolyline, origin, destination);
 
   return (
     <View style={styles.container}>
@@ -129,6 +124,43 @@ export function DeliveryMap({ destination, origin, pickup }: DeliveryMapProps) {
       </Map>
     </View>
   );
+}
+
+function buildRoute(
+  routePolyline: string | null | undefined,
+  origin: LatLng | null | undefined,
+  destination: LatLng | null,
+): GeoJSON.GeoJSON | null {
+  // Ruta real (OSRM) si viene polyline decodificable.
+  if (routePolyline) {
+    try {
+      const coords = decodePolyline(routePolyline);
+      if (coords.length >= 2) {
+        return {
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: coords },
+          properties: {},
+        };
+      }
+    } catch {
+      /* polyline inválida → línea recta */
+    }
+  }
+  // Fallback: línea recta entre repartidor y destino.
+  if (origin && destination) {
+    return {
+      type: "Feature",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [origin.lng, origin.lat],
+          [destination.lng, destination.lat],
+        ],
+      },
+      properties: {},
+    };
+  }
+  return null;
 }
 
 function MapFallback() {

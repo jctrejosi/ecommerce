@@ -71,6 +71,8 @@ completa contra un mock en memoria (`src/api/mock.ts`):
 
 Copia `.env.example` a `.env` y define `EXPO_PUBLIC_API_URL` para usar el
 backend real (contrato en [`docs/maquina-de-estados.md`](docs/maquina-de-estados.md)).
+El backend del delivery vive en `ecommerce/backend/src/modules/delivery/`
+(montado en `/delivery`) y usa OSRM (`ecommerce/delivery-routing/`) para las rutas.
 
 ## Notas de implementación
 
@@ -83,14 +85,15 @@ backend real (contrato en [`docs/maquina-de-estados.md`](docs/maquina-de-estados
 - **GPS**: solo en `PICKED_UP`/`IN_DELIVERY`, ping cada 15 s o 20 m, cola
   offline con reintento (`src/tracking/`). Background = fase 2.
 - **Mapa**: MapLibre + tiles OSM (sin API key); carga dinámica con fallback
-  en Expo Go/web; ruta en línea recta en el MVP; navegación externa
+  en Expo Go/web. La ruta recomendada viene del backend vía
+  `GET /delivery/orders/:id/route` (OSRM: polyline + distancia + duración);
+  si no hay ruta, se degrada a línea recta. Navegación externa
   (Google Maps/Waze/Apple Maps).
 - **Push**: `expo-notifications` + FCM vía backend; solo en dev build nativo
   (no en Expo Go ni web — el módulo se carga dinámicamente).
 
 ## Pendiente (fases 2-3, ver docs/)
 
-- Ruta real y ETA desde el backend (OSRM).
 - Background tracking (`expo-task-manager`) y panel de monitoreo.
 - Prueba de entrega (foto/firma/OTP). Multi-pedido, navegación integrada,
   liquidación.
