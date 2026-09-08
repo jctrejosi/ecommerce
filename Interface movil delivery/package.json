@@ -1,0 +1,45 @@
+{
+  "name": "delivery-app",
+  "version": "1.0.0",
+  "main": "expo-router/entry",
+  "packageManager": "pnpm@10.34.3",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@expo/vector-icons": "^15.1.1",
+    "@maplibre/maplibre-react-native": "^11.3.10",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/netinfo": "12.0.1",
+    "@tanstack/react-query": "^5.102.8",
+    "axios": "^1.20.0",
+    "expo": "~57.0.21",
+    "expo-constants": "~57.0.17",
+    "expo-device": "~57.0.1",
+    "expo-linking": "~57.0.9",
+    "expo-location": "~57.0.16",
+    "expo-notifications": "~57.0.17",
+    "expo-router": "~57.0.20",
+    "expo-secure-store": "~57.0.3",
+    "expo-status-bar": "~57.0.1",
+    "expo-task-manager": "~57.0.16",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.2",
+    "react-native-web": "^0.21.2",
+    "socket.io-client": "^4.8.3",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "private": true
+}

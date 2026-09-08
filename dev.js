@@ -27,6 +27,8 @@ const path = require("node:path");
 const ROOT = __dirname;
 const LOGS_DIR = path.join(ROOT, "logs");
 const PIDS_FILE = path.join(LOGS_DIR, ".pids.json");
+const DELIVERY_DIR = path.join(ROOT, "Interface movil delivery");
+const DELIVERY_PORT = 8081;
 
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
@@ -73,6 +75,7 @@ const C = {
   "picking-admin": "\x1b[91m",
   bot: "\x1b[35m",
   ia: "\x1b[33m",
+  delivery: "\x1b[92m",
   reset: "\x1b[0m",
 };
 
@@ -142,6 +145,72 @@ const SERVICES = [
     deps: PYTHON_DEPS,
   },
 ];
+
+// ── Selección por aplicativo (flags --x) ─────────────────────
+// Cada app declara sus dependencias; al pedirla se levanta también lo mínimo
+// para que funcione (p. ej. --analytics ⇒ backend + PostgreSQL de campañas).
+const APP_ALIASES = {
+  client: "web",
+  web: "web",
+  backend: "backend",
+  admin: "admin",
+  analytics: "analytics",
+  ia: "ia",
+  picking: "picking",
+  "picking-admin": "picking-admin",
+  bot: "bot",
+  delivery: "delivery",
+};
+
+const APP_DEPENDS = {
+  backend: ["db", "db-campaigns"], // el backend usa la BD principal + la de campañas
+  web: ["backend"],
+  admin: ["backend"],
+  analytics: ["backend"],
+  picking: ["backend"],
+  "picking-admin": ["backend"],
+  bot: ["backend"],
+  ia: ["db-campaigns"],
+  delivery: [], // modo mock no necesita backend; agrega --backend para API real
+};
+
+const NO_SELECTOR_FLAGS = new Set(["--prod", "--live", "--stop", "--help", "--all"]);
+
+/** null ⇒ levantar todo (comportamiento por defecto). */
+function resolveSelection() {
+  const requested = ARGS.filter((a) => a.startsWith("--") && !NO_SELECTOR_FLAGS.has(a))
+    .map((a) => a.slice(2).toLowerCase());
+  if (requested.length === 0) return null;
+  const names = requested.map((r) => APP_ALIASES[r]).filter((n) => n !== undefined);
+  if (names.length === 0) return null;
+
+  const out = [];
+  const seen = new Set();
+  const add = (n) => {
+    for (const dep of APP_DEPENDS[n] ?? []) {
+      if (dep === "db" || dep === "db-campaigns") {
+        if (!seen.has(dep)) {
+          seen.add(dep);
+          out.push(dep);
+        }
+      } else {
+        add(dep);
+      }
+    }
+    if (!seen.has(n)) {
+      seen.add(n);
+      out.push(n);
+    }
+  };
+  for (const n of names) add(n);
+  return out; // orden de arranque: dependencias primero
+}
+
+function selectionLabel(plan) {
+  if (!plan) return "todo";
+  const apps = plan.filter((n) => n !== "db" && n !== "db-campaigns");
+  return apps.length ? apps.join(" + ") : "solo bases de datos";
+}
 
 // ── Utilidades de red ───────────────────────────────────────
 
@@ -388,16 +457,70 @@ function startService(svc) {
   return child.pid;
 }
 
-function printUrls() {
+function printUrls(services, showDb, showCampaigns) {
   console.log("\n━━━━━━━━━━━━━ MercAldas — URLs ━━━━━━━━━━━━━");
-  for (const svc of SERVICES) {
+  for (const svc of services) {
     if (!svc.url) continue;
     console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
   }
-  console.log("  DB             → PostgreSQL localhost:5432 (docker)");
-  console.log("  DB-CAMPAIGNS   → PostgreSQL localhost:5436 (docker, analytics)");
+  if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
+  if (showCampaigns) console.log("  DB-CAMPAIGNS   → PostgreSQL localhost:5436 (docker, analytics)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("Logs: logs/*.log  (db, backend, web, admin, analytics, picking, picking-admin, bot, ia)");
+  const started = services.map((s) => s.name).join(", ");
+  console.log(`Logs: logs/*.log  (${started || "sin servicios"}). El DELIVERY imprime en esta terminal.`);
+}
+
+// ── Delivery app (Expo Go) ────────────────────────────────────
+
+function ensureDeliveryDeps() {
+  if (dirHasContent(path.join(DELIVERY_DIR, "node_modules"))) return true;
+  console.log(
+    `${C.delivery}[delivery]${C.reset} 📦 instalando dependencias (${PM})...`,
+  );
+  const r = spawnSync(PM, ["install"], {
+    cwd: DELIVERY_DIR,
+    stdio: "inherit",
+    timeout: 300000,
+  });
+  if (r.status !== 0) {
+    console.error(
+      `${C.delivery}[delivery]${C.reset} ✘ falló la instalación de dependencias`,
+    );
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Arranca la delivery app con Expo en FOREGROUND (interactivo): así el QR de
+ * Expo Go aparece en esta terminal. Ctrl+C detiene solo el delivery; el resto
+ * de servicios sigue en background. Solo aplica en modo dev.
+ */
+function startDeliveryExpo() {
+  if (!ensureDeliveryDeps()) return;
+
+  console.log("");
+  console.log(
+    `${C.delivery}📱 DELIVERY APP${C.reset} — escanea el QR con **Expo Go** (celular en la MISMA red Wi-Fi).`,
+  );
+  console.log(
+    `${C.delivery}[delivery]${C.reset}   Sin EXPO_PUBLIC_API_URL corre en modo mock (demo / demo1234).`,
+  );
+  console.log(
+    `${C.delivery}[delivery]${C.reset}   Ctrl+C aquí detiene SOLO el delivery; lo demás sigue en background.`,
+  );
+  console.log("");
+
+  const r = spawnSync(PM, ["exec", "expo", "start"], {
+    cwd: DELIVERY_DIR,
+    stdio: "inherit",
+    env: { ...process.env, EXPO_NO_TELEMETRY: "1" },
+  });
+  if (r.status !== 0) {
+    console.warn(
+      `${C.delivery}[delivery]${C.reset} ⚠️  expo terminó con código ${r.status ?? "?"} — ¿puerto ${DELIVERY_PORT} ocupado? (node dev.js --stop para liberar)`,
+    );
+  }
 }
 
 // ── Detención ───────────────────────────────────────────────
@@ -434,6 +557,7 @@ function stopAll() {
   for (const svc of SERVICES) {
     if (svc.url) killPort(new URL(svc.url).port);
   }
+  killPort(DELIVERY_PORT); // expo/delivery (no queda registrado en pids)
 
   try {
     fs.unlinkSync(PIDS_FILE);
@@ -450,10 +574,15 @@ async function main() {
   if (HELP) {
     console.log(
       "MercAldas launcher\n" +
-        "  node dev.js            → dev (logs en logs/*.log, terminal libre)\n" +
-        "  node dev.js --prod     → producción (requiere builds previos)\n" +
-        "  node dev.js --stop     → detiene los servicios\n" +
-        "  node dev.js --help     → esta ayuda\n" +
+        "  node dev.js                    → todo (dev; termina con el QR del DELIVERY app)\n" +
+        "  node dev.js --client           → solo web client + sus dependencias\n" +
+        "  node dev.js --analytics        → solo analytics + backend + BDs\n" +
+        "  node dev.js --delivery         → solo el QR del delivery (mock; agrega --backend para API real)\n" +
+        "  node dev.js --admin --picking  → combina aplicativos\n" +
+        "  Flags: --backend --client --admin --analytics --picking --picking-admin --bot --ia --delivery --all\n" +
+        "  node dev.js --prod [flags]     → producción (requiere builds previos)\n" +
+        "  node dev.js --stop             → detiene los servicios\n" +
+        "  node dev.js --help             → esta ayuda\n" +
         "  cd db/docker && docker compose stop → detener PostgreSQL\n" +
         "  cd db-campaigns && docker compose stop → detener PostgreSQL analytics (:5436)\n",
     );
@@ -462,46 +591,71 @@ async function main() {
   if (STOP) return stopAll();
 
   fs.mkdirSync(LOGS_DIR, { recursive: true });
-  console.log(`🧪 MercAldas — modo ${MODE.toUpperCase()}  (logs → logs/*.log)`);
+
+  const plan = resolveSelection(); // null ⇒ todo
+  const wantDb = plan === null || plan.includes("db");
+  const wantCampaigns = plan === null || plan.includes("db-campaigns");
+  const svcNames =
+    plan === null
+      ? SERVICES.map((s) => s.name)
+      : plan.filter((n) => n !== "db" && n !== "db-campaigns");
+  const services = SERVICES.filter((s) => svcNames.includes(s.name));
+  const wantDelivery = plan === null || plan.includes("delivery");
+
+  console.log(
+    `🧪 MercAldas — modo ${MODE.toUpperCase()} · selección: ${selectionLabel(plan)}  (logs → logs/*.log)`,
+  );
   if (PM === "npm")
     console.warn(
       `${C.picking}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes en los fronts.`,
     );
   console.log("");
 
-  // 1. Instalar dependencias faltantes ANTES de tocar la BD: si un servicio
-  //    falla la instalación, se omite al arrancar más abajo.
+  // 1. Instalar dependencias faltantes de los servicios elegidos.
   const sinDeps = new Set();
-  for (const svc of SERVICES) {
+  for (const svc of services) {
     if (!ensureDeps(svc)) sinDeps.add(svc.name);
   }
   console.log("");
 
-  startDatabase();
-  const dbUp = await waitForPort(5432, 90000);
-  if (!dbUp)
-    console.warn(
-      `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
-    );
-
-  startDatabaseCampaigns();
-  const dbCampaignsUp = await waitForPort(5436, 90000);
-  if (!dbCampaignsUp)
-    console.warn(
-      `${C.db}[db-campaigns]${C.reset} ⚠️  PostgreSQL analytics no responde en :5436; la segmentación fallará hasta que esté arriba.`,
-    );
+  if (wantDb) {
+    startDatabase();
+    const dbUp = await waitForPort(5432, 90000);
+    if (!dbUp)
+      console.warn(
+        `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
+      );
+  }
+  if (wantCampaigns) {
+    startDatabaseCampaigns();
+    const dbCampaignsUp = await waitForPort(5436, 90000);
+    if (!dbCampaignsUp)
+      console.warn(
+        `${C.db}[db-campaigns]${C.reset} ⚠️  PostgreSQL analytics no responde en :5436; la segmentación fallará hasta que esté arriba.`,
+      );
+  }
+  if (!wantDb && !wantCampaigns)
+    console.log(`${C.db}[db]${C.reset} 🚫 PostgreSQL no iniciado (esta selección no lo necesita).`);
 
   const pids = {};
-  for (const svc of SERVICES) {
+  for (const svc of services) {
     if (sinDeps.has(svc.name)) continue; // falló la instalación de dependencias
     const pid = startService(svc);
     if (pid) pids[svc.name] = pid;
   }
-  fs.writeFileSync(PIDS_FILE, JSON.stringify(pids, null, 2));
+  if (Object.keys(pids).length) {
+    fs.writeFileSync(PIDS_FILE, JSON.stringify(pids, null, 2));
+  } else {
+    try {
+      fs.unlinkSync(PIDS_FILE);
+    } catch {
+      /* noop */
+    }
+  }
 
   // No liberar la terminal hasta que el backend esté montado: si se cierra
   // antes, el usuario no puede ver si arrancó bien o falló al revisar logs.
-  const backendSvc = SERVICES.find((s) => s.name === "backend");
+  const backendSvc = services.find((s) => s.name === "backend");
   if (backendSvc && backendSvc.url) {
     const backendPort = Number(new URL(backendSvc.url).port);
     console.log(
@@ -517,8 +671,30 @@ async function main() {
     }
   }
 
-  printUrls();
-  console.log("\n✅ Todo levantado. Esta terminal queda libre — puedes cerrarla.");
+  printUrls(services, wantDb, wantCampaigns);
+
+  if (MODE === "dev") {
+    if (wantDelivery) {
+      console.log(
+        "\n✅ Servicios levantados (background). Ahora el delivery app:",
+      );
+      startDeliveryExpo(); // bloquea mostrando el QR hasta Ctrl+C
+      console.log(
+        "\n⏹ Delivery detenido. El resto de servicios sigue corriendo.",
+      );
+    } else {
+      console.log(
+        "\n✅ Listo — esta selección no incluye el delivery (agrega --delivery). Terminal libre.",
+      );
+    }
+  } else {
+    console.log("\n✅ Todo levantado. Terminal libre.");
+    if (wantDelivery)
+      console.log(
+        "   Delivery en --prod: corre desde el APK/dev build (carpeta android/), no usa Expo Go.",
+      );
+  }
+
   console.log("");
   console.log("Comandos útiles:");
   console.log(`  node dev.js --stop                  → detener los servicios levantados`);

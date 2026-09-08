@@ -1,0 +1,9 @@
+Starting project at /home/jk/Proyectos/dsi/ecommerce/Interface movil delivery
+Starting Metro Bundler
+
+Waiting on http://localhost:8081
+
+Logs for your project will appear below.
+Android Bundled 4718ms node_modules/.pnpm/expo-router@57.0.20_36a9990310c3767a24f98ab4aeb81531/node_modules/expo-router/entry.js (1596 modules)
+Android Bundled 1070ms node_modules/.pnpm/expo-notifications@57.0.17_expo@57.0.21_react-native@0.86.3_@babel+core@7.29.7_@react-n_447ba46bd75fa32c098163367adfc186/node_modules/expo-notifications/build/index.js (756 modules)
+Killed
