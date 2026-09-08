@@ -40,6 +40,15 @@ const NPM_DEPS = {
   markerType: "dir",
   install: [["npm", "install"]],
 };
+
+// Los fronts del ecommerce usan pnpm (pnpm-lock.yaml). Si pnpm no está
+// instalado se cae a npm: los scripts dev/build/preview existen igual.
+const PM = hasBin("pnpm") ? "pnpm" : "npm";
+const PNPM_DEPS = {
+  marker: ["node_modules"],
+  markerType: "dir",
+  install: [[PM, "install"]],
+};
 const PYTHON_DEPS = {
   marker: [".venv", "bin", "python"],
   markerType: "file",
@@ -53,15 +62,6 @@ function hasBin(cmd) {
   const r = spawnSync(cmd, ["--version"], { stdio: "ignore" });
   return r.status === 0;
 }
-
-// pnpm puede no estar instalado; se cae a npm (el package.json de picking
-// expone los scripts "dev" y "preview", así que npm funciona igual).
-const PICKING_PM = hasBin("pnpm") ? "pnpm" : "npm";
-const PICKING_DEPS = {
-  marker: ["node_modules"],
-  markerType: "dir",
-  install: [[PICKING_PM, "install"]],
-};
 
 const C = {
   db: "\x1b[36m",
@@ -89,41 +89,41 @@ const SERVICES = [
     name: "web",
     dir: "Interface web client",
     url: "http://localhost:5173",
-    dev: ["npm", "run", "dev"],
+    dev: [PM, "run", "dev"],
     prod: ["npx", "vite", "preview"],
-    deps: NPM_DEPS,
+    deps: PNPM_DEPS,
   },
   {
     name: "admin",
     dir: "Interface web admin",
     url: "http://localhost:8443",
-    dev: ["npm", "run", "dev"],
-    prod: ["npm", "run", "preview"],
-    deps: NPM_DEPS,
+    dev: [PM, "run", "dev"],
+    prod: [PM, "run", "preview"],
+    deps: PNPM_DEPS,
   },
   {
     name: "analytics",
     dir: "Interface web analytics",
     url: "http://localhost:8444",
-    dev: ["npm", "run", "dev"],
-    prod: ["npm", "run", "preview"],
-    deps: NPM_DEPS,
+    dev: [PM, "run", "dev"],
+    prod: [PM, "run", "preview"],
+    deps: PNPM_DEPS,
   },
   {
     name: "picking",
     dir: "Interface web picking",
     url: "http://localhost:8445",
-    dev: [PICKING_PM, "dev"],
-    prod: [PICKING_PM, "run", "preview"],
-    deps: PICKING_DEPS,
+    dev: [PM, "run", "dev"],
+    prod: [PM, "run", "preview"],
+    deps: PNPM_DEPS,
   },
   {
     name: "picking-admin",
     dir: "Interface web picking admin",
     url: "http://localhost:8446",
-    dev: ["npm", "run", "dev"],
-    prod: ["npm", "run", "preview"],
-    deps: NPM_DEPS,
+    dev: [PM, "run", "dev"],
+    prod: [PM, "run", "preview"],
+    deps: PNPM_DEPS,
   },
   {
     name: "bot",
@@ -463,9 +463,9 @@ async function main() {
 
   fs.mkdirSync(LOGS_DIR, { recursive: true });
   console.log(`🧪 MercAldas — modo ${MODE.toUpperCase()}  (logs → logs/*.log)`);
-  if (PICKING_PM === "npm")
+  if (PM === "npm")
     console.warn(
-      `${C.picking}[picking]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes.`,
+      `${C.picking}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes en los fronts.`,
     );
   console.log("");
 
