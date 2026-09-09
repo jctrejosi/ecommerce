@@ -233,4 +233,38 @@ export const ordersService = {
       credentials: "include",
     });
   },
+
+  /** Seguimiento en vivo de la entrega (público, por código de pedido). */
+  async liveTracking(referenceCode: string): Promise<OrderLiveTracking> {
+    return fetchJson<OrderLiveTracking>(
+      `${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}/live`,
+    );
+  },
+};
+
+export type Point = { lat: number; lng: number };
+
+export type OrderLiveTracking = {
+  referenceCode: string;
+  /** Estado visible para el cliente (preparando/en camino/entregado…). */
+  status: string;
+  /** Estado real de la entrega (ASSIGNED…IN_DELIVERY/DELIVERED…). */
+  deliveryStatus: string | null;
+  driver: {
+    name: string;
+    vehicleType: string | null;
+    vehiclePlate: string | null;
+    location: Point | null;
+    lastLocationAt: string | null;
+  } | null;
+  branch: {
+    name: string;
+    address: string | null;
+    location: Point | null;
+  } | null;
+  destination: {
+    address: string;
+    location: Point | null;
+  };
+  updatedAt: string | null;
 };

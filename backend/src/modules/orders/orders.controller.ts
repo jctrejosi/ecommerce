@@ -63,6 +63,14 @@ export class OrdersController {
     return this.ordersService.trackOrder(referenceCode);
   }
 
+  /** Seguimiento en vivo de la entrega (repartidor en el mapa), por código. */
+  @Public()
+  @Get('track/:referenceCode/live')
+  @ApiOperation({ summary: 'Seguimiento en vivo del repartidor (por código)' })
+  liveTracking(@Param('referenceCode') referenceCode: string) {
+    return this.ordersService.getLiveTracking(referenceCode);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Obtener pedidos del cliente autenticado' })
   @ApiResponse({ status: 200, description: 'Listado de pedidos del cliente' })

@@ -15,6 +15,7 @@ import {
 } from '../../../drizzle/schema';
 import { parsePoint } from './delivery.service';
 import { DeliveryGateway } from './delivery.gateway';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { TransitionDto } from './dto/transition.dto';
 
 export interface TimelineEvent {
@@ -106,6 +107,8 @@ interface AssignmentRow {
   shipment_id: string;
   order_id: string;
   status: string;
+  customer_id: string | null;
+  reference_code: string;
 }
 
 const ORDERS_SELECT = `
@@ -197,6 +200,7 @@ export class DeliveryOrdersService {
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly gateway: DeliveryGateway,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private get db() {
@@ -322,7 +326,8 @@ export class DeliveryOrdersService {
   ) {
     const rows = await this.drizzle.execute<AssignmentRow>(
       `SELECT a.id AS assignment_id, a.status,
-              s.id AS shipment_id, o.id AS order_id
+              s.id AS shipment_id, o.id AS order_id,
+              o.customer_id, o.reference_code
        FROM delivery_assignments a
        JOIN shipments s ON s.id = a.shipment_id
        JOIN orders o ON o.id = s.order_id
@@ -392,6 +397,13 @@ export class DeliveryOrdersService {
           },
         ]);
       }
+      if (action === 'start') {
+        // El repartidor va en camino → el cliente ve el pedido como "En camino".
+        await tx
+          .update(orders)
+          .set({ status: 'shipped' })
+          .where(eq(orders.id, BigInt(orderId)));
+      }
     });
 
     // Avisa al panel administrativo (sala `fleet`) para refrescar en vivo.
@@ -401,6 +413,18 @@ export class DeliveryOrdersService {
       driverId,
       status: NEXT_STATUS[action],
     });
+
+    // El cliente recibe la notificación (con botón para ver el rastreo) cuando
+    // el repartidor sale con el pedido.
+    if (action === 'start' && assignment.customer_id != null) {
+      await this.notificationsService.create({
+        type: 'ORDER',
+        title: 'Tu pedido está en camino 🛵',
+        message: `El repartidor salió con tu pedido ${assignment.reference_code}. Síguelo en el mapa.`,
+        targetCustomerId: Number(assignment.customer_id),
+        linkUrl: `order-track:${assignment.reference_code}`,
+      });
+    }
 
     return this.getOrder(driverId, orderId);
   }

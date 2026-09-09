@@ -50,6 +50,8 @@ interface HeaderProps {
   notifications?: AppNotification[];
   unreadNotifCount?: number;
   onMarkNotifRead?: (id: number) => void;
+  /** Abre el mapa de rastreo de un pedido (notificaciones tipo order-track). */
+  onTrackOrder?: (code: string) => void;
   onNavigateNotifs: () => void;
   onAddressClick: () => void;
   generalLogo?: { url?: string } | null;
@@ -85,6 +87,7 @@ export function Header({
   notifications = [],
   unreadNotifCount = 0,
   onMarkNotifRead,
+  onTrackOrder,
   onNavigateNotifs,
   onAddressClick,
   generalLogo,
@@ -653,6 +656,7 @@ export function Header({
                   onMarkAsRead={(id) => {
                     onMarkNotifRead?.(id);
                   }}
+                  onTrackOrder={onTrackOrder}
                   onNavigate={() => onNavigateNotifs?.()}
                   onClose={() => setNotifOpen(false)}
                 />

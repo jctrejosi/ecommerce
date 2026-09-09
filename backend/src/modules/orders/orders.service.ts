@@ -19,6 +19,8 @@ import {
   branches,
   customerAddresses,
   customers,
+  deliveryAssignments,
+  deliveryDrivers,
   guestSessions,
   media,
   orderItems,
@@ -536,6 +538,139 @@ export class OrdersService {
       customerName: row.customerName ?? shipment?.recipientName ?? null,
       customerPhone: row.customerPhone ?? shipment?.recipientPhone ?? null,
     };
+  }
+
+  /**
+   * Seguimiento en vivo de la entrega (público por código, sin sesión):
+   * repartidor (posición), destino y sucursal para pintar el mapa del cliente.
+   */
+  async getLiveTracking(referenceCode: string) {
+    const code = (referenceCode || '').trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException('Ingresa el código del pedido');
+    }
+
+    const [order] = await this.db
+      .select({
+        id: orders.id,
+        referenceCode: orders.referenceCode,
+        status: orders.status,
+        branchId: orders.branchId,
+      })
+      .from(orders)
+      .where(eq(orders.referenceCode, code))
+      .limit(1);
+    if (!order) {
+      throw new NotFoundException(
+        `No encontramos el pedido ${code}. Verifica el código e intenta de nuevo.`,
+      );
+    }
+    const orderId = Number(order.id);
+
+    const [shipment] = await this.db
+      .select({
+        id: shipments.id,
+        addressLine1: shipments.addressLine1,
+        city: shipments.city,
+        location: shipments.location,
+      })
+      .from(shipments)
+      .where(eq(shipments.orderId, orderId))
+      .limit(1);
+    if (!shipment) {
+      throw new NotFoundException('El pedido no tiene envío asociado.');
+    }
+
+    const [assignment] = await this.db
+      .select({
+        status: deliveryAssignments.status,
+        inDeliveryAt: deliveryAssignments.inDeliveryAt,
+        completedAt: deliveryAssignments.completedAt,
+        driverId: deliveryAssignments.driverId,
+      })
+      .from(deliveryAssignments)
+      .where(eq(deliveryAssignments.shipmentId, Number(shipment.id)))
+      .orderBy(desc(deliveryAssignments.id))
+      .limit(1);
+
+    let driver: {
+      name: string;
+      vehicleType: string | null;
+      vehiclePlate: string | null;
+      location: { lat: number; lng: number } | null;
+      lastLocationAt: string | null;
+    } | null = null;
+    if (assignment?.driverId != null) {
+      const [d] = await this.db
+        .select({
+          fullName: deliveryDrivers.fullName,
+          vehicleType: deliveryDrivers.vehicleType,
+          vehiclePlate: deliveryDrivers.vehiclePlate,
+          currentLocation: deliveryDrivers.currentLocation,
+          lastLocationAt: deliveryDrivers.lastLocationAt,
+        })
+        .from(deliveryDrivers)
+        .where(eq(deliveryDrivers.id, BigInt(assignment.driverId)))
+        .limit(1);
+      if (d) {
+        driver = {
+          name: d.fullName,
+          vehicleType: d.vehicleType,
+          vehiclePlate: d.vehiclePlate,
+          location: this.parseDbPoint(d.currentLocation),
+          lastLocationAt: d.lastLocationAt ?? null,
+        };
+      }
+    }
+
+    let branch: {
+      name: string;
+      address: string | null;
+      location: { lat: number; lng: number } | null;
+    } | null = null;
+    if (order.branchId != null) {
+      const [b] = await this.db
+        .select({
+          name: branches.name,
+          address: branches.address,
+          location: branches.location,
+        })
+        .from(branches)
+        .where(eq(branches.id, BigInt(order.branchId)))
+        .limit(1);
+      if (b) {
+        branch = {
+          name: b.name,
+          address: b.address,
+          location: this.parseDbPoint(b.location),
+        };
+      }
+    }
+
+    return {
+      referenceCode: order.referenceCode,
+      status: this.mapOrderStatus(order.status),
+      deliveryStatus: assignment?.status ?? null,
+      driver,
+      branch,
+      destination: {
+        address: [shipment.addressLine1, shipment.city]
+          .filter(Boolean)
+          .join(', '),
+        location: this.parseDbPoint(shipment.location),
+      },
+      updatedAt: driver?.lastLocationAt ?? null,
+    };
+  }
+
+  /** Parsea un punto postgis/EWKT ('POINT(lng lat)') si viene como texto. */
+  private parseDbPoint(value: string | null | undefined): { lat: number; lng: number } | null {
+    if (!value) return null;
+    const m = value.match(
+      /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
+    );
+    if (!m) return null;
+    return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
   }
 
   async getOrders(customerId: number) {

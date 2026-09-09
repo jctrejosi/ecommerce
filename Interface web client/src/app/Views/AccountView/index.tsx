@@ -1007,6 +1007,8 @@ export interface UserAdminViewProps {
   notifications?: AppNotification[];
   unreadNotifCount?: number;
   onMarkNotifRead?: (id: number) => void;
+  /** Abre el rastreo en el mapa (modal global). */
+  onOpenTracking?: (code: string) => void;
   onReplaceCart?: (items: CartItem[]) => void;
   fmt?: (n: number) => string;
   onProfileUpdated?: (
@@ -1041,6 +1043,7 @@ export function UserAdminView({
   notifications = [],
   unreadNotifCount = 0,
   onMarkNotifRead,
+  onOpenTracking,
   onReplaceCart,
   onProfileUpdated,
 }: UserAdminViewProps) {
@@ -1544,7 +1547,11 @@ export function UserAdminView({
                     <button
                       onClick={() => {
                         setTrackingOrderId(order.id);
-                        navigate("tracking");
+                        if (onOpenTracking) {
+                          onOpenTracking(order.id);
+                        } else {
+                          navigate("tracking");
+                        }
                       }}
                       className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 text-center"
                       style={{ background: "#FFF200", color: "#1A1A2E" }}

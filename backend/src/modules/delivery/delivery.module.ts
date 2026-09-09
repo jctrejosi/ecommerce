@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 import { DeliveryAuthController } from './delivery-auth.controller';
 import { DeliveryAuthService } from './delivery-auth.service';
 import { DeliveryController } from './delivery.controller';
@@ -12,7 +13,7 @@ import { DeliveryAdminService } from './delivery-admin.service';
 import { SuperuserGuard } from './superuser.guard';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, NotificationsModule],
   controllers: [
     DeliveryAuthController,
     DeliveryController,

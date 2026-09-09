@@ -1,12 +1,21 @@
-import { Bell, Package, Tag, AlertCircle, Info, X } from 'lucide-react';
+import { Bell, Package, Tag, AlertCircle, Info, X, MapPinned } from 'lucide-react';
 import type { AppNotification } from '../../hooks/useNotifications';
 
 interface NotificationsDropdownProps {
   notifications: AppNotification[];
   unreadCount: number;
   onMarkAsRead: (id: number) => void;
+  /** Abre el rastreo en el mapa (linkUrl 'order-track:<código>'). */
+  onTrackOrder?: (code: string) => void;
   onNavigate: () => void;
   onClose: () => void;
+}
+
+/** Extrae el código de pedido de linkUrl 'order-track:MER-xxx'. */
+function trackingCodeOf(linkUrl: string | null | undefined): string | null {
+  if (!linkUrl) return null;
+  const m = /^order-track:([A-Za-z0-9-]+)/.exec(linkUrl.trim());
+  return m ? m[1] : null;
 }
 
 const typeIcons: Record<string, typeof Package> = {
@@ -29,7 +38,7 @@ const typeColors: Record<string, string> = {
   ERROR: '#EF4444',
 };
 
-export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead, onNavigate, onClose }: NotificationsDropdownProps) {
+export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead, onTrackOrder, onNavigate, onClose }: NotificationsDropdownProps) {
   return (
     <div className="absolute right-0 top-full mt-2 w-80 max-h-[70vh] bg-white rounded-2xl border border-border shadow-2xl z-50 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
@@ -57,14 +66,20 @@ export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead
           notifications.map((n) => {
             const Icon = typeIcons[n.type] ?? Info;
             const color = typeColors[n.type] ?? '#6B7280';
+            const trackCode = trackingCodeOf(n.linkUrl);
+            const handleClick = () => {
+              if (!n.isRead) onMarkAsRead(n.id);
+              onClose();
+              if (trackCode && onTrackOrder) {
+                onTrackOrder(trackCode); // botón/acción de rastreo en el mapa
+              } else {
+                onNavigate();
+              }
+            };
             return (
               <button
                 key={n.id}
-                onClick={() => {
-                  if (!n.isRead) onMarkAsRead(n.id);
-                  onNavigate();
-                  onClose();
-                }}
+                onClick={handleClick}
                 className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-muted/50 transition-colors border-b border-border last:border-0"
               >
                 <div
@@ -86,6 +101,12 @@ export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead
                   <p className="text-[10px] text-muted-foreground mt-1">
                     {new Date(n.createdAt).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </p>
+                  {trackCode && onTrackOrder && (
+                    <span className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-bold transition-all hover:brightness-95" style={{ background: '#FFF200', color: '#1A1A2E' }}>
+                      <MapPinned className="w-3.5 h-3.5" />
+                      Ver rastreo en el mapa
+                    </span>
+                  )}
                 </div>
               </button>
             );

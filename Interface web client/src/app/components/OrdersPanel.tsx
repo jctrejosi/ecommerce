@@ -20,6 +20,8 @@ interface OrdersPanelProps {
   onClose: () => void;
   onSelectOrder: (order: Order | null) => void;
   onGoToCatalog: () => void;
+  /** Abre el rastreo en el mapa para un pedido en camino. */
+  onTrackOrder?: (code: string) => void;
   fmt: (n: number) => string;
 }
 
@@ -30,6 +32,7 @@ export function OrdersPanel({
   onClose,
   onSelectOrder,
   onGoToCatalog,
+  onTrackOrder,
   fmt,
 }: OrdersPanelProps) {
   const [trackCode, setTrackCode] = useState("");
@@ -197,6 +200,18 @@ export function OrdersPanel({
                         {order.items.length !== 1 ? "s" : ""} ·{" "}
                         {fmt(order.total)}
                       </p>
+                      {order.status === "en camino" && onTrackOrder && (
+                        <span
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onTrackOrder(String(order.id));
+                          }}
+                          className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:brightness-95"
+                          style={{ background: "#FFF200", color: "#1A1A2E" }}
+                        >
+                          🛵 Rastrear en el mapa
+                        </span>
+                      )}
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
                   </button>
@@ -283,6 +298,16 @@ export function OrdersPanel({
                       ))}
                     </div>
                   </div>
+
+                  {selectedOrder.status === "en camino" && onTrackOrder && (
+                    <button
+                      onClick={() => onTrackOrder(String(selectedOrder.id))}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm transition-all hover:brightness-95"
+                      style={{ background: "#FFF200", color: "#1A1A2E" }}
+                    >
+                      🛵 Ver rastreo en el mapa
+                    </button>
+                  )}
 
                   <div>
                     <h3 className="text-sm font-bold mb-2">Productos</h3>

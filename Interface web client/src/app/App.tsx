@@ -35,6 +35,7 @@ import { AuthModal } from "./components/AuthModal";
 import { CheckoutModal } from "./components/CheckoutModal";
 import { ErrorPage } from "./components/ErrorPage";
 import { OrdersPanel } from "./components/OrdersPanel";
+import { OrderTrackingModal } from "./components/OrderTrackingModal";
 import { PopupDisplay } from "./components/PopupDisplay";
 
 const fmt = (n: number) =>
@@ -190,6 +191,13 @@ export default function App() {
   });
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
+
+  // Pedido que se está rastreando en el mapa (modal global).
+  const [trackingOrderCode, setTrackingOrderCode] = useState<string | null>(null);
+  const openTracker = useCallback((code: string) => {
+    setOrdersOpen(false);
+    setTrackingOrderCode(code);
+  }, []);
 
   const [landingCategories, setLandingCategories] = useState<CatalogCategory[]>(
     [],
@@ -824,6 +832,7 @@ export default function App() {
     notifications,
     unreadNotifCount: unreadCount,
     onMarkNotifRead: markAsRead,
+    onTrackOrder: openTracker,
     fmt,
     generalLogo,
   };
@@ -921,6 +930,7 @@ export default function App() {
           onMarkNotifRead={markAsRead}
           onReplaceCart={replaceCart}
           onProfileUpdated={updateProfile}
+          onOpenTracking={openTracker}
         />
       )}
 
@@ -1051,8 +1061,17 @@ export default function App() {
           setSelectedOrder(null);
           openCatalog();
         }}
+        onTrackOrder={openTracker}
         fmt={fmt}
       />
+
+      {/* Rastreo de pedido en el mapa (notificaciones, modal de pedidos, cuenta) */}
+      {trackingOrderCode && (
+        <OrderTrackingModal
+          orderCode={trackingOrderCode}
+          onClose={() => setTrackingOrderCode(null)}
+        />
+      )}
 
       {/* Chatbot de compras (parte inferior derecha) */}
       <ChatbotWidget

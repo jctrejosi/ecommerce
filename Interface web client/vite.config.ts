@@ -20,4 +20,18 @@ export default defineConfig({
   },
 
   assetsInclude: ["**/*.svg", "**/*.csv"],
+
+  server: {
+    port: 5173,
+    strictPort: true,
+    proxy: {
+      // OpenFreeMap (tiles vectoriales, mismo proveedor del delivery admin)
+      // servido same-origin para evitar bloqueos de red/adblock.
+      "/ofm": {
+        target: "https://tiles.openfreemap.org",
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ofm/, ""),
+      },
+    },
+  },
 });
