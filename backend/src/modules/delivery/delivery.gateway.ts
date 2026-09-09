@@ -35,14 +35,28 @@ export class DeliveryGateway implements OnGatewayConnection {
     try {
       const token = client.handshake.auth?.token as string | undefined;
       if (!token) throw new Error('sin token');
-      const secret = this.configService.get<string>('jwt.secret') ?? 'secret-key';
-      const payload = this.jwtService.verify(token, { secret });
+      const secret =
+        this.configService.get<string>('jwt.secret') ?? 'secret-key';
+      const payload = this.jwtService.verify<{
+        sub: number | string;
+        isSuperuser?: boolean;
+      }>(token, { secret });
       const userId = Number(payload.sub);
-      client.data.userId = userId;
-      client.join(`driver:${userId}`);
-      this.logger.log(`Repartidor conectado: user ${userId}`);
+      const data = client.data as { userId?: number; isSuperuser?: boolean };
+      data.userId = userId;
+      data.isSuperuser = Boolean(payload.isSuperuser);
+      if (payload.isSuperuser) {
+        // Administrador (panel web): se une a la sala de flota.
+        void client.join('fleet');
+        this.logger.log(`Admin conectado a /delivery (fleet): user ${userId}`);
+      } else {
+        void client.join(`driver:${userId}`);
+        this.logger.log(`Repartidor conectado: user ${userId}`);
+      }
     } catch {
-      this.logger.warn(`Conexión /delivery rechazada (${client.id}): token inválido`);
+      this.logger.warn(
+        `Conexión /delivery rechazada (${client.id}): token inválido`,
+      );
       client.disconnect(true);
     }
   }
@@ -51,6 +65,15 @@ export class DeliveryGateway implements OnGatewayConnection {
     this.server?.to('fleet').emit('delivery:fleet-location', {
       driverId,
       ...payload,
+      at: new Date().toISOString(),
+    });
+  }
+
+  /** Cambios de estado de pedidos/disponibilidad para el panel administrativo. */
+  emitFleetStatus(payload: Record<string, unknown>) {
+    this.server?.to('fleet').emit('delivery:fleet-status', {
+      ...payload,
+      at: new Date().toISOString(),
     });
   }
 }

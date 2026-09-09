@@ -7,10 +7,25 @@ import { DeliveryService } from './delivery.service';
 import { DeliveryGateway } from './delivery.gateway';
 import { DeliveryOrdersController } from './delivery-orders.controller';
 import { DeliveryOrdersService } from './delivery-orders.service';
+import { DeliveryAdminController } from './delivery-admin.controller';
+import { DeliveryAdminService } from './delivery-admin.service';
+import { SuperuserGuard } from './superuser.guard';
 
 @Module({
   imports: [AuthModule],
-  controllers: [DeliveryAuthController, DeliveryController, DeliveryOrdersController],
-  providers: [DeliveryAuthService, DeliveryService, DeliveryOrdersService, DeliveryGateway],
+  controllers: [
+    DeliveryAuthController,
+    DeliveryController,
+    DeliveryOrdersController,
+    DeliveryAdminController,
+  ],
+  providers: [
+    DeliveryAuthService,
+    DeliveryService,
+    DeliveryOrdersService,
+    DeliveryAdminService,
+    DeliveryGateway,
+    SuperuserGuard,
+  ],
 })
 export class DeliveryModule {}

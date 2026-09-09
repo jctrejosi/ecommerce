@@ -14,6 +14,7 @@ import {
   shipments,
 } from '../../../drizzle/schema';
 import { parsePoint } from './delivery.service';
+import { DeliveryGateway } from './delivery.gateway';
 import type { TransitionDto } from './dto/transition.dto';
 
 export interface TimelineEvent {
@@ -142,7 +143,11 @@ LEFT JOIN LATERAL (
 
 function buildTimeline(row: OrderRow): TimelineEvent[] {
   const events: TimelineEvent[] = [];
-  const push = (event: string, at: string | null, description?: string | null) => {
+  const push = (
+    event: string,
+    at: string | null,
+    description?: string | null,
+  ) => {
     if (at) events.push({ event, at, description: description ?? null });
   };
   push('ASSIGNED', row.assigned_at);
@@ -151,7 +156,11 @@ function buildTimeline(row: OrderRow): TimelineEvent[] {
   push('PICKED_UP', row.picked_up_at);
   push('IN_DELIVERY', row.in_delivery_at);
   push('DELIVERED', row.completed_at);
-  push('FAILED_DELIVERY', row.failed_at, row.reject_reason ?? row.cancel_reason);
+  push(
+    'FAILED_DELIVERY',
+    row.failed_at,
+    row.reject_reason ?? row.cancel_reason,
+  );
   push('REJECTED', row.rejected_at, row.reject_reason);
   push('CANCELLED', row.cancelled_at, row.cancel_reason);
   return events.sort(
@@ -185,7 +194,10 @@ function tsPatch(action: string, now: string): AssignmentUpdate {
 
 @Injectable()
 export class DeliveryOrdersService {
-  constructor(private readonly drizzle: DrizzleService) {}
+  constructor(
+    private readonly drizzle: DrizzleService,
+    private readonly gateway: DeliveryGateway,
+  ) {}
 
   private get db() {
     return this.drizzle.db;
@@ -266,7 +278,9 @@ export class DeliveryOrdersService {
 
   private async rowsToOrders(rows: OrderRow[]) {
     const items = await this.fetchItems(rows.map((r) => r.order_id));
-    return rows.map((r) => this.toDeliveryOrder(r, items.get(r.order_id) ?? []));
+    return rows.map((r) =>
+      this.toDeliveryOrder(r, items.get(r.order_id) ?? []),
+    );
   }
 
   async listActive(driverId: number) {
@@ -380,6 +394,14 @@ export class DeliveryOrdersService {
       }
     });
 
+    // Avisa al panel administrativo (sala `fleet`) para refrescar en vivo.
+    this.gateway.emitFleetStatus({
+      event: 'order-status',
+      orderId,
+      driverId,
+      status: NEXT_STATUS[action],
+    });
+
     return this.getOrder(driverId, orderId);
   }
 
@@ -388,6 +410,11 @@ export class DeliveryOrdersService {
       .update(deliveryDrivers)
       .set({ isAvailable })
       .where(eq(deliveryDrivers.id, BigInt(driverId)));
+    this.gateway.emitFleetStatus({
+      event: 'availability',
+      driverId,
+      isAvailable,
+    });
     return { ok: true };
   }
 

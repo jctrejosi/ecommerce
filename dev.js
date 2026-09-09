@@ -75,6 +75,7 @@ const C = {
   analytics: "\x1b[96m",
   picking: "\x1b[95m",
   "picking-admin": "\x1b[91m",
+  "delivery-admin": "\x1b[93m",
   bot: "\x1b[35m",
   ia: "\x1b[33m",
   delivery: "\x1b[92m",
@@ -132,6 +133,14 @@ const SERVICES = [
     deps: PNPM_DEPS,
   },
   {
+    name: "delivery-admin",
+    dir: "Interface web delivery admin",
+    url: "http://localhost:8447",
+    dev: [PM, "run", "dev"],
+    prod: [PM, "run", "preview"],
+    deps: PNPM_DEPS,
+  },
+  {
     name: "bot",
     dir: "bot",
     url: "http://localhost:8000",
@@ -161,6 +170,7 @@ const APP_ALIASES = {
   ia: "ia",
   picking: "picking",
   "picking-admin": "picking-admin",
+  "delivery-admin": "delivery-admin",
   bot: "bot",
   delivery: "delivery",
   osrm: "osrm",
@@ -173,6 +183,7 @@ const APP_DEPENDS = {
   analytics: ["backend"],
   picking: ["backend"],
   "picking-admin": ["backend"],
+  "delivery-admin": ["backend"],
   bot: ["backend"],
   ia: ["db-campaigns"],
   delivery: ["backend", "osrm"], // API real: backend (+BD) + OSRM para rutas
