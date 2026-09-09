@@ -4,17 +4,17 @@
  *
  * Uso:
  *   node dev.js            # DEV: instala dependencias faltantes, levanta
- *                          #   PostgreSQL + los 7 servicios en segundo plano,
+ *                          #   PostgreSQL + los servicios en segundo plano,
  *                          #   espera a que el backend esté listo, imprime las
  *                          #   URLs y termina (la terminal queda libre).
+ *   node dev.js <flags>    # Solo los aplicativos pedidos (p. ej. --delivery-admin).
  *   node dev.js --prod     # PRODUCCIÓN ("en vivo"): comandos de producción.
  *                          #   Requiere builds previos (backend: npm run build,
  *                          #   webs: npm run build). Los logs quedan en logs/*.log.
  *   node dev.js --stop     # Detiene los servicios levantados por dev.js.
- *   node dev.js --help     # Esta ayuda.
+ *   node dev.js --help     # Lista todos los comandos implementados.
  *
- * Logs: un archivo por servicio en logs/
- *   logs/db.log  logs/backend.log  logs/web.log  logs/admin.log  logs/analytics.log  logs/picking.log  logs/bot.log  logs/ia.log
+ * Logs: un archivo por servicio en logs/ (logs/<servicio>.log).
  *
  * La BD (docker) queda corriendo al salir; se detiene con
  * `cd db/docker && docker compose stop`.
@@ -620,26 +620,108 @@ function stopAll() {
   console.log("   OSRM (rutas): cd delivery-routing && docker compose stop");
 }
 
+// ── Ayuda (--help) ─────────────────────────────────────────
+const APP_LABELS = {
+  backend: "API backend (NestJS)",
+  web: "Cliente web",
+  admin: "Panel admin web",
+  analytics: "Panel analytics web",
+  picking: "Picking web",
+  "picking-admin": "Picking admin web",
+  "delivery-admin": "Delivery admin web",
+  bot: "Bot (Python)",
+  ia: "Servicio IA (Python)",
+};
+
+/** Flags con los que se puede pedir un aplicativo (--alias). */
+function selectorFlags(name) {
+  const flags = [];
+  for (const [alias, n] of Object.entries(APP_ALIASES)) {
+    if (n === name) flags.push("--" + alias);
+  }
+  // El flag canónico (igual al nombre) primero: --web antes que --client.
+  return flags.sort((a, b) => Number(b === "--" + name) - Number(a === "--" + name));
+}
+
+function helpDeps(name) {
+  const deps = (APP_DEPENDS[name] ?? []).map((d) =>
+    d === "db"
+      ? "PostgreSQL :5432"
+      : d === "db-campaigns"
+        ? "db-campaigns :5436"
+        : d,
+  );
+  return deps.length ? "requiere " + deps.join(" + ") : "";
+}
+
+function printHelp() {
+  const out = [];
+  out.push("🧪 MercAldas launcher — comandos implementados (node dev.js en la raíz)");
+  out.push("");
+  out.push("USO");
+  out.push("  node dev.js                     → levanta TODO (BDs + backend + todos los web + bot + IA + OSRM + delivery)");
+  out.push("  node dev.js <flags>             → solo los aplicativos pedidos (+ sus dependencias)");
+  out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
+  out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
+  out.push("  node dev.js --help              → esta ayuda");
+  out.push("");
+  out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
+  const order = [
+    "web",
+    "admin",
+    "analytics",
+    "picking",
+    "picking-admin",
+    "delivery-admin",
+    "backend",
+    "bot",
+    "ia",
+  ];
+  const rows = order.map((name) => {
+    const svc = SERVICES.find((s) => s.name === name);
+    return {
+      flags: selectorFlags(name).join(" / "),
+      label: APP_LABELS[name] + (svc ? ` (${svc.dir})` : ""),
+      url: svc?.url ?? "",
+      deps: helpDeps(name),
+    };
+  });
+  const wFlags = Math.max(...rows.map((r) => r.flags.length));
+  const wLabel = Math.max(...rows.map((r) => r.label.length));
+  const wUrl = Math.max(...rows.map((r) => r.url.length));
+  for (const r of rows) {
+    out.push(
+      `  ${r.flags.padEnd(wFlags)}  ${r.label.padEnd(wLabel)}  ${r.url.padEnd(wUrl)}  ${r.deps}`.trimEnd(),
+    );
+  }
+  out.push("");
+  out.push("MÓVIL Y RUTAS");
+  out.push("  --delivery   App móvil delivery (Expo, QR en :8081)  — levanta backend + OSRM + PostgreSQL");
+  out.push("  --osrm       Motor de rutas OSRM (:5000) — Manizales (sin apps)");
+  out.push("");
+  out.push("BASES DE DATOS");
+  out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
+  out.push("  db-campaigns (:5436) solo se monta con --analytics o sin flags (todo).");
+  out.push("  Para detenerlas:  cd db/docker && docker compose stop");
+  out.push("                     cd db-campaigns && docker compose stop");
+  out.push("                     cd delivery-routing && docker compose stop  (OSRM)");
+  out.push("");
+  out.push("EJEMPLOS");
+  out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + BD");
+  out.push("  node dev.js --analytics         → analytics + backend + BDs (incluye db-campaigns :5436)");
+  out.push("  node dev.js --delivery          → API real (backend + OSRM + BD) y QR del delivery app");
+  out.push("  node dev.js --admin --picking   → combina aplicativos");
+  out.push("  node dev.js --prod --delivery-admin");
+  out.push("");
+  out.push("Notas: --client es alias de --web · logs en logs/<servicio>.log · PIDs en logs/.pids.json");
+  console.log(out.join("\n"));
+}
+
 // ── Main ────────────────────────────────────────────────────
 
 async function main() {
   if (HELP) {
-    console.log(
-      "MercAldas launcher\n" +
-        "  node dev.js                    → todo (dev; termina con el QR del DELIVERY app)\n" +
-        "  node dev.js --client           → solo web client + sus dependencias\n" +
-        "  node dev.js --analytics        → solo analytics + backend + BDs (incl. db-campaigns)\n" +
-        "  node dev.js --delivery         → QR delivery + backend + OSRM (API real)\n" +
-        "  node dev.js --osrm             → solo el motor de rutas OSRM (Manizales)\n" +
-        "  node dev.js --admin --picking  → combina aplicativos\n" +
-        "  Flags: --backend --client --admin --analytics --picking --picking-admin --bot --ia --delivery --osrm --all\n" +
-        "  node dev.js --prod [flags]     → producción (requiere builds previos)\n" +
-        "  node dev.js --stop             → detiene los servicios\n" +
-        "  node dev.js --help             → esta ayuda\n" +
-        "  cd db/docker && docker compose stop → detener PostgreSQL\n" +
-        "  cd db-campaigns && docker compose stop → detener PostgreSQL analytics (:5436)\n" +
-        "  cd delivery-routing && docker compose stop → detener OSRM (rutas)\n",
-    );
+    printHelp();
     return;
   }
   if (STOP) return stopAll();
