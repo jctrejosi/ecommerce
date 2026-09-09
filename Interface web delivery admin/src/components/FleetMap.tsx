@@ -3,8 +3,10 @@ import {
   useEffect,
   useImperativeHandle,
   useRef,
+  useState,
 } from 'react';
 import L from 'leaflet';
+import { Check, Layers } from 'lucide-react';
 import type { FleetDriver } from '../types';
 import { driverVisual, STATUS_META } from '../lib/status';
 
@@ -19,8 +21,100 @@ interface Props {
   onSelect: (id: number | null) => void;
 }
 
-const TILES = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
-const DEFAULT_CENTER: [number, number] = [5.067, -75.517]; // Manizales
+interface LayerDef {
+  id: string;
+  name: string;
+  /** Una o más tile layers apiladas (p. ej. Base + Reference de Esri). */
+  urls: string[];
+  attribution: string;
+  maxZoom?: number;
+  swatch: string;
+  /** Filtro CSS opcional aplicado a los tiles (p. ej. estilo Waze). */
+  filter?: string;
+}
+
+/**
+ * Capas base disponibles. Todas son gratuitas y SIN API key (verificado
+ * contra los servidores de tiles: HTTP 200 sin autenticación).
+ * Nota: las capas de CARTO ya NO se usan porque desde ago/2026 piden
+ * API key (muestran watermark "API KEY REQUIRED").
+ */
+const LAYERS: LayerDef[] = [
+  {
+    id: 'standard',
+    name: 'Estándar',
+    urls: ['https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png'],
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    swatch: 'linear-gradient(135deg,#b8d8a5 0%,#e6e9dd 55%,#f4f7f6 100%)',
+  },
+  {
+    id: 'streets',
+    name: 'Calles · estilo Waze',
+    urls: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    ],
+    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ',
+    // Waze: mapa casi acromático, fondo pálido y calles blancas marcadas.
+    // Se desaturan los colores de terreno de Esri para lograr ese look.
+    filter: 'saturate(0.45) brightness(1.05) contrast(1.05)',
+    swatch: 'linear-gradient(#ffffff 0 0) 50% 35%/80% 2px no-repeat, linear-gradient(#ffffff 0 0) 50% 55%/60% 2px no-repeat, #d6d6d6',
+  },
+  {
+    id: 'light',
+    name: 'Claro',
+    // Fondo gris claro + calles OSCURAS (Transportation) + nombres de lugares.
+    urls: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+    ],
+    attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    maxZoom: 18,
+    swatch:
+      'linear-gradient(#454a50 0 0) 50% 35%/75% 2px no-repeat, linear-gradient(#454a50 0 0) 50% 60%/50% 2px no-repeat, #f2f1ee',
+  },
+  {
+    id: 'dark',
+    name: 'Oscuro',
+    // Base (fondo gris oscuro) + Reference (calles y etiquetas claras).
+    urls: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    ],
+    attribution: 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ',
+    maxZoom: 18,
+    swatch:
+      'linear-gradient(#c9ced6 0 0) 50% 35%/75% 2px no-repeat, linear-gradient(#c9ced6 0 0) 50% 60%/50% 2px no-repeat, #26292e',
+  },
+  {
+    id: 'satellite',
+    name: 'Satélite',
+    urls: [
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    ],
+    attribution: 'Tiles &copy; Esri &mdash; Maxar, Earthstar Geographics',
+    swatch: 'linear-gradient(135deg,#3f6d4e 0%,#6f8f5f 55%,#9aa06b 100%)',
+  },
+  {
+    id: 'terrain',
+    name: 'Relieve',
+    urls: ['https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png'],
+    attribution:
+      '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> · SRTM · <a href="https://opentopomap.org">OpenTopoMap</a>',
+    maxZoom: 17,
+    swatch: 'linear-gradient(135deg,#bcd6a4 0%,#e9e6cf 55%,#a8c4d8 100%)',
+  },
+];
+
+const LAYER_STORAGE_KEY = 'delivery_admin_map_layer_v2';
+
+/** Enfoque del mapa: la operación de delivery es solo en Manizales. */
+const MANIZALES_CENTER: [number, number] = [5.067, -75.517];
+const MANIZALES_BOUNDS: L.LatLngBoundsExpression = [
+  [4.97, -75.6], // SW (incluye Villamaría y margen rural)
+  [5.14, -75.4], // NE
+];
 
 function buildIcon(
   driver: FleetDriver,
@@ -63,31 +157,40 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<L.Map | null>(null);
+  const tileRefs = useRef<L.TileLayer[]>([]);
   const markersRef = useRef<Map<number, L.Marker>>(new Map());
   const routesRef = useRef<L.LayerGroup | null>(null);
   const destsRef = useRef<L.LayerGroup | null>(null);
+
+  const [activeLayer, setActiveLayer] = useState<string>(() => {
+    const saved = localStorage.getItem(LAYER_STORAGE_KEY);
+    // Por defecto la capa tipo Waze (Calles).
+    return LAYERS.some((l) => l.id === saved) ? (saved as string) : 'streets';
+  });
+  const [layersOpen, setLayersOpen] = useState(false);
+  const layerButtonRef = useRef<HTMLButtonElement | null>(null);
+  const layerPanelRef = useRef<HTMLDivElement | null>(null);
 
   // Refs espejo para usar dentro de handlers estables.
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
   const selectedIdRef = useRef(selectedId);
   selectedIdRef.current = selectedId;
-  const driversRef = useRef(drivers);
-  driversRef.current = drivers;
-  const hiddenIdsRef = useRef(hiddenIds);
-  hiddenIdsRef.current = hiddenIds;
 
   // ── Inicialización del mapa ──
   useEffect(() => {
     const el = containerRef.current;
     if (!el || mapRef.current) return;
 
-    const map = L.map(el, { zoomControl: true, attributionControl: true });
-    map.setView(DEFAULT_CENTER, 13);
-    L.tileLayer(TILES, {
-      maxZoom: 19,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
-    }).addTo(map);
+    const map = L.map(el, {
+      zoomControl: true,
+      attributionControl: true,
+      maxBounds: MANIZALES_BOUNDS,
+      maxBoundsViscosity: 0.9,
+      minZoom: 13,
+      maxZoom: 18,
+    });
+    map.setView(MANIZALES_CENTER, 14);
 
     routesRef.current = L.layerGroup().addTo(map);
     destsRef.current = L.layerGroup().addTo(map);
@@ -98,11 +201,62 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     return () => {
       map.remove();
       mapRef.current = null;
+      tileRefs.current = [];
       markersRef.current.clear();
       routesRef.current = null;
       destsRef.current = null;
     };
   }, []);
+
+  // ── Capa base (estilo del mapa) ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    for (const tile of tileRefs.current) {
+      map.removeLayer(tile);
+    }
+    tileRefs.current = [];
+
+    const def = LAYERS.find((l) => l.id === activeLayer) ?? LAYERS[0];
+    const maxZoom = def.maxZoom ?? 19;
+    for (const url of def.urls) {
+      tileRefs.current.push(
+        L.tileLayer(url, {
+          maxZoom,
+          attribution: def.attribution,
+          detectRetina: true,
+        }).addTo(map),
+      );
+    }
+    // Filtro CSS del estilo (no afecta pines/rutas, solo la capa de tiles).
+    const tilePane = map.getPane('tilePane');
+    if (tilePane) tilePane.style.filter = def.filter ?? 'none';
+    // Si la capa no llega al zoom actual, se acomoda para no dejar el mapa en blanco.
+    if (map.getZoom() > maxZoom) map.setZoom(maxZoom);
+  }, [activeLayer]);
+
+  // ── Persistir la preferencia de capa ──
+  useEffect(() => {
+    localStorage.setItem(LAYER_STORAGE_KEY, activeLayer);
+  }, [activeLayer]);
+
+  // ── Cerrar el selector de capas al hacer click fuera ──
+  useEffect(() => {
+    if (!layersOpen) return;
+    const onDown = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        layerPanelRef.current?.contains(target) ||
+        layerButtonRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setLayersOpen(false);
+    };
+    window.addEventListener('mousedown', onDown);
+    return () => window.removeEventListener('mousedown', onDown);
+  }, [layersOpen]);
 
   // ── Pines de repartidores ──
   useEffect(() => {
@@ -248,23 +402,68 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
-  // ── API imperativa: recenter ──
+  // ── API imperativa: recenter (enfoca Manizales) ──
   useImperativeHandle(ref, () => ({
     recenter() {
       const map = mapRef.current;
       if (!map) return;
-      const points: [number, number][] = [];
-      for (const d of driversRef.current) {
-        if (d.location && !hiddenIdsRef.current.has(d.id)) {
-          points.push([d.location.lat, d.location.lng]);
-        }
-      }
-      if (!points.length) return;
-      map.fitBounds(L.latLngBounds(points), { padding: [50, 50], maxZoom: 15 });
+      map.fitBounds(MANIZALES_BOUNDS, { padding: [30, 30], maxZoom: 15 });
     },
   }));
 
-  return <div ref={containerRef} className="h-full w-full" />;
+  return (
+    <div className="relative h-full w-full">
+      <div ref={containerRef} className="h-full w-full" />
+
+      {/* Selector de capas (esquina inferior izquierda) */}
+      <button
+        ref={layerButtonRef}
+        onClick={() => setLayersOpen((o) => !o)}
+        title="Cambiar estilo del mapa"
+        className={`absolute bottom-6 left-4 z-500 flex h-10 w-10 items-center justify-center rounded-xl shadow-lg ring-1 transition ${
+          layersOpen
+            ? 'bg-slate-900 text-white ring-slate-900'
+            : 'bg-white text-slate-600 ring-slate-200 hover:text-slate-900'
+        }`}
+      >
+        <Layers className="h-4.5 w-4.5" />
+      </button>
+
+      {layersOpen && (
+        <div
+          ref={layerPanelRef}
+          className="absolute bottom-[4.4rem] left-4 z-500 w-56 rounded-2xl bg-white p-1.5 shadow-xl ring-1 ring-slate-200"
+        >
+          <p className="px-2.5 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Estilo del mapa
+          </p>
+          {LAYERS.map((l) => (
+            <button
+              key={l.id}
+              onClick={() => {
+                setActiveLayer(l.id);
+                setLayersOpen(false);
+              }}
+              className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold transition-colors ${
+                activeLayer === l.id
+                  ? 'bg-amber-50 text-slate-900'
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span
+                className="h-6 w-9 shrink-0 rounded-md ring-1 ring-slate-200"
+                style={{ background: l.swatch }}
+              />
+              {l.name}
+              {activeLayer === l.id && (
+                <Check className="ml-auto h-3.5 w-3.5 text-amber-500" />
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 });
 
 export default FleetMap;

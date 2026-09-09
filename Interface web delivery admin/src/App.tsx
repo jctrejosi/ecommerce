@@ -340,17 +340,17 @@ export default function App() {
               onSelect={setSelectedId}
             />
 
-            {/* Botón recentrar */}
+            {/* Botón recentrar (Manizales) */}
             <button
               onClick={() => mapRef.current?.recenter()}
-              title="Centrar en la flota"
-              className="absolute bottom-8 right-4 z-[500] flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-lg ring-1 ring-slate-200 transition hover:text-slate-900"
+              title="Centrar el mapa en Manizales"
+              className="absolute bottom-8 right-4 z-500 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-lg ring-1 ring-slate-200 transition hover:text-slate-900"
             >
               <LocateFixed className="h-4.5 w-4.5" />
             </button>
 
             {/* Leyenda (a la derecha del control de zoom de Leaflet) */}
-            <div className="pointer-events-none absolute left-12 top-4 z-[500] rounded-xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
+            <div className="pointer-events-none absolute left-12 top-4 z-500 rounded-xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Estado de los repartidores
               </p>

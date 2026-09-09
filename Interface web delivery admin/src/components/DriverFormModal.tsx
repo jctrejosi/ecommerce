@@ -164,7 +164,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
     (mode === 'edit' || form.password.length >= 8);
 
   return (
-    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
+    <div className="fixed inset-0 z-1000 flex items-center justify-center bg-slate-950/50 p-4 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-2xl">
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
           <div>
