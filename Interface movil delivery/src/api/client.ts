@@ -6,19 +6,54 @@ export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/+$/, "
 export const USE_MOCK =
   process.env.EXPO_PUBLIC_USE_MOCK === "true" || API_URL.length === 0;
 
-export const http = axios.create({
-  baseURL: `${API_URL}/delivery`,
-  timeout: 20_000,
-  headers: { "Content-Type": "application/json" },
-});
+export const http = createApiClient(`${API_URL}/delivery`);
+/** Cliente contra la raíz del backend (p. ej. POST /upload/image). */
+export const uploadHttp = createApiClient(`${API_URL}`);
 
-http.interceptors.request.use(async (config) => {
-  const tokens = await getTokens();
-  if (tokens?.accessToken) {
-    config.headers.Authorization = `Bearer ${tokens.accessToken}`;
-  }
-  return config;
-});
+function createApiClient(baseURL: string) {
+  const client = axios.create({
+    baseURL,
+    timeout: 20_000,
+    headers: { "Content-Type": "application/json" },
+  });
+
+  client.interceptors.request.use(async (config) => {
+    const tokens = await getTokens();
+    if (tokens?.accessToken) {
+      config.headers.Authorization = `Bearer ${tokens.accessToken}`;
+    }
+    return config;
+  });
+
+  client.interceptors.response.use(
+    (res) => res,
+    async (error: AxiosError) => {
+      const original = error.config as
+        | (InternalAxiosRequestConfig & { _retry?: boolean })
+        | undefined;
+
+      if (
+        error.response?.status === 401 &&
+        original &&
+        !original._retry &&
+        !String(original.url).includes("/auth/")
+      ) {
+        original._retry = true;
+        refreshPromise ??= doRefresh().finally(() => {
+          refreshPromise = null;
+        });
+        const token = await refreshPromise;
+        if (token) {
+          original.headers.Authorization = `Bearer ${token}`;
+          return client(original);
+        }
+      }
+      return Promise.reject(error);
+    },
+  );
+
+  return client;
+}
 
 let refreshPromise: Promise<string | null> | null = null;
 
@@ -43,33 +78,6 @@ async function doRefresh(): Promise<string | null> {
     return null;
   }
 }
-
-http.interceptors.response.use(
-  (res) => res,
-  async (error: AxiosError) => {
-    const original = error.config as
-      | (InternalAxiosRequestConfig & { _retry?: boolean })
-      | undefined;
-
-    if (
-      error.response?.status === 401 &&
-      original &&
-      !original._retry &&
-      !String(original.url).includes("/auth/")
-    ) {
-      original._retry = true;
-      refreshPromise ??= doRefresh().finally(() => {
-        refreshPromise = null;
-      });
-      const token = await refreshPromise;
-      if (token) {
-        original.headers.Authorization = `Bearer ${token}`;
-        return http(original);
-      }
-    }
-    return Promise.reject(error);
-  },
-);
 
 /** El backend Nest envuelve respuestas en { data } — se desempaqueta si aplica. */
 export function unwrap<T>(payload: unknown): T {

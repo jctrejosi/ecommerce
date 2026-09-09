@@ -36,15 +36,18 @@ export function useHistory() {
 }
 
 /** Ruta recomendada (OSRM) para un pedido. Recálculo cada 60 s.
- *  `from` es opcional: sin él, el backend usa la última posición conocida. */
+ *  `from` es opcional: sin él, el backend usa la última posición conocida.
+ *  `target` indica hacia dónde se pide la ruta: la tienda a recoger ('store')
+ *  o el cliente ('customer'); undefined ⇒ no se consulta ruta. */
 export function useOrderRoute(
   orderId: number | string | undefined,
   from: string | undefined,
+  target: "customer" | "store" | undefined,
 ) {
   return useQuery({
-    queryKey: ["delivery", "orders", "route", orderId ?? "", from ?? ""] as const,
-    queryFn: () => api.getRoute(orderId!, from),
-    enabled: orderId !== undefined,
+    queryKey: ["delivery", "orders", "route", orderId ?? "", from ?? "", target ?? ""] as const,
+    queryFn: () => api.getRoute(orderId!, from, target),
+    enabled: orderId !== undefined && target !== undefined,
     refetchInterval: 60_000,
     retry: 1,
     staleTime: 15_000,

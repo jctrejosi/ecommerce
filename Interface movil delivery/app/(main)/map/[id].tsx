@@ -9,19 +9,7 @@ import { api } from "@/api";
 import { Button } from "@/ui/Button";
 import { ErrorBox } from "@/ui/ErrorBox";
 import { colors, radius, spacing } from "@/theme";
-import type { LatLng } from "@/api/types";
-
-function haversineKm(a: LatLng, b: LatLng): number {
-  const R = 6371;
-  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
-  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
-  const s =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((a.lat * Math.PI) / 180) *
-      Math.cos((b.lat * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(s));
-}
+import type { LatLng, DeliveryStatus } from "@/api/types";
 
 function formatDuration(seconds: number): string {
   const min = Math.round(seconds / 60);
@@ -31,15 +19,31 @@ function formatDuration(seconds: number): string {
   return m ? `≈ ${h} h ${m} min` : `≈ ${h} h`;
 }
 
+/** Fase del trayecto según el estado del pedido. */
+function phaseOf(status: DeliveryStatus): "to-store" | "at-store" | "to-customer" {
+  if (status === "ASSIGNED" || status === "ACCEPTED") return "to-store";
+  if (status === "READY_FOR_PICKUP") return "at-store";
+  return "to-customer"; // PICKED_UP / IN_DELIVERY (el resto no llega aquí)
+}
+
 export default function MapScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: order, isLoading, isError, error } = useOrder(id);
 
   const [origin, setOrigin] = useState<LatLng | null>(null);
 
-  // Ruta recomendada (OSRM) desde la posición actual del repartidor.
+  // Fase: mientras no se ha llegado a la tienda la ruta apunta a la tienda;
+  // al confirmar "TENGO EL PEDIDO" (PICKED_UP) la ruta apunta al cliente.
+  const phase = order ? phaseOf(order.status) : undefined;
+  const routeTarget: "customer" | "store" | undefined =
+    phase === "to-store"
+      ? "store"
+      : phase === "to-customer"
+        ? "customer"
+        : undefined;
+
   const from = origin ? `${origin.lng},${origin.lat}` : undefined;
-  const { data: route } = useOrderRoute(order?.id, from);
+  const { data: route } = useOrderRoute(order?.id, from, routeTarget);
 
   const refreshPosition = async () => {
     const pos = await getCurrentPosition();
@@ -87,17 +91,14 @@ export default function MapScreen() {
       ? { lat: order.pickup.branch.lat, lng: order.pickup.branch.lng }
       : null;
 
-  const distance =
-    route?.distanceM != null
-      ? route.distanceM / 1000
-      : origin && destination
-        ? haversineKm(origin, destination)
-        : null;
+  const showCustomer = phase !== "to-store"; // el cliente se muestra al llegar a la tienda
+  const navigateTo = phase === "to-store" ? pickup : destination;
+  const distance = route?.distanceM != null ? route.distanceM / 1000 : null;
 
   return (
     <View style={styles.container}>
       <DeliveryMap
-        destination={destination}
+        destination={showCustomer ? destination : null}
         origin={origin}
         pickup={pickup}
         routePolyline={route?.polyline}
@@ -106,25 +107,33 @@ export default function MapScreen() {
       {/* Barra de información */}
       <View style={styles.infoCard}>
         <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Destino</Text>
+          <Text style={styles.infoLabel}>{phase === "to-store" ? "Tienda" : "Destino"}</Text>
           <Text style={styles.infoValue} numberOfLines={1}>
-            {order.customer.name} · {order.address.line1}
+            {phase === "to-store"
+              ? [order.pickup.branch.name, order.pickup.branch.address]
+                  .filter(Boolean)
+                  .join(" · ")
+              : `${order.customer.name} · ${order.address.line1}`}
           </Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Distancia</Text>
           <Text style={styles.infoValue}>
-            {distance != null
-              ? route?.distanceM != null
-                ? `${distance.toFixed(1)} km (ruta real)`
-                : `≈ ${distance.toFixed(1)} km (línea recta)`
-              : "Calculando…"}
+            {route?.distanceM != null && distance != null
+              ? `${distance.toFixed(1)} km (ruta real)`
+              : phase === "at-store"
+                ? "En la tienda"
+                : "Calculando…"}
           </Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Tiempo estimado</Text>
           <Text style={styles.infoValue}>
-            {route?.durationS != null ? formatDuration(route.durationS) : "—"}
+            {route?.durationS != null
+              ? formatDuration(route.durationS)
+              : phase === "at-store"
+                ? "—"
+                : "—"}
           </Text>
         </View>
       </View>
@@ -135,9 +144,14 @@ export default function MapScreen() {
           label="ABRIR NAVEGACIÓN"
           icon="navigate-outline"
           onPress={() =>
-            destination
-              ? openExternalNavigation(destination)
-              : Alert.alert("Sin coordenadas", "Este pedido no tiene destino GPS.")
+            navigateTo
+              ? openExternalNavigation(navigateTo)
+              : Alert.alert(
+                  phase === "to-store"
+                    ? "Sin coordenadas de tienda"
+                    : "Sin coordenadas",
+                  "No hay un punto GPS válido para navegar.",
+                )
           }
         />
       </View>

@@ -11,6 +11,8 @@ import {
   deliveryDriverLocations,
   deliveryDrivers,
   shipments,
+  branches,
+  orders,
 } from '../../../drizzle/schema';
 import type { LocationDto } from './dto/location.dto';
 
@@ -90,23 +92,43 @@ export class DeliveryService {
     return { ok: true, location: { lat: dto.lat, lng: dto.lng } };
   }
 
-  /** Ruta recomendada (origen → destino) vía OSRM. */
+  /**
+   * Ruta recomendada vía OSRM.
+   * `target` = 'customer' (destino de entrega, default) | 'store' (tienda a recoger).
+   */
   async getOrderRoute(
     driver: typeof deliveryDrivers.$inferSelect,
     orderId: number,
     from?: string,
+    target: 'customer' | 'store' = 'customer',
   ) {
-    const rows = await this.db
-      .select({ location: shipments.location })
-      .from(shipments)
-      .where(eq(shipments.orderId, orderId))
-      .limit(1);
+    let destination: LatLng | null = null;
 
-    const destination = parsePoint(rows[0]?.location);
-    if (!destination) {
-      throw new UnprocessableEntityException(
-        'El pedido no tiene coordenadas de entrega.',
-      );
+    if (target === 'store') {
+      const rows = await this.db
+        .select({ location: branches.location })
+        .from(orders)
+        .innerJoin(branches, eq(branches.id, orders.branchId))
+        .where(eq(orders.id, BigInt(orderId)))
+        .limit(1);
+      destination = parsePoint(rows[0]?.location);
+      if (!destination) {
+        throw new UnprocessableEntityException(
+          'La tienda no tiene coordenadas de recogida.',
+        );
+      }
+    } else {
+      const rows = await this.db
+        .select({ location: shipments.location })
+        .from(shipments)
+        .where(eq(shipments.orderId, orderId))
+        .limit(1);
+      destination = parsePoint(rows[0]?.location);
+      if (!destination) {
+        throw new UnprocessableEntityException(
+          'El pedido no tiene coordenadas de entrega.',
+        );
+      }
     }
 
     const origin =

@@ -83,6 +83,10 @@ export const deliveryEventTypeEnum = pgEnum('delivery_event_type_enum', [
   'CANCELLED',
   'LOCATION_UPDATE',
 ]);
+export const deliveryProofKindEnum = pgEnum('delivery_proof_kind_enum', [
+  'LOCATION',
+  'PACKAGE',
+]);
 export const inventoryMovementTypeEnum = pgEnum(
   'inventory_movement_type_enum',
   [
@@ -2571,6 +2575,7 @@ export const deliveryAssignments = pgTable(
     }),
     cancelReason: text('cancel_reason'),
     rejectReason: text('reject_reason'),
+    deliveryNote: text('delivery_note'),
     status: deliveryAssignmentStatusEnum().default('ASSIGNED').notNull(),
   },
   (table) => [
@@ -2643,6 +2648,30 @@ export const deliveryEvents = pgTable(
       foreignColumns: [customers.id],
       name: 'delivery_events_created_by_fkey',
     }),
+  ],
+);
+
+export const deliveryProofMedia = pgTable(
+  'delivery_proof_media',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    assignmentId: bigint('assignment_id', { mode: 'number' }).notNull(),
+    kind: deliveryProofKindEnum('kind').notNull(),
+    url: text('url').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_delivery_proof_assignment').using(
+      'btree',
+      table.assignmentId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.assignmentId],
+      foreignColumns: [deliveryAssignments.id],
+      name: 'delivery_proof_media_assignment_id_fkey',
+    }).onDelete('cascade'),
   ],
 );
 

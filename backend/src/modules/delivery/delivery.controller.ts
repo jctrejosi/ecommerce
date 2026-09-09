@@ -39,11 +39,14 @@ export class DeliveryController {
     @CurrentUser('sub') userId: bigint,
     @Param('id') id: string,
     @Query('from') from?: string,
+    @Query('target') target?: string,
   ) {
     const driver = await this.delivery.getDriverByAuthUserId(Number(userId));
     if (!driver) {
       throw new UnauthorizedException('No hay repartidor asociado a esta cuenta.');
     }
-    return this.delivery.getOrderRoute(driver, Number(id), from);
+    const routeTarget =
+      target === 'store' ? 'store' : 'customer';
+    return this.delivery.getOrderRoute(driver, Number(id), from, routeTarget);
   }
 }

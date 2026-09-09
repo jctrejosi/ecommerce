@@ -220,7 +220,7 @@ export const mockApi: DeliveryApi = {
     return clone(history);
   },
 
-  async getRoute() {
+  async getRoute(_orderId, _from, _target) {
     // En mock no hay motor de rutas: la app usa la línea recta.
     return null;
   },
@@ -282,6 +282,11 @@ export const mockApi: DeliveryApi = {
   },
 
   async setPushToken(_token) {},
+
+  async uploadProofImage(_uri, kind) {
+    await delay(400);
+    return `https://mock.media/delivery/${kind}-${Date.now()}.jpg`;
+  },
 
   async setAvailability(available) {
     await delay(300);

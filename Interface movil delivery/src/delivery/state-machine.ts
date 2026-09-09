@@ -52,7 +52,7 @@ export const ACTIONS_BY_STATUS: Partial<Record<DeliveryStatus, StateAction[]>> =
     { key: "reject", label: "Rechazar", requiresReason: true, variant: "secondary" },
   ],
   ACCEPTED: [{ key: "arrived", label: "LLEGUÉ A LA TIENDA", variant: "primary" }],
-  READY_FOR_PICKUP: [{ key: "pickup", label: "RECOGÍ EL PEDIDO", variant: "primary" }],
+  READY_FOR_PICKUP: [{ key: "pickup", label: "TENGO EL PEDIDO", variant: "primary" }],
   PICKED_UP: [{ key: "start", label: "INICIAR ENTREGA", variant: "primary" }],
   IN_DELIVERY: [
     { key: "deliver", label: "CONFIRMAR ENTREGA", variant: "primary" },

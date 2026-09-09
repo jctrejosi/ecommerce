@@ -13,6 +13,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useOrder, useTransitionOrder } from "@/api/orders";
 import type { OrderItem } from "@/api/types";
+import { DeliveryProofModal } from "@/ui/DeliveryProofModal";
+import type { DeliveryProofPayload } from "@/ui/DeliveryProofModal";
 import { actionsFor } from "@/delivery/state-machine";
 import type { StateAction } from "@/delivery/state-machine";
 import { StatusBadge } from "@/ui/StatusBadge";
@@ -31,6 +33,7 @@ export default function OrderDetailScreen() {
 
   const [reasonAction, setReasonAction] = useState<StateAction | null>(null);
   const [reason, setReason] = useState("");
+  const [proofOpen, setProofOpen] = useState(false);
 
   const runAction = (action: StateAction) => {
     transition.mutate(
@@ -65,6 +68,19 @@ export default function OrderDetailScreen() {
         },
       },
     );
+  };
+
+  const confirmDelivery = async (proof: DeliveryProofPayload) => {
+    await transition.mutateAsync({
+      action: "deliver",
+      payload: {
+        proofLocationUrl: proof.proofLocationUrl,
+        proofPackageUrl: proof.proofPackageUrl,
+        note: proof.note,
+      },
+    });
+    // Al éxito la mutación ya refresca la caché; se cierra el modal aquí.
+    setProofOpen(false);
   };
 
   if (isLoading) {
@@ -163,10 +179,15 @@ export default function OrderDetailScreen() {
       {/* Recogida */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Recoger en</Text>
-        <Text style={styles.strong}>{order.pickup.branch.name}</Text>
-        {order.pickup.branch.address ? (
-          <Text style={styles.muted}>{order.pickup.branch.address}</Text>
-        ) : null}
+        <View style={styles.pickupRow}>
+          <Ionicons name="storefront-outline" size={30} color={colors.primary} />
+          <View style={styles.pickupText}>
+            <Text style={styles.strong}>{order.pickup.branch.name}</Text>
+            {order.pickup.branch.address ? (
+              <Text style={styles.muted}>{order.pickup.branch.address}</Text>
+            ) : null}
+          </View>
+        </View>
       </View>
 
       {/* Acciones del estado */}
@@ -185,9 +206,13 @@ export default function OrderDetailScreen() {
             icon={action.key === "accept" ? "checkmark-circle-outline" : undefined}
             loading={transition.isPending && !action.requiresReason}
             disabled={transition.isPending}
-            onPress={() =>
-              action.requiresReason ? setReasonAction(action) : runAction(action)
-            }
+            onPress={() => {
+              if (action.key === "deliver") {
+                setProofOpen(true);
+                return;
+              }
+              action.requiresReason ? setReasonAction(action) : runAction(action);
+            }}
           />
         ))}
       </View>
@@ -231,6 +256,14 @@ export default function OrderDetailScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* Confirmación de entrega con prueba fotográfica */}
+      <DeliveryProofModal
+        visible={proofOpen}
+        orderReference={order.referenceCode}
+        onCancel={() => setProofOpen(false)}
+        onSubmit={confirmDelivery}
+      />
     </Screen>
   );
 }
@@ -323,6 +356,12 @@ const styles = StyleSheet.create({
   itemQty: { fontSize: 14, fontWeight: "800", color: colors.primary, width: 32 },
   itemName: { fontSize: 14, color: colors.text, flex: 1 },
   total: { fontSize: 16, fontWeight: "800", color: colors.primary },
+  pickupRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(3),
+  },
+  pickupText: { flex: 1, gap: 2 },
   actions: { gap: spacing(2), marginBottom: spacing(6) },
   modalOverlay: {
     flex: 1,

@@ -21,7 +21,14 @@ export interface TransitionPayload {
   lat?: number;
   lng?: number;
   note?: string;
+  /** URL de la foto del lugar de entrega (subida previamente). */
+  proofLocationUrl?: string;
+  /** URL de la foto del pedido entregado (subida previamente). */
+  proofPackageUrl?: string;
 }
+
+/** Tipo de foto de la prueba de entrega. */
+export type ProofImageKind = "location" | "package";
 
 export interface RouteResult {
   polyline: string;
@@ -47,7 +54,11 @@ export interface DeliveryApi {
   getHistory(): Promise<HistoryEntry[]>;
 
   // ruta (OSRM): devuelve null cuando no hay ruta disponible (se degrada a línea recta)
-  getRoute(orderId: number | string, from?: string): Promise<RouteResult | null>;
+  getRoute(
+    orderId: number | string,
+    from?: string,
+    target?: "customer" | "store",
+  ): Promise<RouteResult | null>;
 
   // transiciones de estado
   transition(
@@ -55,6 +66,9 @@ export interface DeliveryApi {
     action: TransitionKey,
     payload?: TransitionPayload,
   ): Promise<DeliveryOrder>;
+
+  // sube una foto de la prueba de entrega y devuelve la URL publicada
+  uploadProofImage(uri: string, kind: ProofImageKind): Promise<string>;
 
   // tracking / perfil / notificaciones
   sendLocation(ping: LocationPing): Promise<void>;

@@ -1,5 +1,11 @@
-import { http, unwrap, apiErrorMessage } from "./client";
-import type { DeliveryApi, RouteResult, TransitionPayload, TransitionKey } from "./contract";
+import { http, uploadHttp, unwrap, apiErrorMessage } from "./client";
+import type {
+  DeliveryApi,
+  ProofImageKind,
+  RouteResult,
+  TransitionPayload,
+  TransitionKey,
+} from "./contract";
 import type {
   DeliveryOrder,
   DriverUser,
@@ -75,10 +81,10 @@ export const realApi: DeliveryApi = {
     }
   },
 
-  async getRoute(orderId, from) {
+  async getRoute(orderId, from, target?: "customer" | "store") {
     try {
       const res = await http.get(`/orders/${orderId}/route`, {
-        params: from ? { from } : undefined,
+        params: { from, target },
       });
       return unwrap<RouteResult>(res.data);
     } catch {
@@ -110,6 +116,27 @@ export const realApi: DeliveryApi = {
       return unwrap<DriverUser>(res.data);
     } catch (err) {
       throw new Error(apiErrorMessage(err, "No se pudo actualizar la disponibilidad."));
+    }
+  },
+
+  async uploadProofImage(uri, kind: ProofImageKind) {
+    try {
+      const form = new FormData();
+      form.append("file", {
+        uri,
+        name: `delivery_${kind}_${Date.now()}.jpg`,
+        type: "image/jpeg",
+      } as unknown as Blob);
+      form.append("code", "delivery_proofs");
+      const res = await uploadHttp.post("/upload/image", form, {
+        timeout: 30_000,
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const data = unwrap<{ url?: string }>(res.data);
+      if (!data?.url) throw new Error("La subida no devolvió una URL.");
+      return data.url;
+    } catch (err) {
+      throw new Error(apiErrorMessage(err, "No se pudo subir la foto."));
     }
   },
 };

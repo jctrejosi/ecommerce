@@ -63,7 +63,9 @@ export function DeliveryMap({
       .then((mod) => {
         if (mounted) setMl(mod);
       })
-      .catch(() => {
+      .catch((err) => {
+        // Solo ocurre si el APK no incluye el módulo nativo (dev build viejo).
+        console.warn("[map] módulo nativo no disponible:", err);
         if (mounted) setFailed(true);
       });
     return () => {
@@ -84,9 +86,11 @@ export function DeliveryMap({
 
   const center: [number, number] = destination
     ? [destination.lng, destination.lat]
-    : origin
-      ? [origin.lng, origin.lat]
-      : [-74.07209, 4.71099]; // Bogotá
+    : pickup
+      ? [pickup.lng, pickup.lat]
+      : origin
+        ? [origin.lng, origin.lat]
+        : [-74.07209, 4.71099]; // Bogotá
 
   const route: GeoJSON.GeoJSON | null = buildRoute(routePolyline, origin, destination);
 

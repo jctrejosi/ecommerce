@@ -9,6 +9,7 @@ import { DrizzleService } from '../../database/drizzle.service';
 import {
   deliveryAssignments,
   deliveryDrivers,
+  deliveryProofMedia,
   orders,
   shipments,
 } from '../../../drizzle/schema';
@@ -328,12 +329,24 @@ export class DeliveryOrdersService {
       throw new BadRequestException('Debes indicar un motivo.');
     }
 
+    // Prueba de entrega: la app exige 2 fotos (lugar + pedido) para confirmar.
+    const proofLocationUrl = payload?.proofLocationUrl?.trim();
+    const proofPackageUrl = payload?.proofPackageUrl?.trim();
+    if (action === 'deliver' && (!proofLocationUrl || !proofPackageUrl)) {
+      throw new BadRequestException(
+        'La entrega requiere la foto del lugar y la foto del pedido.',
+      );
+    }
+
     const now = new Date().toISOString();
     const patch: AssignmentUpdate = {
       status: NEXT_STATUS[action] as AssignmentUpdate['status'],
       ...tsPatch(action, now),
       ...(action === 'reject' || action === 'fail'
         ? { rejectReason: payload?.reason }
+        : {}),
+      ...(action === 'deliver'
+        ? { deliveryNote: payload?.note?.trim() || null }
         : {}),
     };
 
@@ -352,6 +365,18 @@ export class DeliveryOrdersService {
           .update(orders)
           .set({ status: 'delivered' })
           .where(eq(orders.id, BigInt(orderId)));
+        await tx.insert(deliveryProofMedia).values([
+          {
+            assignmentId: Number(assignment.assignment_id),
+            kind: 'LOCATION',
+            url: proofLocationUrl!,
+          },
+          {
+            assignmentId: Number(assignment.assignment_id),
+            kind: 'PACKAGE',
+            url: proofPackageUrl!,
+          },
+        ]);
       }
     });
 

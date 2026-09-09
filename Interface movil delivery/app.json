@@ -27,6 +27,7 @@
       "permissions": [
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.CAMERA",
         "android.permission.POST_NOTIFICATIONS"
       ]
     },
@@ -50,6 +51,14 @@
         {
           "color": "#2563EB",
           "defaultChannel": "delivery"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "La app adjunta fotos como prueba de la entrega del pedido.",
+          "cameraPermission": "La app usa la cámara para tomar la foto de la entrega.",
+          "microphonePermission": false
         }
       ]
     ]
