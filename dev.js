@@ -175,7 +175,7 @@ const APP_DEPENDS = {
   "picking-admin": ["backend"],
   bot: ["backend"],
   ia: ["db-campaigns"],
-  delivery: ["osrm"], // en mock no usa el backend; OSRM es para la ruta (fase real)
+  delivery: ["backend", "osrm"], // API real: backend (+BD) + OSRM para rutas
   osrm: [],
 };
 
@@ -616,7 +616,7 @@ async function main() {
         "  node dev.js                    → todo (dev; termina con el QR del DELIVERY app)\n" +
         "  node dev.js --client           → solo web client + sus dependencias\n" +
         "  node dev.js --analytics        → solo analytics + backend + BDs\n" +
-        "  node dev.js --delivery         → solo el QR del delivery + OSRM (mock; agrega --backend para API real)\n" +
+        "  node dev.js --delivery         → QR delivery + backend + OSRM (API real)\n" +
         "  node dev.js --osrm             → solo el motor de rutas OSRM (Manizales)\n" +
         "  node dev.js --admin --picking  → combina aplicativos\n" +
         "  Flags: --backend --client --admin --analytics --picking --picking-admin --bot --ia --delivery --osrm --all\n" +

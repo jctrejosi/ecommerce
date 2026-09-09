@@ -17,6 +17,16 @@ type MapLibreModule = typeof import("@maplibre/maplibre-react-native");
  */
 const MAP_UNAVAILABLE = Platform.OS === "web" || isRunningInExpoGo();
 
+/**
+ * Mapa base (calles, barrios, direcciones): OpenFreeMap sirve tiles
+ * vectoriales de OpenStreetMap (https://openfreemap.org) — gratis, sin API
+ * key y con nombres de vías en español para Manizales. Antes se usaba el
+ * estilo demo de MapLibre (sin detalle urbano), por eso solo se veían los
+ * marcadores y la ruta. Alternativa raster OSM si algún día hace falta:
+ * https://tile.openstreetmap.org/{z}/{x}/{y}.png
+ */
+const BASEMAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+
 export interface DeliveryMapProps {
   destination: LatLng | null;
   /** Posición actual del repartidor (si no hay, se omite la ruta). */
@@ -82,10 +92,7 @@ export function DeliveryMap({
 
   return (
     <View style={styles.container}>
-      <Map
-        style={styles.map}
-        mapStyle="https://demotiles.maplibre.org/style.json"
-      >
+      <Map style={styles.map} mapStyle={BASEMAP_STYLE_URL}>
         <Camera initialViewState={{ center, zoom: 13 }} />
 
         {route && (
