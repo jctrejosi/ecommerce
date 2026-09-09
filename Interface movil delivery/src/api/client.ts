@@ -74,7 +74,9 @@ async function doRefresh(): Promise<string | null> {
     await clearTokens();
     // Import diferido para romper el ciclo authStore ↔ client (solo se usa al refrescar).
     const { useAuthStore } = await import("@/auth/authStore");
+    // Sin sesión: el layout de (main) redirige a /login; se avisa el motivo.
     useAuthStore.getState().setUser(null);
+    useAuthStore.setState({ error: "Tu sesión expiró o no pudo renovarse. Inicia sesión de nuevo." });
     return null;
   }
 }

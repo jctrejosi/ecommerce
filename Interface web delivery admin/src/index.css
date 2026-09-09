@@ -15,31 +15,71 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-.leaflet-container {
+/* MapLibre */
+.maplibregl-map {
   width: 100%;
   height: 100%;
-  z-index: 0;
   font-family: inherit;
 }
 
-/* Tooltip de los pines del mapa */
-.fleet-tip {
-  border-radius: 10px;
+.maplibregl-ctrl-attrib {
+  font-size: 10px;
+}
+
+/* Pines de repartidores */
+.ml-pin {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--pin);
+  border: 3px solid var(--pin-border, #ffffff);
+  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.4);
+  color: #fff;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  z-index: 1000;
+}
+
+.ml-pin-inner {
+  pointer-events: none;
+}
+
+/* Tooltip al pasar el cursor sobre el pin */
+.ml-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #fff;
   border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
+  border-radius: 10px;
   padding: 6px 10px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
+  white-space: nowrap;
   font-size: 12px;
   line-height: 1.35;
+  color: #0f172a;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 2000;
 }
 
-.fleet-tip b {
+.ml-tip b {
   display: block;
   font-weight: 700;
-  color: #0f172a;
 }
 
-.fleet-tip .muted {
+.ml-tip .muted {
   color: #64748b;
+}
+
+.ml-pin:hover .ml-tip {
+  visibility: visible;
+  opacity: 1;
 }
 
 ::-webkit-scrollbar {

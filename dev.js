@@ -177,15 +177,17 @@ const APP_ALIASES = {
 };
 
 const APP_DEPENDS = {
-  backend: ["db", "db-campaigns"], // el backend usa la BD principal + la de campañas
+  // db-campaigns (PostgreSQL de analytics, :5436) solo lo necesita el panel
+  // de analytics; el backend de ecommerce usa únicamente la BD principal (:5432).
+  backend: ["db"],
   web: ["backend"],
   admin: ["backend"],
-  analytics: ["backend"],
+  analytics: ["backend", "db-campaigns"], // panel analytics + su BD de campañas
   picking: ["backend"],
   "picking-admin": ["backend"],
   "delivery-admin": ["backend"],
   bot: ["backend"],
-  ia: ["db-campaigns"],
+  ia: ["backend"], // genera contenido vía el backend; no usa la BD de campañas
   delivery: ["backend", "osrm"], // API real: backend (+BD) + OSRM para rutas
   osrm: [],
 };
@@ -626,7 +628,7 @@ async function main() {
       "MercAldas launcher\n" +
         "  node dev.js                    → todo (dev; termina con el QR del DELIVERY app)\n" +
         "  node dev.js --client           → solo web client + sus dependencias\n" +
-        "  node dev.js --analytics        → solo analytics + backend + BDs\n" +
+        "  node dev.js --analytics        → solo analytics + backend + BDs (incl. db-campaigns)\n" +
         "  node dev.js --delivery         → QR delivery + backend + OSRM (API real)\n" +
         "  node dev.js --osrm             → solo el motor de rutas OSRM (Manizales)\n" +
         "  node dev.js --admin --picking  → combina aplicativos\n" +

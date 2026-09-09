@@ -349,7 +349,7 @@ export default function App() {
               <LocateFixed className="h-4.5 w-4.5" />
             </button>
 
-            {/* Leyenda (a la derecha del control de zoom de Leaflet) */}
+            {/* Leyenda (junto al control de zoom) */}
             <div className="pointer-events-none absolute left-12 top-4 z-500 rounded-xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
               <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                 Estado de los repartidores
