@@ -49,7 +49,7 @@ export function BrandsSection({ brands = [], onBrandClick }: BrandsSectionProps)
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Nuestros aliados</p>
               <h2 className="font-black text-2xl text-foreground leading-tight" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
-                Marcas Destacadas
+                Marcas destacadas
               </h2>
             </div>
           </div>
@@ -63,9 +63,9 @@ export function BrandsSection({ brands = [], onBrandClick }: BrandsSectionProps)
           </div>
         </div>
 
-        <div ref={scrollRef} className="flex gap-4 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
+        <div ref={scrollRef} className="flex gap-6 overflow-x-auto pb-2" style={{ scrollbarWidth: "none" }}>
           {brands.length === 0 ? (
-            <div className="flex gap-4">
+            <div className="flex gap-6">
               {[...FALLBACK_BRANDS, ...FALLBACK_BRANDS].map((name, i) => (
                 <div key={`fb-${i}`} className="flex-shrink-0 flex flex-col items-center gap-3 group">
                   <div className="w-20 h-20 md:w-24 md:h-24 rounded-2xl border-2 border-border flex items-center justify-center transition-all duration-200 group-hover:border-foreground group-hover:shadow-md bg-white">

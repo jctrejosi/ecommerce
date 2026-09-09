@@ -286,8 +286,9 @@ export function DailyDealsSection({
                       </span>
                     </button>
                     <div className="p-3 flex flex-col gap-1 flex-1">
-                      <p className="text-xs text-muted-foreground">{p.category}</p>
-                      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2">{p.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{p.category}</p>
+                      {/* Altura fija de 2 líneas: evita saltos al cambiar el carrusel */}
+                      <p className="text-sm font-semibold text-foreground leading-snug line-clamp-2 h-10 overflow-hidden">{p.name}</p>
                       <div className="flex items-end gap-1.5 mt-auto pt-1">
                         <span className="font-bold text-base text-foreground" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
                           {fmt(p.price)}
