@@ -55,6 +55,8 @@ export interface OrderItem {
   name: string;
   quantity: number;
   unit?: string | null;
+  /** URL de la imagen cover del producto (media.path); null si no tiene. */
+  image?: string | null;
 }
 
 export interface OrderCustomer {

@@ -200,7 +200,7 @@ CREATE TABLE delivery_proofs (
     "city": "Bogotá", "notes": "Llamar al llegar"
   },
   "destination": { "lat": 4.7109, "lng": -74.0721 },
-  "items": [ { "name": "Producto A", "quantity": 2 }, … ],
+  "items": [ { "name": "Producto A", "quantity": 2, "image": "https://…/producto-a.jpg" }, … ],
   "totals": { "value": 45000, "currency": "COP", "shipping": 6000 },
   "payment": { "method": "CASH", "label": "Contraentrega" },
   "pickup": { "branch": { "name": "MercAldas Norte", "address": "…", "lat": …, "lng": … } },

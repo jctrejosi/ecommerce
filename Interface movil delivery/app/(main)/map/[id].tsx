@@ -3,7 +3,7 @@ import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useOrder, useOrderRoute } from "@/api/orders";
 import { DeliveryMap } from "@/maps/DeliveryMap";
-import { openExternalNavigation, openGenericNavigation } from "@/maps/navigation";
+import { openExternalNavigation } from "@/maps/navigation";
 import { getCurrentPosition, startDeliveryTracking, stopDeliveryTracking } from "@/tracking/location";
 import { api } from "@/api";
 import { Button } from "@/ui/Button";
@@ -36,17 +36,14 @@ export default function MapScreen() {
   const { data: order, isLoading, isError, error } = useOrder(id);
 
   const [origin, setOrigin] = useState<LatLng | null>(null);
-  const [locating, setLocating] = useState(false);
 
   // Ruta recomendada (OSRM) desde la posición actual del repartidor.
   const from = origin ? `${origin.lng},${origin.lat}` : undefined;
   const { data: route } = useOrderRoute(order?.id, from);
 
   const refreshPosition = async () => {
-    setLocating(true);
     const pos = await getCurrentPosition();
     if (pos) setOrigin(pos);
-    setLocating(false);
   };
 
   // Posición inicial + refresco cada 15 s.
@@ -130,14 +127,6 @@ export default function MapScreen() {
             {route?.durationS != null ? formatDuration(route.durationS) : "—"}
           </Text>
         </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Tracking</Text>
-          <Text style={styles.infoValue}>
-            {order.status === "PICKED_UP" || order.status === "IN_DELIVERY"
-              ? "🟢 activo (ping cada 15 s)"
-              : "⚫ inactivo (fuera de entrega)"}
-          </Text>
-        </View>
       </View>
 
       {/* Acciones */}
@@ -151,25 +140,6 @@ export default function MapScreen() {
               : Alert.alert("Sin coordenadas", "Este pedido no tiene destino GPS.")
           }
         />
-        <View style={styles.actionsRow}>
-          <View style={styles.half}>
-            <Button
-              label={locating ? "Ubicando…" : "Mi posición"}
-              icon="locate-outline"
-              variant="secondary"
-              loading={locating}
-              onPress={() => void refreshPosition()}
-            />
-          </View>
-          <View style={styles.half}>
-            <Button
-              label="App del sistema"
-              icon="compass-outline"
-              variant="secondary"
-              onPress={() => destination && openGenericNavigation(destination)}
-            />
-          </View>
-        </View>
       </View>
     </View>
   );
@@ -200,6 +170,4 @@ const styles = StyleSheet.create({
     right: spacing(4),
     gap: spacing(2),
   },
-  actionsRow: { flexDirection: "row", gap: spacing(2) },
-  half: { flex: 1 },
 });

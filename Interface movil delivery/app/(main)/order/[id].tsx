@@ -2,14 +2,17 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   StyleSheet,
   Text,
   TextInput,
   View,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useOrder, useTransitionOrder } from "@/api/orders";
+import type { OrderItem } from "@/api/types";
 import { actionsFor } from "@/delivery/state-machine";
 import type { StateAction } from "@/delivery/state-machine";
 import { StatusBadge } from "@/ui/StatusBadge";
@@ -130,6 +133,7 @@ export default function OrderDetailScreen() {
         <Text style={styles.cardTitle}>Productos</Text>
         {order.items.map((item, i) => (
           <View key={`${item.name}-${i}`} style={styles.itemRow}>
+            <ProductThumb item={item} />
             <Text style={styles.itemQty}>{item.quantity}x</Text>
             <Text style={styles.itemName} numberOfLines={2}>
               {item.name}
@@ -163,23 +167,6 @@ export default function OrderDetailScreen() {
         {order.pickup.branch.address ? (
           <Text style={styles.muted}>{order.pickup.branch.address}</Text>
         ) : null}
-      </View>
-
-      {/* Línea de tiempo */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Línea de tiempo</Text>
-        {order.timeline.map((t, i) => (
-          <View key={`${t.event}-${i}`} style={styles.timelineRow}>
-            <View style={styles.timelineDot} />
-            <View style={styles.timelineBody}>
-              <Text style={styles.timelineEvent}>{t.event}</Text>
-              {t.description ? (
-                <Text style={styles.muted}>{t.description}</Text>
-              ) : null}
-            </View>
-            <Text style={styles.timelineAt}>{formatDateTime(t.at)}</Text>
-          </View>
-        ))}
       </View>
 
       {/* Acciones del estado */}
@@ -248,6 +235,29 @@ export default function OrderDetailScreen() {
   );
 }
 
+/**
+ * Miniatura del producto: usa la imagen cover del catálogo (media.path).
+ * Si el ítem no trae imagen o la URL falla, muestra un placeholder.
+ */
+function ProductThumb({ item }: { item: OrderItem }) {
+  const [broken, setBroken] = useState(false);
+  if (!item.image || broken) {
+    return (
+      <View style={[styles.itemThumb, styles.itemThumbEmpty]}>
+        <Ionicons name="bag-outline" size={20} color={colors.textFaint} />
+      </View>
+    );
+  }
+  return (
+    <Image
+      source={{ uri: item.image }}
+      style={styles.itemThumb}
+      resizeMode="cover"
+      onError={() => setBroken(true)}
+    />
+  );
+}
+
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   headerRow: {
@@ -298,25 +308,21 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: colors.border,
   },
-  itemQty: { fontSize: 14, fontWeight: "800", color: colors.primary, width: 34 },
+  itemThumb: {
+    width: 46,
+    height: 46,
+    borderRadius: radius.md,
+    backgroundColor: colors.background,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  itemThumbEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  itemQty: { fontSize: 14, fontWeight: "800", color: colors.primary, width: 32 },
   itemName: { fontSize: 14, color: colors.text, flex: 1 },
   total: { fontSize: 16, fontWeight: "800", color: colors.primary },
-  timelineRow: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    gap: spacing(2),
-    paddingVertical: spacing(1.5),
-  },
-  timelineDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: colors.primary,
-    marginTop: 4,
-  },
-  timelineBody: { flex: 1 },
-  timelineEvent: { fontSize: 13, fontWeight: "700", color: colors.text },
-  timelineAt: { fontSize: 11, color: colors.textFaint },
   actions: { gap: spacing(2), marginBottom: spacing(6) },
   modalOverlay: {
     flex: 1,

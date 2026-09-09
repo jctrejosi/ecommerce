@@ -1,4 +1,4 @@
-import { Alert, Platform, StyleSheet, Switch, Text, View } from "react-native";
+import { Alert, Platform, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { useAuthStore } from "@/auth/authStore";
 import { Button } from "@/ui/Button";
@@ -10,15 +10,7 @@ import { colors, radius, spacing } from "@/theme";
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
-  const isAvailable = useAuthStore((s) => s.isAvailable);
-  const setAvailability = useAuthStore((s) => s.setAvailability);
   const logout = useAuthStore((s) => s.logout);
-
-  const toggleAvailability = (value: boolean) => {
-    setAvailability(value).catch((err: unknown) =>
-      Alert.alert("Error", err instanceof Error ? err.message : "No se pudo actualizar."),
-    );
-  };
 
   const confirmLogout = () => {
     // En web, Alert con botones no ejecuta callbacks: logout directo.
@@ -60,24 +52,6 @@ export default function ProfileScreen() {
         <InfoRow
           label="Estado"
           value={user?.isActive === false ? "Inactivo" : "Activo"}
-        />
-      </View>
-
-      <View style={[styles.card, styles.availability]}>
-        <View style={styles.availabilityText}>
-          <Text style={styles.availabilityTitle}>
-            {isAvailable ? "🟢 Disponible" : "⚫ No disponible"}
-          </Text>
-          <Text style={styles.availabilityHint}>
-            {isAvailable
-              ? "Puedes recibir asignaciones de pedidos."
-              : "No recibirás nuevos pedidos."}
-          </Text>
-        </View>
-        <Switch
-          value={isAvailable}
-          onValueChange={toggleAvailability}
-          trackColor={{ false: "#CBD5E1", true: colors.primary }}
         />
       </View>
 
@@ -127,13 +101,5 @@ const styles = StyleSheet.create({
     marginTop: spacing(1),
     fontWeight: "700",
   },
-  availability: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  availabilityText: { flex: 1, marginRight: spacing(3) },
-  availabilityTitle: { fontSize: 15, fontWeight: "800", color: colors.text },
-  availabilityHint: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
   logoutWrap: { marginTop: spacing(2) },
 });

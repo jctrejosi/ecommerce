@@ -96,6 +96,7 @@ interface ItemRow {
   order_id: string;
   product_name: string;
   quantity: string;
+  product_image: string | null;
 }
 
 interface AssignmentRow {
@@ -192,9 +193,13 @@ export class DeliveryOrdersService {
   private async fetchItems(orderIds: string[]) {
     if (!orderIds.length) return new Map<string, ItemRow[]>();
     const rows = await this.drizzle.execute<ItemRow>(
-      `SELECT order_id, product_name, quantity FROM order_items
-       WHERE order_id = ANY($1::bigint[])
-       ORDER BY id ASC`,
+      `SELECT oi.order_id, oi.product_name, oi.quantity, m.path AS product_image
+       FROM order_items oi
+       LEFT JOIN product_variants pv ON pv.id = oi.product_variant_id
+       LEFT JOIN product_images pi ON pi.product_id = pv.product_id AND pi.is_cover = true
+       LEFT JOIN media m ON m.id = pi.media_id
+       WHERE oi.order_id = ANY($1::bigint[])
+       ORDER BY oi.id ASC`,
       [orderIds.map((id) => Number(id))],
     );
     const map = new Map<string, ItemRow[]>();
@@ -229,6 +234,7 @@ export class DeliveryOrdersService {
       items: items.map((i) => ({
         name: i.product_name,
         quantity: Number(i.quantity),
+        image: i.product_image,
       })),
       totals: {
         value: Number(row.grand_total ?? 0),
