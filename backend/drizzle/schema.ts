@@ -2932,6 +2932,7 @@ export const savedFilters = pgTable(
     name: varchar({ length: 100 }).notNull(),
     description: text(),
     categoryIds: jsonb('category_ids').default('[]').notNull(),
+    productIds: jsonb('product_ids').default('[]').notNull(),
     brandId: bigint('brand_id', { mode: 'number' }),
     productTypeCode: varchar('product_type_code', { length: 50 }),
     onSale: boolean('on_sale').default(false),

@@ -14,6 +14,8 @@ type DealFeaturedItem = {
   bgFrom: string;
   bgTo: string;
   endsAt: string;
+  productIds?: number[];
+  categoryIds?: number[];
 };
 
 const DEAL_OF_DAY_ITEMS: DealFeaturedItem[] = [
@@ -71,6 +73,13 @@ interface DailyDealsSectionProps {
   onRemove: (id: number) => void;
   onProductClick: (product: Product) => void;
   dealProducts: Product[];
+  onApplyFilter?: (f: {
+    categoryIds?: number[];
+    productIds?: number[];
+    onSale?: boolean;
+    search?: string;
+    sort?: string;
+  }) => void;
   dailyDeals?: {
     featuredItems: DealFeaturedItem[];
     carousel: Product[];
@@ -78,7 +87,7 @@ interface DailyDealsSectionProps {
 }
 
 export function DailyDealsSection({
-  cartItems, onAdd, onRemove, onProductClick, dealProducts, dailyDeals,
+  cartItems, onAdd, onRemove, onProductClick, dealProducts, dailyDeals, onApplyFilter,
 }: DailyDealsSectionProps) {
   const featuredItems = (dailyDeals?.featuredItems?.length ? dailyDeals.featuredItems : DEAL_OF_DAY_ITEMS).map((item) => ({
     ...item,
@@ -127,6 +136,13 @@ export function DailyDealsSection({
   };
 
   const featured = featuredItems[featuredIdx % featuredItems.length];
+  const featuredFilter =
+    featured &&
+    ((featured.productIds?.length ?? 0) > 0 ||
+      (featured.categoryIds?.length ?? 0) > 0)
+      ? { productIds: featured.productIds, categoryIds: featured.categoryIds }
+      : null;
+  const featuredClickable = !!featuredFilter && !!onApplyFilter;
 
   return (
     <section className="py-10 bg-muted/40">
@@ -177,7 +193,8 @@ export function DailyDealsSection({
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Left: featured deal of the day */}
           <div
-            className="lg:w-72 flex-shrink-0 rounded-2xl overflow-hidden relative flex flex-col justify-between"
+            className={`lg:w-72 flex-shrink-0 rounded-2xl overflow-hidden relative flex flex-col justify-between${featuredClickable ? " cursor-pointer" : ""}`}
+            onClick={featuredClickable ? () => onApplyFilter!(featuredFilter!) : undefined}
             style={{ background: `linear-gradient(160deg, ${featured.bgFrom} 0%, ${featured.bgTo} 100%)`, minHeight: "340px", transition: "background 1s ease" }}
           >
             <div className="p-6 z-10 relative">
@@ -224,7 +241,10 @@ export function DailyDealsSection({
               {featuredItems.map((_, i) => (
                 <button
                   key={i}
-                  onClick={() => setFeaturedIdx(i)}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setFeaturedIdx(i);
+                  }}
                   className="h-1 rounded-full transition-all duration-500"
                   style={{ width: i === featuredIdx ? "16px" : "5px", background: i === featuredIdx ? "#FFF200" : "rgba(255,255,255,0.4)" }}
                 />

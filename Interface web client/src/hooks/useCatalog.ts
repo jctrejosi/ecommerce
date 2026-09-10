@@ -24,6 +24,7 @@ export function useCatalog(
 
   const categoriesKey = filters?.categories?.join("|") ?? "";
   const categoryIdsKey = filters?.categoryIds?.join("|") ?? "";
+  const productIdsKey = filters?.productIds?.join("|") ?? "";
 
   // Load products when filters change
   useEffect(() => {
@@ -58,6 +59,7 @@ export function useCatalog(
   }, [
     categoriesKey,
     categoryIdsKey,
+    productIdsKey,
     filters?.productTypeCode,
     filters?.onSale,
     filters?.priceRange,

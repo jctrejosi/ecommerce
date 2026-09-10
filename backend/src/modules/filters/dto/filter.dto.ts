@@ -1,5 +1,5 @@
 import { IsString, IsOptional, IsBoolean, IsInt, IsArray, MaxLength } from 'class-validator';
-import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional, PartialType } from '@nestjs/swagger';
 
 export class CreateFilterDto {
   @ApiProperty({ description: 'Nombre del filtro' })
@@ -17,6 +17,12 @@ export class CreateFilterDto {
   @IsArray()
   @IsInt({ each: true })
   categoryIds?: number[];
+
+  @ApiPropertyOptional({ description: 'IDs de productos específicos' })
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  productIds?: number[];
 
   @ApiPropertyOptional({ description: 'ID de marca' })
   @IsOptional()
@@ -59,4 +65,4 @@ export class CreateFilterDto {
   isActive?: boolean;
 }
 
-export class UpdateFilterDto extends CreateFilterDto {}
+export class UpdateFilterDto extends PartialType(CreateFilterDto) {}

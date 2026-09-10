@@ -57,6 +57,7 @@ export type ProductType = {
 export type ProductsQuery = {
   search?: string;
   categoryIds?: number[];
+  productIds?: number[];
   brandId?: number;
   productTypeCode?: string;
   isActive?: boolean;

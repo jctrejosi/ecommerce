@@ -20,6 +20,8 @@ export interface CatalogPageProps {
   onProductClick: (p: Product) => void;
   catalogCategory: number[];
   setCatalogCategory: (v: number[]) => void;
+  catalogProductIds: number[];
+  setCatalogProductIds: (v: number[]) => void;
   catalogOnSale: boolean;
   setCatalogOnSale: (v: boolean) => void;
   catalogPriceRange: string;

@@ -10,6 +10,7 @@ interface PopupData {
   position: "header" | "footer" | "left" | "right";
   filterConfig: {
     categoryIds?: number[];
+    productIds?: number[];
     brandId?: number | null;
     productTypeCode?: string;
     onSale?: boolean;
@@ -24,6 +25,7 @@ interface PopupData {
 interface PopupDisplayProps {
   onApplyFilter: (f: {
     categoryIds?: number[];
+    productIds?: number[];
     brandId?: number | null;
     productTypeCode?: string;
     onSale?: boolean;

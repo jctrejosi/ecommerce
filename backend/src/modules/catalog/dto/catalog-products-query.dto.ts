@@ -56,6 +56,25 @@ export class CatalogProductsQueryDto {
   categoryIds?: number[];
 
   @IsOptional()
+  @Transform(({ value }) => {
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => Number(item))
+        .filter((item) => Number.isFinite(item));
+    }
+    if (typeof value === 'string') {
+      return value
+        .split(',')
+        .map((item) => Number(item.trim()))
+        .filter((item) => Number.isFinite(item));
+    }
+    return [];
+  })
+  @IsArray()
+  @IsNumber({}, { each: true })
+  productIds?: number[];
+
+  @IsOptional()
   @Transform(({ value }) => value === 'true' || value === true)
   @IsBoolean()
   onSale?: boolean;

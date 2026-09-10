@@ -1,10 +1,15 @@
 import { useState, useEffect } from "react";
 import {
   Plus, Edit, Trash2, X, Loader2, Filter, Image, Type,
-  SlidersHorizontal, Megaphone, Search, Check, Save, AlertTriangle,
+  SlidersHorizontal, Megaphone, Save, AlertTriangle, Package, Tag,
 } from "lucide-react";
 import { popupsService, type Popup, type CreatePopupData } from "../services/popups.service";
-import { filtersService, type FilterConfig } from "../services/filters.service";
+import {
+  ProductPicker,
+  CategoryPicker,
+  useAdminCategories,
+  useProductOptions,
+} from "../components/TargetingPickers";
 
 const POSITION_LABEL: Record<string, string> = {
   header: "Header",
@@ -43,76 +48,6 @@ async function createMediaFromUrl(url: string, mediaType?: string): Promise<numb
   });
   if (!res.ok) throw new Error("Error al crear media");
   return (await res.json()).mediaId;
-}
-
-// ── Mini filter form ──
-function FilterMiniForm({
-  onCreated,
-  onCancel,
-}: {
-  onCreated: (f: FilterConfig) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [categoryIds, setCategoryIds] = useState("");
-  const [brandId, setBrandId] = useState("");
-  const [productTypeCode, setProductTypeCode] = useState("");
-  const [onSale, setOnSale] = useState(false);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const handleCreate = async () => {
-    if (!name.trim()) { setError("Nombre requerido"); return; }
-    setSaving(true); setError("");
-    try {
-      const f = await filtersService.create({
-        name: name.trim(),
-        categoryIds: categoryIds ? categoryIds.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n)) : [],
-        brandId: brandId ? parseInt(brandId) : null,
-        productTypeCode: productTypeCode.trim() || undefined,
-        onSale,
-        search: search.trim() || undefined,
-        sort: sort || undefined,
-      });
-      onCreated(f);
-    } catch (e: any) { setError(e.message || "Error"); }
-    finally { setSaving(false); }
-  };
-
-  return (
-    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-      <p className="text-xs font-semibold text-gray-700">Nuevo filtro</p>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del filtro *" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-      <div className="grid grid-cols-2 gap-2">
-        <input value={categoryIds} onChange={(e) => setCategoryIds(e.target.value)} placeholder="IDs categorías (1,2,3)" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-        <input value={brandId} onChange={(e) => setBrandId(e.target.value)} placeholder="ID marca" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-      </div>
-      <div className="grid grid-cols-2 gap-2">
-        <input value={productTypeCode} onChange={(e) => setProductTypeCode(e.target.value)} placeholder="Tipo producto" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Búsqueda" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-      </div>
-      <div className="flex items-center gap-3">
-        <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-2 text-xs border rounded-lg bg-white flex-1">
-          <option value="">Orden: por defecto</option>
-          <option value="precio-asc">Precio ↑</option>
-          <option value="precio-desc">Precio ↓</option>
-          <option value="descuento">Descuento</option>
-          <option value="relevancia">Relevancia</option>
-          <option value="vendidos">Vendidos</option>
-        </select>
-        <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={onSale} onChange={(e) => setOnSale(e.target.checked)} className="w-3.5 h-3.5" /> Oferta</label>
-      </div>
-      <div className="flex gap-2">
-        <button onClick={handleCreate} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-amber-400 text-amber-900 rounded-lg hover:bg-amber-500 disabled:opacity-50">
-          {saving && <Loader2 size={12} className="animate-spin" />} Crear filtro
-        </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
-      </div>
-    </div>
-  );
 }
 
 // ── Popup Editor Drawer ──
@@ -160,15 +95,18 @@ function PopupEditor({
     return { url: data.url, mediaType: data.mediaType || "image/webp" };
   };
 
-  // Filter state from popup's filterConfig
-  const [filterCategoryIds, setFilterCategoryIds] = useState(
-    (popup?.filterConfig?.categoryIds ?? []).join(",")
+  // Filtro de destino (se guarda en popup.filterConfig)
+  const [filterCategoryIds, setFilterCategoryIds] = useState<number[]>(
+    popup?.filterConfig?.categoryIds ?? [],
   );
   const [filterBrandId, setFilterBrandId] = useState(popup?.filterConfig?.brandId?.toString() ?? "");
   const [filterProductType, setFilterProductType] = useState(popup?.filterConfig?.productTypeCode ?? "");
   const [filterOnSale, setFilterOnSale] = useState(popup?.filterConfig?.onSale ?? false);
   const [filterSearch, setFilterSearch] = useState(popup?.filterConfig?.search ?? "");
   const [filterSort, setFilterSort] = useState(popup?.filterConfig?.sort ?? "");
+  const categories = useAdminCategories();
+  const { products: filterProducts, setProducts: setFilterProducts } =
+    useProductOptions(popup?.filterConfig?.productIds ?? []);
 
   const handleSave = async () => {
     if (!title.trim()) { setError("El título es obligatorio"); return; }
@@ -179,7 +117,8 @@ function PopupEditor({
       if (pendingFile) { const u = await uploadFile(pendingFile); if (u) finalImageUrl = u.url; }
       const imageMediaId = await createMediaFromUrl(finalImageUrl);
       const filterConfig: Record<string, unknown> = {
-        categoryIds: filterCategoryIds ? filterCategoryIds.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n)) : [],
+        categoryIds: filterCategoryIds,
+        productIds: filterProducts.map((p) => p.id),
         brandId: filterBrandId ? parseInt(filterBrandId) : null,
         productTypeCode: filterProductType.trim() || undefined,
         onSale: filterOnSale,
@@ -313,12 +252,23 @@ function PopupEditor({
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"><Filter size={12} /> Filtro de destino</div>
             <p className="text-xs text-gray-500">Al hacer clic en el popup, el usuario irá al catálogo con este filtro aplicado.</p>
-            <div className="grid grid-cols-2 gap-2">
-              <input value={filterCategoryIds} onChange={(e) => setFilterCategoryIds(e.target.value)} placeholder="IDs categorías (1,2,3)" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-              <input value={filterBrandId} onChange={(e) => setFilterBrandId(e.target.value)} placeholder="ID marca" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+                <Package size={11} /> Productos
+              </label>
+              <ProductPicker selected={filterProducts} onChange={setFilterProducts} />
+            </div>
+            <div>
+              <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+                <Tag size={11} /> Categorías
+              </label>
+              <CategoryPicker categories={categories} selected={filterCategoryIds} onChange={setFilterCategoryIds} />
             </div>
             <div className="grid grid-cols-2 gap-2">
+              <input value={filterBrandId} onChange={(e) => setFilterBrandId(e.target.value)} placeholder="ID marca" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
               <input value={filterProductType} onChange={(e) => setFilterProductType(e.target.value)} placeholder="Tipo producto" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+            </div>
+            <div>
               <input value={filterSearch} onChange={(e) => setFilterSearch(e.target.value)} placeholder="Búsqueda" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
             </div>
             <div className="flex items-center gap-3">

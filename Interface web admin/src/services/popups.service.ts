@@ -10,6 +10,7 @@ export type Popup = {
   position: PopupPosition;
   filterConfig: {
     categoryIds?: number[];
+    productIds?: number[];
     brandId?: number | null;
     productTypeCode?: string;
     onSale?: boolean;

@@ -9,6 +9,7 @@ export type FilterConfig = {
   name: string;
   description: string | null;
   categoryIds: number[];
+  productIds: number[];
   brandId: number | null;
   productTypeCode: string | null;
   onSale: boolean;
@@ -37,6 +38,7 @@ export class FiltersService {
       name: row.name,
       description: row.description,
       categoryIds: (row.categoryIds as number[]) ?? [],
+      productIds: (row.productIds as number[]) ?? [],
       brandId: row.brandId,
       productTypeCode: row.productTypeCode,
       onSale: row.onSale ?? false,
@@ -75,6 +77,7 @@ export class FiltersService {
         name: dto.name,
         description: dto.description ?? null,
         categoryIds: dto.categoryIds ?? [],
+        productIds: dto.productIds ?? [],
         brandId: dto.brandId ?? null,
         productTypeCode: dto.productTypeCode ?? null,
         onSale: dto.onSale ?? false,
@@ -94,6 +97,7 @@ export class FiltersService {
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.description !== undefined) data.description = dto.description;
     if (dto.categoryIds !== undefined) data.categoryIds = dto.categoryIds;
+    if (dto.productIds !== undefined) data.productIds = dto.productIds;
     if (dto.brandId !== undefined) data.brandId = dto.brandId;
     if (dto.productTypeCode !== undefined)
       data.productTypeCode = dto.productTypeCode;

@@ -88,6 +88,7 @@ export default function App() {
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("");
   const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
+  const [catalogProductIds, setCatalogProductIds] = useState<number[]>([]);
   const [catalogOnSale, setCatalogOnSale] = useState(false);
   const [catalogPriceRange, setCatalogPriceRange] = useState<string>("all");
   const [catalogSort, setCatalogSort] = useState("relevancia");
@@ -524,6 +525,7 @@ export default function App() {
     if (typeof categoryId === "number") {
       // El dropdown "Nuestros productos" pasa la categoría: aplicarla en el catálogo.
       setCatalogCategory([categoryId]);
+      setCatalogProductIds([]);
       setCatalogBrand(null);
       setCatalogProductType("");
       setCatalogSearch("");
@@ -531,6 +533,7 @@ export default function App() {
       // Vista completa ("Ver catálogo completo" / "Ver todos los productos"):
       // limpiar TODOS los filtros para que el catálogo no salga vacío.
       setCatalogCategory([]);
+      setCatalogProductIds([]);
       setCatalogBrand(null);
       setCatalogProductType("");
       setCatalogOnSale(false);
@@ -547,6 +550,7 @@ export default function App() {
    */
   const openCatalogWithSearch = (search: string) => {
     setCatalogCategory([]);
+    setCatalogProductIds([]);
     setCatalogBrand(null);
     setCatalogProductType("");
     setCatalogOnSale(false);
@@ -570,6 +574,7 @@ export default function App() {
   const handleCategoryClick = (n: string) => {
     setCatalogSearch(n);
     setCatalogBrand(null);
+    setCatalogProductIds([]);
     setCurrentView("catalog");
     navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -577,6 +582,7 @@ export default function App() {
   const handleBrandClick = (brandId: number) => {
     setCatalogBrand(brandId);
     setCatalogCategory([]);
+    setCatalogProductIds([]);
     setCatalogSearch("");
     setCurrentView("catalog");
     navigate("/catalog");
@@ -585,6 +591,7 @@ export default function App() {
   const handleProductTypeClick = (code: string) => {
     setCatalogProductType(code);
     setCatalogCategory([]);
+    setCatalogProductIds([]);
     setCatalogSearch("");
     setCurrentView("catalog");
     navigate("/catalog");
@@ -593,6 +600,7 @@ export default function App() {
 
   const handleApplyFilter = (f: {
     categoryIds?: number[];
+    productIds?: number[];
     brandId?: number | null;
     productTypeCode?: string;
     onSale?: boolean;
@@ -603,6 +611,7 @@ export default function App() {
   }) => {
     if (f.categoryIds?.length) setCatalogCategory(f.categoryIds);
     else setCatalogCategory([]);
+    setCatalogProductIds(f.productIds?.length ? f.productIds : []);
     setCatalogBrand(f.brandId ?? null);
     setCatalogProductType(f.productTypeCode ?? "");
     setCatalogOnSale(f.onSale ?? false);
@@ -888,6 +897,8 @@ export default function App() {
           onOpenCategory={openCatalog}
           catalogCategory={catalogCategory}
           setCatalogCategory={setCatalogCategory}
+          catalogProductIds={catalogProductIds}
+          setCatalogProductIds={setCatalogProductIds}
           catalogOnSale={catalogOnSale}
           setCatalogOnSale={setCatalogOnSale}
           catalogPriceRange={catalogPriceRange}

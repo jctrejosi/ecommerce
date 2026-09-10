@@ -1594,6 +1594,8 @@ export class CatalogService {
     const normalizedCategories = query.categories?.filter(Boolean) ?? [];
     const normalizedCategoryIds =
       query.categoryIds?.filter((id) => Number.isFinite(id)) ?? [];
+    const normalizedProductIds =
+      query.productIds?.filter((id) => Number.isFinite(id)) ?? [];
     const search = query.search?.trim();
     const sort = query.sort ?? 'relevancia';
     const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
@@ -1726,6 +1728,22 @@ export class CatalogService {
               END DESC, ${products.name} ASC`
         : undefined;
 
+    // Cuando se pide un conjunto explícito de productos (p. ej. un banner),
+    // se preserva el orden elegido por el usuario y se ignoran los demás ordenes.
+    const productIdsOrder =
+      normalizedProductIds.length > 0
+        ? sql`array_position(ARRAY[${sql.join(
+            normalizedProductIds.map((id) => sql`${BigInt(id)}`),
+            sql`, `,
+          )}]::bigint[], ${products.id})`
+        : undefined;
+
+    const orderBy = productIdsOrder
+      ? [productIdsOrder]
+      : searchOrder
+        ? [searchOrder]
+        : this.buildSort(sort);
+
     const rows = await this.drizzleService.db
       .select({
         id: products.id,
@@ -1794,6 +1812,12 @@ export class CatalogService {
             ? sql`${productVariants.currentComparePrice} IS NOT NULL`
             : undefined,
           query.brandId ? eq(products.brandId, query.brandId) : undefined,
+          normalizedProductIds.length > 0
+            ? inArray(
+                products.id,
+                normalizedProductIds.map((id) => BigInt(id)),
+              )
+            : undefined,
           query.productTypeCode
             ? eq(productTypes.code, query.productTypeCode)
             : undefined,
@@ -1808,10 +1832,7 @@ export class CatalogService {
             : undefined,
         ),
       )
-      .orderBy(
-        searchOrder ?? this.buildSort(sort)[0],
-        ...(searchOrder ? [] : this.buildSort(sort).slice(1)),
-      )
+      .orderBy(...orderBy)
       .limit(limit * 3)
       .offset(offset);
 

@@ -15,6 +15,7 @@ interface HeroSlide {
   accent: string;
   filter?: {
     categoryIds?: number[];
+    productIds?: number[];
     brandId?: number | null;
     productTypeCode?: string;
     onSale?: boolean;
@@ -167,6 +168,10 @@ export function HeroSection({
 
   const slide = slides[currentIndex];
   const hasText = !!(slide.slogan || slide.title || slide.description || slide.ctaText);
+  const bannerClickable = !!slide.filter && !!onApplyFilter;
+  const handleBannerClick = () => {
+    if (slide.filter && onApplyFilter) onApplyFilter(slide.filter);
+  };
 
   return (
     <section className="relative overflow-hidden" style={{ background: slide.bg, transition: "background 0.6s ease" }}>
@@ -174,7 +179,8 @@ export function HeroSection({
 
       <div className="max-w-7xl mx-auto px-4">
         <div
-          className="relative flex items-center h-[340px] md:h-[420px]"
+          className={`relative flex items-center h-[340px] md:h-[420px]${bannerClickable ? " cursor-pointer" : ""}`}
+          onClick={bannerClickable ? handleBannerClick : undefined}
           style={
             isLeaving
               ? { animation: "heroBgFade 0.45s ease both" }
@@ -252,7 +258,8 @@ export function HeroSection({
             )}
             {slide.ctaText && (
               <button
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   if (slide.filter && onApplyFilter) onApplyFilter(slide.filter);
                 }}
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
@@ -298,14 +305,20 @@ export function HeroSection({
           {slides.length > 1 && (
             <>
               <button
-                onClick={() => goSlide(-1)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goSlide(-1);
+                }}
                 className="absolute left-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110"
                 style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(4px)" }}
               >
                 <ChevronLeft className="w-4 h-4 text-white" />
               </button>
               <button
-                onClick={() => goSlide(1)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  goSlide(1);
+                }}
                 className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full flex items-center justify-center transition-all hover:scale-110 ${hasText ? "md:right-[42%]" : ""}`}
                 style={{ background: "rgba(255,255,255,0.2)", backdropFilter: "blur(4px)" }}
               >

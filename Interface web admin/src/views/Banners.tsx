@@ -16,6 +16,14 @@ import {
   type FeaturedProduct,
 } from "../services/featured.service";
 import { filtersService, type FilterConfig } from "../services/filters.service";
+import {
+  ProductPicker,
+  CategoryPicker,
+  useAdminCategories,
+  useProductOptions,
+  type ProductOption,
+  type AdminCategory,
+} from "../components/TargetingPickers";
 
 const STATUS_BADGE: Record<string, string> = {
   activo: "bg-green-50 text-green-700 border-green-200",
@@ -31,72 +39,368 @@ const STATUS_LABEL: Record<string, string> = {
   expirado: "Expirado",
 };
 
-// ── Mini filter form ──
-function FilterMiniForm({
-  onCreated,
+// ── Filtro: editor ──
+
+// Resumen legible de los criterios de un filtro.
+function filterSummary(f: FilterConfig): string {
+  const parts: string[] = [];
+  if (f.categoryIds?.length)
+    parts.push(`${f.categoryIds.length} categoría${f.categoryIds.length > 1 ? "s" : ""}`);
+  if (f.productIds?.length)
+    parts.push(`${f.productIds.length} producto${f.productIds.length > 1 ? "s" : ""}`);
+  if (f.onSale) parts.push("En oferta");
+  if (f.search) parts.push(`“${f.search}”`);
+  if (f.sort) parts.push(`orden ${f.sort}`);
+  if (f.brandId) parts.push("marca específica");
+  if (f.productTypeCode) parts.push(`tipo ${f.productTypeCode}`);
+  return parts.length ? parts.join(" · ") : "Sin criterios (abre todo el catálogo)";
+}
+
+// Editor de un filtro: categorías, productos, oferta, búsqueda y orden.
+function FilterEditor({
+  filter,
+  onSaved,
   onCancel,
 }: {
-  onCreated: (f: FilterConfig) => void;
+  filter: FilterConfig | null;
+  onSaved: (f: FilterConfig) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [categoryIds, setCategoryIds] = useState("");
-  const [brandId, setBrandId] = useState("");
-  const [productTypeCode, setProductTypeCode] = useState("");
-  const [onSale, setOnSale] = useState(false);
-  const [search, setSearch] = useState("");
-  const [sort, setSort] = useState("");
+  const isEdit = !!filter;
+  const [name, setName] = useState(filter?.name ?? "");
+  const [categoryIds, setCategoryIds] = useState<number[]>(filter?.categoryIds ?? []);
+  const [onSale, setOnSale] = useState(filter?.onSale ?? false);
+  const [sort, setSort] = useState(filter?.sort ?? "");
+  const [search, setSearch] = useState(filter?.search ?? "");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const categories = useAdminCategories();
+  const { products: selectedProducts, setProducts: setSelectedProducts } =
+    useProductOptions(filter?.productIds ?? []);
 
-  const handleCreate = async () => {
-    if (!name.trim()) { setError("Nombre requerido"); return; }
-    setSaving(true); setError("");
+  const handleSave = async () => {
+    if (!name.trim()) {
+      setError("El nombre es obligatorio");
+      return;
+    }
+    setSaving(true);
+    setError("");
     try {
-      const f = await filtersService.create({
+      const payload = {
         name: name.trim(),
-        categoryIds: categoryIds ? categoryIds.split(",").map((s) => parseInt(s.trim())).filter((n) => !isNaN(n)) : [],
-        brandId: brandId ? parseInt(brandId) : null,
-        productTypeCode: productTypeCode.trim() || undefined,
+        categoryIds,
+        productIds: selectedProducts.map((p) => p.id),
         onSale,
-        search: search.trim() || undefined,
         sort: sort || undefined,
-      });
-      onCreated(f);
-    } catch (e: any) { setError(e.message || "Error"); }
-    finally { setSaving(false); }
+        search: search.trim() || undefined,
+        // Preserva criterios avanzados que no se editan en este formulario.
+        brandId: filter?.brandId ?? null,
+        productTypeCode: filter?.productTypeCode ?? undefined,
+        priceMin: filter?.priceMin ?? undefined,
+        priceMax: filter?.priceMax ?? undefined,
+        isActive: filter?.isActive ?? true,
+      };
+      const saved =
+        isEdit && filter
+          ? await filtersService.update(filter.id, payload)
+          : await filtersService.create(payload);
+      onSaved(saved);
+    } catch (e: any) {
+      setError(e.message || "Error al guardar el filtro");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3">
-      <p className="text-xs font-semibold text-gray-700">Nuevo filtro</p>
+    <div className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-4">
+      <p className="text-xs font-semibold text-gray-700">
+        {isEdit ? `Editar filtro: ${filter?.name}` : "Nuevo filtro"}
+      </p>
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nombre del filtro *" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+
+      <div>
+        <label className="block text-[11px] font-semibold text-gray-500 mb-1">Nombre *</label>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ej: Ofertas de tecnología"
+          className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+        />
+      </div>
+
+      <div className="space-y-4">
+        <div>
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+            <Package size={11} /> Productos específicos (opcional)
+          </label>
+          <ProductPicker selected={selectedProducts} onChange={setSelectedProducts} />
+        </div>
+        <div>
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+            <Tag size={11} /> Categorías (opcional)
+          </label>
+          <CategoryPicker categories={categories} selected={categoryIds} onChange={setCategoryIds} />
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
-        <input value={categoryIds} onChange={(e) => setCategoryIds(e.target.value)} placeholder="IDs categorías (1,2,3)" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-        <input value={brandId} onChange={(e) => setBrandId(e.target.value)} placeholder="ID marca" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
+        <div>
+          <label className="block text-[11px] font-semibold text-gray-500 mb-1">Búsqueda (opcional)</label>
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Ej: nevera"
+            className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+          />
+        </div>
+        <div>
+          <label className="block text-[11px] font-semibold text-gray-500 mb-1">Orden</label>
+          <select
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className="w-full px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white"
+          >
+            <option value="">Por defecto</option>
+            <option value="precio-asc">Precio ↑</option>
+            <option value="precio-desc">Precio ↓</option>
+            <option value="descuento">Descuento</option>
+            <option value="relevancia">Relevancia</option>
+            <option value="nombre">Nombre A–Z</option>
+          </select>
+        </div>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <input value={productTypeCode} onChange={(e) => setProductTypeCode(e.target.value)} placeholder="Tipo producto" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Búsqueda" className="w-full px-3 py-2 text-xs border rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300" />
-      </div>
-      <div className="flex items-center gap-3">
-        <select value={sort} onChange={(e) => setSort(e.target.value)} className="px-3 py-2 text-xs border rounded-lg bg-white flex-1">
-          <option value="">Orden: por defecto</option>
-          <option value="precio-asc">Precio ↑</option>
-          <option value="precio-desc">Precio ↓</option>
-          <option value="descuento">Descuento</option>
-          <option value="relevancia">Relevancia</option>
-          <option value="vendidos">Vendidos</option>
-        </select>
-        <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={onSale} onChange={(e) => setOnSale(e.target.checked)} className="w-3.5 h-3.5" /> Oferta</label>
-      </div>
+
+      <label className="flex items-center gap-1.5 text-xs">
+        <input type="checkbox" checked={onSale} onChange={(e) => setOnSale(e.target.checked)} className="w-3.5 h-3.5" />
+        Solo productos en oferta
+      </label>
+
+      <p className="text-[11px] text-gray-400">
+        Si eliges productos, el catálogo mostrará exactamente esos productos (en ese orden). Si además eliges categorías, se combinan ambos criterios.
+      </p>
+
       <div className="flex gap-2">
-        <button onClick={handleCreate} disabled={saving} className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-amber-400 text-amber-900 rounded-lg hover:bg-amber-500 disabled:opacity-50">
-          {saving && <Loader2 size={12} className="animate-spin" />} Crear filtro
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-1 px-3 py-1.5 text-xs font-bold bg-amber-400 text-amber-900 rounded-lg hover:bg-amber-500 disabled:opacity-50"
+        >
+          {saving && <Loader2 size={12} className="animate-spin" />} {isEdit ? "Guardar cambios" : "Crear filtro"}
         </button>
         <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700">Cancelar</button>
       </div>
+    </div>
+  );
+}
+
+// Persiste los criterios de un banner en un saved filter y devuelve su id.
+// - Sin selección ⇒ null (desvincula el filtro del banner, sin borrarlo).
+// - Con filtro existente ⇒ lo actualiza (conserva los criterios avanzados).
+// - Sin filtro ⇒ crea uno nuevo.
+async function persistBannerFilter(opts: {
+  filterId: number | null;
+  base?: Banner["filter"];
+  name: string;
+  categoryIds: number[];
+  productIds: number[];
+}): Promise<number | null> {
+  const { filterId, base, name, categoryIds, productIds } = opts;
+  const hasSelection = categoryIds.length > 0 || productIds.length > 0;
+  if (!hasSelection) return null;
+
+  const criteria = {
+    categoryIds,
+    productIds,
+    onSale: base?.onSale ?? false,
+    sort: base?.sort ?? undefined,
+    search: base?.search ?? undefined,
+    brandId: base?.brandId ?? null,
+    productTypeCode: base?.productTypeCode ?? undefined,
+    priceMin: base?.priceMin ?? undefined,
+    priceMax: base?.priceMax ?? undefined,
+  };
+
+  if (filterId) {
+    // No renombramos al editar: puede estar compartido con otros banners.
+    const saved = await filtersService.update(filterId, criteria);
+    return saved.id;
+  }
+  const created = await filtersService.create({
+    name: (name.trim() || base?.name || "Filtro de banner").slice(0, 100),
+    ...criteria,
+  });
+  return created.id;
+}
+
+// Sección reutilizable para los modales: elegir productos y/o categorías
+// que se aplicarán como filtro al hacer clic en el banner.
+function BannerTargetingSection({
+  filter,
+  categoryIds,
+  setCategoryIds,
+  productIds,
+  setProductIds,
+}: {
+  filter?: Banner["filter"];
+  categoryIds: number[];
+  setCategoryIds: (v: number[]) => void;
+  productIds: number[];
+  setProductIds: (v: number[]) => void;
+}) {
+  const categories = useAdminCategories();
+  const { products: selectedProducts, setProducts: setSelectedProducts } =
+    useProductOptions(filter?.productIds ?? []);
+
+  const handleProductsChange = (next: ProductOption[]) => {
+    setSelectedProducts(next);
+    setProductIds(next.map((p) => p.id));
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider">
+        <Filter size={12} /> Productos y categorías
+      </div>
+      <p className="text-[11px] text-gray-400 -mt-2">
+        Elige productos concretos y/o categorías. Al hacer clic en el botón del banner, el catálogo se abrirá filtrado por ellos. Si no eliges nada, el botón abre todo el catálogo.
+      </p>
+      <div className="space-y-4">
+        <div>
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+            <Package size={11} /> Productos
+          </label>
+          <ProductPicker selected={selectedProducts} onChange={handleProductsChange} />
+        </div>
+        <div>
+          <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+            <Tag size={11} /> Categorías
+          </label>
+          <CategoryPicker categories={categories} selected={categoryIds} onChange={setCategoryIds} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Pestaña de filtros: asigna a cada slide qué catálogo abrir al hacer clic.
+function SlideFiltersTab({
+  slides,
+  filters,
+  onSaved,
+}: {
+  slides: Banner[];
+  filters: FilterConfig[];
+  onSaved: () => void;
+}) {
+  const [localFilters, setLocalFilters] = useState<FilterConfig[]>(filters);
+  const [assignments, setAssignments] = useState<Record<number, string>>(() => {
+    const map: Record<number, string> = {};
+    slides.forEach((s) => { map[s.id] = s.filterId?.toString() ?? ""; });
+    return map;
+  });
+  const [savingId, setSavingId] = useState<number | null>(null);
+  const [editor, setEditor] = useState<{ slideId: number; filter: FilterConfig | null } | null>(null);
+  const [error, setError] = useState("");
+
+  const sortedSlides = [...slides].sort((a, b) => a.position - b.position);
+  const filterById = (id: string) => localFilters.find((f) => f.id.toString() === id) ?? null;
+
+  const handleAssign = async (slideId: number) => {
+    setSavingId(slideId);
+    setError("");
+    try {
+      const value = assignments[slideId];
+      await bannersService.update(slideId, {
+        filterId: value ? parseInt(value) : null,
+      } as any);
+      onSaved();
+    } catch (e: any) {
+      setError(e.message || "Error al guardar");
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const handleFilterSaved = (slideId: number, f: FilterConfig) => {
+    setLocalFilters((prev) =>
+      prev.some((x) => x.id === f.id)
+        ? prev.map((x) => (x.id === f.id ? f : x))
+        : [...prev, f],
+    );
+    setAssignments((prev) => ({ ...prev, [slideId]: f.id.toString() }));
+    setEditor(null);
+    // Auto-asigna el filtro al slide para que el clic ya funcione.
+    void bannersService
+      .update(slideId, { filterId: f.id } as any)
+      .then(() => onSaved())
+      .catch(() => {});
+  };
+
+  return (
+    <div className="p-6 space-y-4">
+      <p className="text-sm text-gray-500">
+        Configura qué catálogo se abre al hacer clic en el botón de cada slide: productos concretos o una categoría completa.
+      </p>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {sortedSlides.length === 0 ? (
+        <div className="text-center py-16 text-sm text-gray-400">No hay slides configurados.</div>
+      ) : (
+        <div className="space-y-4">
+          {sortedSlides.map((s) => {
+            const assignedId = assignments[s.id] ?? "";
+            const assigned = filterById(assignedId);
+            return (
+              <div key={s.id} className="bg-white border border-gray-200 rounded-xl p-4">
+                <div className="flex items-start gap-3 mb-3">
+                  {s.image && <img src={s.image} alt="" className="w-16 h-10 rounded-lg object-cover shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-900 truncate">{s.title || <span className="underline decoration-dotted">Sin texto</span>}</p>
+                    <p className="text-xs text-gray-400 mt-0.5 truncate">Botón: {s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}</p>
+                    {assigned && <p className="text-[11px] text-amber-700 mt-1">{filterSummary(assigned)}</p>}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <select
+                    value={assignedId}
+                    onChange={(e) => setAssignments((prev) => ({ ...prev, [s.id]: e.target.value }))}
+                    className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                  >
+                    <option value="">Sin filtro (abre todo el catálogo)</option>
+                    {localFilters.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={() => setEditor({ slideId: s.id, filter: assigned })}
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100"
+                  >
+                    {assigned ? <SquarePen size={11} /> : <Plus size={11} />} {assigned ? "Editar" : "Nuevo"}
+                  </button>
+                  <button
+                    onClick={() => handleAssign(s.id)}
+                    disabled={savingId === s.id}
+                    className="shrink-0 px-3 py-2 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg disabled:opacity-50"
+                  >
+                    {savingId === s.id ? <Loader2 size={12} className="animate-spin" /> : "Guardar"}
+                  </button>
+                </div>
+
+                {editor?.slideId === s.id && (
+                  <div className="mt-3">
+                    <FilterEditor
+                      filter={editor.filter}
+                      onSaved={(f) => handleFilterSaved(s.id, f)}
+                      onCancel={() => setEditor(null)}
+                    />
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -130,6 +434,8 @@ function SlideEditor({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingMobileFile, setPendingMobileFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [categoryIds, setCategoryIds] = useState<number[]>(slide?.filter?.categoryIds ?? []);
+  const [productIds, setProductIds] = useState<number[]>(slide?.filter?.productIds ?? []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>, mobile: boolean) => {
     const file = e.target.files?.[0];
@@ -156,10 +462,6 @@ function SlideEditor({
     return { url: data.url, mediaType: data.mediaType || "image/webp" };
   };
 
-  // Filter config in content tab is read-only — managed in Filter tab
-  const filterId = slide?.filterId?.toString() ?? "";
-  const savedFilter = slide?.filter;
-
   const handleSave = async () => {
     if (!imageUrl.trim()) { setError("La imagen es obligatoria"); return; }
     setError(""); setSaving(true);
@@ -170,6 +472,13 @@ function SlideEditor({
       if (pendingMobileFile) { const u = await uploadFile(pendingMobileFile); if (u) finalMobileUrl = u.url; }
       const imageMediaId = await createMediaFromUrl(finalImageUrl);
       const mobileMediaId = finalMobileUrl ? await createMediaFromUrl(finalMobileUrl) : undefined;
+      const filterId = await persistBannerFilter({
+        filterId: slide?.filterId ?? null,
+        base: slide?.filter,
+        name: title.trim() || "Filtro de banner",
+        categoryIds,
+        productIds,
+      });
       const data: CreateBannerData = {
         title: title.trim(),
         subtitle: subtitle.trim(),
@@ -184,6 +493,7 @@ function SlideEditor({
         isActive,
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         endDate: endDate ? new Date(endDate).toISOString() : undefined,
+        filterId,
       };
       if (isEdit && slide) await bannersService.update(slide.id, data);
       else await bannersService.create(data);
@@ -271,15 +581,15 @@ function SlideEditor({
               <label className="block text-xs font-semibold text-gray-600 mb-1.5">Texto del botón</label>
               <input value={ctaText} onChange={(e) => setCtaText(e.target.value)} className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" placeholder="Ver Frutas y Verduras" />
             </div>
-            {/* Show assigned filter info */}
-            {savedFilter && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-2 text-xs">
-                <Filter size={12} className="text-amber-600 shrink-0" />
-                <span className="text-amber-800">Filtro: <strong>{savedFilter.name}</strong></span>
-                <span className="text-amber-500">— configurable en la pestaña Filtros</span>
-              </div>
-            )}
           </div>
+
+          <BannerTargetingSection
+            filter={slide?.filter}
+            categoryIds={categoryIds}
+            setCategoryIds={setCategoryIds}
+            productIds={productIds}
+            setProductIds={setProductIds}
+          />
 
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"><Calendar size={12} /> Programación</div>
@@ -340,16 +650,6 @@ function CarouselManager({
   const [activeTab, setActiveTab] = useState<"contenido" | "filtros">("contenido");
   const [slideEditor, setSlideEditor] = useState<Banner | null | "new">(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Banner | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  // For filter tab: track filter assignments per slide
-  const [slideFilters, setSlideFilters] = useState<Record<number, string>>(() => {
-    const map: Record<number, string> = {};
-    slides.forEach((s) => { map[s.id] = s.filterId?.toString() ?? ""; });
-    return map;
-  });
-  const [showFilterForm, setShowFilterForm] = useState<number | null>(null);
-  const [localFilters, setLocalFilters] = useState<FilterConfig[]>(filters);
 
   const sortedSlides = [...slides].sort((a, b) => a.position - b.position);
 
@@ -357,18 +657,6 @@ function CarouselManager({
     if (!deleteConfirm) return;
     try { await bannersService.remove(deleteConfirm.id); setDeleteConfirm(null); onSaved(); }
     catch (e) { console.error(e); }
-  };
-
-  const handleSaveFilter = async (slideId: number) => {
-    setSaving(true);
-    try {
-      const filterId = slideFilters[slideId];
-      await bannersService.update(slideId, {
-        filterId: filterId ? parseInt(filterId) : null,
-      } as any);
-      onSaved();
-    } catch (e) { console.error(e); }
-    finally { setSaving(false); }
   };
 
   return (
@@ -480,69 +768,7 @@ function CarouselManager({
             </div>
           ) : (
             /* ── FILTROS TAB ── */
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-500">
-                Configura el filtro que se aplicará al hacer clic en el botón de cada slide.
-              </p>
-
-              {sortedSlides.length === 0 ? (
-                <div className="text-center py-16 text-sm text-gray-400">No hay slides configurados.</div>
-              ) : (
-                <div className="space-y-4">
-                  {sortedSlides.map((s) => (
-                    <div key={s.id} className="bg-white border border-gray-200 rounded-xl p-4">
-                      <div className="flex items-start gap-3 mb-3">
-                        {s.image && <img src={s.image} alt="" className="w-16 h-10 rounded-lg object-cover shrink-0" />}
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{s.title || <span className="underline decoration-dotted">Sin texto</span>}</p>
-                          <p className="text-xs text-gray-400 mt-0.5 truncate">Slogan: {s.subtitle || <span className="underline decoration-dotted">Sin texto</span>}</p>
-                          <p className="text-xs text-gray-400 mt-0.5 truncate">Botón: {s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <select
-                          value={slideFilters[s.id] ?? ""}
-                          onChange={(e) => setSlideFilters((prev) => ({ ...prev, [s.id]: e.target.value }))}
-                          className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
-                        >
-                          <option value="">Sin filtro</option>
-                          {localFilters.map((f) => (
-                            <option key={f.id} value={f.id}>{f.name}</option>
-                          ))}
-                        </select>
-                        <button
-                          onClick={() => setShowFilterForm(showFilterForm === s.id ? null : s.id)}
-                          className="shrink-0 flex items-center gap-1 px-2.5 py-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100"
-                        >
-                          <Plus size={11} /> Nuevo
-                        </button>
-                        <button
-                          onClick={() => handleSaveFilter(s.id)}
-                          disabled={saving}
-                          className="shrink-0 px-3 py-2 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg disabled:opacity-50"
-                        >
-                          Guardar
-                        </button>
-                      </div>
-
-                      {showFilterForm === s.id && (
-                        <div className="mt-3">
-                          <FilterMiniForm
-                            onCreated={(f) => {
-                              setLocalFilters((prev) => [...prev, f]);
-                              setSlideFilters((prev) => ({ ...prev, [s.id]: f.id.toString() }));
-                              setShowFilterForm(null);
-                            }}
-                            onCancel={() => setShowFilterForm(null)}
-                          />
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            <SlideFiltersTab slides={slides} filters={filters} onSaved={onSaved} />
           )}
         </div>
       </div>
@@ -598,6 +824,8 @@ function PromoSlideEditor({
   const [startDate, setStartDate] = useState(slide?.startDate ? new Date(slide.startDate).toISOString().slice(0, 16) : "");
   const [endDate, setEndDate] = useState(slide?.endDate ? new Date(slide.endDate).toISOString().slice(0, 16) : "");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [categoryIds, setCategoryIds] = useState<number[]>(slide?.filter?.categoryIds ?? []);
+  const [productIds, setProductIds] = useState<number[]>(slide?.filter?.productIds ?? []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -626,6 +854,13 @@ function PromoSlideEditor({
       let finalImageUrl = imageUrl.trim();
       if (pendingFile) { const u = await uploadFile(pendingFile); if (u) finalImageUrl = u.url; }
       const imageMediaId = await createMediaFromUrl(finalImageUrl);
+      const filterId = await persistBannerFilter({
+        filterId: slide?.filterId ?? null,
+        base: slide?.filter,
+        name: title.trim() || "Filtro de banner",
+        categoryIds,
+        productIds,
+      });
       const data: CreateBannerData = {
         title: title.trim(),
         subtitle: subtitle.trim(),
@@ -638,6 +873,7 @@ function PromoSlideEditor({
         isActive,
         startDate: startDate ? new Date(startDate).toISOString() : undefined,
         endDate: endDate ? new Date(endDate).toISOString() : undefined,
+        filterId,
       };
       if (isEdit && slide) await bannersService.update(slide.id, data);
       else await bannersService.create(data);
@@ -714,6 +950,14 @@ function PromoSlideEditor({
             </div>
           </div>
 
+          <BannerTargetingSection
+            filter={slide?.filter}
+            categoryIds={categoryIds}
+            setCategoryIds={setCategoryIds}
+            productIds={productIds}
+            setProductIds={setProductIds}
+          />
+
           <div className="space-y-4">
             <div className="flex items-center gap-2 text-xs font-semibold text-gray-400 uppercase tracking-wider"><Calendar size={12} /> Programación</div>
             <div className="grid grid-cols-2 gap-4">
@@ -768,15 +1012,6 @@ function PromoManager({
   const [activeTab, setActiveTab] = useState<"contenido" | "filtros">("contenido");
   const [slideEditor, setSlideEditor] = useState<Banner | null | "new">(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Banner | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const [slideFilters, setSlideFilters] = useState<Record<number, string>>(() => {
-    const map: Record<number, string> = {};
-    slides.forEach((s) => { map[s.id] = s.filterId?.toString() ?? ""; });
-    return map;
-  });
-  const [showFilterForm, setShowFilterForm] = useState<number | null>(null);
-  const [localFilters, setLocalFilters] = useState<FilterConfig[]>(filters);
 
   const sortedSlides = [...slides].sort((a, b) => a.position - b.position);
 
@@ -784,16 +1019,6 @@ function PromoManager({
     if (!deleteConfirm) return;
     try { await bannersService.remove(deleteConfirm.id); setDeleteConfirm(null); onSaved(); }
     catch (e) { console.error(e); }
-  };
-
-  const handleSaveFilter = async (slideId: number) => {
-    setSaving(true);
-    try {
-      const filterId = slideFilters[slideId];
-      await bannersService.update(slideId, { filterId: filterId ? parseInt(filterId) : null } as any);
-      onSaved();
-    } catch (e) { console.error(e); }
-    finally { setSaving(false); }
   };
 
   return (
@@ -857,32 +1082,7 @@ function PromoManager({
               )}
             </div>
           ) : (
-            <div className="p-6 space-y-4">
-              <p className="text-sm text-gray-500">Configura el filtro para el botón de cada banner.</p>
-              {sortedSlides.map((s) => (
-                <div key={s.id} className="bg-white border border-gray-200 rounded-xl p-4">
-                  <div className="flex items-start gap-3 mb-3">
-                    {s.image && <img src={s.image} alt="" className="w-16 h-10 rounded-lg object-cover shrink-0" />}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold text-gray-900 truncate">{s.title || <span className="underline decoration-dotted">Sin texto</span>}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">Subtítulo: {s.subtitle || <span className="underline decoration-dotted">Sin texto</span>}</p>
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">Botón: {s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <select value={slideFilters[s.id] ?? ""} onChange={(e) => setSlideFilters((prev) => ({ ...prev, [s.id]: e.target.value }))} className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white">
-                      <option value="">Sin filtro</option>
-                      {localFilters.map((f) => (<option key={f.id} value={f.id}>{f.name}</option>))}
-                    </select>
-                    <button onClick={() => setShowFilterForm(showFilterForm === s.id ? null : s.id)} className="shrink-0 flex items-center gap-1 px-2.5 py-2 text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded-lg hover:bg-amber-100"><Plus size={11} /> Nuevo</button>
-                    <button onClick={() => handleSaveFilter(s.id)} disabled={saving} className="shrink-0 px-3 py-2 text-xs font-semibold text-white bg-amber-500 hover:bg-amber-600 rounded-lg disabled:opacity-50">Guardar</button>
-                  </div>
-                  {showFilterForm === s.id && (
-                    <div className="mt-3"><FilterMiniForm onCreated={(f) => { setLocalFilters((prev) => [...prev, f]); setSlideFilters((prev) => ({ ...prev, [s.id]: f.id.toString() })); setShowFilterForm(null); }} onCancel={() => setShowFilterForm(null)} /></div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <SlideFiltersTab slides={slides} filters={filters} onSaved={onSaved} />
           )}
         </div>
       </div>
@@ -1116,6 +1316,10 @@ function BenefitsInlineEditor({
 }
 
 // ── Daily Deals Manager ──
+type DealItemTextField =
+  | "title" | "subtitle" | "discount" | "price"
+  | "originalPrice" | "unit" | "image" | "bgFrom" | "bgTo" | "endsAt";
+
 interface DealItemForm {
   id: string;
   title: string;
@@ -1128,6 +1332,8 @@ interface DealItemForm {
   bgFrom: string;
   bgTo: string;
   endsAt: string;
+  productIds: number[];
+  categoryIds: number[];
 }
 
 interface DealCarouselProduct {
@@ -1137,6 +1343,50 @@ interface DealCarouselProduct {
   originalPrice?: number;
   image: string | null;
   category?: string | null;
+}
+
+// Filtro por item del display de Ofertas del día (productos y/o categorías).
+function DealItemFilter({
+  categories,
+  categoryIds,
+  productIds,
+  onChange,
+}: {
+  categories: AdminCategory[];
+  categoryIds: number[];
+  productIds: number[];
+  onChange: (v: { productIds: number[]; categoryIds: number[] }) => void;
+}) {
+  const { products, setProducts } = useProductOptions(productIds);
+  return (
+    <div className="border-t border-gray-100 pt-3 space-y-3">
+      <p className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+        Filtro al hacer clic
+      </p>
+      <div>
+        <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+          <Package size={11} /> Productos
+        </label>
+        <ProductPicker
+          selected={products}
+          onChange={(next) => {
+            setProducts(next);
+            onChange({ productIds: next.map((p) => p.id), categoryIds });
+          }}
+        />
+      </div>
+      <div>
+        <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 mb-1">
+          <Tag size={11} /> Categorías
+        </label>
+        <CategoryPicker
+          categories={categories}
+          selected={categoryIds}
+          onChange={(next) => onChange({ productIds, categoryIds: next })}
+        />
+      </div>
+    </div>
+  );
 }
 
 function DailyDealsManager({ onClose }: { onClose: () => void }) {
@@ -1152,6 +1402,7 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
   const [searchResults, setSearchResults] = useState<DealCarouselProduct[]>([]);
   const [searching, setSearching] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const categories = useAdminCategories();
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -1175,6 +1426,12 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
             bgFrom: it.bgFrom ?? "#1A4A2E",
             bgTo: it.bgTo ?? "#0D3B1F",
             endsAt: it.endsAt ?? "",
+            productIds: Array.isArray(it.productIds)
+              ? it.productIds.map(Number)
+              : [],
+            categoryIds: Array.isArray(it.categoryIds)
+              ? it.categoryIds.map(Number)
+              : [],
           })),
         );
         setCarousel(data.carousel ?? []);
@@ -1190,8 +1447,17 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
     void load();
   }, [load]);
 
-  const updateItem = (idx: number, field: keyof DealItemForm, value: string) => {
+  const updateItem = (idx: number, field: DealItemTextField, value: string) => {
     setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
+  };
+
+  const updateItemFilter = (
+    idx: number,
+    next: { productIds: number[]; categoryIds: number[] },
+  ) => {
+    setItems((prev) =>
+      prev.map((it, i) => (i === idx ? { ...it, ...next } : it)),
+    );
   };
 
   const addItem = () => {
@@ -1209,6 +1475,8 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
         bgFrom: "#1A4A2E",
         bgTo: "#0D3B1F",
         endsAt: "",
+        productIds: [],
+        categoryIds: [],
       },
     ]);
   };
@@ -1281,6 +1549,8 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
           bgFrom: it.bgFrom,
           bgTo: it.bgTo,
           endsAt: it.endsAt.trim(),
+          productIds: it.productIds,
+          categoryIds: it.categoryIds,
         }));
       const res = await fetch(`${API_BASE}/admin/landing/daily-deals`, {
         method: "PUT",
@@ -1415,6 +1685,12 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
                     </div>
                   </div>
                 </div>
+                <DealItemFilter
+                  categories={categories}
+                  categoryIds={it.categoryIds}
+                  productIds={it.productIds}
+                  onChange={(v) => updateItemFilter(i, v)}
+                />
               </div>
             ))}
             <button

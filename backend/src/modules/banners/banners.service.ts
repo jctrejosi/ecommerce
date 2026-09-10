@@ -31,6 +31,7 @@ export interface BannerResponse {
     id: number;
     name: string;
     categoryIds: number[];
+    productIds: number[];
     brandId: number | null;
     productTypeCode: string | null;
     onSale: boolean;
@@ -102,6 +103,7 @@ export class BannersService {
           id: Number(f.id),
           name: f.name,
           categoryIds: (f.categoryIds as number[]) ?? [],
+          productIds: (f.productIds as number[]) ?? [],
           brandId: f.brandId,
           productTypeCode: f.productTypeCode,
           onSale: f.onSale ?? false,
@@ -185,6 +187,7 @@ export class BannersService {
           id: Number(f.id),
           name: f.name,
           categoryIds: (f.categoryIds as number[]) ?? [],
+          productIds: (f.productIds as number[]) ?? [],
           brandId: f.brandId,
           productTypeCode: f.productTypeCode,
           onSale: f.onSale ?? false,

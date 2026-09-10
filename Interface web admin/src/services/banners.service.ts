@@ -26,6 +26,7 @@ export type Banner = {
     id: number;
     name: string;
     categoryIds: number[];
+    productIds: number[];
     brandId: number | null;
     productTypeCode: string | null;
     onSale: boolean;

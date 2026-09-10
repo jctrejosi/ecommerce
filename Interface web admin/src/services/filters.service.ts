@@ -5,6 +5,7 @@ export type FilterConfig = {
   name: string;
   description: string | null;
   categoryIds: number[];
+  productIds: number[];
   brandId: number | null;
   productTypeCode: string | null;
   onSale: boolean;
@@ -21,6 +22,7 @@ export type CreateFilterData = {
   name: string;
   description?: string;
   categoryIds?: number[];
+  productIds?: number[];
   brandId?: number | null;
   productTypeCode?: string;
   onSale?: boolean;

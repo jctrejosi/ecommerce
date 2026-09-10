@@ -40,6 +40,8 @@ export function CatalogPage({
   onProductClick,
   catalogCategory,
   setCatalogCategory,
+  catalogProductIds,
+  setCatalogProductIds,
   catalogOnSale,
   setCatalogOnSale,
   catalogPriceRange,
@@ -136,6 +138,7 @@ export function CatalogPage({
   } = useCatalog(
     {
       categoryIds: catalogSearch ? [] : catalogCategory,
+      productIds: catalogSearch ? undefined : catalogProductIds,
       onSale: catalogSearch ? false : catalogOnSale,
       priceRange: catalogSearch ? "all" : catalogPriceRange,
       sort: catalogSort,
@@ -162,6 +165,7 @@ export function CatalogPage({
     setHasMore(true);
   }, [
     catalogCategory,
+    catalogProductIds,
     catalogOnSale,
     catalogPriceRange,
     catalogSort,
@@ -264,12 +268,14 @@ export function CatalogPage({
 
   const activeFilterCount =
     catalogCategory.length +
+    (catalogProductIds.length > 0 ? 1 : 0) +
     (catalogOnSale ? 1 : 0) +
     (catalogPriceRange !== "all" ? 1 : 0) +
     (catalogProductType ? 1 : 0);
 
   const clearAll = () => {
     setCatalogCategory([]);
+    setCatalogProductIds([]);
     setCatalogOnSale(false);
     setCatalogPriceRange("all");
     setCatalogSearch("");
@@ -819,6 +825,17 @@ export function CatalogPage({
                       "{catalogSearch}"
                       <button
                         onClick={() => setCatalogSearch("")}
+                        className="hover:opacity-70 ml-0.5"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  )}
+                  {catalogProductIds.length > 0 && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                      Selección de productos ({catalogProductIds.length})
+                      <button
+                        onClick={() => setCatalogProductIds([])}
                         className="hover:opacity-70 ml-0.5"
                       >
                         <X className="w-2.5 h-2.5" />

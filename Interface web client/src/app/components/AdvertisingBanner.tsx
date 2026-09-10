@@ -13,6 +13,7 @@ interface AdBanner {
   accent: string;
   filter?: {
     categoryIds?: number[];
+    productIds?: number[];
     brandId?: number | null;
     productTypeCode?: string;
     onSale?: boolean;
@@ -160,13 +161,15 @@ export function AdvertisingBanner({
   if (banners.length === 0) return null;
   const banner = banners[current];
   const hasText = !!(banner.title || banner.subtitle || banner.ctaText);
+  const bannerClickable = !!banner.filter && !!onApplyFilter;
 
   return (
     <section className="py-6 bg-background">
       <style>{ANIM_STYLES}</style>
       <div className="max-w-7xl mx-auto px-4">
         <div
-          className="relative overflow-hidden rounded-2xl h-40 md:h-44"
+          className={`relative overflow-hidden rounded-2xl h-40 md:h-44${bannerClickable ? " cursor-pointer" : ""}`}
+          onClick={bannerClickable ? handleClick : undefined}
           style={{
             background: banner.bg,
             transition: "background 0.6s ease",
@@ -260,7 +263,10 @@ export function AdvertisingBanner({
             </div>
             {banner.ctaText && (
               <button
-                onClick={handleClick}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleClick();
+                }}
                 className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95 self-start md:self-auto"
                 style={{
                   background: banner.accent,
@@ -279,14 +285,20 @@ export function AdvertisingBanner({
           {banners.length > 1 && (
             <>
               <button
-                onClick={() => go(-1)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  go(-1);
+                }}
                 className="absolute left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full flex items-center justify-center hover:scale-110 transition-all"
                 style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(4px)" }}
               >
                 <ChevronLeft className="w-3.5 h-3.5 text-white" />
               </button>
               <button
-                onClick={() => go(1)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  go(1);
+                }}
                 className="absolute right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full flex items-center justify-center hover:scale-110 transition-all"
                 style={{ background: "rgba(255,255,255,0.18)", backdropFilter: "blur(4px)" }}
               >
@@ -301,7 +313,8 @@ export function AdvertisingBanner({
               {banners.map((_, i) => (
                 <button
                   key={i}
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     goTo(i, i > current ? 1 : -1);
                     setTimeout(() => startTimer(), SLIDE_OUT_MS + 60);
                   }}
