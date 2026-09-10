@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, MapPin, Navigation, PackageCheck, Loader2 } from "lucide-react";
-import { ordersService, type OrderLiveTracking } from "../../services/orders.service";
+import { X, Home, Navigation, PackageCheck, Loader2 } from "lucide-react";
+import {
+  ordersService,
+  type OrderLiveRoute,
+  type OrderLiveTracking,
+} from "../../services/orders.service";
 import { LiveOrderMap } from "./LiveOrderMap";
 
 const STATUS_TEXT: Record<string, { label: string; tone: string; showMap: boolean }> = {
@@ -38,9 +42,11 @@ interface OrderTrackingModalProps {
  */
 export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalProps) {
   const [data, setData] = useState<OrderLiveTracking | null>(null);
+  const [route, setRoute] = useState<OrderLiveRoute | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const timerRef = useRef<number | null>(null);
+  const routeTimerRef = useRef<number | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -54,6 +60,16 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
     }
   }, [orderCode]);
 
+  // La ruta por calles se recalcula más lento que la posición: el backend la
+  // cachea ~30 s y no conviene pedirla en cada refresco del rastreo.
+  const loadRoute = useCallback(async () => {
+    try {
+      setRoute(await ordersService.liveRoute(orderCode));
+    } catch {
+      /* sin ruta disponible: se conserva la anterior */
+    }
+  }, [orderCode]);
+
   useEffect(() => {
     setLoading(true);
     setData(null);
@@ -63,6 +79,15 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
       if (timerRef.current != null) window.clearInterval(timerRef.current);
     };
   }, [load]);
+
+  useEffect(() => {
+    setRoute(null);
+    void loadRoute();
+    routeTimerRef.current = window.setInterval(() => void loadRoute(), 30_000);
+    return () => {
+      if (routeTimerRef.current != null) window.clearInterval(routeTimerRef.current);
+    };
+  }, [loadRoute]);
 
   const delivery = data?.deliveryStatus ? STATUS_TEXT[data.deliveryStatus] : null;
   const canShowMap =
@@ -152,6 +177,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
                     driver={data.driver?.location ?? null}
                     destination={data.destination?.location ?? null}
                     branch={data.branch?.location ?? null}
+                    routePolyline={route?.polyline ?? null}
                   />
                 </div>
               ) : (
@@ -192,7 +218,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
 
               {/* Destino */}
               <div className="rounded-2xl border border-border p-4 flex items-start gap-3">
-                <MapPin className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
+                <Home className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-foreground">Dirección de entrega</p>
                   <p className="text-xs text-muted-foreground mt-0.5">

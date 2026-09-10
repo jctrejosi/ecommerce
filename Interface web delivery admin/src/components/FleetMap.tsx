@@ -10,6 +10,8 @@ import type { Map as MlMap, Marker, StyleSpecification } from 'maplibre-gl';
 import { Check, Layers } from 'lucide-react';
 import type { Feature } from 'geojson';
 import type { FleetDriver } from '../types';
+import { api } from '../services/api';
+import { decodePolyline } from '../lib/polyline';
 import { driverVisual, STATUS_META } from '../lib/status';
 import {
   MAP_STYLE_OPTIONS,
@@ -49,20 +51,20 @@ function tipHtml(driver: FleetDriver): string {
 }
 
 function pinHtml(driver: FleetDriver, selected: boolean): string {
-  const visual = driverVisual(driver);
-  const size = selected ? 46 : 34;
-  const border = selected ? '#0f172a' : '#ffffff';
-  const initials = driver.fullName
-    .split(/\s+/)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join('')
-    .toUpperCase();
-  const fs = selected ? 14 : 11;
+  const size = selected ? 46 : 38;
+  const sel = selected ? 'ml-pin--sel' : '';
   return `
-    <div class="ml-pin" style="width:${size}px;height:${size}px;--pin:${visual.color};--pin-border:${border};${driver.isActive ? '' : 'opacity:.55;'}">
-      <span class="ml-pin-inner" style="font-size:${fs}px">${initials}</span>
+    <div class="ml-pin ${sel}" style="width:${size}px;height:${size}px;${driver.isActive ? '' : 'opacity:.55;'}">
+      <span class="ml-pin-inner" style="font-size:${selected ? 24 : 20}px">🛵</span>
       <span class="ml-tip">${tipHtml(driver)}</span>
+    </div>`;
+}
+
+/** Marcador de la dirección de entrega (casita), igual que en el cliente. */
+function destPinHtml(): string {
+  return `
+    <div class="ml-dest" title="Dirección de entrega">
+      <span class="ml-dest-inner">🏠</span>
     </div>`;
 }
 
@@ -210,7 +212,19 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MlMap | null>(null);
+  /**
+   * Rutas reales (OSRM), ya decodificadas a [lng,lat]. Se calculan antes de
+   * pintarse: mientras estén en `null` no se dibuja línea alguna.
+   */
+  const [routes, setRoutes] = useState<{
+    driver: [number, number][] | null;
+    full: [number, number][] | null;
+  }>({ driver: null, full: null });
+  const routesRef = useRef(routes);
+  routesRef.current = routes;
   const markersRef = useRef<Map<number, Marker>>(new Map());
+  /** Marcadores de destinos (casitas), independientes de los repartidores. */
+  const destMarkersRef = useRef<Marker[]>([]);
   const [styleOption, setStyleOption] = useState<MapStyleOption>(defaultStyleOption);
   const [styleReady, setStyleReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -231,6 +245,19 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   styleOptionRef.current = styleOption;
   /** id del estilo ya aplicado al mapa (evita re-setStyle en el montaje). */
   const appliedStyleIdRef = useRef<string | null>(null);
+
+  // Selección actual y su pedido activo (para cargar la ruta por calles).
+  const selectedDriver = drivers.find((d) => d.id === selectedId) ?? null;
+  const selAssignment = selectedDriver?.activeAssignment ?? null;
+  const selOrderId = selAssignment?.orderId ?? null;
+  const selStatus = selAssignment?.status ?? null;
+  const selTarget: 'customer' | 'store' =
+    selStatus === 'ASSIGNED' ||
+    selStatus === 'ACCEPTED' ||
+    selStatus === 'READY_FOR_PICKUP'
+      ? 'store'
+      : 'customer';
+  const [routeTick, setRouteTick] = useState(0);
 
   const overlaySourceId = 'fleet-overlays';
 
@@ -260,21 +287,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       filter: ['==', ['get', 'kind'], 'route-driver'],
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': 3,
+        'line-width': 4,
         'line-opacity': 0.9,
-        'line-dasharray': [6, 7],
-      },
-    });
-    map.addLayer({
-      id: 'ov-dest-dot',
-      type: 'circle',
-      source: overlaySourceId,
-      filter: ['==', ['get', 'kind'], 'dest-dot'],
-      paint: {
-        'circle-radius': 4,
-        'circle-color': '#475569',
-        'circle-stroke-color': '#f8fafc',
-        'circle-stroke-width': 1,
       },
     });
     map.addLayer({
@@ -289,18 +303,6 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         'circle-stroke-width': 2.5,
       },
     });
-    map.addLayer({
-      id: 'ov-stop-dest',
-      type: 'circle',
-      source: overlaySourceId,
-      filter: ['==', ['get', 'kind'], 'dest'],
-      paint: {
-        'circle-radius': 8,
-        'circle-color': '#dcfce7',
-        'circle-stroke-color': '#16a34a',
-        'circle-stroke-width': 2.5,
-      },
-    });
   }
 
   /** Recalcula el GeoJSON de overlays con los datos actuales. */
@@ -310,55 +312,29 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
 
     const features: Feature[] = [];
     const dAll = driversRef.current;
-    const hidden = hiddenIdsRef.current;
     const selectedIdNow = selectedIdRef.current;
-
-    for (const d of dAll) {
-      const dest = d.activeAssignment?.destination;
-      if (dest && !hidden.has(d.id)) {
-        features.push({
-          type: 'Feature',
-          properties: { kind: 'dest-dot' },
-          geometry: { type: 'Point', coordinates: [dest.lng, dest.lat] },
-        });
-      }
-    }
+    const r = routesRef.current;
 
     const sel = dAll.find((d) => d.id === selectedIdNow);
     if (sel?.activeAssignment) {
       const a = sel.activeAssignment;
       const statusColor = STATUS_META[a.status]?.color ?? '#2563eb';
-      const target =
-        a.status === 'ASSIGNED' ||
-        a.status === 'ACCEPTED' ||
-        a.status === 'READY_FOR_PICKUP'
-          ? a.branchLocation
-          : a.destination;
 
-      if (sel.location && target) {
+      // Ruta real del repartidor hacia su objetivo actual (OSRM). Si aún no
+      // se ha calculado, no se dibuja nada (nunca una recta provisional).
+      if (r.driver) {
         features.push({
           type: 'Feature',
           properties: { kind: 'route-driver', color: statusColor },
-          geometry: {
-            type: 'LineString',
-            coordinates: [
-              [sel.location.lng, sel.location.lat],
-              [target.lng, target.lat],
-            ],
-          },
+          geometry: { type: 'LineString', coordinates: r.driver },
         });
       }
-      if (a.branchLocation && a.destination) {
+      // Ruta completa tienda → domicilio (también real).
+      if (r.full) {
         features.push({
           type: 'Feature',
           properties: { kind: 'route-full' },
-          geometry: {
-            type: 'LineString',
-            coordinates: [
-              [a.branchLocation.lng, a.branchLocation.lat],
-              [a.destination.lng, a.destination.lat],
-            ],
-          },
+          geometry: { type: 'LineString', coordinates: r.full },
         });
       }
       if (a.branchLocation) {
@@ -368,16 +344,6 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
           geometry: {
             type: 'Point',
             coordinates: [a.branchLocation.lng, a.branchLocation.lat],
-          },
-        });
-      }
-      if (a.destination) {
-        features.push({
-          type: 'Feature',
-          properties: { kind: 'dest' },
-          geometry: {
-            type: 'Point',
-            coordinates: [a.destination.lng, a.destination.lat],
           },
         });
       }
@@ -395,6 +361,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     // Se regeneran por completo (pocos pines; coste despreciable vs. cada ping).
     for (const [, marker] of markersRef.current) marker.remove();
     markersRef.current.clear();
+    for (const marker of destMarkersRef.current) marker.remove();
+    destMarkersRef.current = [];
     const selectedNow = selectedIdRef.current;
 
     for (const d of driversRef.current) {
@@ -411,6 +379,25 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         .setLngLat([d.location.lng, d.location.lat])
         .addTo(map);
       markersRef.current.set(d.id, marker);
+    }
+
+    // Casitas de destino (una por coordenada, aunque varios repartidores
+    // entreguen en el mismo punto).
+    const seenDests = new Set<string>();
+    for (const d of driversRef.current) {
+      if (hiddenIdsRef.current.has(d.id)) continue;
+      const dest = d.activeAssignment?.destination;
+      if (!dest) continue;
+      const key = `${dest.lat.toFixed(5)},${dest.lng.toFixed(5)}`;
+      if (seenDests.has(key)) continue;
+      seenDests.add(key);
+      const holder = document.createElement('div');
+      holder.innerHTML = destPinHtml();
+      const destEl = holder.firstElementChild as HTMLElement;
+      const marker = new maplibregl.Marker({ element: destEl, anchor: 'center' })
+        .setLngLat([dest.lng, dest.lat])
+        .addTo(map);
+      destMarkersRef.current.push(marker);
     }
   }
 
@@ -549,6 +536,7 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       map?.remove();
       mapRef.current = null;
       markersRef.current.clear();
+      destMarkersRef.current = [];
       setStyleReady(false);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -576,12 +564,69 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styleOption]);
 
-  // ── Overlays: puntos de destino y rutas ──
+  // ── Ruta por calles del repartidor seleccionado ──
+  // Al cambiar de repartidor u objetivo se descarta la ruta anterior: la nueva
+  // debe estar calculada antes de volver a pintarse (nunca una recta).
+  useEffect(() => {
+    setRoutes({ driver: null, full: null });
+  }, [selOrderId, selTarget]);
+
+  // La ruta no necesita recalcularse en cada ping: cada 30 s es suficiente.
+  useEffect(() => {
+    if (selOrderId == null) return;
+    const t = setInterval(() => setRouteTick((x) => x + 1), 30_000);
+    return () => clearInterval(t);
+  }, [selOrderId, selTarget]);
+
+  useEffect(() => {
+    if (selOrderId == null) return;
+    const driver = driversRef.current.find(
+      (d) => d.id === selectedIdRef.current,
+    );
+    const a = driver?.activeAssignment;
+    const loc = driver?.location;
+    if (!a || !loc) return;
+    const origin = `${loc.lng},${loc.lat}`;
+    let cancelled = false;
+
+    const load = async (
+      target: 'customer' | 'store',
+      from: string,
+    ): Promise<[number, number][] | null> => {
+      try {
+        const res = await api.orderRoute(a.orderId, target, from);
+        const coords = decodePolyline(res.polyline);
+        return coords.length >= 2 ? coords : null;
+      } catch {
+        return null;
+      }
+    };
+
+    const fullFrom =
+      a.branchLocation && a.destination
+        ? `${a.branchLocation.lng},${a.branchLocation.lat}`
+        : null;
+
+    void Promise.all([
+      load(selTarget, origin),
+      fullFrom ? load('customer', fullFrom) : Promise.resolve(null),
+    ]).then(([driverCoords, fullCoords]) => {
+      if (cancelled) return;
+      setRoutes({ driver: driverCoords, full: fullCoords });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selOrderId, selTarget, routeTick]);
+
+  // ── Overlays: rutas y paradas ──
   useEffect(() => {
     if (!styleReady) return;
     syncOverlays();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drivers, hiddenIds, selectedId, styleReady]);
+  }, [drivers, hiddenIds, selectedId, styleReady, routes]);
 
   // ── Pines de repartidores ──
   useEffect(() => {

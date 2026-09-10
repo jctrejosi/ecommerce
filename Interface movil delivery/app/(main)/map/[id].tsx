@@ -43,7 +43,11 @@ export default function MapScreen() {
         : undefined;
 
   const from = origin ? `${origin.lng},${origin.lat}` : undefined;
-  const { data: route } = useOrderRoute(order?.id, from, routeTarget);
+  const { data: route, isPending: routePending } = useOrderRoute(
+    order?.id,
+    from,
+    routeTarget,
+  );
 
   const refreshPosition = async () => {
     const pos = await getCurrentPosition();
@@ -123,7 +127,9 @@ export default function MapScreen() {
               ? `${distance.toFixed(1)} km (ruta real)`
               : phase === "at-store"
                 ? "En la tienda"
-                : "Calculando…"}
+                : routeTarget && routePending
+                  ? "Calculando…"
+                  : "Sin ruta"}
           </Text>
         </View>
         <View style={styles.infoRow}>

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { resolveMapStyle } from "../lib/trackingMapStyle";
+import { decodePolyline } from "../lib/polyline";
 
 export interface MapPoint {
   lat: number;
@@ -12,6 +13,12 @@ interface LiveOrderMapProps {
   driver?: MapPoint | null;
   destination?: MapPoint | null;
   branch?: MapPoint | null;
+  /**
+   * Ruta real por calles (OSRM) codificada en polyline. Mientras sea `null`
+   * no se dibuja ninguna línea: primero se calcula la ruta y luego se muestra
+   * (nunca una recta provisional repartidor → destino).
+   */
+  routePolyline?: string | null;
 }
 
 /**
@@ -23,6 +30,7 @@ export function LiveOrderMap({
   driver,
   destination,
   branch,
+  routePolyline,
 }: LiveOrderMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -65,9 +73,8 @@ export function LiveOrderMap({
             layout: { "line-cap": "round", "line-join": "round" },
             paint: {
               "line-color": "#2563eb",
-              "line-width": 3.5,
-              "line-opacity": 0.85,
-              "line-dasharray": [4, 3],
+              "line-width": 4,
+              "line-opacity": 0.9,
             },
           });
         });
@@ -100,30 +107,58 @@ export function LiveOrderMap({
       return [p.lng, p.lat] as [number, number];
     };
 
-    if (driver) {
+    // Si el repartidor todavía no tiene ubicación registrada, se sitúa un
+    // punto de referencia cerca del destino/sucursal para que se vea "dónde
+    // viene" en lugar de dejar el mapa sin su marcador.
+    const driverPoint: MapPoint | null =
+      driver ??
+      (destination
+        ? { lat: destination.lat + 0.012, lng: destination.lng - 0.009 }
+        : branch
+          ? { lat: branch.lat + 0.012, lng: branch.lng - 0.009 }
+          : null);
+
+    if (driverPoint) {
+      // MapLibre posiciona el marcador aplicando `transform: translate(...)`
+      // sobre este elemento. La animación (que también usa `transform: scale`)
+      // va en un hijo: si se aplicara al propio marcador, pisaría ese translate
+      // y el pin quedaría anclado en la esquina superior izquierda del mapa.
       const el = document.createElement("div");
-      el.className =
-        "flex items-center justify-center rounded-full bg-white shadow-lg ring-2 ring-[#1A1A2E]";
       el.style.width = "38px";
       el.style.height = "38px";
-      el.style.fontSize = "20px";
-      el.style.border = "3px solid #FFF200";
-      el.style.animation = "deliveryBlink 1.4s ease-in-out infinite";
-      el.textContent = "🛵";
+      el.title = "Repartidor";
+
+      const inner = document.createElement("div");
+      inner.className =
+        "flex items-center justify-center rounded-full bg-white shadow-lg ring-2 ring-[#1A1A2E]";
+      inner.style.width = "100%";
+      inner.style.height = "100%";
+      inner.style.fontSize = "20px";
+      inner.style.boxSizing = "border-box";
+      inner.style.border = "3px solid #FFF200";
+      inner.style.animation = "deliveryBlink 1.4s ease-in-out infinite";
+      inner.textContent = "🛵";
+      el.appendChild(inner);
+
       markersRef.current.push(
         new maplibregl.Marker({ element: el, anchor: "center" })
-          .setLngLat([driver.lng, driver.lat])
+          .setLngLat([driverPoint.lng, driverPoint.lat])
           .addTo(map),
       );
-      add(driver);
+      add(driverPoint);
     }
     if (destination) {
       const el = document.createElement("div");
-      el.className = "relative";
-      el.style.width = "18px";
-      el.style.height = "18px";
-      el.innerHTML =
-        '<span style="position:absolute;inset:0;border-radius:9999px;background:#16a34a;border:3px solid white;box-shadow:0 1px 6px rgba(0,0,0,.4)"></span>';
+      el.className =
+        "flex items-center justify-center rounded-full bg-white shadow-lg";
+      el.style.width = "38px";
+      el.style.height = "38px";
+      el.style.fontSize = "20px";
+      el.style.lineHeight = "1";
+      el.style.boxSizing = "border-box";
+      el.style.border = "3px solid #16A34A";
+      el.textContent = "🏠";
+      el.title = "Dirección de entrega";
       markersRef.current.push(
         new maplibregl.Marker({ element: el, anchor: "center" })
           .setLngLat([destination.lng, destination.lat])
@@ -148,26 +183,31 @@ export function LiveOrderMap({
       add(branch);
     }
 
-    // Línea punteada repartidor → destino.
+    // Ruta real por calles. Solo se pinta cuando el backend ya la calculó
+    // (polyline decodificable); si no, se deja el mapa sin línea.
     const src = map.getSource(lineSourceId) as maplibregl.GeoJSONSource | null;
-    const driverPt = driver ? [driver.lng, driver.lat] : null;
-    const destPt = destination ? [destination.lng, destination.lat] : null;
     if (src) {
-      const features: unknown[] = [];
-      if (driverPt && destPt) {
-        features.push({
-          type: "Feature",
-          properties: {},
-          geometry: {
-            type: "LineString",
-            coordinates: [driverPt, destPt],
-          },
-        });
+      let coordinates: [number, number][] | null = null;
+      if (routePolyline) {
+        try {
+          const decoded = decodePolyline(routePolyline);
+          if (decoded.length >= 2) coordinates = decoded;
+        } catch {
+          coordinates = null;
+        }
       }
       src.setData({
         type: "FeatureCollection",
-        features: features as never[],
-      });
+        features: coordinates
+          ? [
+              {
+                type: "Feature",
+                properties: {},
+                geometry: { type: "LineString", coordinates },
+              },
+            ]
+          : [],
+      } as never);
     }
 
     if (points.length >= 2) {
@@ -180,13 +220,13 @@ export function LiveOrderMap({
         ],
         { padding: 70, maxZoom: 16.5, duration: 600 },
       );
-    } else if (driver) {
-      map.easeTo({ center: [driver.lng, driver.lat], zoom: Math.max(map.getZoom(), 15), duration: 500 });
+    } else if (driverPoint) {
+      map.easeTo({ center: [driverPoint.lng, driverPoint.lat], zoom: Math.max(map.getZoom(), 15), duration: 500 });
     } else if (destination) {
       map.easeTo({ center: [destination.lng, destination.lat], zoom: Math.max(map.getZoom(), 14.5), duration: 500 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.lat, driver?.lng, destination?.lat, destination?.lng, branch?.lat, branch?.lng, styleTick]);
+  }, [driver?.lat, driver?.lng, destination?.lat, destination?.lng, branch?.lat, branch?.lng, routePolyline, styleTick]);
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-2xl">

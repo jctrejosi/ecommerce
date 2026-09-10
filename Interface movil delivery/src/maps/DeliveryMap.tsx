@@ -33,7 +33,11 @@ export interface DeliveryMapProps {
   origin?: LatLng | null;
   /** Punto de recogida (tienda). */
   pickup?: LatLng | null;
-  /** Polyline (OSRM) de la ruta recomendada; si falta se dibuja línea recta. */
+  /**
+   * Polyline (OSRM) de la ruta recomendada. Mientras no esté calculada no se
+   * dibuja nada: primero se calcula la ruta y luego se muestra (nada de línea
+   * recta provisional).
+   */
   routePolyline?: string | null;
 }
 
@@ -92,7 +96,7 @@ export function DeliveryMap({
         ? [origin.lng, origin.lat]
         : [-74.07209, 4.71099]; // Bogotá
 
-  const route: GeoJSON.GeoJSON | null = buildRoute(routePolyline, origin, destination);
+  const route: GeoJSON.GeoJSON | null = buildRoute(routePolyline);
 
   return (
     <View style={styles.container}>
@@ -119,16 +123,20 @@ export function DeliveryMap({
 
         {destination && (
           <Marker lngLat={[destination.lng, destination.lat]}>
-            <View style={styles.markerPin}>
-              <Text style={styles.markerEmoji}>📍</Text>
+            <View style={styles.markerRing}>
+              <View style={[styles.markerBadge, styles.badgeDest]}>
+                <Text style={styles.markerEmoji}>🏠</Text>
+              </View>
             </View>
           </Marker>
         )}
 
         {origin && (
           <Marker lngLat={[origin.lng, origin.lat]}>
-            <View style={styles.markerDriver}>
-              <View style={styles.markerDriverDot} />
+            <View style={styles.markerRing}>
+              <View style={[styles.markerBadge, styles.badgeDriver]}>
+                <Text style={styles.markerEmoji}>🛵</Text>
+              </View>
             </View>
           </Marker>
         )}
@@ -139,37 +147,22 @@ export function DeliveryMap({
 
 function buildRoute(
   routePolyline: string | null | undefined,
-  origin: LatLng | null | undefined,
-  destination: LatLng | null,
 ): GeoJSON.GeoJSON | null {
-  // Ruta real (OSRM) si viene polyline decodificable.
-  if (routePolyline) {
-    try {
-      const coords = decodePolyline(routePolyline);
-      if (coords.length >= 2) {
-        return {
-          type: "Feature",
-          geometry: { type: "LineString", coordinates: coords },
-          properties: {},
-        };
-      }
-    } catch {
-      /* polyline inválida → línea recta */
+  // Solo se pinta la ruta ya calculada (OSRM). Si aún no ha llegado, no se
+  // dibuja nada: antes se caía a una línea recta y esa recta aparecía durante
+  // el cálculo, dando la impresión de una ruta incorrecta.
+  if (!routePolyline) return null;
+  try {
+    const coords = decodePolyline(routePolyline);
+    if (coords.length >= 2) {
+      return {
+        type: "Feature",
+        geometry: { type: "LineString", coordinates: coords },
+        properties: {},
+      };
     }
-  }
-  // Fallback: línea recta entre repartidor y destino.
-  if (origin && destination) {
-    return {
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: [
-          [origin.lng, origin.lat],
-          [destination.lng, destination.lat],
-        ],
-      },
-      properties: {},
-    };
+  } catch {
+    /* polyline inválida → sin ruta */
   }
   return null;
 }
@@ -216,8 +209,23 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     overflow: "hidden",
   },
-  markerPin: { alignItems: "center" },
-  markerEmoji: { fontSize: 26 },
+  markerEmoji: { fontSize: 18, lineHeight: 20 },
+  markerRing: {
+    padding: 2,
+    borderRadius: 21,
+    backgroundColor: "#1A1A2E",
+  },
+  markerBadge: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 3,
+  },
+  badgeDest: { borderColor: "#16A34A" },
+  badgeDriver: { borderColor: "#FFF200" },
   markerCircle: {
     width: 34,
     height: 34,
@@ -227,21 +235,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-  },
-  markerDriver: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: "rgba(37,99,235,0.25)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  markerDriverDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: "#2563EB",
-    borderWidth: 2,
-    borderColor: "#FFFFFF",
   },
 });

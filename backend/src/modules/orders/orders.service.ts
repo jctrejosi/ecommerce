@@ -41,6 +41,16 @@ import { EpaycoService } from '../payments/epayco.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OrdersGateway } from './orders.gateway';
 
+const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
+/** La vista pública del cliente puede refrescar seguido: cachear la ruta. */
+const LIVE_ROUTE_TTL_MS = 30_000;
+
+export interface LiveRoute {
+  polyline: string;
+  distanceM: number;
+  durationS: number;
+}
+
 @Injectable()
 export class OrdersService {
   constructor(
@@ -55,6 +65,12 @@ export class OrdersService {
   private get db() {
     return this.drizzleService.db;
   }
+
+  /** Caché corta de rutas del mapa público (clave: código de pedido). */
+  private readonly liveRouteCache = new Map<
+    string,
+    { at: number; data: LiveRoute | null }
+  >();
 
   async checkout(customerId: number, dto: CreateOrderDto) {
     const customer = await this.getCustomer(customerId);
@@ -661,6 +677,92 @@ export class OrdersService {
       },
       updatedAt: driver?.lastLocationAt ?? null,
     };
+  }
+
+  /**
+   * Ruta por calles (OSRM) entre el repartidor y el domicilio del cliente,
+   * para el mapa público de seguimiento. Devuelve `null` si aún no hay datos
+   * (sin repartidor, sin coordenadas o motor de rutas caído).
+   */
+  async getLiveRoute(referenceCode: string): Promise<LiveRoute | null> {
+    const code = (referenceCode || '').trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException('Ingresa el código del pedido');
+    }
+
+    const cached = this.liveRouteCache.get(code);
+    if (cached && Date.now() - cached.at < LIVE_ROUTE_TTL_MS) return cached.data;
+
+    const data = await this.computeLiveRoute(code);
+    this.liveRouteCache.set(code, { at: Date.now(), data });
+    return data;
+  }
+
+  private async computeLiveRoute(code: string): Promise<LiveRoute | null> {
+    const [order] = await this.db
+      .select({ id: orders.id, branchId: orders.branchId })
+      .from(orders)
+      .where(eq(orders.referenceCode, code))
+      .limit(1);
+    if (!order) {
+      throw new NotFoundException(
+        `No encontramos el pedido ${code}. Verifica el código e intenta de nuevo.`,
+      );
+    }
+
+    const [shipment] = await this.db
+      .select({ id: shipments.id, location: shipments.location })
+      .from(shipments)
+      .where(eq(shipments.orderId, Number(order.id)))
+      .limit(1);
+    const destination = this.parseDbPoint(shipment?.location);
+    if (!shipment || !destination) return null;
+
+    // Origen: última posición del repartidor asignado; si no, la sucursal.
+    let origin: { lat: number; lng: number } | null = null;
+    const [assignment] = await this.db
+      .select({ driverId: deliveryAssignments.driverId })
+      .from(deliveryAssignments)
+      .where(eq(deliveryAssignments.shipmentId, Number(shipment.id)))
+      .orderBy(desc(deliveryAssignments.id))
+      .limit(1);
+    if (assignment?.driverId != null) {
+      const [d] = await this.db
+        .select({ currentLocation: deliveryDrivers.currentLocation })
+        .from(deliveryDrivers)
+        .where(eq(deliveryDrivers.id, BigInt(assignment.driverId)))
+        .limit(1);
+      origin = this.parseDbPoint(d?.currentLocation);
+    }
+    if (!origin && order.branchId != null) {
+      const [b] = await this.db
+        .select({ location: branches.location })
+        .from(branches)
+        .where(eq(branches.id, BigInt(order.branchId)))
+        .limit(1);
+      origin = this.parseDbPoint(b?.location);
+    }
+    if (!origin) return null;
+
+    const url =
+      `${OSRM_URL}/route/v1/car/${origin.lng},${origin.lat};${destination.lng},${destination.lat}` +
+      `?overview=full&geometries=polyline&alternatives=false`;
+    try {
+      const res = await fetch(url);
+      if (!res.ok) return null;
+      const payload = (await res.json()) as {
+        routes?: Array<{ geometry?: string; distance?: number; duration?: number }>;
+      };
+      const route = payload?.routes?.[0];
+      if (!route?.geometry) return null;
+      return {
+        polyline: route.geometry,
+        distanceM: Number(route.distance ?? 0),
+        durationS: Number(route.duration ?? 0),
+      };
+    } catch {
+      return null;
+    }
   }
 
   /** Parsea un punto postgis/EWKT ('POINT(lng lat)') si viene como texto. */

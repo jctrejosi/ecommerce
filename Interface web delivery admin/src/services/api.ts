@@ -88,6 +88,14 @@ export interface UpdateDriverPayload {
   isActive?: boolean;
 }
 
+/** Ruta por calles (OSRM) para pintar en el mapa de flota. */
+export interface OrderRoute {
+  /** Polyline (precisión 5) lista para decodificar a coordenadas. */
+  polyline: string;
+  distanceM: number;
+  durationS: number;
+}
+
 export const api = {
   login: (identifier: string, password: string) =>
     fetchJson<LoginResponse>('/auth/login', {
@@ -120,4 +128,15 @@ export const api = {
     }),
 
   orders: () => fetchJson<FleetOrder[]>('/delivery/admin/orders'),
+
+  /**
+   * Ruta por calles (OSRM) de un pedido. `from` (`lng,lat`) permite calcular
+   * rutas que no parten del repartidor (p. ej. tienda → domicilio).
+   */
+  orderRoute: (orderId: number, target: 'customer' | 'store', from?: string) =>
+    fetchJson<OrderRoute>(
+      `/delivery/admin/orders/${orderId}/route?target=${target}${
+        from ? `&from=${encodeURIComponent(from)}` : ''
+      }`,
+    ),
 };

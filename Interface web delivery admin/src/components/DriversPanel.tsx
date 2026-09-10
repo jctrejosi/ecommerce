@@ -1,4 +1,4 @@
-import { KeyRound, Pencil, Plus, Power, Search } from 'lucide-react';
+import { KeyRound, MapPin, Pencil, Plus, Power, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { FleetDriver } from '../types';
 import { FILTER_OPTIONS, driverVisual } from '../lib/status';
@@ -120,7 +120,7 @@ export default function DriversPanel({
                 <tr
                   key={d.id}
                   className="cursor-pointer transition-colors hover:bg-slate-50"
-                  onClick={() => onSelect(d.id)}
+                  onClick={() => onEdit(d)}
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -154,6 +154,16 @@ export default function DriversPanel({
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-1">
+                      <button
+                        title="Ver en el mapa"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelect(d.id);
+                        }}
+                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        <MapPin className="h-3.5 w-3.5" />
+                      </button>
                       <button
                         title="Editar"
                         onClick={(e) => {

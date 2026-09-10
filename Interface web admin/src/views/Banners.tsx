@@ -1318,6 +1318,8 @@ interface DealItemForm {
   endsAt: string;
   productIds: number[];
   categoryIds: number[];
+  startAt: string | null;
+  endAt: string | null;
 }
 
 interface DealCarouselProduct {
@@ -1327,6 +1329,85 @@ interface DealCarouselProduct {
   originalPrice?: number;
   image: string | null;
   category?: string | null;
+  startAt?: string | null;
+  endAt?: string | null;
+}
+
+interface DealCarouselGroup {
+  id: string;
+  name: string;
+  startAt: string | null;
+  endAt: string | null;
+  products: DealCarouselProduct[];
+}
+
+// ISO -> "YYYY-MM-DDTHH:mm" en hora local, para <input type="datetime-local">.
+function toLocalInput(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// "YYYY-MM-DDTHH:mm" -> ISO (o null si se borra).
+function fromLocalInput(v: string): string | null {
+  if (!v) return null;
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+// ¿El rango [startAt, endAt] incluye el momento actual? (null = sin límite)
+function isScheduleActiveNow(
+  startAt: string | null | undefined,
+  endAt: string | null | undefined,
+): boolean {
+  const now = Date.now();
+  if (startAt) {
+    const s = new Date(startAt).getTime();
+    if (!Number.isNaN(s) && now < s) return false;
+  }
+  if (endAt) {
+    const e = new Date(endAt).getTime();
+    if (!Number.isNaN(e) && now > e) return false;
+  }
+  return true;
+}
+
+function scheduleLabel(startAt: string | null, endAt: string | null): string {
+  if (!startAt && !endAt) return "Sin programación (siempre activo)";
+  if (startAt && endAt) {
+    return `Activo: ${toLocalInput(startAt).replace("T", " ")} → ${toLocalInput(endAt).replace("T", " ")}`;
+  }
+  if (startAt) return `Activo desde: ${toLocalInput(startAt).replace("T", " ")}`;
+  return `Activo hasta: ${toLocalInput(endAt).replace("T", " ")}`;
+}
+
+// Dos rangos se cruzan si comparten algún instante (null = abierto por ese lado).
+function rangesOverlap(
+  a: { startAt: string | null; endAt: string | null },
+  b: { startAt: string | null; endAt: string | null },
+): boolean {
+  const toTime = (v: string | null, fallback: number) => {
+    if (!v) return fallback;
+    const t = new Date(v).getTime();
+    return Number.isNaN(t) ? fallback : t;
+  };
+  const aS = toTime(a.startAt, -Infinity);
+  const aE = toTime(a.endAt, Infinity);
+  const bS = toTime(b.startAt, -Infinity);
+  const bE = toTime(b.endAt, Infinity);
+  return aS < bE && bS < aE;
+}
+
+// Nombres de los otros carouseles cuyas fechas se cruzan con el dado.
+function overlappingNames(
+  groups: DealCarouselGroup[],
+  group: DealCarouselGroup,
+): string[] {
+  return groups
+    .filter((o) => o.id !== group.id && rangesOverlap(group, o))
+    .map((o) => o.name);
 }
 
 // Filtro por item del display de Ofertas del día (productos y/o categorías).
@@ -1448,6 +1529,25 @@ function DealItemEditor({
                 <input value={item.endsAt} onChange={(e) => onChange({ endsAt: e.target.value })} className={inputCls} placeholder="Hoy · Hasta agotar existencias" />
               </div>
             </div>
+            <div className="col-span-2">
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Programación (opcional)</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="datetime-local"
+                  value={toLocalInput(item.startAt)}
+                  onChange={(e) => onChange({ startAt: fromLocalInput(e.target.value) })}
+                  className={inputCls}
+                />
+                <span className="text-xs text-gray-400 shrink-0">hasta</span>
+                <input
+                  type="datetime-local"
+                  value={toLocalInput(item.endAt)}
+                  onChange={(e) => onChange({ endAt: fromLocalInput(e.target.value) })}
+                  className={inputCls}
+                />
+              </div>
+              <p className="text-[10px] text-gray-400 mt-1">Vacío = siempre visible. Solo se muestra dentro del rango.</p>
+            </div>
           </div>
 
           <DealItemFilter
@@ -1560,8 +1660,8 @@ function DealCarouselSearchModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-[60] bg-black/40" onClick={onClose} />
-      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="fixed inset-0 z-[70] bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-sm text-gray-900">Añadir productos al carousel</h3>
@@ -1622,15 +1722,149 @@ function DealCarouselSearchModal({
   );
 }
 
+// Modal de edición de un carousel programable (nombre, fechas y productos).
+function DealCarouselEditor({
+  group,
+  index,
+  currency,
+  onPatch,
+  onAddProducts,
+  onRemoveProduct,
+  onPatchProduct,
+  onDelete,
+  onClose,
+  overlapNames,
+}: {
+  group: DealCarouselGroup;
+  index: number;
+  currency: Intl.NumberFormat;
+  onPatch: (patch: Partial<DealCarouselGroup>) => void;
+  onAddProducts: () => void;
+  onRemoveProduct: (productId: number) => void;
+  onPatchProduct: (productId: number, patch: Partial<DealCarouselProduct>) => void;
+  onDelete: () => void;
+  onClose: () => void;
+  overlapNames: string[];
+}) {
+  const inputCls =
+    "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
+  return (
+    <div className="fixed inset-0 z-[60] flex">
+      <div className="flex-1 bg-black/50" onClick={onClose} />
+      <div className="w-full max-w-2xl bg-white flex flex-col shadow-2xl overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <div className="min-w-0">
+            <h2 className="font-bold text-gray-900">Editar Carousel #{index + 1}</h2>
+            <p className="text-[11px] text-gray-500">{scheduleLabel(group.startAt, group.endAt)}</p>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <input
+              value={group.name}
+              onChange={(e) => onPatch({ name: e.target.value })}
+              placeholder="Nombre del carousel"
+              className="w-full text-sm font-semibold border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300"
+            />
+            <input
+              type="datetime-local"
+              value={toLocalInput(group.startAt)}
+              onChange={(e) => onPatch({ startAt: fromLocalInput(e.target.value) })}
+              className={inputCls}
+              title="Vigente desde"
+            />
+            <input
+              type="datetime-local"
+              value={toLocalInput(group.endAt)}
+              onChange={(e) => onPatch({ endAt: fromLocalInput(e.target.value) })}
+              className={inputCls}
+              title="Vigente hasta"
+            />
+          </div>
+          <p className="text-[10px] text-gray-400">Rango de vigencia del carousel (vacío = sin límite).</p>
+          {overlapNames.length > 0 && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              Las fechas se cruzan con: {overlapNames.join(", ")}. Solo un carousel puede estar activo a la vez.
+            </p>
+          )}
+
+          <button
+            onClick={onAddProducts}
+            className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors"
+          >
+            <Plus size={13} /> Añadir productos
+          </button>
+
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+            Productos ({group.products.length})
+          </p>
+          {group.products.length === 0 ? (
+            <p className="text-[11px] text-gray-400 py-4 text-center">Sin productos en este carousel</p>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {group.products.map((p) => (
+                <div key={p.id} className="flex flex-wrap items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                  <div className="w-10 h-10 rounded bg-gray-200 overflow-hidden shrink-0">
+                    {p.image && <img src={p.image} alt={p.name} className="w-full h-full object-cover" />}
+                  </div>
+                  <div className="flex-1 min-w-[8rem]">
+                    <p className="text-xs text-gray-700 truncate font-medium">{p.name}</p>
+                    <p className="text-[10px] text-gray-400">
+                      {currency.format(p.price)}
+                      {p.originalPrice ? (
+                        <span className="line-through ml-1.5">{currency.format(p.originalPrice)}</span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <input
+                    type="datetime-local"
+                    value={toLocalInput(p.startAt)}
+                    onChange={(e) => onPatchProduct(p.id, { startAt: fromLocalInput(e.target.value) })}
+                    className="w-36 text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-300 shrink-0"
+                    title="Inicio (opcional)"
+                  />
+                  <input
+                    type="datetime-local"
+                    value={toLocalInput(p.endAt)}
+                    onChange={(e) => onPatchProduct(p.id, { endAt: fromLocalInput(e.target.value) })}
+                    className="w-36 text-[11px] border border-gray-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber-300 shrink-0"
+                    title="Expiración (opcional)"
+                  />
+                  <button
+                    onClick={() => onRemoveProduct(p.id)}
+                    className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
+                    title="Quitar del carousel"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            onClick={onDelete}
+            className="w-full py-2.5 rounded-xl text-sm font-semibold border border-red-200 text-red-500 hover:bg-red-50 transition-colors"
+          >
+            <Trash2 size={13} className="inline mr-1" /> Eliminar carousel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
   const [items, setItems] = useState<DealItemForm[]>([]);
-  const [carousel, setCarousel] = useState<DealCarouselProduct[]>([]);
+  const [groups, setGroups] = useState<DealCarouselGroup[]>([]);
   const [tab, setTab] = useState<"display" | "carousel">("display");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const [showSearch, setShowSearch] = useState(false);
+  const [searchGroupId, setSearchGroupId] = useState<string | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const categories = useAdminCategories();
 
@@ -1662,9 +1896,54 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
             categoryIds: Array.isArray(it.categoryIds)
               ? it.categoryIds.map(Number)
               : [],
+            startAt: it.startAt ?? null,
+            endAt: it.endAt ?? null,
           })),
         );
-        setCarousel(data.carousel ?? []);
+
+        const rawGroups = Array.isArray(data.carousels) ? data.carousels : [];
+        let nextGroups: DealCarouselGroup[] = rawGroups.map((g: any, i: number) => ({
+          id: String(g.id ?? `c${i + 1}`),
+          name: g.name ?? `Carousel ${i + 1}`,
+          startAt: g.startAt ?? null,
+          endAt: g.endAt ?? null,
+          products: (Array.isArray(g.products) ? g.products : []).map((p: any) => ({
+            id: Number(p.id),
+            name: p.name ?? "",
+            price: Number(p.price ?? 0),
+            originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined,
+            image: p.image ?? null,
+            category: p.category ?? null,
+            startAt: p.startAt ?? null,
+            endAt: p.endAt ?? null,
+          })),
+        }));
+        // Compatibilidad: si no hay grupos, arma uno con el carousel legacy.
+        if (
+          nextGroups.length === 0 &&
+          Array.isArray(data.carousel) &&
+          data.carousel.length > 0
+        ) {
+          nextGroups = [
+            {
+              id: "default",
+              name: "Carousel principal",
+              startAt: null,
+              endAt: null,
+              products: data.carousel.map((p: any) => ({
+                id: Number(p.id),
+                name: p.name ?? "",
+                price: Number(p.price ?? 0),
+                originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined,
+                image: p.image ?? null,
+                category: p.category ?? null,
+                startAt: null,
+                endAt: null,
+              })),
+            },
+          ];
+        }
+        setGroups(nextGroups);
       }
     } catch (e) {
       console.error(e);
@@ -1699,6 +1978,8 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
         endsAt: "",
         productIds: [],
         categoryIds: [],
+        startAt: null,
+        endAt: null,
       },
     ]);
     setEditingId(id);
@@ -1707,15 +1988,75 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
   const removeItem = (id: string) =>
     setItems((prev) => prev.filter((it) => it.id !== id));
 
-  const addCarouselProduct = (p: DealCarouselProduct) => {
-    setCarousel((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]));
+  const patchGroup = (id: string, patch: Partial<DealCarouselGroup>) =>
+    setGroups((prev) => prev.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+
+  const addGroup = () => {
+    const id = `g${Date.now()}`;
+    setGroups((prev) => [
+      ...prev,
+      { id, name: `Carousel ${prev.length + 1}`, startAt: null, endAt: null, products: [] },
+    ]);
   };
 
-  const removeCarouselProduct = (id: number) => {
-    setCarousel((prev) => prev.filter((p) => p.id !== id));
+  const removeGroup = (id: string) =>
+    setGroups((prev) => prev.filter((g) => g.id !== id));
+
+  const addCarouselProduct = (groupId: string, p: DealCarouselProduct) => {
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId && !g.products.some((x) => x.id === p.id)
+          ? {
+              ...g,
+              products: [
+                ...g.products,
+                { ...p, startAt: p.startAt ?? null, endAt: p.endAt ?? null },
+              ],
+            }
+          : g,
+      ),
+    );
   };
+
+  const removeCarouselProduct = (groupId: string, id: number) =>
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId ? { ...g, products: g.products.filter((p) => p.id !== id) } : g,
+      ),
+    );
+
+  const patchCarouselProduct = (
+    groupId: string,
+    productId: number,
+    patch: Partial<DealCarouselProduct>,
+  ) =>
+    setGroups((prev) =>
+      prev.map((g) =>
+        g.id === groupId
+          ? {
+              ...g,
+              products: g.products.map((p) =>
+                p.id === productId ? { ...p, ...patch } : p,
+              ),
+            }
+          : g,
+      ),
+    );
 
   const handleSave = async () => {
+    // Solo un carousel activo a la vez: los rangos no deben cruzarse.
+    const conflict = groups.find((g) =>
+      groups.some((o) => o.id !== g.id && rangesOverlap(g, o)),
+    );
+    if (conflict) {
+      const other = groups.find(
+        (o) => o.id !== conflict.id && rangesOverlap(conflict, o),
+      );
+      setError(
+        `El carousel "${conflict.name}" se cruza con "${other?.name ?? ""}". Solo uno puede estar activo a la vez.`,
+      );
+      return;
+    }
     setSaving(true);
     setError("");
     try {
@@ -1735,14 +2076,28 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
           endsAt: it.endsAt.trim(),
           productIds: it.productIds,
           categoryIds: it.categoryIds,
+          startAt: it.startAt,
+          endAt: it.endAt,
         }));
+      const carousels = groups.map((g) => ({
+        id: g.id,
+        name: g.name.trim() || "Carousel",
+        startAt: g.startAt,
+        endAt: g.endAt,
+        products: g.products.map((p) => ({
+          id: p.id,
+          startAt: p.startAt ?? null,
+          endAt: p.endAt ?? null,
+        })),
+      }));
       const res = await fetch(`${API_BASE}/admin/landing/daily-deals`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           featuredItems,
-          carouselProductIds: carousel.map((p) => p.id),
+          carousels,
+          carouselProductIds: groups.flatMap((g) => g.products.map((p) => p.id)),
         }),
       });
       if (!res.ok) throw new Error("Error al guardar");
@@ -1761,6 +2116,7 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
   });
 
   const editingItem = items.find((it) => it.id === editingId) ?? null;
+  const editingGroup = groups.find((g) => g.id === editingGroupId) ?? null;
 
   return (
     <div className="flex-1 min-h-0 flex flex-col">
@@ -1776,7 +2132,7 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
             onClick={() => setTab("carousel")}
             className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${tab === "carousel" ? "text-amber-600 border-b-2 border-amber-400" : "text-gray-400 hover:text-gray-600"}`}
           >
-            Carousel ({carousel.length})
+            Carousel ({groups.reduce((n, g) => n + g.products.length, 0)})
           </button>
         </div>
 
@@ -1835,6 +2191,11 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
                             </span>
                           )}
                         </div>
+                        {(it.startAt || it.endAt) && (
+                          <p className="text-[10px] mt-2 font-semibold" style={{ color: "rgba(255,255,255,0.75)" }}>
+                            ⏳ {it.startAt ? toLocalInput(it.startAt).replace("T", " ") : "…"} → {it.endAt ? toLocalInput(it.endAt).replace("T", " ") : "…"}
+                          </p>
+                        )}
                       </div>
                       {it.image && (
                         <div className="sm:w-40 h-36 sm:h-auto shrink-0 overflow-hidden">
@@ -1864,42 +2225,91 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
             </div>
           </div>
         ) : (
-          <div className="flex-1 min-h-0 flex flex-col p-6 gap-3">
-            <button
-              onClick={() => setShowSearch(true)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors shrink-0"
-            >
-              <Plus size={14} /> Añadir productos
-            </button>
-            {carousel.length === 0 ? (
-              <p className="text-xs text-gray-400 py-6 text-center">Sin productos en el carousel</p>
-            ) : (
-              <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
-                {carousel.map((p) => (
-                  <div key={p.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                    <div className="w-10 h-10 rounded bg-gray-200 overflow-hidden shrink-0">
-                      {p.image && <img src={p.image} alt={p.name} className="w-full h-full object-cover" />}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-700 truncate font-medium">{p.name}</p>
-                      <p className="text-[10px] text-gray-400">
-                        {currency.format(p.price)}
-                        {p.originalPrice ? (
-                          <span className="line-through ml-1.5">{currency.format(p.originalPrice)}</span>
-                        ) : null}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => removeCarouselProduct(p.id)}
-                      className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 shrink-0"
-                      title="Quitar del carousel"
-                    >
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-gray-500">
+                {groups.length} carousel(es) · {groups.reduce((n, g) => n + g.products.length, 0)} productos
+              </p>
+              <button
+                onClick={addGroup}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors"
+              >
+                <Plus size={13} /> Añadir carousel
+              </button>
+            </div>
+
+            {groups.length === 0 && (
+              <p className="text-xs text-gray-400 py-8 text-center">
+                Sin carouseles. Crea uno para agrupar productos por fechas.
+              </p>
             )}
+
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {groups.map((g) => {
+                const active = isScheduleActiveNow(g.startAt, g.endAt);
+                const overlaps = overlappingNames(groups, g);
+                return (
+                  <div
+                    key={g.id}
+                    onClick={() => setEditingGroupId(g.id)}
+                    className={`bg-white border rounded-2xl overflow-hidden cursor-pointer hover:shadow-md transition-shadow ${overlaps.length > 0 ? "border-red-300" : "border-gray-200"}`}
+                  >
+                    <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
+                      <div className="min-w-0">
+                        <p className="text-sm font-bold text-gray-900 truncate">{g.name}</p>
+                        <p className={`text-[11px] ${overlaps.length > 0 ? "text-red-500" : "text-gray-400"}`}>
+                          {scheduleLabel(g.startAt, g.endAt)}
+                          {overlaps.length > 0 && ` · Se cruza con: ${overlaps.join(", ")}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${active ? "bg-green-50 text-green-600" : "bg-gray-100 text-gray-500"}`}>
+                          {active ? "Vigente" : "Inactivo"}
+                        </span>
+                        <button
+                          onClick={() => setEditingGroupId(g.id)}
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-gray-600 border border-gray-200 hover:border-amber-300 hover:text-amber-600 transition-colors"
+                        >
+                          <Edit size={12} /> Editar
+                        </button>
+                        <button
+                          onClick={() => removeGroup(g.id)}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors"
+                          title="Eliminar carousel"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="p-4">
+                      {g.products.length === 0 ? (
+                        <p className="text-[11px] text-gray-400 py-4 text-center">Sin productos en este carousel</p>
+                      ) : (
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {g.products.slice(0, 4).map((p) => (
+                            <div key={p.id} className="border border-gray-100 rounded-lg overflow-hidden">
+                              <div className="aspect-square bg-gray-100 overflow-hidden">
+                                {p.image && <img src={p.image} alt={p.name} className="w-full h-full object-cover" />}
+                              </div>
+                              <div className="p-1.5">
+                                <p className="text-[10px] font-semibold text-gray-700 truncate">{p.name}</p>
+                                <p className="text-[10px] font-bold text-gray-900">{currency.format(p.price)}</p>
+                              </div>
+                            </div>
+                          ))}
+                          {g.products.length > 4 && (
+                            <div className="aspect-square rounded-lg border border-dashed border-gray-200 flex items-center justify-center text-xs font-semibold text-gray-400">
+                              +{g.products.length - 4}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
@@ -1925,11 +2335,15 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
         </div>
 
       {/* Buscador de productos del carousel */}
-      {showSearch && (
+      {searchGroupId !== null && (
         <DealCarouselSearchModal
-          addedIds={new Set(carousel.map((p) => p.id))}
-          onAdd={addCarouselProduct}
-          onClose={() => setShowSearch(false)}
+          addedIds={
+            new Set(
+              (groups.find((g) => g.id === searchGroupId)?.products ?? []).map((p) => p.id),
+            )
+          }
+          onAdd={(p) => addCarouselProduct(searchGroupId, p)}
+          onClose={() => setSearchGroupId(null)}
         />
       )}
 
@@ -1941,6 +2355,25 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
           categories={categories}
           onChange={(patch) => patchItem(editingItem.id, patch)}
           onClose={() => setEditingId(null)}
+        />
+      )}
+
+      {/* Editor de un carousel programable */}
+      {editingGroup && (
+        <DealCarouselEditor
+          group={editingGroup}
+          index={groups.findIndex((g) => g.id === editingGroup.id)}
+          currency={currency}
+          onPatch={(patch) => patchGroup(editingGroup.id, patch)}
+          onAddProducts={() => setSearchGroupId(editingGroup.id)}
+          onRemoveProduct={(pid) => removeCarouselProduct(editingGroup.id, pid)}
+          onPatchProduct={(pid, patch) => patchCarouselProduct(editingGroup.id, pid, patch)}
+          onDelete={() => {
+            removeGroup(editingGroup.id);
+            setEditingGroupId(null);
+          }}
+          onClose={() => setEditingGroupId(null)}
+          overlapNames={overlappingNames(groups, editingGroup)}
         />
       )}
     </div>
@@ -1991,6 +2424,23 @@ function BrandsLandingManager({
       /* noop */
     }
   };
+
+  // Las marcas sin imagen quedan inactivas (no se muestran en la landing).
+  useEffect(() => {
+    const targets = brands.filter((b) => b.isActive && !b.imagePath);
+    if (targets.length === 0) return;
+    setItems((prev) => prev.map((b) => (b.imagePath ? b : { ...b, isActive: false })));
+    void Promise.all(
+      targets.map((b) =>
+        fetch(`${API_BASE}/admin/landing/brands/${b.id}/active`, {
+          method: "PATCH",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ isActive: false }),
+        }).catch(() => {}),
+      ),
+    );
+  }, [brands]);
 
   const toggleActive = async (b: LandingBrand) => {
     const newActive = !b.isActive;
@@ -2054,6 +2504,8 @@ function BrandsLandingManager({
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
+      // Primero las activas, luego el criterio elegido.
+      if (a.isActive !== b.isActive) return a.isActive ? -1 : 1;
       if (sortKey === "count") {
         return sortDir === "desc" ? b.productCount - a.productCount : a.productCount - b.productCount;
       }
@@ -2124,8 +2576,14 @@ function BrandsLandingManager({
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-1">
           {filtered.map((b) => (
             <div key={b.id} onClick={() => void openBrandEditor(b.id)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
-              <label onClick={(e) => e.stopPropagation()} className="flex items-center gap-3 flex-1 cursor-pointer">
-                <input type="checkbox" checked={b.selected} onChange={() => toggleSelected(b.id)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
+              <div className="flex items-center gap-3 flex-1 min-w-0">
+                <input
+                  type="checkbox"
+                  checked={b.selected}
+                  onClick={(e) => e.stopPropagation()}
+                  onChange={() => toggleSelected(b.id)}
+                  className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300 cursor-pointer shrink-0"
+                />
                 <div className="w-7 h-7 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
                   {b.imagePath ? (
                     <img src={b.imagePath} alt={b.name} className="w-full h-full object-contain" />
@@ -2136,7 +2594,7 @@ function BrandsLandingManager({
                 <span className={`flex-1 text-sm ${b.isActive ? "text-gray-700" : "text-gray-300 line-through"}`}>{b.name}</span>
                 {b.code && <span className="text-[10px] text-gray-400 font-mono">{b.code}</span>}
                 <span className="text-xs text-gray-400">{b.productCount} prod.</span>
-              </label>
+              </div>
               <button
                 onClick={(e) => { e.stopPropagation(); toggleActive(b); }}
                 className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${b.isActive ? "bg-green-500" : "bg-red-400"}`}

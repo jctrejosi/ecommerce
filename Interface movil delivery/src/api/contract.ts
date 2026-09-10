@@ -53,7 +53,8 @@ export interface DeliveryApi {
   getOrder(id: number | string): Promise<DeliveryOrder>;
   getHistory(): Promise<HistoryEntry[]>;
 
-  // ruta (OSRM): devuelve null cuando no hay ruta disponible (se degrada a línea recta)
+  // ruta (OSRM): devuelve null cuando no hay ruta disponible; la app no dibuja
+  // línea hasta que haya una ruta calculada.
   getRoute(
     orderId: number | string,
     from?: string,

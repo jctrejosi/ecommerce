@@ -7,6 +7,7 @@ import {
   Param,
   Post,
   Put,
+  Query,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
@@ -59,5 +60,23 @@ export class DeliveryAdminController {
   @Get('orders')
   listOrders() {
     return this.admin.listOrders();
+  }
+
+  /**
+   * Ruta por calles (OSRM) del pedido, para pintarla en el mapa de flota.
+   * `target` = 'store' | 'customer'; `from` opcional (`lng,lat`) para rutas
+   * que no parten del repartidor (p. ej. tienda → domicilio).
+   */
+  @Get('orders/:id/route')
+  getOrderRoute(
+    @Param('id') id: string,
+    @Query('target') target?: string,
+    @Query('from') from?: string,
+  ) {
+    return this.admin.getOrderRoute(
+      Number(id),
+      target === 'store' ? 'store' : 'customer',
+      from,
+    );
   }
 }

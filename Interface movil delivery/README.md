@@ -82,13 +82,14 @@ El backend del delivery vive en `ecommerce/backend/src/modules/delivery/`
 - **Estados**: el backend es la única fuente de verdad; la app envía
   transiciones (`accept/arrived/pickup/start/deliver/reject/fail`) según
   `order.status` (`src/delivery/state-machine.ts`). `reject`/`fail` piden motivo.
-- **GPS**: solo en `PICKED_UP`/`IN_DELIVERY`, ping cada 15 s o 20 m, cola
-  offline con reintento (`src/tracking/`). Background = fase 2.
+- **GPS**: solo en `PICKED_UP`/`IN_DELIVERY`, ping cada 15 s (por tiempo, sin
+  exigir desplazamiento) con foreground service en background, cola offline con
+  reintento (`src/tracking/`).
 - **Mapa**: MapLibre + tiles OSM (sin API key); carga dinámica con fallback
   en Expo Go/web. La ruta recomendada viene del backend vía
-  `GET /delivery/orders/:id/route` (OSRM: polyline + distancia + duración);
-  si no hay ruta, se degrada a línea recta. Navegación externa
-  (Google Maps/Waze/Apple Maps).
+  `GET /delivery/orders/:id/route` (OSRM: polyline + distancia + duración); la
+  ruta se dibuja solo cuando ya está calculada (no hay línea recta provisional).
+  Navegación externa (Google Maps/Waze/Apple Maps).
 - **Push**: `expo-notifications` + FCM vía backend; solo en dev build nativo
   (no en Expo Go ni web — el módulo se carga dinámicamente).
 

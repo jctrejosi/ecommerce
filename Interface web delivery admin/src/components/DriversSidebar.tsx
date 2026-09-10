@@ -3,7 +3,6 @@ import {
   Eye,
   EyeOff,
   MapPinOff,
-  Pencil,
   Phone,
   Search,
   ShoppingBag,
@@ -25,8 +24,6 @@ interface Props {
   hiddenIds: Set<number>;
   onToggleHidden: (id: number) => void;
   onToggleAvailable: (driver: FleetDriver, value: boolean) => void;
-  onToggleActive: (driver: FleetDriver, value: boolean) => void;
-  onEdit: (driver: FleetDriver) => void;
 }
 
 function DriverRow({
@@ -94,15 +91,11 @@ function DriverRow({
 function DetailView({
   driver,
   onBack,
-  onEdit,
   onToggleAvailable,
-  onToggleActive,
 }: {
   driver: FleetDriver;
   onBack: () => void;
-  onEdit: () => void;
   onToggleAvailable: (value: boolean) => void;
-  onToggleActive: (value: boolean) => void;
 }) {
   const visual = driverVisual(driver);
   const a = driver.activeAssignment;
@@ -195,25 +188,6 @@ function DetailView({
             </div>
           </section>
         )}
-
-        <section className="flex flex-col gap-2">
-          <button
-            onClick={onEdit}
-            className="flex items-center justify-center gap-2 rounded-xl bg-slate-900 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
-          >
-            <Pencil className="h-3.5 w-3.5" /> Editar repartidor
-          </button>
-          <button
-            onClick={() => onToggleActive(!driver.isActive)}
-            className={`rounded-xl py-2 text-xs font-bold transition ${
-              driver.isActive
-                ? 'bg-rose-50 text-rose-600 hover:bg-rose-100'
-                : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
-            }`}
-          >
-            {driver.isActive ? 'Desactivar cuenta' : 'Activar cuenta'}
-          </button>
-        </section>
       </div>
     </div>
   );
@@ -231,8 +205,6 @@ export default function DriversSidebar(props: Props) {
     hiddenIds,
     onToggleHidden,
     onToggleAvailable,
-    onToggleActive,
-    onEdit,
   } = props;
 
   const selected = drivers.find((d) => d.id === selectedId) ?? null;
@@ -279,9 +251,7 @@ export default function DriversSidebar(props: Props) {
         <DetailView
           driver={selected}
           onBack={() => onSelect(null)}
-          onEdit={() => onEdit(selected)}
           onToggleAvailable={(v) => onToggleAvailable(selected, v)}
-          onToggleActive={(v) => onToggleActive(selected, v)}
         />
       ) : (
         <div className="flex-1 overflow-y-auto">

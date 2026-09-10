@@ -32,7 +32,7 @@ export class AdminLandingController {
   @Put('daily-deals')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Guardar configuración de Ofertas del día' })
-  updateDailyDeals(@Body() body: { featuredItems?: any[]; carouselProductIds?: number[] }) {
+  updateDailyDeals(@Body() body: { featuredItems?: any[]; carousels?: any[]; carouselProductIds?: number[] }) {
     return this.landingService.updateDailyDeals(body);
   }
 

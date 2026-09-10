@@ -221,7 +221,7 @@ export const mockApi: DeliveryApi = {
   },
 
   async getRoute(_orderId, _from, _target) {
-    // En mock no hay motor de rutas: la app usa la línea recta.
+    // En mock no hay motor de rutas: no se dibuja ruta.
     return null;
   },
 

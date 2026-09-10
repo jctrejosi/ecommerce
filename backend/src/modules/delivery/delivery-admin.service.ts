@@ -3,12 +3,18 @@ import {
   ConflictException,
   Injectable,
   NotFoundException,
+  UnprocessableEntityException,
 } from '@nestjs/common';
-import { and, eq, isNull, or } from 'drizzle-orm';
+import { and, desc, eq, isNull, or } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import { DrizzleService } from '../../database/drizzle.service';
-import { deliveryDrivers, users } from '../../../drizzle/schema';
-import { parsePoint } from './delivery.service';
+import {
+  deliveryAssignments,
+  deliveryDrivers,
+  shipments,
+  users,
+} from '../../../drizzle/schema';
+import { parsePoint, DeliveryService } from './delivery.service';
 import type { CreateDriverDto, UpdateDriverDto } from './dto/admin-driver.dto';
 
 /** Estados en los que la asignación sigue activa (visible en el panel). */
@@ -113,7 +119,10 @@ LEFT JOIN branches b ON b.id = o.branch_id
 
 @Injectable()
 export class DeliveryAdminService {
-  constructor(private readonly drizzle: DrizzleService) {}
+  constructor(
+    private readonly drizzle: DrizzleService,
+    private readonly delivery: DeliveryService,
+  ) {}
 
   private get db() {
     return this.drizzle.db;
@@ -179,6 +188,37 @@ export class DeliveryAdminService {
       throw new NotFoundException(`Repartidor ${id} no encontrado.`);
     }
     return this.toDriver(rows[0]);
+  }
+
+  /**
+   * Ruta por calles (OSRM) de un pedido para el mapa de flota.
+   * `target` = 'store' (tienda a recoger) | 'customer' (domicilio).
+   * El origen puede venir en `from` (`lng,lat`); si no, se usa la posición del
+   * repartidor asignado. La ruta se calcula antes de pintarse.
+   */
+  async getOrderRoute(
+    orderId: number,
+    target: 'customer' | 'store' = 'customer',
+    from?: string,
+  ) {
+    let driver: typeof deliveryDrivers.$inferSelect | null = null;
+    if (!from) {
+      const [assignment] = await this.db
+        .select({ driverId: deliveryAssignments.driverId })
+        .from(deliveryAssignments)
+        .innerJoin(shipments, eq(shipments.id, deliveryAssignments.shipmentId))
+        .where(eq(shipments.orderId, orderId))
+        .orderBy(desc(deliveryAssignments.id))
+        .limit(1);
+      if (assignment?.driverId != null) {
+        driver = await this.findDriverRow(Number(assignment.driverId));
+      } else {
+        throw new UnprocessableEntityException(
+          'El pedido no tiene un repartidor asignado.',
+        );
+      }
+    }
+    return this.delivery.getOrderRoute(driver, orderId, from, target);
   }
 
   private async findDriverRow(id: number) {

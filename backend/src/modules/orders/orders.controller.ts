@@ -71,6 +71,14 @@ export class OrdersController {
     return this.ordersService.getLiveTracking(referenceCode);
   }
 
+  /** Ruta por calles (OSRM) repartidor → domicilio, para el mapa del cliente. */
+  @Public()
+  @Get('track/:referenceCode/route')
+  @ApiOperation({ summary: 'Ruta por calles del pedido (por código)' })
+  liveRoute(@Param('referenceCode') referenceCode: string) {
+    return this.ordersService.getLiveRoute(referenceCode);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Obtener pedidos del cliente autenticado' })
   @ApiResponse({ status: 200, description: 'Listado de pedidos del cliente' })

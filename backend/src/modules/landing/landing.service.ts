@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
@@ -192,23 +192,119 @@ export class LandingService {
       .limit(1);
     const config = row.length ? (row[0].value as any) : null;
     const featuredItems = Array.isArray(config?.featuredItems)
-      ? config.featuredItems
+      ? config.featuredItems.map((it: any) => ({
+          ...it,
+          startAt: it?.startAt ?? null,
+          endAt: it?.endAt ?? null,
+        }))
       : [];
-    const carouselProductIds = Array.isArray(config?.carouselProductIds)
+
+    const legacyIds = Array.isArray(config?.carouselProductIds)
       ? config.carouselProductIds.map(Number)
       : [];
-    const carousel = await this.resolveCarouselProducts(carouselProductIds);
-    return { featuredItems, carouselProductIds, carousel };
+
+    let carousels: Array<{
+      id: string;
+      name: string;
+      startAt: string | null;
+      endAt: string | null;
+      products: Array<{ id: number; startAt: string | null; endAt: string | null }>;
+    }> = (Array.isArray(config?.carousels) ? config.carousels : []).map(
+      (c: any, i: number) => ({
+        id: String(c?.id ?? `c${i + 1}`),
+        name: String(c?.name ?? `Carousel ${i + 1}`),
+        startAt: c?.startAt ?? null,
+        endAt: c?.endAt ?? null,
+        products: (Array.isArray(c?.products) ? c.products : [])
+          .map((p: any) => ({
+            id: Number(p?.id),
+            startAt: p?.startAt ?? null,
+            endAt: p?.endAt ?? null,
+          }))
+          .filter((p: any) => Number.isFinite(p.id)),
+      }),
+    );
+
+    // Compatibilidad: si aún no hay grupos pero sí ids sueltos, se crea uno por defecto.
+    if (carousels.length === 0 && legacyIds.length > 0) {
+      carousels = [
+        {
+          id: 'default',
+          name: 'Carousel principal',
+          startAt: null,
+          endAt: null,
+          products: legacyIds.map((id) => ({ id, startAt: null, endAt: null })),
+        },
+      ];
+    }
+
+    const allIds = [
+      ...new Set(carousels.flatMap((c) => c.products.map((p) => p.id))),
+    ];
+    const resolved = await this.resolveCarouselProducts(allIds);
+    const byId = new Map<number, Record<string, unknown>>(
+      resolved.map((p: any) => [Number(p.id), p]),
+    );
+
+    const carouselsWithProducts = carousels.map((c) => ({
+      ...c,
+      products: c.products.map((p) => ({
+        ...(byId.get(p.id) ?? { id: p.id }),
+        id: p.id,
+        startAt: p.startAt,
+        endAt: p.endAt,
+      })),
+    }));
+
+    const carouselProductIds = allIds;
+    const carousel = allIds
+      .map((id) => byId.get(id))
+      .filter((x): x is Record<string, unknown> => !!x);
+
+    return { featuredItems, carousels: carouselsWithProducts, carouselProductIds, carousel };
   }
 
   async updateDailyDeals(body: {
     featuredItems?: any[];
+    carousels?: any[];
     carouselProductIds?: number[];
   }) {
-    const value = {
-      featuredItems: body.featuredItems ?? [],
-      carouselProductIds: (body.carouselProductIds ?? []).map(Number),
-    };
+    const featuredItems = (body.featuredItems ?? []).map((it: any) => ({
+      ...it,
+      startAt: it?.startAt ?? null,
+      endAt: it?.endAt ?? null,
+    }));
+
+    const carousels = (body.carousels ?? []).map((c: any, i: number) => ({
+      id: String(c?.id ?? `c${i + 1}`),
+      name: String(c?.name ?? `Carousel ${i + 1}`),
+      startAt: c?.startAt ?? null,
+      endAt: c?.endAt ?? null,
+      products: (Array.isArray(c?.products) ? c.products : [])
+        .map((p: any) => ({
+          id: Number(p?.id),
+          startAt: p?.startAt ?? null,
+          endAt: p?.endAt ?? null,
+        }))
+        .filter((p: any) => Number.isFinite(p.id)),
+    }));
+
+    // Solo un carousel puede estar activo a la vez: los rangos no deben cruzarse.
+    for (let i = 0; i < carousels.length; i++) {
+      for (let j = i + 1; j < carousels.length; j++) {
+        if (this.rangesOverlap(carousels[i], carousels[j])) {
+          throw new BadRequestException(
+            `Los carouseles "${carousels[i].name}" y "${carousels[j].name}" se cruzan en fechas. Solo uno puede estar activo a la vez.`,
+          );
+        }
+      }
+    }
+
+    const carouselProductIds = body.carouselProductIds
+      ? body.carouselProductIds.map(Number)
+      : [...new Set(carousels.flatMap((c) => c.products.map((p) => p.id)))];
+
+    const value = { featuredItems, carousels, carouselProductIds };
     const row = await this.db
       .select()
       .from(settings)
@@ -232,9 +328,68 @@ export class LandingService {
     return this.getDailyDeals();
   }
 
+  // ¿La fecha actual está dentro del rango [startAt, endAt]? (null = sin límite)
+  private isScheduleActive(startAt?: string | null, endAt?: string | null): boolean {
+    const now = Date.now();
+    if (startAt) {
+      const s = new Date(startAt).getTime();
+      if (!Number.isNaN(s) && now < s) return false;
+    }
+    if (endAt) {
+      const e = new Date(endAt).getTime();
+      if (!Number.isNaN(e) && now > e) return false;
+    }
+    return true;
+  }
+
+  // Dos rangos se cruzan si comparten algún instante. null = abierto por ese lado.
+  private rangesOverlap(
+    a: { startAt?: string | null; endAt?: string | null },
+    b: { startAt?: string | null; endAt?: string | null },
+  ): boolean {
+    const toTime = (v: string | null | undefined, fallback: number) => {
+      if (!v) return fallback;
+      const t = new Date(v).getTime();
+      return Number.isNaN(t) ? fallback : t;
+    };
+    const aS = toTime(a.startAt, -Infinity);
+    const aE = toTime(a.endAt, Infinity);
+    const bS = toTime(b.startAt, -Infinity);
+    const bE = toTime(b.endAt, Infinity);
+    return aS < bE && bS < aE;
+  }
+
   async getPublicDailyDeals() {
-    const { featuredItems, carousel } = await this.getDailyDeals();
-    return { featuredItems, carousel };
+    const { featuredItems, carousels, carousel } = await this.getDailyDeals();
+
+    const activeItems = featuredItems.filter((it: any) =>
+      this.isScheduleActive(it.startAt, it.endAt),
+    );
+
+    let products: Array<Record<string, unknown>> = [];
+    if (carousels.length > 0) {
+      const byId = new Map<number, Record<string, unknown>>(
+        carousel.map((p: any) => [Number(p.id), p]),
+      );
+      const seen = new Set<number>();
+      for (const group of carousels) {
+        if (!this.isScheduleActive(group.startAt, group.endAt)) continue;
+        for (const p of group.products) {
+          if (!this.isScheduleActive(p.startAt, p.endAt)) continue;
+          const id = Number(p.id);
+          if (seen.has(id)) continue;
+          const prod = byId.get(id);
+          if (prod) {
+            seen.add(id);
+            products.push(prod);
+          }
+        }
+      }
+    } else {
+      products = carousel;
+    }
+
+    return { featuredItems: activeItems, carousel: products };
   }
 
   // ── Landing Brands ──

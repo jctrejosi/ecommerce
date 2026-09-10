@@ -89,12 +89,14 @@ interface DailyDealsSectionProps {
 export function DailyDealsSection({
   cartItems, onAdd, onRemove, onProductClick, dealProducts, dailyDeals, onApplyFilter,
 }: DailyDealsSectionProps) {
-  const featuredItems = (dailyDeals?.featuredItems?.length ? dailyDeals.featuredItems : DEAL_OF_DAY_ITEMS).map((item) => ({
+  // Si hay configuración desde el admin, se respeta tal cual (incluida la
+  // programación por fechas: si nada está vigente, no se muestra nada).
+  // El contenido de ejemplo solo se usa cuando no existe configuración.
+  const featuredItems = (dailyDeals ? dailyDeals.featuredItems ?? [] : DEAL_OF_DAY_ITEMS).map((item) => ({
     ...item,
     title: (item.title || "").replace(/\\n/g, "\n"),
   }));
-  const carouselProducts =
-    dailyDeals?.carousel?.length ? dailyDeals.carousel : dealProducts;
+  const carouselProducts = dailyDeals ? dailyDeals.carousel ?? [] : dealProducts;
 
   const [featuredIdx, setFeaturedIdx] = useState(0);
   const [carouselStart, setCarouselStart] = useState(0);
@@ -135,7 +137,10 @@ export function DailyDealsSection({
     setLocalQtys((prev) => ({ ...prev, [p.id]: 1 }));
   };
 
-  const featured = featuredItems[featuredIdx % featuredItems.length];
+  const featured =
+    featuredItems.length > 0
+      ? featuredItems[featuredIdx % featuredItems.length]
+      : undefined;
   const featuredFilter =
     featured &&
     ((featured.productIds?.length ?? 0) > 0 ||
@@ -192,6 +197,7 @@ export function DailyDealsSection({
 
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Left: featured deal of the day */}
+          {featured && (
           <div
             className={`lg:w-72 flex-shrink-0 rounded-2xl overflow-hidden relative flex flex-col justify-between${featuredClickable ? " cursor-pointer" : ""}`}
             onClick={featuredClickable ? () => onApplyFilter!(featuredFilter!) : undefined}
@@ -251,6 +257,7 @@ export function DailyDealsSection({
               ))}
             </div>
           </div>
+          )}
 
           {/* Right: deals carousel */}
           <div className="flex-1 flex flex-col gap-3">

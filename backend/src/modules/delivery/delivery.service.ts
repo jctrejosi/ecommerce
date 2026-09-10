@@ -97,7 +97,7 @@ export class DeliveryService {
    * `target` = 'customer' (destino de entrega, default) | 'store' (tienda a recoger).
    */
   async getOrderRoute(
-    driver: typeof deliveryDrivers.$inferSelect,
+    driver: typeof deliveryDrivers.$inferSelect | null,
     orderId: number,
     from?: string,
     target: 'customer' | 'store' = 'customer',
@@ -132,7 +132,7 @@ export class DeliveryService {
     }
 
     const origin =
-      (from ? parseLonLat(from) : null) ?? parsePoint(driver.currentLocation);
+      (from ? parseLonLat(from) : null) ?? parsePoint(driver?.currentLocation ?? null);
     if (!origin) {
       throw new UnprocessableEntityException(
         'No hay posición de origen (repartidor).',

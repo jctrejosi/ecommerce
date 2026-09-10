@@ -42,9 +42,9 @@ if (Platform.OS !== "web") {
       return;
     }
     const { locations } = data as { locations: Location.LocationObject[] };
-    for (const loc of locations ?? []) {
-      void enqueuePing(toPing(loc));
-    }
+    // Se espera el encolado antes de vaciar: si no, el flush puede leer la
+    // cola vacía y el ping se queda esperando a la siguiente lectura.
+    await Promise.all((locations ?? []).map((loc) => enqueuePing(toPing(loc))));
     // En background no corre el flusher de foreground: intentar enviar ya.
     await flushQueue((ping) => api.sendLocation(ping)).catch(() => {
       /* sin red: la cola se reintenta en la próxima lectura */
@@ -112,7 +112,7 @@ export async function startDeliveryTracking(
       {
         accuracy: Location.Accuracy.Balanced,
         timeInterval: 15_000, // ms entre lecturas
-        distanceInterval: 20, // metros mínimos de movimiento
+        distanceInterval: 0, // 0 = entrega por tiempo, sin exigir desplazamiento
       },
       (pos) => {
         void enqueuePing(toPing(pos));
@@ -164,8 +164,8 @@ export async function startBackgroundTracking(): Promise<boolean> {
       await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, {
         accuracy: Location.Accuracy.Balanced,
         timeInterval: 15_000,
-        distanceInterval: 20,
-        pausesUpdatesAutomatically: true,
+        distanceInterval: 0, // por tiempo: reporta aunque el repartidor esté quieto
+        pausesUpdatesAutomatically: false,
         foregroundService: {
           notificationTitle: "Delivery activo",
           notificationBody: "Enviando tu ubicación mientras entregas el pedido",

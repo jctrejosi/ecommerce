@@ -45,7 +45,11 @@ export function useOrderRoute(
   target: "customer" | "store" | undefined,
 ) {
   return useQuery({
-    queryKey: ["delivery", "orders", "route", orderId ?? "", from ?? "", target ?? ""] as const,
+    // La clave NO incluye `from`: la posición del repartidor cambia cada pocos
+    // segundos y generar una clave nueva en cada lectura provocaba recalcular
+    // la ruta sin parar (y, al no haber datos previos, la línea real parpadeaba
+    // a la recta). El `from` actual se usa igual en cada recálculo.
+    queryKey: ["delivery", "orders", "route", orderId ?? "", target ?? ""] as const,
     queryFn: () => api.getRoute(orderId!, from, target),
     enabled: orderId !== undefined && target !== undefined,
     refetchInterval: 60_000,

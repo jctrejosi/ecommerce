@@ -394,8 +394,6 @@ export default function App() {
               })
             }
             onToggleAvailable={toggleAvailable}
-            onToggleActive={toggleActive}
-            onEdit={(driver) => setModal({ mode: 'edit', driver })}
           />
         </main>
       )}

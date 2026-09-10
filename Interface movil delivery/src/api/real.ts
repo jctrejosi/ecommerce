@@ -88,7 +88,8 @@ export const realApi: DeliveryApi = {
       });
       return unwrap<RouteResult>(res.data);
     } catch {
-      // Sin ruta (OSRM caído / sin coordenadas) la app degrada a línea recta.
+      // Sin ruta (OSRM caído / sin coordenadas) se devuelve null y la app no
+      // dibuja ninguna línea hasta que haya una ruta calculada.
       return null;
     }
   },

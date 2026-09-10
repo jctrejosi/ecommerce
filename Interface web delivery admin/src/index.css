@@ -26,23 +26,44 @@ body {
   font-size: 10px;
 }
 
-/* Pines de repartidores */
+/* Pines de repartidores (igual que el marcador del cliente) */
 .ml-pin {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
-  background: var(--pin);
-  border: 3px solid var(--pin-border, #ffffff);
-  box-shadow: 0 3px 10px rgba(15, 23, 42, 0.4);
-  color: #fff;
-  font-weight: 800;
-  letter-spacing: 0.5px;
+  background: #ffffff;
+  border: 3px solid #fff200;
+  box-shadow: 0 0 0 2px #1a1a2e, 0 3px 10px rgba(15, 23, 42, 0.4);
   z-index: 1000;
 }
 
+.ml-pin--sel {
+  border-color: #1a1a2e;
+}
+
+/* Marcador de destino (casita) */
+.ml-dest {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid #16a34a;
+  box-shadow: 0 0 0 2px #1a1a2e, 0 3px 10px rgba(15, 23, 42, 0.4);
+  z-index: 900;
+}
+
+.ml-dest-inner {
+  font-size: 20px;
+  line-height: 1;
+}
+
 .ml-pin-inner {
+  line-height: 1;
   pointer-events: none;
 }
 

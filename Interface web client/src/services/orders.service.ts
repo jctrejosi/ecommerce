@@ -240,9 +240,24 @@ export const ordersService = {
       `${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}/live`,
     );
   },
+
+  /** Ruta por calles (OSRM) repartidor → domicilio (público, por código). */
+  async liveRoute(referenceCode: string): Promise<OrderLiveRoute | null> {
+    return fetchJson<OrderLiveRoute | null>(
+      `${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}/route`,
+    );
+  },
 };
 
 export type Point = { lat: number; lng: number };
+
+/** Ruta por calles (OSRM) entre el repartidor y el domicilio. */
+export type OrderLiveRoute = {
+  /** Polyline (precisión 5) lista para decodificar a coordenadas. */
+  polyline: string;
+  distanceM: number;
+  durationS: number;
+};
 
 export type OrderLiveTracking = {
   referenceCode: string;
