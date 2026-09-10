@@ -34,13 +34,14 @@ body {
   justify-content: center;
   border-radius: 9999px;
   background: #ffffff;
-  border: 3px solid #fff200;
+  /* Color propio del repartidor (--pin), igual que su ruta. */
+  border: 3px solid var(--pin, #fff200);
   box-shadow: 0 0 0 2px #1a1a2e, 0 3px 10px rgba(15, 23, 42, 0.4);
   z-index: 1000;
 }
 
 .ml-pin--sel {
-  border-color: #1a1a2e;
+  box-shadow: 0 0 0 4px #1a1a2e, 0 4px 14px rgba(15, 23, 42, 0.5);
 }
 
 /* Marcador de destino (casita) */

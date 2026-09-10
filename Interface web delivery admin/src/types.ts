@@ -43,6 +43,8 @@ export interface FleetDriver {
   vehicleBrand: string | null;
   vehicleModel: string | null;
   vehicleColor: string | null;
+  /** Color (#RRGGBB) de la ruta del repartidor en el mapa de flota. */
+  routeColor: string | null;
   isAvailable: boolean;
   isActive: boolean;
   location: LatLng | null;

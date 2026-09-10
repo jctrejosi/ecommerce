@@ -6,6 +6,27 @@ import './index.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
+// Interceptor global: si una petición al API responde 401 (token ausente o
+// expirado), se avisa a la app para que vuelva siempre al login.
+const originalFetch = window.fetch.bind(window)
+window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+  const res = await originalFetch(input, init)
+  try {
+    const url =
+      typeof input === 'string'
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url
+    if (res.status === 401 && url.startsWith(API_URL) && !url.includes('/auth/login')) {
+      window.dispatchEvent(new Event('auth:unauthorized'))
+    }
+  } catch {
+    /* noop */
+  }
+  return res
+}
+
 function BootScreen({ onReady }: { onReady: () => void }) {
   const [status, setStatus] = useState<'loading' | 'error'>('loading')
 

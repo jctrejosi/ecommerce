@@ -221,7 +221,7 @@ export default function App() {
     featuredItems: any[];
     carousel: Product[];
   } | null>(null);
-  const [generalLogo, setGeneralLogo] = useState<{ url?: string } | null>(null);
+  const [generalLogo, setGeneralLogo] = useState<{ url?: string; title?: string } | null>(null);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
   const [landingProductTypes, setLandingProductTypes] = useState<
@@ -305,6 +305,12 @@ export default function App() {
       setTimeout(() => window.location.reload(), 1500);
     }
   }, [online]);
+
+  // Título de la pestaña del navegador: configurable en el admin, siempre con sufijo "| DSI".
+  useEffect(() => {
+    const base = (generalLogo?.title || "Mercaldas").trim();
+    document.title = `${base} | DSI`;
+  }, [generalLogo]);
 
   useEffect(() => {
     if (initialDataLoaded) return;

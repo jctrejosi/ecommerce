@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
-import { Bike, Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
+import { Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
 import { api, ApiError } from '../services/api';
 import type { AuthUser } from '../types';
+import logo from '../assets/logo.png';
 
 interface Props {
   onLogin: (token: string, user: AuthUser) => void;
@@ -37,8 +38,8 @@ export default function LoginScreen({ onLogin }: Props) {
     <div className="min-h-full flex items-center justify-center bg-slate-950 px-4">
       <div className="w-full max-w-sm">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-400 shadow-lg shadow-amber-400/30">
-            <Bike className="h-8 w-8 text-slate-900" />
+          <div className="mx-auto mb-4 flex items-center justify-center rounded-2xl bg-white px-5 py-3 shadow-lg">
+            <img src={logo} alt="MercAldas" className="h-8 w-auto object-contain" />
           </div>
           <h1 className="text-2xl font-bold text-white">MercAldas Delivery</h1>
           <p className="mt-1 text-sm text-slate-400">

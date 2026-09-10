@@ -1,9 +1,9 @@
-import { KeyRound, MapPin, Pencil, Plus, Power, Search } from 'lucide-react';
+import { MapPin, Pencil, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { FleetDriver } from '../types';
 import { FILTER_OPTIONS, driverVisual } from '../lib/status';
 import { vehicleLabel } from '../lib/format';
-import { AvailabilitySwitch, DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
+import { DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
 import type { DriverFilter } from '../types';
 
 interface Props {
@@ -11,8 +11,6 @@ interface Props {
   onSelect: (id: number | null) => void;
   onCreate: () => void;
   onEdit: (driver: FleetDriver, focusReset?: boolean) => void;
-  onToggleAvailable: (driver: FleetDriver, value: boolean) => void;
-  onToggleActive: (driver: FleetDriver, value: boolean) => void;
 }
 
 export default function DriversPanel({
@@ -20,8 +18,6 @@ export default function DriversPanel({
   onSelect,
   onCreate,
   onEdit,
-  onToggleAvailable,
-  onToggleActive,
 }: Props) {
   const [filter, setFilter] = useState<DriverFilter>('all');
   const [search, setSearch] = useState('');
@@ -94,7 +90,7 @@ export default function DriversPanel({
         <table className="w-full">
           <thead>
             <tr className="sticky top-0 border-b border-slate-100 bg-slate-50 text-left">
-              {['Repartidor', 'Contacto', 'Vehículo', 'Estado', 'Última señal', 'Disponible', ''].map(
+              {['Repartidor', 'Contacto', 'Vehículo', 'Estado', 'Última señal', 'Acciones'].map(
                 (h) => (
                   <th
                     key={h}
@@ -109,7 +105,7 @@ export default function DriversPanel({
           <tbody className="divide-y divide-slate-50">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-xs text-slate-400">
+                <td colSpan={6} className="p-8 text-center text-xs text-slate-400">
                   No hay repartidores que coincidan.
                 </td>
               </tr>
@@ -150,19 +146,16 @@ export default function DriversPanel({
                     <LastSeen driver={d} />
                   </td>
                   <td className="px-4 py-3">
-                    <AvailabilitySwitch driver={d} onToggle={onToggleAvailable} />
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-end gap-1">
+                    <div className="flex items-center justify-start gap-2">
                       <button
                         title="Ver en el mapa"
                         onClick={(e) => {
                           e.stopPropagation();
                           onSelect(d.id);
                         }}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
                       >
-                        <MapPin className="h-3.5 w-3.5" />
+                        <MapPin className="h-4 w-4" /> Ver en el mapa
                       </button>
                       <button
                         title="Editar"
@@ -170,31 +163,9 @@ export default function DriversPanel({
                           e.stopPropagation();
                           onEdit(d);
                         }}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                        className="inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
                       >
-                        <Pencil className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        title="Restablecer contraseña"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onEdit(d, true);
-                        }}
-                        className="flex h-7 w-7 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
-                      >
-                        <KeyRound className="h-3.5 w-3.5" />
-                      </button>
-                      <button
-                        title={d.isActive ? 'Desactivar cuenta' : 'Activar cuenta'}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onToggleActive(d, !d.isActive);
-                        }}
-                        className={`flex h-7 w-7 items-center justify-center rounded-lg hover:bg-slate-100 ${
-                          d.isActive ? 'text-emerald-500' : 'text-slate-300'
-                        }`}
-                      >
-                        <Power className="h-3.5 w-3.5" />
+                        <Pencil className="h-4 w-4" /> Editar
                       </button>
                     </div>
                   </td>

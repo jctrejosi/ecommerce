@@ -15,6 +15,7 @@ import {
   users,
 } from '../../../drizzle/schema';
 import { parsePoint, DeliveryService } from './delivery.service';
+import { pickRouteColor } from './driver-colors';
 import type { CreateDriverDto, UpdateDriverDto } from './dto/admin-driver.dto';
 
 /** Estados en los que la asignación sigue activa (visible en el panel). */
@@ -31,6 +32,7 @@ interface DriverRow {
   vehicle_brand: string | null;
   vehicle_model: string | null;
   vehicle_color: string | null;
+  route_color: string | null;
   is_available: boolean;
   is_active: boolean;
   current_location: string | null;
@@ -94,6 +96,7 @@ const DRIVERS_SELECT = `
 SELECT
   d.id, d.full_name, d.phone, d.email,
   d.vehicle_type, d.vehicle_plate, d.vehicle_brand, d.vehicle_model, d.vehicle_color,
+  d.route_color,
   d.is_available, d.is_active,
   d.current_location, d.last_location_at, d.created_at,
   u.id AS auth_user_id, u.username, u.first_name, u.last_name,
@@ -140,6 +143,7 @@ export class DeliveryAdminService {
       vehicleBrand: row.vehicle_brand,
       vehicleModel: row.vehicle_model,
       vehicleColor: row.vehicle_color,
+      routeColor: row.route_color,
       isAvailable: row.is_available,
       isActive: row.is_active,
       location: parsePoint(row.current_location),
@@ -263,6 +267,17 @@ export class DeliveryAdminService {
     const firstName = dto.firstName?.trim() || nameParts[0] || 'Repartidor';
     const lastName = dto.lastName?.trim() || nameParts.slice(1).join(' ') || '';
 
+    // Color de ruta por defecto: aleatorio entre los que aún no se usan.
+    const usedColors = (
+      await this.db
+        .select({ routeColor: deliveryDrivers.routeColor })
+        .from(deliveryDrivers)
+        .where(isNull(deliveryDrivers.deletedAt))
+    )
+      .map((r) => r.routeColor)
+      .filter((c): c is string => Boolean(c));
+    const routeColor = pickRouteColor(usedColors);
+
     const driverId = await this.drizzle.transaction(async (tx) => {
       const [user] = await tx
         .insert(users)
@@ -290,6 +305,7 @@ export class DeliveryAdminService {
           vehicleBrand: dto.vehicleBrand?.trim() || null,
           vehicleModel: dto.vehicleModel?.trim() || null,
           vehicleColor: dto.vehicleColor?.trim() || null,
+          routeColor,
           isAvailable: true,
           isActive: true,
         })
@@ -333,6 +349,8 @@ export class DeliveryAdminService {
       patch.vehicleModel = dto.vehicleModel.trim() || null;
     if (dto.vehicleColor !== undefined)
       patch.vehicleColor = dto.vehicleColor.trim() || null;
+    if (dto.routeColor !== undefined)
+      patch.routeColor = dto.routeColor.trim().toUpperCase();
     if (dto.isAvailable !== undefined) patch.isAvailable = dto.isAvailable;
     if (dto.isActive !== undefined) patch.isActive = dto.isActive;
 

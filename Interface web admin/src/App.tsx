@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import footerLogo from "./assets/logo.png";
 import sidebarLogo from "./assets/logo.png";
 import {
   LayoutDashboard,
@@ -67,6 +66,8 @@ import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
 import Branches from "./views/Branches";
 import Popups from "./views/Popups";
+import Login from "./views/Login";
+import AppFooter from "./components/AppFooter";
 import Newsletter from "./views/Newsletter";
 
 export type ViewId =
@@ -598,12 +599,14 @@ function TopBar({
   collapsed,
   onToggleCollapse,
   user,
+  onLogout,
 }: {
   current: ViewId;
   onOpenCommand: () => void;
   collapsed: boolean;
   onToggleCollapse: () => void;
   user: UserProfile | null;
+  onLogout: () => void;
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
@@ -707,7 +710,10 @@ function TopBar({
                 </button>
               ))}
               <div className="border-t border-gray-100 mt-1 pt-1">
-                <button className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors">
+                <button
+                  onClick={onLogout}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                >
                   <LogOut size={14} />
                   Cerrar sesión
                 </button>
@@ -789,6 +795,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [authState, setAuthState] = useState<"loading" | "out" | "in">("loading");
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -812,15 +819,54 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Fetch authenticated user profile
+  // Fetch authenticated user profile. Sin token válido, siempre al login.
   useEffect(() => {
     authService
       .getProfile()
-      .then((profile) => setUser(profile))
+      .then((profile) => {
+        setUser(profile);
+        setAuthState("in");
+      })
       .catch(() => {
-        // User not authenticated or token expired
+        setUser(null);
+        setAuthState("out");
       });
   }, []);
+
+  // Si cualquier petición al API responde 401, volver al login.
+  useEffect(() => {
+    const onUnauthorized = () => {
+      setUser(null);
+      setAuthState("out");
+    };
+    window.addEventListener("auth:unauthorized", onUnauthorized);
+    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+  }, []);
+
+  const handleLogout = async () => {
+    await authService.logout();
+    setUser(null);
+    setAuthState("out");
+  };
+
+  if (authState === "loading") {
+    return (
+      <div className="h-screen flex items-center justify-center bg-gray-50">
+        <div className="w-10 h-10 border-[3px] border-amber-400 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (authState === "out") {
+    return (
+      <Login
+        onSuccess={(profile) => {
+          setUser(profile);
+          setAuthState("in");
+        }}
+      />
+    );
+  }
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
@@ -833,28 +879,12 @@ export default function App() {
           collapsed={collapsed}
           onToggleCollapse={() => setCollapsed((c) => !c)}
           user={user}
+          onLogout={handleLogout}
         />
         <main className="flex-1 overflow-y-auto">
           <ViewRenderer view={view} user={user} onNavigate={(v) => navigate(v as ViewId)} />
         </main>
-        <footer className="shrink-0" style={{ background: "#111827" }}>
-          <div className="flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center">
-            <a
-              href="https://dsi.com.co"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center hover:opacity-80 transition-opacity"
-            >
-              <img src={footerLogo} alt="MercAldas" className="h-8 w-auto object-contain" />
-            </a>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
-              © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
-            </p>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>
-              Manizales, Caldas, Colombia
-            </p>
-          </div>
-        </footer>
+        <AppFooter />
       </div>
 
       {cmdOpen && (

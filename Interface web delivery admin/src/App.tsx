@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Bike,
   Loader2,
   LogOut,
   LocateFixed,
@@ -26,6 +25,7 @@ import {
 import { filterDrivers } from './lib/status';
 import { initials, isStale } from './lib/format';
 import LoginScreen from './components/LoginScreen';
+import logo from './assets/logo.png';
 import FleetMap, { type FleetMapHandle } from './components/FleetMap';
 import DriversSidebar from './components/DriversSidebar';
 import DriversPanel from './components/DriversPanel';
@@ -175,13 +175,13 @@ export default function App() {
     [scheduleRefresh],
   );
 
-  const toggleActive = useCallback(
-    (driver: FleetDriver, value: boolean) => {
+  const changeDriverColor = useCallback(
+    (driver: FleetDriver, color: string) => {
       setDrivers((prev) =>
-        prev.map((d) => (d.id === driver.id ? { ...d, isActive: value } : d)),
+        prev.map((d) => (d.id === driver.id ? { ...d, routeColor: color } : d)),
       );
       void api
-        .updateDriver(driver.id, { isActive: value })
+        .updateDriver(driver.id, { routeColor: color })
         .catch(() => scheduleRefresh());
     },
     [scheduleRefresh],
@@ -240,9 +240,11 @@ export default function App() {
       {/* ── Topbar ── */}
       <header className="z-10 flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-400">
-            <Bike className="h-5 w-5 text-slate-900" />
-          </div>
+          <img
+            src={logo}
+            alt="Mercaldas"
+            className="h-9 w-auto shrink-0 object-contain"
+          />
           <div className="leading-tight">
             <p className="text-sm font-bold text-slate-900">Delivery Admin</p>
             <p className="text-[11px] text-slate-400">Seguimiento de flota</p>
@@ -394,6 +396,7 @@ export default function App() {
               })
             }
             onToggleAvailable={toggleAvailable}
+            onChangeColor={changeDriverColor}
           />
         </main>
       )}
@@ -408,8 +411,6 @@ export default function App() {
             }}
             onCreate={() => setModal({ mode: 'create' })}
             onEdit={(driver, focusReset) => setModal({ mode: 'edit', driver, focusReset })}
-            onToggleAvailable={toggleAvailable}
-            onToggleActive={toggleActive}
           />
         </main>
       )}
@@ -419,6 +420,27 @@ export default function App() {
           <OrdersPanel orders={orders} onLocate={locateDriver} />
         </main>
       )}
+
+      <footer className="shrink-0" style={{ background: '#111827' }}>
+        <div className="flex flex-col items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center md:flex-row">
+          <a
+            href="https://dsi.com.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center transition-opacity hover:opacity-80"
+          >
+            <img src={logo} alt="MercAldas" className="h-8 w-auto object-contain" />
+          </a>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
+            © 2026 Desarrollado por{' '}
+            <span className="font-bold text-white/70">DSI SA</span> · Todos los
+            derechos reservados
+          </p>
+          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+            Manizales, Caldas, Colombia
+          </p>
+        </div>
+      </footer>
 
       {modal && (
         <DriverFormModal

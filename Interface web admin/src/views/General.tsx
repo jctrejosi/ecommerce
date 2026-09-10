@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
 export default function General() {
   const [logoUrl, setLogoUrl] = useState("");
+  const [siteTitle, setSiteTitle] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -20,6 +21,7 @@ export default function General() {
       if (res.ok) {
         const data = await res.json();
         setLogoUrl(data.url ?? "");
+        setSiteTitle(data.title ?? "");
       }
     } catch (e) {
       console.error(e);
@@ -57,7 +59,7 @@ export default function General() {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify({ url, title: siteTitle }),
       });
       if (!res.ok) throw new Error("Error al guardar");
       setOk(true);
@@ -83,6 +85,41 @@ export default function General() {
         <p className="text-sm text-gray-500 mt-0.5">
           Configuración general de la tienda
         </p>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 max-w-xl space-y-5">
+        <div>
+          <h3 className="font-semibold text-sm text-gray-900">Título de la página</h3>
+          <p className="text-xs text-gray-400 mt-0.5">
+            Es el título que aparece en la pestaña del navegador. Siempre se muestra con el sufijo <strong>| DSI</strong>.
+          </p>
+        </div>
+        <div>
+          <label className="block text-xs font-semibold text-gray-600 mb-1.5">
+            Título
+          </label>
+          <input
+            value={siteTitle}
+            onChange={(e) => setSiteTitle(e.target.value)}
+            placeholder="Mercaldas"
+            className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+          />
+          <p className="text-xs text-gray-400 mt-2">
+            Resultado: <span className="font-semibold text-gray-700">{(siteTitle.trim() || "Mercaldas") + " | DSI"}</span>
+          </p>
+        </div>
+
+        {error && <p className="text-sm text-red-500">{error}</p>}
+        {ok && <p className="text-sm text-green-600">Título guardado correctamente</p>}
+
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors disabled:opacity-50"
+        >
+          {saving && <Loader2 size={14} className="animate-spin" />}
+          <Save size={14} /> Guardar título
+        </button>
       </div>
 
       <div className="bg-white rounded-2xl border border-gray-100 p-6 max-w-xl space-y-5">

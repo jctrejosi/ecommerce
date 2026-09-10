@@ -12,12 +12,19 @@ import type { Feature } from 'geojson';
 import type { FleetDriver } from '../types';
 import { api } from '../services/api';
 import { decodePolyline } from '../lib/polyline';
-import { driverVisual, STATUS_META } from '../lib/status';
+import { driverColor } from '../lib/driverColors';
+import { driverVisual } from '../lib/status';
 import {
   MAP_STYLE_OPTIONS,
   LAYER_STORAGE_KEY,
   type MapStyleOption,
 } from '../lib/wazeStyles';
+
+interface LiveRouteData {
+  coords: [number, number][];
+  distanceM: number;
+  durationS: number;
+}
 
 export interface FleetMapHandle {
   recenter: () => void;
@@ -53,8 +60,9 @@ function tipHtml(driver: FleetDriver): string {
 function pinHtml(driver: FleetDriver, selected: boolean): string {
   const size = selected ? 46 : 38;
   const sel = selected ? 'ml-pin--sel' : '';
+  const color = driverColor(driver);
   return `
-    <div class="ml-pin ${sel}" style="width:${size}px;height:${size}px;${driver.isActive ? '' : 'opacity:.55;'}">
+    <div class="ml-pin ${sel}" style="width:${size}px;height:${size}px;--pin:${color};${driver.isActive ? '' : 'opacity:.55;'}">
       <span class="ml-pin-inner" style="font-size:${selected ? 24 : 20}px">🛵</span>
       <span class="ml-tip">${tipHtml(driver)}</span>
     </div>`;
@@ -213,15 +221,21 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MlMap | null>(null);
   /**
-   * Rutas reales (OSRM), ya decodificadas a [lng,lat]. Se calculan antes de
-   * pintarse: mientras estén en `null` no se dibuja línea alguna.
+   * Rutas reales (OSRM) de CADA repartidor con entrega activa, ya decodificadas
+   * a [lng,lat] y indexadas por id de repartidor. Se calculan antes de pintarse:
+   * mientras un repartidor no tenga entrada aquí, no se dibuja su línea.
    */
-  const [routes, setRoutes] = useState<{
-    driver: [number, number][] | null;
-    full: [number, number][] | null;
-  }>({ driver: null, full: null });
+  const [routes, setRoutes] = useState<Record<number, LiveRouteData>>({});
   const routesRef = useRef(routes);
   routesRef.current = routes;
+  /** Estado de cálculo por repartidor (feedback en el mapa). */
+  const [routeState, setRouteState] = useState<
+    Record<number, 'loading' | 'ok' | 'empty'>
+  >({});
+  /** Ruta completa tienda → domicilio del repartidor seleccionado. */
+  const [fullRoute, setFullRoute] = useState<LiveRouteData | null>(null);
+  const fullRouteRef = useRef(fullRoute);
+  fullRouteRef.current = fullRoute;
   const markersRef = useRef<Map<number, Marker>>(new Map());
   /** Marcadores de destinos (casitas), independientes de los repartidores. */
   const destMarkersRef = useRef<Marker[]>([]);
@@ -246,18 +260,41 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   /** id del estilo ya aplicado al mapa (evita re-setStyle en el montaje). */
   const appliedStyleIdRef = useRef<string | null>(null);
 
-  // Selección actual y su pedido activo (para cargar la ruta por calles).
-  const selectedDriver = drivers.find((d) => d.id === selectedId) ?? null;
-  const selAssignment = selectedDriver?.activeAssignment ?? null;
-  const selOrderId = selAssignment?.orderId ?? null;
-  const selStatus = selAssignment?.status ?? null;
-  const selTarget: 'customer' | 'store' =
-    selStatus === 'ASSIGNED' ||
-    selStatus === 'ACCEPTED' ||
-    selStatus === 'READY_FOR_PICKUP'
-      ? 'store'
-      : 'customer';
+  // Repartidores con entrega activa: cada uno recibe su ruta por calles.
+  /** Clave estable: refrescar las rutas cuando cambia la flota o algún pedido. */
+  const fleetKey = drivers
+    .filter((d) => d.activeAssignment)
+    .map((d) => `${d.id}:${d.activeAssignment!.orderId}:${d.activeAssignment!.status}`)
+    .sort()
+    .join('|');
   const [routeTick, setRouteTick] = useState(0);
+  /** Evita reencuadrar el mapa más de una vez. */
+  const fittedRef = useRef(false);
+  /** Repartidor seleccionado (para resaltar su ruta y mostrar su ruta completa). */
+  const selectedDriver = drivers.find((d) => d.id === selectedId) ?? null;
+  const selFullFrom =
+    selectedDriver?.activeAssignment?.branchLocation &&
+    selectedDriver.activeAssignment.destination
+      ? `${selectedDriver.activeAssignment.branchLocation.lng},${selectedDriver.activeAssignment.branchLocation.lat}`
+      : null;
+  const selOrderIdForFull = selectedDriver?.activeAssignment?.orderId ?? null;
+
+  // Resumen mostrado en el mapa: cuántas rutas hay y el detalle del seleccionado.
+  const activeRouteCount = Object.keys(routes).length;
+  const selState = selectedId != null ? routeState[selectedId] : undefined;
+  const selRoute = selectedId != null ? routes[selectedId] : undefined;
+  const selBadge =
+    selState === 'loading'
+      ? 'Calculando ruta…'
+      : selState === 'empty'
+        ? 'Ruta no disponible'
+        : selRoute
+          ? `Ruta: ${
+              selRoute.distanceM >= 1000
+                ? `${(selRoute.distanceM / 1000).toFixed(1)} km`
+                : `${Math.round(selRoute.distanceM)} m`
+            } · ≈ ${Math.max(1, Math.round(selRoute.durationS / 60))} min`
+          : null;
 
   const overlaySourceId = 'fleet-overlays';
 
@@ -274,10 +311,24 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       source: overlaySourceId,
       filter: ['==', ['get', 'kind'], 'route-full'],
       paint: {
-        'line-color': '#94a3b8',
-        'line-width': 2,
-        'line-opacity': 0.6,
-        'line-dasharray': [2, 7],
+        'line-color': '#475569',
+        'line-width': 3,
+        'line-opacity': 0.7,
+        'line-dasharray': [2, 6],
+      },
+    });
+    // Contorno blanco bajo la ruta del repartidor: la hace visible sobre
+    // cualquier base (verde de vegetación, gris de vías, etc.). El seleccionado
+    // se dibuja más grueso.
+    map.addLayer({
+      id: 'ov-route-driver-casing',
+      type: 'line',
+      source: overlaySourceId,
+      filter: ['==', ['get', 'kind'], 'route-driver'],
+      paint: {
+        'line-color': '#ffffff',
+        'line-width': ['case', ['==', ['get', 'sel'], true], 11, 7],
+        'line-opacity': 0.95,
       },
     });
     map.addLayer({
@@ -287,8 +338,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       filter: ['==', ['get', 'kind'], 'route-driver'],
       paint: {
         'line-color': ['get', 'color'],
-        'line-width': 4,
-        'line-opacity': 0.9,
+        'line-width': ['case', ['==', ['get', 'sel'], true], 6, 4],
+        'line-opacity': ['case', ['==', ['get', 'sel'], true], 1, 0.9],
       },
     });
     map.addLayer({
@@ -314,27 +365,34 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     const dAll = driversRef.current;
     const selectedIdNow = selectedIdRef.current;
     const r = routesRef.current;
+    const full = fullRouteRef.current;
+
+    // Ruta real de CADA repartidor con entrega activa (OSRM). Si aún no se ha
+    // calculado, no se dibuja nada (nunca una recta provisional).
+    for (const d of dAll) {
+      const a = d.activeAssignment;
+      const route = r[d.id];
+      if (!a || !route) continue;
+      features.push({
+        type: 'Feature',
+        properties: {
+          kind: 'route-driver',
+          color: driverColor(d),
+          sel: d.id === selectedIdNow,
+        },
+        geometry: { type: 'LineString', coordinates: route.coords },
+      });
+    }
 
     const sel = dAll.find((d) => d.id === selectedIdNow);
     if (sel?.activeAssignment) {
       const a = sel.activeAssignment;
-      const statusColor = STATUS_META[a.status]?.color ?? '#2563eb';
-
-      // Ruta real del repartidor hacia su objetivo actual (OSRM). Si aún no
-      // se ha calculado, no se dibuja nada (nunca una recta provisional).
-      if (r.driver) {
-        features.push({
-          type: 'Feature',
-          properties: { kind: 'route-driver', color: statusColor },
-          geometry: { type: 'LineString', coordinates: r.driver },
-        });
-      }
-      // Ruta completa tienda → domicilio (también real).
-      if (r.full) {
+      // Ruta completa tienda → domicilio del seleccionado (también real).
+      if (full) {
         features.push({
           type: 'Feature',
           properties: { kind: 'route-full' },
-          geometry: { type: 'LineString', coordinates: r.full },
+          geometry: { type: 'LineString', coordinates: full.coords },
         });
       }
       if (a.branchLocation) {
@@ -564,69 +622,130 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [styleOption]);
 
-  // ── Ruta por calles del repartidor seleccionado ──
-  // Al cambiar de repartidor u objetivo se descarta la ruta anterior: la nueva
-  // debe estar calculada antes de volver a pintarse (nunca una recta).
+  // ── Rutas por calles de TODOS los repartidores con entrega activa ──
+  // La ruta se calcula y solo entonces se pinta (nunca una recta provisional).
   useEffect(() => {
-    setRoutes({ driver: null, full: null });
-  }, [selOrderId, selTarget]);
-
-  // La ruta no necesita recalcularse en cada ping: cada 30 s es suficiente.
-  useEffect(() => {
-    if (selOrderId == null) return;
-    const t = setInterval(() => setRouteTick((x) => x + 1), 30_000);
-    return () => clearInterval(t);
-  }, [selOrderId, selTarget]);
-
-  useEffect(() => {
-    if (selOrderId == null) return;
-    const driver = driversRef.current.find(
-      (d) => d.id === selectedIdRef.current,
+    const targets = driversRef.current.filter(
+      (d) => d.activeAssignment && d.location,
     );
-    const a = driver?.activeAssignment;
-    const loc = driver?.location;
-    if (!a || !loc) return;
-    const origin = `${loc.lng},${loc.lat}`;
+    if (!targets.length) {
+      setRoutes({});
+      setRouteState({});
+      return;
+    }
     let cancelled = false;
+    setRouteState((prev) => {
+      const next: Record<number, 'loading' | 'ok' | 'empty'> = { ...prev };
+      for (const d of targets) next[d.id] = 'loading';
+      return next;
+    });
 
-    const load = async (
-      target: 'customer' | 'store',
-      from: string,
-    ): Promise<[number, number][] | null> => {
+    const loadOne = async (d: FleetDriver) => {
+      const a = d.activeAssignment!;
+      const loc = d.location!;
+      const target: 'customer' | 'store' =
+        a.status === 'ASSIGNED' ||
+        a.status === 'ACCEPTED' ||
+        a.status === 'READY_FOR_PICKUP'
+          ? 'store'
+          : 'customer';
       try {
-        const res = await api.orderRoute(a.orderId, target, from);
+        const res = await api.orderRoute(
+          a.orderId,
+          target,
+          `${loc.lng},${loc.lat}`,
+        );
         const coords = decodePolyline(res.polyline);
-        return coords.length >= 2 ? coords : null;
+        if (coords.length < 2) return [d.id, null, 'empty'] as const;
+        return [
+          d.id,
+          { coords, distanceM: res.distanceM, durationS: res.durationS },
+          'ok',
+        ] as const;
       } catch {
-        return null;
+        return [d.id, null, 'empty'] as const;
       }
     };
 
-    const fullFrom =
-      a.branchLocation && a.destination
-        ? `${a.branchLocation.lng},${a.branchLocation.lat}`
-        : null;
-
-    void Promise.all([
-      load(selTarget, origin),
-      fullFrom ? load('customer', fullFrom) : Promise.resolve(null),
-    ]).then(([driverCoords, fullCoords]) => {
+    void Promise.all(targets.map(loadOne)).then((entries) => {
       if (cancelled) return;
-      setRoutes({ driver: driverCoords, full: fullCoords });
+      const nextRoutes: Record<number, LiveRouteData> = {};
+      const nextState: Record<number, 'loading' | 'ok' | 'empty'> = {};
+      for (const [id, route, state] of entries) {
+        if (route) nextRoutes[id] = route;
+        nextState[id] = state;
+      }
+      setRoutes(nextRoutes);
+      setRouteState(nextState);
+
+      // Encuadra una sola vez al entrar, para que se vean todas las rutas.
+      const map = mapRef.current;
+      const pts = Object.values(nextRoutes).flatMap((r) => r.coords);
+      if (map && pts.length >= 2 && !fittedRef.current) {
+        fittedRef.current = true;
+        const lngs = pts.map((p) => p[0]);
+        const lats = pts.map((p) => p[1]);
+        map.fitBounds(
+          [
+            [Math.min(...lngs), Math.min(...lats)],
+            [Math.max(...lngs), Math.max(...lats)],
+          ],
+          { padding: 70, maxZoom: 15.5, duration: 600 },
+        );
+      }
     });
 
     return () => {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selOrderId, selTarget, routeTick]);
+  }, [fleetKey, routeTick]);
+
+  // La ruta no necesita recalcularse en cada ping: cada 30 s es suficiente.
+  useEffect(() => {
+    const t = setInterval(() => setRouteTick((x) => x + 1), 30_000);
+    return () => clearInterval(t);
+  }, [fleetKey]);
+
+  // Ruta completa (tienda → domicilio) solo del repartidor seleccionado.
+  useEffect(() => {
+    if (selOrderIdForFull == null) {
+      setFullRoute(null);
+      return;
+    }
+    const orderId = selOrderIdForFull;
+    const from = selFullFrom;
+    if (!from) {
+      setFullRoute(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.orderRoute(orderId, 'customer', from);
+        const coords = decodePolyline(res.polyline);
+        if (cancelled) return;
+        setFullRoute(
+          coords.length >= 2
+            ? { coords, distanceM: res.distanceM, durationS: res.durationS }
+            : null,
+        );
+      } catch {
+        if (!cancelled) setFullRoute(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selOrderIdForFull, selFullFrom, routeTick]);
 
   // ── Overlays: rutas y paradas ──
   useEffect(() => {
     if (!styleReady) return;
     syncOverlays();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drivers, hiddenIds, selectedId, styleReady, routes]);
+  }, [drivers, hiddenIds, selectedId, styleReady, routes, fullRoute]);
 
   // ── Pines de repartidores ──
   useEffect(() => {
@@ -736,6 +855,20 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Resumen de rutas activas + estado del seleccionado */}
+      {activeRouteCount > 0 && (
+        <div className="pointer-events-none absolute bottom-6 left-1/2 z-500 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-bold text-slate-600 shadow-lg ring-1 ring-slate-200">
+          <span>
+            {activeRouteCount === 1
+              ? '1 ruta activa'
+              : `${activeRouteCount} rutas activas`}
+          </span>
+          {selBadge && (
+            <span className="text-slate-400">· {selBadge}</span>
+          )}
         </div>
       )}
 

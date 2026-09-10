@@ -34,4 +34,33 @@ export const authService = {
   async getProfile(): Promise<UserProfile> {
     return fetchJson<UserProfile>(`${API_BASE_URL}/auth/me`);
   },
+
+  /**
+   * Login con email o username. Las cookies httpOnly las setea el backend.
+   */
+  async login(identifier: string, password: string): Promise<UserProfile> {
+    const res = await fetch(`${API_BASE_URL}/auth/login`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifier, password }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const message = Array.isArray(data?.message)
+        ? data.message.join(", ")
+        : data?.message;
+      throw new Error(message || "Credenciales inválidas");
+    }
+    return data.user as UserProfile;
+  },
+
+  async logout(): Promise<void> {
+    await fetch(`${API_BASE_URL}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    }).catch(() => {});
+  },
 };

@@ -3,6 +3,7 @@ import {
   IsEmail,
   IsOptional,
   IsString,
+  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -134,6 +135,13 @@ export class UpdateDriverDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  /** Color (#RRGGBB) con el que se pinta la ruta del repartidor en el mapa. */
+  @IsOptional()
+  @Matches(/^#[0-9a-fA-F]{6}$/, {
+    message: 'routeColor debe ser un color hexadecimal (#RRGGBB).',
+  })
+  routeColor?: string;
 }
 
 export class ResetPasswordDto {

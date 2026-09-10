@@ -385,14 +385,17 @@ export class AuthService {
   }
 
   /**
-   * Genera un refresh token con expiración más larga
+   * Genera un refresh token con expiración más larga.
+   * Solo incluye el `sub`: el token completo con todos los claims excede el
+   * límite de la columna `user_refresh_tokens.token` (varchar 255).
    */
   private generateRefreshToken(payload: JwtPayload): string {
     const refreshExpiresIn =
       this.configService.get<string>('JWT_REFRESH_EXPIRES_IN') ?? '30d';
-    return this.jwtService.sign(payload, {
-      expiresIn: this.parseDurationToSeconds(refreshExpiresIn),
-    });
+    return this.jwtService.sign(
+      { sub: payload.sub },
+      { expiresIn: this.parseDurationToSeconds(refreshExpiresIn) },
+    );
   }
 
   /**

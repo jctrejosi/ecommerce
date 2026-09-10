@@ -2448,6 +2448,8 @@ export const deliveryDrivers = pgTable(
     vehicleBrand: varchar('vehicle_brand', { length: 100 }),
     vehicleModel: varchar('vehicle_model', { length: 100 }),
     vehicleColor: varchar('vehicle_color', { length: 50 }),
+    // Color con el que se pinta la ruta del repartidor en el mapa de flota.
+    routeColor: varchar('route_color', { length: 9 }),
     isAvailable: boolean('is_available').default(true).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     // Token push del dispositivo (FCM/expo) — se registra desde la app.

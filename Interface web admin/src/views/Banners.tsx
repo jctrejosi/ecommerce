@@ -3,7 +3,7 @@ import {
   Plus, Edit, SquarePen, Trash2, X, Loader2, Filter, GripVertical,
   Image, Type, Palette, Link, Calendar, Eye, ChevronLeft, ChevronRight,
   LayoutTemplate, SlidersHorizontal, Zap, Truck, ShieldCheck, Clock, Megaphone,
-  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save, AlertTriangle, Tag, Store, Star,
+  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save, AlertTriangle, Tag, Store, Star, MapPin,
 } from "lucide-react";
 import {
   bannersService,
@@ -2634,6 +2634,26 @@ function BrandsLandingManager({
 }
 
 // ── Landing Branches Manager ──
+// Imágenes por defecto (las mismas que usa el cliente cuando la sucursal
+// no tiene imagen propia) para que el admin refleje lo que se ve en la landing.
+const BRANCH_FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1779370139349-c5a1d667cc9e?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1759178388578-d3589d058c0f?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1758701446898-83d8dcf6309c?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1770993189356-f8def91ec5a5?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1770927423667-3c701c99ba3a?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1779370139349-c5a1d667cc9e?w=400&h=260&fit=crop&auto=format&crop=right",
+  "https://images.unsplash.com/photo-1758701446898-83d8dcf6309c?w=400&h=260&fit=crop&auto=format",
+];
+
+const branchImage = (branch: { imagePath?: string | null }, index: number) =>
+  branch.imagePath || BRANCH_FALLBACK_IMAGES[index % BRANCH_FALLBACK_IMAGES.length];
+
+function openBranchMap(b: { name: string; address: string; city: string }) {
+  const q = encodeURIComponent(`${b.name}, ${b.address}, ${b.city}, Colombia`);
+  window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, "_blank");
+}
+
 const BRANCH_DAYS: { key: string; label: string }[] = [
   { key: "monday", label: "Lunes" },
   { key: "tuesday", label: "Martes" },
@@ -2795,14 +2815,14 @@ function BranchesLandingManager() {
           <p className="text-xs text-gray-400 py-12 text-center">No hay sucursales</p>
         ) : (
           <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-gray-50">
-            {branches.map((b) => (
-              <div key={b.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+            {branches.map((b, idx) => (
+              <div
+                key={b.id}
+                onClick={() => openEdit(b)}
+                className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors cursor-pointer"
+              >
                 <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                  {b.imagePath ? (
-                    <img src={b.imagePath} alt={b.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <Store size={16} className="text-gray-400" />
-                  )}
+                  <img src={branchImage(b, idx)} alt={b.name} className="w-full h-full object-cover" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
@@ -2817,18 +2837,27 @@ function BranchesLandingManager() {
                   <p className="text-[11px] text-gray-400">{branchScheduleSummary(b.schedule)}</p>
                 </div>
                 <button
-                  onClick={() => toggleVisible(b)}
+                  onClick={(e) => { e.stopPropagation(); toggleVisible(b); }}
                   className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}
                   title={b.isActive ? "Ocultar" : "Mostrar"}
                 >
-                  <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${b.isActive ? "left-4" : "left-0.5"}`} />
+                  <span
+                    className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`}
+                  />
                 </button>
                 <button
-                  onClick={() => openEdit(b)}
-                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 shrink-0"
+                  onClick={(e) => { e.stopPropagation(); openBranchMap(b); }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-gray-600 border border-gray-200 hover:border-amber-300 hover:text-amber-600 transition-colors shrink-0"
+                  title="Ver en el mapa"
+                >
+                  <MapPin size={13} /> Ver mapa
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); openEdit(b); }}
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-gray-600 border border-gray-200 hover:border-amber-300 hover:text-amber-600 transition-colors shrink-0"
                   title="Editar sucursal"
                 >
-                  <Edit size={13} />
+                  <Edit size={13} /> Editar
                 </button>
               </div>
             ))}
@@ -2898,7 +2927,16 @@ function BranchesLandingManager() {
                     </button>
                   </div>
                 ) : (
-                  <div className="w-full h-28 rounded-lg border-2 border-dashed border-gray-200 flex items-center justify-center text-gray-400">Sin imagen</div>
+                  <div className="relative">
+                    <img
+                      src={branchImage(editing, branches.findIndex((x) => x.id === editing.id))}
+                      alt={editing.name}
+                      className="w-full h-28 object-cover rounded-lg border border-gray-200"
+                    />
+                    <span className="absolute bottom-1 left-1 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-black/60 text-white">
+                      Imagen por defecto
+                    </span>
+                  </div>
                 )}
                 <label className="mt-2 flex items-center justify-center gap-1 px-3 py-2 text-xs font-semibold border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
                   Subir imagen
@@ -3101,7 +3139,7 @@ function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
 interface FooterSocial { platform: string; url: string }
 interface FooterHelpLink { label: string; url: string }
 interface FooterContact { address: string; phone: string; whatsapp: string; email: string }
-interface FooterCategoryOption { code: string; name: string; isActive: boolean }
+interface FooterCategoryOption { code: string; name: string; isActive: boolean; parentId: number | null }
 
 function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
   const [loading, setLoading] = useState(true);
@@ -3138,10 +3176,17 @@ function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
         const cats = await catRes.json();
         const list: FooterCategoryOption[] = [];
         (Array.isArray(cats) ? cats : []).forEach((c: any) => {
-          if (c.code) list.push({ code: c.code, name: c.name ?? c.code, isActive: c.isActive ?? true });
-          if (c.children && Array.isArray(c.children)) c.children.forEach((ch: any) => { if (ch.code) list.push({ code: ch.code, name: ch.name ?? ch.code, isActive: ch.isActive ?? true }); });
+          if (c.code) list.push({ code: c.code, name: c.name ?? c.code, isActive: c.isActive ?? true, parentId: c.parentId ?? null });
+          if (c.children && Array.isArray(c.children)) c.children.forEach((ch: any) => { if (ch.code) list.push({ code: ch.code, name: ch.name ?? ch.code, isActive: ch.isActive ?? true, parentId: ch.parentId ?? c.id ?? null }); });
         });
         setAllCategories(list);
+        // Si el footer no tiene categorías configuradas, reflejar el fallback del
+        // cliente (las primeras 6 categorías raíz) para que se vean "activas".
+        setSelectedCategories((prev) =>
+          prev.length > 0
+            ? prev
+            : list.filter((c) => c.parentId == null).slice(0, 6).map((c) => c.code),
+        );
       }
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
@@ -3160,6 +3205,16 @@ function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
   const toggleCategory = (code: string) => {
     setSelectedCategories((p) => (p.includes(code) ? p.filter((c) => c !== code) : [...p, code]));
   };
+
+  // "Activa" = categoría incluida en el footer. El filtro y el check usan lo mismo.
+  const catQuery = catSearch.trim().toLowerCase();
+  const filteredCats = allCategories.filter((c) => {
+    if (catQuery && !c.name.toLowerCase().includes(catQuery)) return false;
+    const inFooter = selectedCategories.includes(c.code);
+    if (catFilter === "active") return inFooter;
+    if (catFilter === "inactive") return !inFooter;
+    return true;
+  });
 
   const handleSave = async () => {
     setSaving(true); setError("");
@@ -3216,7 +3271,12 @@ function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
 
             {/* Categorías */}
             <div>
-              <h4 className="text-sm font-bold text-gray-900 mb-2">Categorías del footer</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-bold text-gray-900">Categorías del footer</h4>
+                <span className="text-[11px] font-semibold text-green-600">
+                  {selectedCategories.length} activa{selectedCategories.length === 1 ? "" : "s"}
+                </span>
+              </div>
               <div className="flex items-center gap-2 mb-2">
                 <div className="relative flex-1">
                   <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -3243,19 +3303,28 @@ function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
                   ))}
                 </div>
               </div>
-              <div className="max-h-44 overflow-y-auto grid grid-cols-2 gap-1">
-                {allCategories
-                  .filter((c) => !catSearch || c.name.toLowerCase().includes(catSearch.toLowerCase()))
-                  .filter((c) => (catFilter === "active" ? c.isActive : catFilter === "inactive" ? !c.isActive : true))
-                  .map((c) => (
-                    <label key={c.code} className="flex items-center gap-2 text-xs cursor-pointer hover:bg-gray-50 rounded px-2 py-1">
-                      <input type="checkbox" checked={selectedCategories.includes(c.code)} onChange={() => toggleCategory(c.code)} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
-                      <span className={`truncate ${c.isActive ? "" : "text-gray-400 line-through"}`}>{c.name}</span>
-                      {!c.isActive && <span className="text-[9px] text-red-400 uppercase shrink-0">Inactiva</span>}
+              <div className="max-h-52 overflow-y-auto grid grid-cols-2 gap-1">
+                {filteredCats.map((c) => {
+                  const active = selectedCategories.includes(c.code);
+                  return (
+                    <label
+                      key={c.code}
+                      className={`flex items-center gap-2 text-xs cursor-pointer rounded px-2 py-1 transition-colors ${active ? "bg-green-50" : "hover:bg-gray-50"}`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={active}
+                        onChange={() => toggleCategory(c.code)}
+                        className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500 shrink-0 cursor-pointer"
+                      />
+                      <span className="truncate flex-1">{c.name}</span>
+                      {active && (
+                        <span className="text-[9px] font-bold text-green-600 uppercase shrink-0">Activa</span>
+                      )}
                     </label>
-                  ))}
-                {allCategories.filter((c) => !catSearch || c.name.toLowerCase().includes(catSearch.toLowerCase()))
-                  .filter((c) => (catFilter === "active" ? c.isActive : catFilter === "inactive" ? !c.isActive : true)).length === 0 && (
+                  );
+                })}
+                {filteredCats.length === 0 && (
                   <p className="col-span-2 text-xs text-gray-400 py-2 text-center">Sin resultados</p>
                 )}
               </div>

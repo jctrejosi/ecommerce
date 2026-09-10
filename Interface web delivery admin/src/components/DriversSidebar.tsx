@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import type { DriverFilter, FleetDriver } from '../types';
 import { FILTER_OPTIONS, driverVisual } from '../lib/status';
+import { DRIVER_COLORS, driverColor } from '../lib/driverColors';
 import { formatDateTime, isStale, timeAgo, vehicleLabel } from '../lib/format';
 import { AvailabilitySwitch, DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
 
@@ -24,6 +25,7 @@ interface Props {
   hiddenIds: Set<number>;
   onToggleHidden: (id: number) => void;
   onToggleAvailable: (driver: FleetDriver, value: boolean) => void;
+  onChangeColor: (driver: FleetDriver, color: string) => void;
 }
 
 function DriverRow({
@@ -92,10 +94,12 @@ function DetailView({
   driver,
   onBack,
   onToggleAvailable,
+  onChangeColor,
 }: {
   driver: FleetDriver;
   onBack: () => void;
   onToggleAvailable: (value: boolean) => void;
+  onChangeColor: (color: string) => void;
 }) {
   const visual = driverVisual(driver);
   const a = driver.activeAssignment;
@@ -144,6 +148,32 @@ function DetailView({
           <div className="mt-2 flex items-center justify-between">
             <span className="text-xs text-slate-500">Disponibilidad</span>
             <AvailabilitySwitch driver={driver} onToggle={(_, v) => onToggleAvailable(v)} />
+          </div>
+        </section>
+
+        <section>
+          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+            Color de la ruta en el mapa
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {DRIVER_COLORS.map((color) => {
+              const active =
+                driverColor(driver).toLowerCase() === color.toLowerCase();
+              return (
+                <button
+                  key={color}
+                  type="button"
+                  title={color}
+                  onClick={() => onChangeColor(color)}
+                  className={`h-7 w-7 rounded-full transition ${
+                    active
+                      ? 'ring-2 ring-slate-900 ring-offset-2'
+                      : 'ring-1 ring-black/10 hover:scale-110'
+                  }`}
+                  style={{ background: color }}
+                />
+              );
+            })}
           </div>
         </section>
 
@@ -205,6 +235,7 @@ export default function DriversSidebar(props: Props) {
     hiddenIds,
     onToggleHidden,
     onToggleAvailable,
+    onChangeColor,
   } = props;
 
   const selected = drivers.find((d) => d.id === selectedId) ?? null;
@@ -252,6 +283,7 @@ export default function DriversSidebar(props: Props) {
           driver={selected}
           onBack={() => onSelect(null)}
           onToggleAvailable={(v) => onToggleAvailable(selected, v)}
+          onChangeColor={(color) => onChangeColor(selected, color)}
         />
       ) : (
         <div className="flex-1 overflow-y-auto">

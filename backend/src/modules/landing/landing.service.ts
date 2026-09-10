@@ -566,7 +566,7 @@ export class LandingService {
     return [];
   }
 
-  // ── General (logo) ──
+  // ── General (logo y título del sitio) ──
 
   async getGeneralLogo() {
     const row = await this.db
@@ -574,10 +574,16 @@ export class LandingService {
       .from(settings)
       .where(eq(settings.key, 'general_logo'))
       .limit(1);
-    return row.length ? ((row[0].value as any) ?? {}) : {};
+    const value = row.length ? (row[0].value as any) ?? {} : {};
+    return { url: value.url ?? '', title: value.title ?? '' };
   }
 
-  async updateGeneralLogo(body: { url: string }) {
+  async updateGeneralLogo(body: { url?: string; title?: string }) {
+    const current = await this.getGeneralLogo();
+    const value = {
+      url: body.url !== undefined ? body.url : current.url,
+      title: body.title !== undefined ? body.title.trim() : current.title,
+    };
     const row = await this.db
       .select()
       .from(settings)
@@ -586,15 +592,15 @@ export class LandingService {
     if (row.length) {
       await this.db
         .update(settings)
-        .set({ value: body as any })
+        .set({ value: value as any })
         .where(eq(settings.key, 'general_logo'));
     } else {
       await this.db.insert(settings).values({
         key: 'general_logo',
-        value: body as any,
+        value: value as any,
         dataType: 'json',
         module: 'general',
-        description: 'Logo de la empresa',
+        description: 'Logo y título de la empresa',
         isPublic: true,
       } as any);
     }

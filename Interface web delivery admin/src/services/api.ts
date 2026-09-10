@@ -86,6 +86,8 @@ export interface UpdateDriverPayload {
   vehicleColor?: string;
   isAvailable?: boolean;
   isActive?: boolean;
+  /** Color (#RRGGBB) de la ruta del repartidor en el mapa. */
+  routeColor?: string;
 }
 
 /** Ruta por calles (OSRM) para pintar en el mapa de flota. */
@@ -138,5 +140,7 @@ export const api = {
       `/delivery/admin/orders/${orderId}/route?target=${target}${
         from ? `&from=${encodeURIComponent(from)}` : ''
       }`,
+      // La ruta cambia con la posición: sin caché, para evitar 304 sin cuerpo.
+      { cache: 'no-store' },
     ),
 };
