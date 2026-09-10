@@ -147,7 +147,7 @@ function PopupEditor({
   return (
     <div className="fixed inset-0 z-[60] flex">
       <div className="flex-1 bg-black/50" onClick={onClose} />
-      <div className="w-full max-w-xl bg-white flex flex-col shadow-2xl overflow-y-auto">
+      <div className="w-full max-w-3xl bg-white flex flex-col shadow-2xl overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <h2 className="font-bold text-gray-900">{isEdit ? "Editar Popup" : "Nuevo Popup"}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>

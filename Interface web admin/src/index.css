@@ -4,6 +4,21 @@
 * { font-family: 'Plus Jakarta Sans', system-ui, sans-serif; }
 code, kbd, .mono { font-family: 'JetBrains Mono', monospace; }
 
+/* Base typography: crisper rendering and a darker default text color */
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+body { color: #1f2937; }
+
+/* Raise contrast of the muted grays used across the admin.
+   These are unlayered so they intentionally win over Tailwind's utilities. */
+.text-gray-300 { color: #9ca3af; }
+.text-gray-400 { color: #6b7280; }
+.text-gray-500 { color: #4b5563; }
+.text-gray-600 { color: #374151; }
+
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 99px; }

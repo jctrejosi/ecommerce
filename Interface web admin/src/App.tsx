@@ -33,6 +33,9 @@ import {
   AlertTriangle,
   LayoutTemplate,
   Mail,
+  Clock,
+  Store,
+  Star,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
@@ -40,7 +43,18 @@ import Orders from "./views/Orders";
 import { ordersService } from "./services/orders.service";
 import { authService, type UserProfile } from "./services/auth.service";
 import HomepageEditor from "./views/HomepageEditor";
-import Banners from "./views/Banners";
+import {
+  HomeHeroSection,
+  HomePromosSection,
+  HomeProductTypesSection,
+  HomeBenefitsBarSection,
+  HomeFeaturedSection,
+  HomeDealsSection,
+  HomeBrandsSection,
+  HomeBranchesSection,
+  HomeBenefitsSection,
+  HomeFooterSection,
+} from "./views/Banners";
 import Customers from "./views/Customers";
 import Categories from "./views/Categories";
 import Brands from "./views/Brands";
@@ -66,7 +80,16 @@ export type ViewId =
   | "customers"
   | "promotions"
   | "homepage"
-  | "banners"
+  | "homeHero"
+  | "homePromos"
+  | "homeProductTypes"
+  | "homeBenefitsBar"
+  | "homeFeatured"
+  | "homeDeals"
+  | "homeBrands"
+  | "homeBranches"
+  | "homeBenefits"
+  | "homeFooter"
   | "marketplace"
   | "users"
   | "settings"
@@ -121,9 +144,16 @@ const NAV: NavSection[] = [
   {
     title: "Contenido",
     items: [
-      // { id: "homepage", label: "Editor de Inicio", icon: LayoutTemplate }, // Oculto por ahora
-      // { id: "marketplace", label: "Publicidad", icon: Megaphone }, // Oculto por ahora
-      { id: "banners", label: "Home", icon: LayoutTemplate },
+      { id: "homeHero", label: "Banners publicitarios", icon: LayoutTemplate },
+      { id: "homeProductTypes", label: "Tipos de Producto", icon: Layers },
+      { id: "homeBenefitsBar", label: "Barra de Beneficios", icon: Zap },
+      { id: "homeFeatured", label: "Productos Destacados", icon: Package },
+      { id: "homePromos", label: "Banners Promocionales", icon: Megaphone },
+      { id: "homeDeals", label: "Ofertas del Día", icon: Clock },
+      { id: "homeBrands", label: "Marcas", icon: Tag },
+      { id: "homeBranches", label: "Sucursales", icon: Store },
+      { id: "homeBenefits", label: "Beneficios", icon: Star },
+      { id: "homeFooter", label: "Footer", icon: LayoutTemplate },
       { id: "general", label: "General", icon: Settings },
     ],
   },
@@ -148,7 +178,16 @@ const VIEW_PATHS: Record<string, ViewId> = {
   customers: "customers",
   promotions: "promotions",
   "homepage-editor": "homepage",
-  banners: "banners",
+  "home/hero": "homeHero",
+  "home/promos": "homePromos",
+  "home/product-types": "homeProductTypes",
+  "home/benefits-bar": "homeBenefitsBar",
+  "home/featured": "homeFeatured",
+  "home/deals": "homeDeals",
+  "home/brands": "homeBrands",
+  "home/branches": "homeBranches",
+  "home/benefits": "homeBenefits",
+  "home/footer": "homeFooter",
   marketplace: "marketplace",
   branches: "branches",
   users: "users",
@@ -169,7 +208,16 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   customers: "customers",
   promotions: "promotions",
   homepage: "homepage-editor",
-  banners: "banners",
+  homeHero: "home/hero",
+  homePromos: "home/promos",
+  homeProductTypes: "home/product-types",
+  homeBenefitsBar: "home/benefits-bar",
+  homeFeatured: "home/featured",
+  homeDeals: "home/deals",
+  homeBrands: "home/brands",
+  homeBranches: "home/branches",
+  homeBenefits: "home/benefits",
+  homeFooter: "home/footer",
   marketplace: "marketplace",
   branches: "branches",
   users: "users",
@@ -230,7 +278,16 @@ const LABELS: Record<ViewId, string> = {
   customers: "Clientes",
   promotions: "Promociones",
   homepage: "Editor de Inicio",
-  banners: "Home",
+  homeHero: "Banners publicitarios",
+  homePromos: "Banners Promocionales",
+  homeProductTypes: "Tipos de Producto",
+  homeBenefitsBar: "Barra de Beneficios",
+  homeFeatured: "Productos Destacados",
+  homeDeals: "Ofertas del Día",
+  homeBrands: "Marcas",
+  homeBranches: "Sucursales",
+  homeBenefits: "Beneficios",
+  homeFooter: "Footer",
   marketplace: "Publicidad Marketplace",
   branches: "Sucursales",
   users: "Usuarios y Permisos",
@@ -257,7 +314,7 @@ const QUICK_COMMANDS = [
     label: "Editar página de inicio",
     view: "homepage" as ViewId,
   },
-  { icon: Image, label: "Gestionar banners", view: "banners" as ViewId },
+  { icon: Image, label: "Gestionar banners", view: "homeHero" as ViewId },
   {
     icon: Megaphone,
     label: "Campañas publicitarias",
@@ -466,7 +523,7 @@ function Sidebar({
             <p className="text-white font-bold text-sm leading-tight">
               Mercaldas
             </p>
-            <p className="text-white/40 text-xs">Admin Panel</p>
+            <p className="text-white/60 text-xs">Admin Panel</p>
           </div>
         )}
       </div>
@@ -476,7 +533,7 @@ function Sidebar({
         {NAV.map((section) => (
           <div key={section.title} className="mb-4">
             {!collapsed && (
-              <p className="text-white/30 text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
+              <p className="text-white/50 text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
                 {section.title}
               </p>
             )}
@@ -491,7 +548,7 @@ function Sidebar({
                   className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-all mb-0.5 group relative ${
                     active
                       ? "bg-white/10 text-amber-400"
-                      : "text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+                      : "text-white/70 hover:bg-white/[0.06] hover:text-white"
                   }`}
                 >
                   <item.icon size={15} className="shrink-0" />
@@ -524,7 +581,7 @@ function Sidebar({
               <p className="text-white/80 text-xs font-semibold truncate">
                 Jorge Ramírez
               </p>
-              <p className="text-white/30 text-[10px] truncate">
+              <p className="text-white/50 text-[10px] truncate">
                 Administrador
               </p>
             </div>
@@ -687,8 +744,26 @@ function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProf
       return <Promotions />;
     case "homepage":
       return <HomepageEditor />;
-    case "banners":
-      return <Banners />;
+    case "homeHero":
+      return <HomeHeroSection />;
+    case "homePromos":
+      return <HomePromosSection />;
+    case "homeProductTypes":
+      return <HomeProductTypesSection />;
+    case "homeBenefitsBar":
+      return <HomeBenefitsBarSection />;
+    case "homeFeatured":
+      return <HomeFeaturedSection />;
+    case "homeDeals":
+      return <HomeDealsSection />;
+    case "homeBrands":
+      return <HomeBrandsSection />;
+    case "homeBranches":
+      return <HomeBranchesSection />;
+    case "homeBenefits":
+      return <HomeBenefitsSection />;
+    case "homeFooter":
+      return <HomeFooterSection />;
     case "marketplace":
       return <Marketplace />;
     case "branches":
@@ -772,7 +847,7 @@ export default function App() {
             >
               <img src={footerLogo} alt="MercAldas" className="h-8 w-auto object-contain" />
             </a>
-            <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
+            <p className="text-xs" style={{ color: "rgba(255,255,255,0.6)" }}>
               © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
             </p>
             <p className="text-xs" style={{ color: "rgba(255,255,255,0.3)" }}>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, type ElementType, type ReactNode } from "react";
 import {
   Plus, Edit, SquarePen, Trash2, X, Loader2, Filter, GripVertical,
   Image, Type, Palette, Link, Calendar, Eye, ChevronLeft, ChevronRight,
@@ -16,6 +16,7 @@ import {
   type FeaturedProduct,
 } from "../services/featured.service";
 import { filtersService, type FilterConfig } from "../services/filters.service";
+import { catalogService } from "../services/catalog.service";
 import {
   ProductPicker,
   CategoryPicker,
@@ -505,7 +506,7 @@ function SlideEditor({
   return (
     <div className="fixed inset-0 z-[60] flex">
       <div className="flex-1 bg-black/50" onClick={onClose} />
-      <div className="w-full max-w-xl bg-white flex flex-col shadow-2xl overflow-y-auto">
+      <div className="w-full max-w-3xl bg-white flex flex-col shadow-2xl overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <h2 className="font-bold text-gray-900">{isEdit ? "Editar Slide" : "Nuevo Slide"}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
@@ -639,12 +640,10 @@ async function createMediaFromUrl(url: string, mediaType?: string): Promise<numb
 function CarouselManager({
   slides,
   filters,
-  onClose,
   onSaved,
 }: {
   slides: Banner[];
   filters: FilterConfig[];
-  onClose: () => void;
   onSaved: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"contenido" | "filtros">("contenido");
@@ -660,13 +659,10 @@ function CarouselManager({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col mx-4 overflow-hidden">
+    <div className="flex flex-col [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed [&_select]:cursor-pointer [&_label]:cursor-pointer">
         {/* Header with tabs */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-6">
-            <h2 className="font-bold text-gray-900">Carousel Hero</h2>
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               <button
                 onClick={() => setActiveTab("contenido")}
@@ -686,7 +682,6 @@ function CarouselManager({
               </button>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
         </div>
 
         {/* Tab content */}
@@ -711,7 +706,7 @@ function CarouselManager({
               ) : (
                 <div className="space-y-3">
                   {sortedSlides.map((s) => (
-                    <div key={s.id} className="relative rounded-xl overflow-hidden group" style={{ background: s.bgColor || "#1A1A2E", minHeight: "160px" }}>
+                    <div key={s.id} onClick={() => setSlideEditor(s)} className="relative rounded-xl overflow-hidden group cursor-pointer" style={{ background: s.bgColor || "#1A1A2E", minHeight: "160px" }}>
                       {/* Background image */}
                       {s.image && (
                         <div className="absolute right-0 top-0 h-full w-2/5">
@@ -744,21 +739,21 @@ function CarouselManager({
                       </div>
 
                       {/* Actions */}
-                      <div className="absolute top-3 right-3 flex items-center gap-1 z-20">
-                        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_BADGE[s.status]}`}>
+                      <div className="absolute top-3 right-3 flex items-center gap-1.5 z-20" onClick={(e) => e.stopPropagation()}>
+                        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${STATUS_BADGE[s.status]}`}>
                           {STATUS_LABEL[s.status]} · #{s.position}
                         </span>
                         <button
                           onClick={() => setSlideEditor(s)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/90 hover:bg-white text-gray-600 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/90 hover:bg-white text-gray-700 transition-colors"
                         >
-                          <Edit size={12} />
+                          <Edit size={13} /> Editar
                         </button>
                         <button
                           onClick={() => setDeleteConfirm(s)}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/90 hover:bg-red-50 text-gray-600 hover:text-red-500 transition-colors"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/90 hover:bg-red-50 text-gray-700 hover:text-red-500 transition-colors"
                         >
-                          <Trash2 size={12} />
+                          <Trash2 size={13} /> Borrar
                         </button>
                       </div>
                     </div>
@@ -771,7 +766,6 @@ function CarouselManager({
             <SlideFiltersTab slides={slides} filters={filters} onSaved={onSaved} />
           )}
         </div>
-      </div>
 
       {/* Slide Editor (nested modal) */}
       {slideEditor !== null && (
@@ -887,7 +881,7 @@ function PromoSlideEditor({
   return (
     <div className="fixed inset-0 z-[60] flex">
       <div className="flex-1 bg-black/50" onClick={onClose} />
-      <div className="w-full max-w-xl bg-white flex flex-col shadow-2xl overflow-y-auto">
+      <div className="w-full max-w-3xl bg-white flex flex-col shadow-2xl overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
           <h2 className="font-bold text-gray-900">{isEdit ? "Editar Banner Promo" : "Nuevo Banner Promo"}</h2>
           <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
@@ -1001,12 +995,10 @@ function PromoSlideEditor({
 function PromoManager({
   slides,
   filters,
-  onClose,
   onSaved,
 }: {
   slides: Banner[];
   filters: FilterConfig[];
-  onClose: () => void;
   onSaved: () => void;
 }) {
   const [activeTab, setActiveTab] = useState<"contenido" | "filtros">("contenido");
@@ -1022,12 +1014,9 @@ function PromoManager({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+    <div className="flex flex-col">
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-6">
-            <h2 className="font-bold text-gray-900">Banners Promocionales</h2>
             <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
               <button onClick={() => setActiveTab("contenido")} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${activeTab === "contenido" ? "bg-white text-gray-800 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
                 <LayoutTemplate size={13} /> Contenido
@@ -1037,7 +1026,6 @@ function PromoManager({
               </button>
             </div>
           </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
@@ -1056,7 +1044,7 @@ function PromoManager({
                   {sortedSlides.map((s) => {
                     const badge = (s.title || "OFERTA").split(" ").slice(0, 2).join(" ").toUpperCase();
                     return (
-                      <div key={s.id} className="relative rounded-xl overflow-hidden group" style={{ background: `linear-gradient(135deg, ${s.bgColor || "#1A1A2E"} 0%, ${(s.bgColor || "#1A1A2E") + "dd"} 100%)`, minHeight: "120px" }}>
+                      <div key={s.id} onClick={() => setSlideEditor(s)} className="relative rounded-xl overflow-hidden group cursor-pointer" style={{ background: `linear-gradient(135deg, ${s.bgColor || "#1A1A2E"} 0%, ${(s.bgColor || "#1A1A2E") + "dd"} 100%)`, minHeight: "120px" }}>
                         {s.image && (
                           <div className="absolute right-0 top-0 h-full w-2/5">
                             <img src={s.image} alt="" className="w-full h-full object-cover opacity-20" />
@@ -1070,7 +1058,7 @@ function PromoManager({
                           </div>
                           <span className="shrink-0 px-4 py-2 rounded-lg text-xs font-bold" style={{ background: s.accentColor || "#FFF200", color: s.bgColor || "#1A1A2E" }}>{s.ctaText || <span className="underline decoration-dotted">Sin texto</span>}</span>
                         </div>
-                        <div className="absolute top-3 right-3 flex items-center gap-1 z-20">
+                        <div className="absolute top-3 right-3 flex items-center gap-1 z-20" onClick={(e) => e.stopPropagation()}>
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_BADGE[s.status]}`}>{STATUS_LABEL[s.status]} · #{s.position}</span>
                           <button onClick={() => setSlideEditor(s)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/90 hover:bg-white text-gray-600"><Edit size={12} /></button>
                           <button onClick={() => setDeleteConfirm(s)} className="w-7 h-7 flex items-center justify-center rounded-lg bg-white/90 hover:bg-red-50 text-gray-600 hover:text-red-500"><Trash2 size={12} /></button>
@@ -1085,7 +1073,6 @@ function PromoManager({
             <SlideFiltersTab slides={slides} filters={filters} onSaved={onSaved} />
           )}
         </div>
-      </div>
 
       {slideEditor !== null && <PromoSlideEditor slide={slideEditor === "new" ? null : slideEditor} onClose={() => setSlideEditor(null)} onSaved={() => { setSlideEditor(null); onSaved(); }} />}
       {deleteConfirm && (
@@ -1316,10 +1303,6 @@ function BenefitsInlineEditor({
 }
 
 // ── Daily Deals Manager ──
-type DealItemTextField =
-  | "title" | "subtitle" | "discount" | "price"
-  | "originalPrice" | "unit" | "image" | "bgFrom" | "bgTo" | "endsAt";
-
 interface DealItemForm {
   id: string;
   title: string;
@@ -1389,7 +1372,256 @@ function DealItemFilter({
   );
 }
 
-function DailyDealsManager({ onClose }: { onClose: () => void }) {
+// ── Editor de un item del display de Ofertas del día ──
+function DealItemEditor({
+  item,
+  index,
+  categories,
+  onChange,
+  onClose,
+}: {
+  item: DealItemForm;
+  index: number;
+  categories: AdminCategory[];
+  onChange: (patch: Partial<DealItemForm>) => void;
+  onClose: () => void;
+}) {
+  const inputCls =
+    "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
+  return (
+    <div className="fixed inset-0 z-[60] flex">
+      <div className="flex-1 bg-black/50" onClick={onClose} />
+      <div className="w-full max-w-2xl bg-white flex flex-col shadow-2xl overflow-y-auto">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
+          <h2 className="font-bold text-gray-900">Editar Item #{index + 1}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
+        </div>
+        <div className="p-6 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="col-span-2">
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
+                Título <span className="text-gray-400">(\n para salto de línea)</span>
+              </label>
+              <input
+                value={item.title}
+                onChange={(e) => onChange({ title: e.target.value })}
+                className={inputCls}
+                placeholder="Papa Criolla\nLimpia"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Subtítulo</label>
+              <input value={item.subtitle} onChange={(e) => onChange({ subtitle: e.target.value })} className={inputCls} placeholder="Fresca desde las fincas" />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Descuento</label>
+              <input value={item.discount} onChange={(e) => onChange({ discount: e.target.value })} className={inputCls} placeholder="21% OFF" />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Unidad</label>
+              <input value={item.unit} onChange={(e) => onChange({ unit: e.target.value })} className={inputCls} placeholder="x kg" />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Precio</label>
+              <input type="number" min="0" value={item.price} onChange={(e) => onChange({ price: e.target.value })} className={inputCls} placeholder="3800" />
+            </div>
+            <div>
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Precio original</label>
+              <input type="number" min="0" value={item.originalPrice} onChange={(e) => onChange({ originalPrice: e.target.value })} className={inputCls} placeholder="4800" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Imagen (URL)</label>
+              <input value={item.image} onChange={(e) => onChange({ image: e.target.value })} className={`${inputCls} font-mono`} placeholder="https://..." />
+              {item.image && (
+                <img src={item.image} alt="" className="mt-2 h-24 w-full object-cover rounded-lg border border-gray-200" />
+              )}
+            </div>
+            <div className="col-span-2 flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Fondo</label>
+                <input type="color" value={item.bgFrom} onChange={(e) => onChange({ bgFrom: e.target.value })} className="w-8 h-8 rounded cursor-pointer border" />
+                <input type="color" value={item.bgTo} onChange={(e) => onChange({ bgTo: e.target.value })} className="w-8 h-8 rounded cursor-pointer border" />
+              </div>
+              <div className="flex-1">
+                <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Texto final (⏱)</label>
+                <input value={item.endsAt} onChange={(e) => onChange({ endsAt: e.target.value })} className={inputCls} placeholder="Hoy · Hasta agotar existencias" />
+              </div>
+            </div>
+          </div>
+
+          <DealItemFilter
+            categories={categories}
+            categoryIds={item.categoryIds}
+            productIds={item.productIds}
+            onChange={(v) => onChange(v)}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Buscador de productos del carousel de Ofertas del día ──
+// Muestra 5 productos al abrir y carga de 5 en 5 al hacer scroll.
+const DEAL_SEARCH_PAGE_SIZE = 5;
+
+function DealCarouselSearchModal({
+  addedIds,
+  onAdd,
+  onClose,
+}: {
+  addedIds: Set<number>;
+  onAdd: (p: DealCarouselProduct) => void;
+  onClose: () => void;
+}) {
+  const currency = new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  });
+  const [query, setQuery] = useState("");
+  const [items, setItems] = useState<DealCarouselProduct[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const offsetRef = useRef(0);
+  const reqIdRef = useRef(0);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const initialLoadRef = useRef(false);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  const loadPage = useCallback(async (q: string, reset: boolean) => {
+    const offset = reset ? 0 : offsetRef.current;
+    const reqId = ++reqIdRef.current;
+    setLoading(true);
+    try {
+      const list = await catalogService.getProducts({
+        limit: DEAL_SEARCH_PAGE_SIZE,
+        offset,
+        search: q.trim() || undefined,
+      });
+      if (reqId !== reqIdRef.current) return; // respuesta obsoleta
+      const mapped: DealCarouselProduct[] = list.map((p) => ({
+        id: p.id,
+        name: p.name,
+        price: Number(p.price ?? 0),
+        originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined,
+        image: p.image ?? null,
+        category: p.category ?? null,
+      }));
+      setItems((prev) => {
+        if (reset) return mapped;
+        const seen = new Set(prev.map((p) => p.id));
+        return [...prev, ...mapped.filter((p) => !seen.has(p.id))];
+      });
+      offsetRef.current = offset + mapped.length;
+      setDone(mapped.length < DEAL_SEARCH_PAGE_SIZE);
+    } catch {
+      if (reqId === reqIdRef.current) setDone(true);
+    } finally {
+      if (reqId === reqIdRef.current) setLoading(false);
+    }
+  }, []);
+
+  // Carga inicial (5 productos) + búsqueda con debounce.
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (!initialLoadRef.current) {
+      initialLoadRef.current = true;
+      offsetRef.current = 0;
+      void loadPage(query, true);
+      return;
+    }
+    debounceRef.current = setTimeout(() => {
+      offsetRef.current = 0;
+      setDone(false);
+      void loadPage(query, true);
+    }, 350);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [query, loadPage]);
+
+  // Lazy load: siguiente página al llegar al final de la lista.
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting && !loading && !done) {
+          void loadPage(query, false);
+        }
+      },
+      { root: el.parentElement, rootMargin: "48px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loading, done, query, loadPage]);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[60] bg-black/40" onClick={onClose} />
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+        <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-sm text-gray-900">Añadir productos al carousel</h3>
+            <button onClick={onClose} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
+              <X size={16} />
+            </button>
+          </div>
+          <div className="relative mb-3">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar producto..."
+              className="w-full text-sm border border-gray-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
+            />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+          </div>
+          <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
+            {items.map((p) => {
+              const already = addedIds.has(p.id);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => onAdd(p)}
+                  disabled={already}
+                  className={`flex items-center gap-3 p-2 rounded-lg text-left transition-colors ${already ? "opacity-50 bg-gray-50" : "bg-gray-50 hover:bg-amber-50"}`}
+                >
+                  <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
+                    {p.image ? (
+                      <img src={p.image} alt={p.name} className="w-full h-full object-cover" loading="lazy" />
+                    ) : (
+                      <span className="w-full h-full flex items-center justify-center">
+                        <Package size={14} className="text-gray-400" />
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-700 truncate">{p.name}</p>
+                    <p className="text-[10px] text-gray-400">
+                      {currency.format(p.price)}
+                      {p.originalPrice ? <span className="line-through ml-1.5">{currency.format(p.originalPrice)}</span> : null}
+                    </p>
+                  </div>
+                  {already ? <Check size={14} className="text-green-500 shrink-0" /> : <Plus size={14} className="text-amber-500 shrink-0" />}
+                </button>
+              );
+            })}
+            <div ref={sentinelRef} className="h-8 flex items-center justify-center">
+              {loading && <Loader2 size={14} className="animate-spin text-gray-400" />}
+              {!loading && done && items.length > 0 && <span className="text-[10px] text-gray-400">Fin de la lista</span>}
+            </div>
+            {items.length === 0 && !loading && (
+              <p className="text-xs text-gray-400 py-8 text-center">Sin resultados</p>
+            )}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
   const [items, setItems] = useState<DealItemForm[]>([]);
   const [carousel, setCarousel] = useState<DealCarouselProduct[]>([]);
   const [tab, setTab] = useState<"display" | "carousel">("display");
@@ -1398,10 +1630,7 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState("");
 
   const [showSearch, setShowSearch] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<DealCarouselProduct[]>([]);
-  const [searching, setSearching] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const categories = useAdminCategories();
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
@@ -1447,24 +1676,16 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
     void load();
   }, [load]);
 
-  const updateItem = (idx: number, field: DealItemTextField, value: string) => {
-    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, [field]: value } : it)));
-  };
-
-  const updateItemFilter = (
-    idx: number,
-    next: { productIds: number[]; categoryIds: number[] },
-  ) => {
-    setItems((prev) =>
-      prev.map((it, i) => (i === idx ? { ...it, ...next } : it)),
-    );
+  const patchItem = (id: string, patch: Partial<DealItemForm>) => {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   };
 
   const addItem = () => {
+    const id = `n${Date.now()}`;
     setItems((prev) => [
       ...prev,
       {
-        id: `n${Date.now()}`,
+        id,
         title: "",
         subtitle: "",
         discount: "",
@@ -1479,52 +1700,14 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
         categoryIds: [],
       },
     ]);
+    setEditingId(id);
   };
 
-  const removeItem = (idx: number) =>
-    setItems((prev) => prev.filter((_, i) => i !== idx));
-
-  const handleProductSearch = (q: string) => {
-    setSearchQuery(q);
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    searchTimer.current = setTimeout(async () => {
-      if (!q.trim()) {
-        setSearchResults([]);
-        return;
-      }
-      setSearching(true);
-      try {
-        const res = await fetch(
-          `${API_BASE}/admin/featured/products/search?q=${encodeURIComponent(q.trim())}&limit=20`,
-          { credentials: "include" },
-        );
-        if (res.ok) {
-          const data = await res.json();
-          const list = Array.isArray(data) ? data : data.products ?? [];
-          setSearchResults(
-            list.map((p: any) => ({
-              id: p.id,
-              name: p.name,
-              price: Number(p.price ?? 0),
-              originalPrice: p.originalPrice ? Number(p.originalPrice) : undefined,
-              image: p.image ?? null,
-              category: p.category ?? null,
-            })),
-          );
-        }
-      } catch {
-        /* noop */
-      } finally {
-        setSearching(false);
-      }
-    }, 350);
-  };
+  const removeItem = (id: string) =>
+    setItems((prev) => prev.filter((it) => it.id !== id));
 
   const addCarouselProduct = (p: DealCarouselProduct) => {
     setCarousel((prev) => (prev.some((x) => x.id === p.id) ? prev : [...prev, p]));
-    setShowSearch(false);
-    setSearchQuery("");
-    setSearchResults([]);
   };
 
   const removeCarouselProduct = (id: number) => {
@@ -1562,7 +1745,7 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
         }),
       });
       if (!res.ok) throw new Error("Error al guardar");
-      onClose();
+      onSaved?.();
     } catch (e: any) {
       setError(e.message || "Error al guardar");
     } finally {
@@ -1576,23 +1759,10 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
     maximumFractionDigits: 0,
   });
 
-  const inputCls =
-    "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
+  const editingItem = items.find((it) => it.id === editingId) ?? null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div>
-            <h2 className="font-bold text-gray-900">Ofertas del Día</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Display rotativo y carousel de productos</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
-            <X size={16} />
-          </button>
-        </div>
-
+    <div className="flex-1 min-h-0 flex flex-col">
         {/* Tabs */}
         <div className="flex border-b border-gray-100 shrink-0">
           <button
@@ -1614,104 +1784,96 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
             <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
           </div>
         ) : tab === "display" ? (
-          <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-4">
             {items.length === 0 && (
               <p className="text-center text-xs text-gray-400 py-8">
                 Sin items. Añade el primero.
               </p>
             )}
-            {items.map((it, i) => (
-              <div key={it.id} className="border border-gray-200 rounded-xl p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                    Item #{i + 1}
-                  </p>
-                  <button
-                    onClick={() => removeItem(i)}
-                    className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500"
-                    title="Quitar item"
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+              {items.map((it, i) => {
+                const hasFilter = it.productIds.length > 0 || it.categoryIds.length > 0;
+                return (
+                  <div
+                    key={it.id}
+                    onClick={() => setEditingId(it.id)}
+                    className="relative rounded-2xl overflow-hidden cursor-pointer group"
+                    style={{ background: `linear-gradient(160deg, ${it.bgFrom} 0%, ${it.bgTo} 100%)` }}
                   >
-                    <X size={12} />
-                  </button>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">
-                      Título <span className="text-gray-400">(\n para salto de línea)</span>
-                    </label>
-                    <input
-                      value={it.title}
-                      onChange={(e) => updateItem(i, "title", e.target.value)}
-                      className={inputCls}
-                      placeholder="Papa Criolla\nLimpia"
-                    />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Subtítulo</label>
-                    <input value={it.subtitle} onChange={(e) => updateItem(i, "subtitle", e.target.value)} className={inputCls} placeholder="Fresca desde las fincas" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Descuento</label>
-                    <input value={it.discount} onChange={(e) => updateItem(i, "discount", e.target.value)} className={inputCls} placeholder="21% OFF" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Unidad</label>
-                    <input value={it.unit} onChange={(e) => updateItem(i, "unit", e.target.value)} className={inputCls} placeholder="x kg" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Precio</label>
-                    <input type="number" min="0" value={it.price} onChange={(e) => updateItem(i, "price", e.target.value)} className={inputCls} placeholder="3800" />
-                  </div>
-                  <div>
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Precio original</label>
-                    <input type="number" min="0" value={it.originalPrice} onChange={(e) => updateItem(i, "originalPrice", e.target.value)} className={inputCls} placeholder="4800" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Imagen (URL)</label>
-                    <input value={it.image} onChange={(e) => updateItem(i, "image", e.target.value)} className={`${inputCls} font-mono`} placeholder="https://..." />
-                    {it.image && (
-                      <img src={it.image} alt="" className="mt-2 h-20 w-full object-cover rounded-lg border border-gray-200" />
-                    )}
-                  </div>
-                  <div className="col-span-2 flex items-center gap-4">
-                    <div className="flex items-center gap-2">
-                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Fondo</label>
-                      <input type="color" value={it.bgFrom} onChange={(e) => updateItem(i, "bgFrom", e.target.value)} className="w-8 h-8 rounded cursor-pointer border" />
-                      <input type="color" value={it.bgTo} onChange={(e) => updateItem(i, "bgTo", e.target.value)} className="w-8 h-8 rounded cursor-pointer border" />
+                    <div className="flex flex-col sm:flex-row">
+                      <div className="p-5 flex-1 min-w-0">
+                        <span className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-3" style={{ background: "#FFF200", color: "#1A1A2E" }}>
+                          {it.discount || "Sin descuento"}
+                        </span>
+                        <h3 className="text-xl font-black text-white whitespace-pre-line leading-tight mb-1">
+                          {it.title || <span className="underline decoration-dotted">Sin título</span>}
+                        </h3>
+                        <p className="text-xs mb-3" style={{ color: "rgba(255,255,255,0.65)" }}>
+                          {it.subtitle || <span className="underline decoration-dotted">Sin subtítulo</span>}
+                        </p>
+                        <div className="flex items-baseline gap-2">
+                          <span className="text-xl font-black text-white">{currency.format(Number(it.price) || 0)}</span>
+                          {Number(it.originalPrice) > 0 && (
+                            <span className="text-sm line-through" style={{ color: "rgba(255,255,255,0.45)" }}>
+                              {currency.format(Number(it.originalPrice) || 0)}
+                            </span>
+                          )}
+                        </div>
+                        {it.unit && <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>{it.unit}</p>}
+                        <p className="text-xs mt-2 font-semibold" style={{ color: "#FFF200" }}>⏱ {it.endsAt || "Sin texto final"}</p>
+                        <div className="mt-3">
+                          {hasFilter ? (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-white/15 text-white">
+                              <SlidersHorizontal size={10} /> Filtro activo
+                              {it.productIds.length > 0 && <span>· {it.productIds.length} prod.</span>}
+                              {it.categoryIds.length > 0 && <span>· {it.categoryIds.length} cat.</span>}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-1 rounded-full bg-black/20" style={{ color: "rgba(255,255,255,0.6)" }}>
+                              Sin filtro
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      {it.image && (
+                        <div className="sm:w-40 h-36 sm:h-auto shrink-0 overflow-hidden">
+                          <img src={it.image} alt="" className="w-full h-full object-cover" />
+                        </div>
+                      )}
                     </div>
-                    <div className="flex-1">
-                      <label className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider block mb-1">Texto final (⏱)</label>
-                      <input value={it.endsAt} onChange={(e) => updateItem(i, "endsAt", e.target.value)} className={inputCls} placeholder="Hoy · Hasta agotar existencias" />
+
+                    <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[11px] font-bold text-white/80 bg-black/25 px-2 py-1 rounded-full">#{i + 1}</span>
+                      <button
+                        onClick={() => setEditingId(it.id)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white/90 hover:bg-white text-gray-700"
+                      >
+                        <Edit size={12} /> Editar
+                      </button>
+                      <button
+                        onClick={() => removeItem(it.id)}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-white/90 hover:bg-red-50 text-gray-700 hover:text-red-500"
+                      >
+                        <Trash2 size={12} /> Borrar
+                      </button>
                     </div>
                   </div>
-                </div>
-                <DealItemFilter
-                  categories={categories}
-                  categoryIds={it.categoryIds}
-                  productIds={it.productIds}
-                  onChange={(v) => updateItemFilter(i, v)}
-                />
-              </div>
-            ))}
-            <button
-              onClick={addItem}
-              className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-xl hover:border-amber-300 hover:text-amber-600 transition-colors"
-            >
-              <Plus size={13} /> Añadir item
-            </button>
+                );
+              })}
+            </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-6 space-y-3">
+          <div className="flex-1 min-h-0 flex flex-col p-6 gap-3">
             <button
               onClick={() => setShowSearch(true)}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors shrink-0"
             >
               <Plus size={14} /> Añadir productos
             </button>
             {carousel.length === 0 ? (
               <p className="text-xs text-gray-400 py-6 text-center">Sin productos en el carousel</p>
             ) : (
-              <div className="flex flex-col gap-2 max-h-[50vh] overflow-y-auto">
+              <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
                 {carousel.map((p) => (
                   <div key={p.id} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
                     <div className="w-10 h-10 rounded bg-gray-200 overflow-hidden shrink-0">
@@ -1741,72 +1903,44 @@ function DailyDealsManager({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">
-            Cancelar
-          </button>
-          {error && <span className="text-xs text-red-500">{error}</span>}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl"
-          >
-            {saving && <Loader2 size={14} className="animate-spin" />} Guardar cambios
-          </button>
+          <span className="text-xs text-red-500">{error}</span>
+          <div className="flex items-center gap-2">
+            {tab === "display" && (
+              <button
+                onClick={addItem}
+                className="flex items-center gap-1.5 px-4 py-2 text-sm font-semibold text-gray-600 bg-white border border-gray-200 hover:border-amber-300 hover:text-amber-600 rounded-xl transition-colors"
+              >
+                <Plus size={14} /> Añadir item
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl"
+            >
+              {saving && <Loader2 size={14} className="animate-spin" />} Guardar cambios
+            </button>
+          </div>
         </div>
-      </div>
 
       {/* Buscador de productos del carousel */}
       {showSearch && (
-        <>
-          <div className="fixed inset-0 z-[60] bg-black/40" onClick={() => setShowSearch(false)} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-bold text-sm text-gray-900">Añadir productos al carousel</h3>
-                <button onClick={() => setShowSearch(false)} className="p-1 rounded-lg hover:bg-gray-100 text-gray-400">
-                  <X size={16} />
-                </button>
-              </div>
-              <div className="relative mb-3">
-                <input
-                  value={searchQuery}
-                  onChange={(e) => handleProductSearch(e.target.value)}
-                  placeholder="Buscar producto..."
-                  className="w-full text-sm border border-gray-200 rounded-lg pl-9 pr-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400"
-                />
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-              </div>
-              {searching ? (
-                <div className="flex justify-center py-6">
-                  <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
-                </div>
-              ) : searchResults.length > 0 ? (
-                <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
-                  {searchResults.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => addCarouselProduct(p)}
-                      className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
-                        {p.image && <img src={p.image} alt={p.name} className="w-full h-full object-cover" />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-700 truncate">{p.name}</p>
-                        <p className="text-[10px] text-gray-400">{currency.format(p.price)}</p>
-                      </div>
-                      <Plus size={14} className="text-amber-500 shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              ) : searchQuery.trim() ? (
-                <p className="text-xs text-gray-400 py-8 text-center">Sin resultados</p>
-              ) : (
-                <p className="text-xs text-gray-400 py-8 text-center">Escribe para buscar productos</p>
-              )}
-            </div>
-          </div>
-        </>
+        <DealCarouselSearchModal
+          addedIds={new Set(carousel.map((p) => p.id))}
+          onAdd={addCarouselProduct}
+          onClose={() => setShowSearch(false)}
+        />
+      )}
+
+      {/* Editor de un item del display */}
+      {editingItem && (
+        <DealItemEditor
+          item={editingItem}
+          index={items.findIndex((it) => it.id === editingItem.id)}
+          categories={categories}
+          onChange={(patch) => patchItem(editingItem.id, patch)}
+          onClose={() => setEditingId(null)}
+        />
       )}
     </div>
   );
@@ -1826,11 +1960,9 @@ interface LandingBrand {
 
 function BrandsLandingManager({
   brands,
-  onClose,
   onSaved,
 }: {
   brands: LandingBrand[];
-  onClose: () => void;
   onSaved: () => void;
 }) {
   const [items, setItems] = useState(brands);
@@ -1897,9 +2029,6 @@ function BrandsLandingManager({
     finally { setSaving(false); }
   };
 
-  const activeCount = items.filter((b) => b.isActive).length;
-  const inactiveCount = items.length - activeCount;
-
   const q = search.trim().toLowerCase();
   const filtered = items
     .filter((b) => {
@@ -1919,18 +2048,7 @@ function BrandsLandingManager({
     });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div>
-            <h2 className="font-bold text-gray-900">Marcas en Home</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {activeCount} activas · {inactiveCount} inactivas de {items.length} totales
-            </p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
+    <div className="flex-1 min-h-0 flex flex-col">
         <div className="px-6 pt-4 pb-1 space-y-3 shrink-0">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -1990,7 +2108,7 @@ function BrandsLandingManager({
             </div>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-1">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-1">
           {filtered.map((b) => (
             <div key={b.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
               <label className="flex items-center gap-3 flex-1 cursor-pointer">
@@ -2019,12 +2137,10 @@ function BrandsLandingManager({
           )}
         </div>
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
           <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
             {saving && <Loader2 size={14} className="animate-spin" />}Guardar selección
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -2067,7 +2183,7 @@ function branchScheduleSummary(schedule: Record<string, string> | null): string 
   return `${filled.length} días · ${schedule[filled[0].key]}`;
 }
 
-function BranchesLandingManager({ onClose }: { onClose: () => void }) {
+function BranchesLandingManager() {
   const [branches, setBranches] = useState<LandingBranchItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<LandingBranchItem | null>(null);
@@ -2182,21 +2298,7 @@ function BranchesLandingManager({ onClose }: { onClose: () => void }) {
     "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div>
-            <h2 className="font-bold text-gray-900">Sucursales en Home</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {branches.filter((b) => b.isActive).length} visibles · {branches.filter((b) => !b.isActive).length} ocultas
-            </p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500">
-            <X size={16} />
-          </button>
-        </div>
-
+    <div className="flex-1 min-h-0 flex flex-col">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
@@ -2204,7 +2306,7 @@ function BranchesLandingManager({ onClose }: { onClose: () => void }) {
         ) : branches.length === 0 ? (
           <p className="text-xs text-gray-400 py-12 text-center">No hay sucursales</p>
         ) : (
-          <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+          <div className="flex-1 min-h-0 overflow-y-auto divide-y divide-gray-50">
             {branches.map((b) => (
               <div key={b.id} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                 <div className="w-10 h-10 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
@@ -2246,10 +2348,8 @@ function BranchesLandingManager({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cerrar</button>
           <p className="text-[11px] text-gray-400">Edita los datos con el lápiz · oculta/muestra con el switch</p>
         </div>
-      </div>
 
       {/* Drawer de edición */}
       {editing && form && (
@@ -2366,7 +2466,7 @@ interface BenefitItemForm {
   desc: string;
 }
 
-function BenefitsLandingManager({ onClose }: { onClose: () => void }) {
+function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
   const [items, setItems] = useState<BenefitItemForm[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -2433,7 +2533,7 @@ function BenefitsLandingManager({ onClose }: { onClose: () => void }) {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Error al guardar");
-      onClose();
+      onSaved?.();
     } catch (e: any) {
       setError(e.message || "Error al guardar");
     } finally {
@@ -2445,19 +2545,7 @@ function BenefitsLandingManager({ onClose }: { onClose: () => void }) {
     "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div>
-            <h2 className="font-bold text-gray-900">Beneficios</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Sección ¿Por qué comprar en Mercaldas? ({items.length} ítems)
-            </p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
-
+    <div className="flex flex-col">
         {loading ? (
           <div className="flex items-center justify-center py-16">
             <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
@@ -2512,13 +2600,11 @@ function BenefitsLandingManager({ onClose }: { onClose: () => void }) {
         )}
 
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
           {error && <span className="text-xs text-red-500">{error}</span>}
           <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
             {saving && <Loader2 size={14} className="animate-spin" />} Guardar cambios
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -2529,7 +2615,7 @@ interface FooterHelpLink { label: string; url: string }
 interface FooterContact { address: string; phone: string; whatsapp: string; email: string }
 interface FooterCategoryOption { code: string; name: string; isActive: boolean }
 
-function FooterLandingManager({ onClose }: { onClose: () => void }) {
+function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -2603,7 +2689,7 @@ function FooterLandingManager({ onClose }: { onClose: () => void }) {
         }),
       });
       if (!res.ok) throw new Error("Error al guardar");
-      onClose();
+      onSaved?.();
     } catch (e: any) { setError(e.message || "Error al guardar"); }
     finally { setSaving(false); }
   };
@@ -2612,13 +2698,7 @@ function FooterLandingManager({ onClose }: { onClose: () => void }) {
   const labelCls = "text-[11px] font-semibold text-gray-500 uppercase tracking-wider block mb-1";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div><h2 className="font-bold text-gray-900">Footer</h2><p className="text-xs text-gray-400 mt-0.5">Configuración del pie de página</p></div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
+    <div className="flex flex-col">
         {loading ? (
           <div className="flex items-center justify-center py-16"><div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" /></div>
         ) : (
@@ -2753,13 +2833,11 @@ function FooterLandingManager({ onClose }: { onClose: () => void }) {
           </div>
         )}
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
           {error && <span className="text-xs text-red-500">{error}</span>}
           <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
             {saving && <Loader2 size={14} className="animate-spin" />} Guardar footer
           </button>
         </div>
-      </div>
     </div>
   );
 }
@@ -2769,11 +2847,9 @@ interface LandingProductType { id: number; code: string; name: string; count: nu
 
 function ProductTypeEditor({
   productTypes,
-  onClose,
   onSaved,
 }: {
   productTypes: LandingProductType[];
-  onClose: () => void;
   onSaved: () => void;
 }) {
   const [items, setItems] = useState(productTypes);
@@ -2858,9 +2934,6 @@ function ProductTypeEditor({
     finally { setSaving(false); }
   };
 
-  const activeCount = items.filter((t) => t.isActive).length;
-  const inactiveCount = items.length - activeCount;
-
   const q = search.trim().toLowerCase();
   const filtered = items
     .filter((t) => {
@@ -2879,18 +2952,7 @@ function ProductTypeEditor({
     });
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/50" onClick={onClose} />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col mx-4 overflow-hidden">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div>
-            <h2 className="font-bold text-gray-900">Tipos de Producto en Home</h2>
-            <p className="text-xs text-gray-400 mt-0.5">
-              {activeCount} activos · {inactiveCount} inactivos de {items.length} totales
-            </p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
+    <div className="flex flex-col">
         <div className="px-6 pt-4 pb-1 space-y-3 shrink-0">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -2973,12 +3035,10 @@ function ProductTypeEditor({
           )}
         </div>
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
           <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
             {saving && <Loader2 size={14} className="animate-spin" />}Guardar selección
           </button>
         </div>
-      </div>
 
       {/* Confirmación de eliminación masiva */}
       {deleteConfirm && (
@@ -3011,13 +3071,7 @@ function ProductTypeEditor({
 }
 
 // ── Featured Products Manager ──
-function FeaturedProductsManager({
-  onClose,
-  onSaved,
-}: {
-  onClose: () => void;
-  onSaved: () => void;
-}) {
+function FeaturedProductsManager() {
   const [tabs, setTabs] = useState<FeaturedTab[]>([]);
   const [selectedTab, setSelectedTab] = useState<number | null>(null);
   const [products, setProducts] = useState<FeaturedProduct[]>([]);
@@ -3174,22 +3228,12 @@ function FeaturedProductsManager({
   const assignedIds = new Set(products.map((p) => p.id));
 
   return (
-    <div className="fixed inset-0 z-[60] flex">
-      <div className="flex-1 bg-black/50" onClick={onClose} />
-      <div className="w-full max-w-5xl bg-white flex flex-col shadow-2xl">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div>
-            <h2 className="font-bold text-gray-900">Productos Destacados</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Pestañas y productos que aparecen en la sección de destacados</p>
-          </div>
-          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"><X size={16} /></button>
-        </div>
-
+    <div className="flex-1 min-h-0 flex flex-col">
         {error && <div className="mx-6 mt-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">{error}</div>}
 
-        <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
           {/* Left: Tabs */}
-          <div className="w-72 border-r border-gray-100 flex flex-col shrink-0">
+          <div className="w-72 border-r border-gray-100 flex flex-col shrink-0 min-h-0">
             <div className="p-4 border-b border-gray-100 space-y-2">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Pestañas</p>
               <div className="flex gap-2">
@@ -3203,13 +3247,13 @@ function FeaturedProductsManager({
                 <button
                   onClick={handleCreateTab}
                   disabled={creating || !newTabName.trim()}
-                  className="px-3 py-2 text-xs font-bold bg-amber-400 text-amber-900 rounded-xl hover:bg-amber-500 disabled:opacity-40 flex items-center gap-1"
+                  className="px-3 py-2 text-xs font-bold bg-amber-400 text-amber-900 rounded-xl hover:bg-amber-500 disabled:cursor-not-allowed flex items-center gap-1"
                 >
                   {creating ? <Loader2 size={12} className="animate-spin" /> : <Plus size={12} />} Añadir
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto p-2 space-y-1">
+            <div className="flex-1 overflow-y-auto p-2 space-y-1 min-h-0">
               {loading ? (
                 <div className="flex justify-center py-8"><Loader2 size={20} className="animate-spin text-gray-300" /></div>
               ) : tabs.length === 0 ? (
@@ -3259,7 +3303,7 @@ function FeaturedProductsManager({
           </div>
 
           {/* Right: Products */}
-          <div className="flex-1 flex flex-col min-w-0">
+          <div className="flex-1 flex flex-col min-w-0 min-h-0">
             <div className="p-4 border-b border-gray-100">
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">
                 {selected ? `Productos en "${selected.name}" (${products.length})` : "Selecciona una pestaña"}
@@ -3298,7 +3342,7 @@ function FeaturedProductsManager({
                 </div>
               )}
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto p-4 min-h-0">
               {productsLoading ? (
                 <div className="flex justify-center py-12"><Loader2 size={22} className="animate-spin text-gray-300" /></div>
               ) : products.length === 0 ? (
@@ -3335,14 +3379,6 @@ function FeaturedProductsManager({
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50">
-          <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cerrar</button>
-          <button onClick={onSaved} className="px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl flex items-center gap-2">
-            <Save size={14} /> Guardar cambios
-          </button>
-        </div>
-      </div>
-
       {/* Delete confirm */}
       {deleteConfirm && (
         <div className="fixed inset-0 z-[70] flex items-center justify-center">
@@ -3363,25 +3399,16 @@ function FeaturedProductsManager({
   );
 }
 
-// ── Main Page ──
-export default function Banners() {
+
+// ── Datos compartidos de la sección Home ──
+function useHomeData() {
   const [slides, setSlides] = useState<Banner[]>([]);
   const [promos, setPromos] = useState<Banner[]>([]);
   const [benefits, setBenefits] = useState<Banner[]>([]);
   const [filters, setFilters] = useState<FilterConfig[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [managerOpen, setManagerOpen] = useState(false);
-  const [promoManagerOpen, setPromoManagerOpen] = useState(false);
-  const [prodTypesOpen, setProdTypesOpen] = useState(false);
-  const [featuredOpen, setFeaturedOpen] = useState(false);
-  const [dealsOpen, setDealsOpen] = useState(false);
   const [landingTypes, setLandingTypes] = useState<LandingProductType[]>([]);
   const [landingBrands, setLandingBrands] = useState<LandingBrand[]>([]);
-  const [brandsOpen, setBrandsOpen] = useState(false);
-  const [landingBranches, setLandingBranches] = useState<LandingBranchItem[]>([]);
-  const [branchesOpen, setBranchesOpen] = useState(false);
-  const [benefitsOpen, setBenefitsOpen] = useState(false);
-  const [footerOpen, setFooterOpen] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -3397,309 +3424,174 @@ export default function Banners() {
       setBenefits(b);
       setFilters(f);
 
-      // Load landing product types
       const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
       const res = await fetch(`${API_BASE}/admin/landing/product-types`, { credentials: "include" });
       if (res.ok) setLandingTypes(await res.json());
-
-      // Load landing brands
       const brandRes = await fetch(`${API_BASE}/admin/landing/brands`, { credentials: "include" });
       if (brandRes.ok) setLandingBrands(await brandRes.json());
-
-      // Load landing branches
-      const branchRes = await fetch(`${API_BASE}/admin/branches`, { credentials: "include" });
-      if (branchRes.ok) setLandingBranches(await branchRes.json());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const activeCount = slides.filter((s) => s.status === "activo").length;
-  const promosActive = promos.filter((p) => p.status === "activo").length;
+  return { slides, promos, benefits, filters, landingTypes, landingBrands, loading, fetchData };
+}
 
+function HomeLoading() {
+  return <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-gray-400" /></div>;
+}
+
+function HomeSection({
+  icon: Icon,
+  iconClass,
+  title,
+  subtitle,
+  stats,
+  fill,
+  children,
+}: {
+  icon: ElementType;
+  iconClass: string;
+  title: string;
+  subtitle: string;
+  stats?: ReactNode;
+  fill?: boolean;
+  children: ReactNode;
+}) {
   return (
-    <>
-      <div className="p-6 space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Home</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Administra los banners de la página principal</p>
+    <div className={`p-6${fill ? " h-full flex flex-col" : ""}`}>
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden flex-1 min-h-0 flex flex-col">
+        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className={"w-10 h-10 rounded-xl flex items-center justify-center " + iconClass}>
+              <Icon size={18} />
+            </div>
+            <div>
+              <h1 className="font-semibold text-gray-900 text-lg">{title}</h1>
+              <p className="text-xs text-gray-500">{subtitle}</p>
+            </div>
+          </div>
+          {stats}
         </div>
-
-        {loading ? (
-          <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-gray-400" /></div>
-        ) : (
-          <>
-            {/* Hero Carousel card */}
-            <div
-              onClick={() => setManagerOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center group-hover:bg-amber-200 transition-colors">
-                  <LayoutTemplate size={18} className="text-amber-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Carousel Hero</h3>
-                  <p className="text-xs text-gray-500">Sección principal del sitio · 1920×600px</p>
-                </div>
-              </div>
-              <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{slides.length}</span> <span className="text-gray-400 text-xs">slides</span></div>
-                <div><span className="font-bold text-green-600">{activeCount}</span> <span className="text-gray-400 text-xs">activos</span></div>
-              </div>
-              {slides.length > 0 && (
-                <div className="flex gap-2 mt-3 overflow-hidden">
-                  {slides.slice(0, 5).map((s) => (
-                    <div key={s.id} className="w-20 h-12 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                      {s.image && <img src={s.image} alt="" className="w-full h-full object-cover" />}
-                    </div>
-                  ))}
-                  {slides.length > 5 && (
-                    <div className="w-20 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-400 shrink-0">+{slides.length - 5}</div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Product Types card */}
-            <div
-              onClick={() => setProdTypesOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center group-hover:bg-purple-200 transition-colors">
-                  <Layers size={18} className="text-purple-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Tipos de Producto</h3>
-                  <p className="text-xs text-gray-500">Selecciona cuáles mostrar en la landing</p>
-                </div>
-              </div>
-              <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos</span></div>
-                <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.isActive).length}</span> <span className="text-gray-400 text-xs">activos</span></div>
-                <div><span className="font-bold text-red-500">{landingTypes.filter((t) => !t.isActive).length}</span> <span className="text-gray-400 text-xs">inactivos</span></div>
-              </div>
-            </div>
-
-            {/* Benefits card */}
-            <div className="bg-white rounded-2xl border border-gray-100 p-5">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center">
-                  <Zap size={18} className="text-green-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Barra de Beneficios</h3>
-                  <p className="text-xs text-gray-500">Textos promocionales debajo del carousel de tipos</p>
-                </div>
-              </div>
-              <BenefitsInlineEditor benefits={benefits} onSaved={fetchData} />
-            </div>
-
-            {/* Featured Products card */}
-            <div
-              onClick={() => setFeaturedOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                  <Package size={18} className="text-indigo-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Productos Destacados</h3>
-                  <p className="text-xs text-gray-500">Pestañas (Más vendidos, Promociones...) y productos asignados</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Administra las pestañas y adjunta productos a cada una</p>
-            </div>
-
-            {/* Daily Deals card */}
-            <div
-              onClick={() => setDealsOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-colors">
-                  <Clock size={18} className="text-orange-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Ofertas del Día</h3>
-                  <p className="text-xs text-gray-500">Display rotativo y carousel de ofertas</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Administra el display izquierdo y los productos del carousel</p>
-            </div>
-
-            {/* Landing Brands card */}
-            <div
-              onClick={() => setBrandsOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-teal-100 flex items-center justify-center group-hover:bg-teal-200 transition-colors">
-                  <Tag size={18} className="text-teal-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Marcas en Home</h3>
-                  <p className="text-xs text-gray-500">Selecciona las marcas visibles en la landing</p>
-                </div>
-              </div>
-              <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{landingBrands.length}</span> <span className="text-gray-400 text-xs">marcas</span></div>
-                <div><span className="font-bold text-green-600">{landingBrands.filter((b) => b.isActive).length}</span> <span className="text-gray-400 text-xs">activas</span></div>
-                <div><span className="font-bold text-red-500">{landingBrands.filter((b) => !b.isActive).length}</span> <span className="text-gray-400 text-xs">inactivas</span></div>
-              </div>
-            </div>
-
-            {/* Landing Branches card */}
-            <div
-              onClick={() => setBranchesOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center group-hover:bg-sky-200 transition-colors">
-                  <Store size={18} className="text-sky-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Sucursales</h3>
-                  <p className="text-xs text-gray-500">Visibilidad y datos de las sucursales</p>
-                </div>
-              </div>
-              <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{landingBranches.length}</span> <span className="text-gray-400 text-xs">sucursales</span></div>
-                <div><span className="font-bold text-green-600">{landingBranches.filter((b) => b.isActive).length}</span> <span className="text-gray-400 text-xs">visibles</span></div>
-                <div><span className="font-bold text-red-500">{landingBranches.filter((b) => !b.isActive).length}</span> <span className="text-gray-400 text-xs">ocultas</span></div>
-              </div>
-            </div>
-
-            {/* Landing Benefits card */}
-            <div
-              onClick={() => setBenefitsOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-rose-100 flex items-center justify-center group-hover:bg-rose-200 transition-colors">
-                  <Star size={18} className="text-rose-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Beneficios</h3>
-                  <p className="text-xs text-gray-500">Sección ¿Por qué comprar en Mercaldas?</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Administra los beneficios (icono, título y descripción)</p>
-            </div>
-
-            {/* Footer card */}
-            <div
-              onClick={() => setFooterOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-violet-100 flex items-center justify-center group-hover:bg-violet-200 transition-colors">
-                  <LayoutTemplate size={18} className="text-violet-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Footer</h3>
-                  <p className="text-xs text-gray-500">Configuración del pie de página del sitio</p>
-                </div>
-              </div>
-              <p className="text-xs text-gray-400">Descripción, redes sociales, categorías, ayuda, contacto y horarios</p>
-            </div>
-
-            {/* Promo/Advertising card */}
-            <div
-              onClick={() => setPromoManagerOpen(true)}
-              className="bg-white rounded-2xl border border-gray-100 p-5 cursor-pointer hover:shadow-md hover:border-amber-200 transition-all group"
-            >
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-colors">
-                  <Megaphone size={18} className="text-blue-600" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900 text-sm">Banners Promocionales</h3>
-                  <p className="text-xs text-gray-500">Sección debajo de productos destacados</p>
-                </div>
-              </div>
-              <div className="flex gap-6 text-sm">
-                <div><span className="font-bold text-gray-900">{promos.length}</span> <span className="text-gray-400 text-xs">banners</span></div>
-                <div><span className="font-bold text-green-600">{promosActive}</span> <span className="text-gray-400 text-xs">activos</span></div>
-              </div>
-              {promos.length > 0 && (
-                <div className="flex gap-2 mt-3 overflow-hidden">
-                  {promos.slice(0, 5).map((p) => (
-                    <div key={p.id} className="w-20 h-12 rounded-lg overflow-hidden bg-gray-100 shrink-0">
-                      {p.image && <img src={p.image} alt="" className="w-full h-full object-cover" />}
-                    </div>
-                  ))}
-                  {promos.length > 5 && <div className="w-20 h-12 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-400 shrink-0">+{promos.length - 5}</div>}
-                </div>
-              )}
-            </div>
-
-          </>
-        )}
+        <div className={fill ? "flex-1 min-h-0 flex flex-col" : ""}>{children}</div>
       </div>
+    </div>
+  );
+}
 
-      {/* Hero carousel manager */}
-      {managerOpen && (
-        <CarouselManager
-          slides={slides}
-          filters={filters}
-          onClose={() => { setManagerOpen(false); fetchData(); }}
-          onSaved={fetchData}
-        />
-      )}
+export function HomeHeroSection() {
+  const { slides, filters, loading, fetchData } = useHomeData();
+  if (loading) return <HomeLoading />;
+  return (
+    <HomeSection icon={LayoutTemplate} iconClass="bg-amber-100 text-amber-600" title="Banners publicitarios" subtitle="Sección principal del sitio · 1920×600px"
+      stats={
+        <div className="flex gap-6 text-sm">
+          <div><span className="font-bold text-gray-900">{slides.length}</span> <span className="text-gray-400 text-xs">slides</span></div>
+          <div><span className="font-bold text-green-600">{slides.filter((s) => s.status === "activo").length}</span> <span className="text-gray-400 text-xs">activos</span></div>
+        </div>
+      }>
+      <CarouselManager slides={slides} filters={filters} onSaved={fetchData} />
+    </HomeSection>
+  );
+}
 
-      {/* Promo manager */}
-      {promoManagerOpen && (
-        <PromoManager
-          slides={promos}
-          filters={filters}
-          onClose={() => { setPromoManagerOpen(false); fetchData(); }}
-          onSaved={fetchData}
-        />
-      )}
+export function HomePromosSection() {
+  const { promos, filters, loading, fetchData } = useHomeData();
+  if (loading) return <HomeLoading />;
+  return (
+    <HomeSection icon={Megaphone} iconClass="bg-blue-100 text-blue-600" title="Banners Promocionales" subtitle="Sección debajo de productos destacados"
+      stats={
+        <div className="flex gap-6 text-sm">
+          <div><span className="font-bold text-gray-900">{promos.length}</span> <span className="text-gray-400 text-xs">banners</span></div>
+          <div><span className="font-bold text-green-600">{promos.filter((p) => p.status === "activo").length}</span> <span className="text-gray-400 text-xs">activos</span></div>
+        </div>
+      }>
+      <PromoManager slides={promos} filters={filters} onSaved={fetchData} />
+    </HomeSection>
+  );
+}
 
-      {/* Product types editor */}
-      {prodTypesOpen && (
-        <ProductTypeEditor
-          productTypes={landingTypes}
-          onClose={() => setProdTypesOpen(false)}
-          onSaved={() => { setProdTypesOpen(false); fetchData(); }}
-        />
-      )}
+export function HomeProductTypesSection() {
+  const { landingTypes, loading, fetchData } = useHomeData();
+  if (loading) return <HomeLoading />;
+  return (
+    <HomeSection icon={Layers} iconClass="bg-purple-100 text-purple-600" title="Tipos de Producto" subtitle="Selecciona cuáles mostrar en la landing"
+      stats={
+        <div className="flex gap-6 text-sm">
+          <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos</span></div>
+          <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.isActive).length}</span> <span className="text-gray-400 text-xs">activos</span></div>
+          <div><span className="font-bold text-red-500">{landingTypes.filter((t) => !t.isActive).length}</span> <span className="text-gray-400 text-xs">inactivos</span></div>
+        </div>
+      }>
+      <ProductTypeEditor productTypes={landingTypes} onSaved={fetchData} />
+    </HomeSection>
+  );
+}
 
-      {/* Featured products manager */}
-      {featuredOpen && (
-        <FeaturedProductsManager
-          onClose={() => setFeaturedOpen(false)}
-          onSaved={() => { setFeaturedOpen(false); }}
-        />
-      )}
+export function HomeBenefitsBarSection() {
+  const { benefits, loading, fetchData } = useHomeData();
+  if (loading) return <HomeLoading />;
+  return (
+    <HomeSection icon={Zap} iconClass="bg-green-100 text-green-600" title="Barra de Beneficios" subtitle="Textos promocionales debajo del carousel de tipos">
+      <BenefitsInlineEditor benefits={benefits} onSaved={fetchData} />
+    </HomeSection>
+  );
+}
 
-      {/* Daily deals manager */}
-      {dealsOpen && <DailyDealsManager onClose={() => setDealsOpen(false)} />}
+export function HomeFeaturedSection() {
+  return (
+    <HomeSection icon={Package} iconClass="bg-indigo-100 text-indigo-600" title="Productos Destacados" subtitle="Pestañas (Más vendidos, Promociones...) y productos asignados" fill>
+      <FeaturedProductsManager />
+    </HomeSection>
+  );
+}
 
-      {/* Landing brands manager */}
-      {brandsOpen && (
-        <BrandsLandingManager
-          brands={landingBrands}
-          onClose={() => setBrandsOpen(false)}
-          onSaved={() => { setBrandsOpen(false); fetchData(); }}
-        />
-      )}
+export function HomeDealsSection() {
+  return (
+    <HomeSection icon={Clock} iconClass="bg-orange-100 text-orange-600" title="Ofertas del Día" subtitle="Display rotativo y carousel de ofertas" fill>
+      <DailyDealsManager />
+    </HomeSection>
+  );
+}
 
-      {/* Landing branches manager */}
-      {branchesOpen && (
-        <BranchesLandingManager onClose={() => { setBranchesOpen(false); fetchData(); }} />
-      )}
+export function HomeBrandsSection() {
+  const { landingBrands, loading, fetchData } = useHomeData();
+  if (loading) return <HomeLoading />;
+  return (
+    <HomeSection icon={Tag} iconClass="bg-teal-100 text-teal-600" title="Marcas" subtitle="Selecciona las marcas visibles en la landing" fill
+      stats={
+        <div className="flex gap-6 text-sm">
+          <div><span className="font-bold text-gray-900">{landingBrands.length}</span> <span className="text-gray-400 text-xs">marcas</span></div>
+          <div><span className="font-bold text-green-600">{landingBrands.filter((b) => b.isActive).length}</span> <span className="text-gray-400 text-xs">activas</span></div>
+          <div><span className="font-bold text-red-500">{landingBrands.filter((b) => !b.isActive).length}</span> <span className="text-gray-400 text-xs">inactivas</span></div>
+        </div>
+      }>
+      <BrandsLandingManager brands={landingBrands} onSaved={fetchData} />
+    </HomeSection>
+  );
+}
 
-      {/* Landing benefits manager */}
-      {benefitsOpen && <BenefitsLandingManager onClose={() => setBenefitsOpen(false)} />}
+export function HomeBranchesSection() {
+  return (
+    <HomeSection icon={Store} iconClass="bg-sky-100 text-sky-600" title="Sucursales" subtitle="Visibilidad y datos de las sucursales" fill>
+      <BranchesLandingManager />
+    </HomeSection>
+  );
+}
 
-      {/* Footer manager */}
-      {footerOpen && <FooterLandingManager onClose={() => setFooterOpen(false)} />}
-    </>
+export function HomeBenefitsSection() {
+  return (
+    <HomeSection icon={Star} iconClass="bg-rose-100 text-rose-600" title="Beneficios" subtitle="Sección ¿Por qué comprar en Mercaldas?">
+      <BenefitsLandingManager />
+    </HomeSection>
+  );
+}
+
+export function HomeFooterSection() {
+  return (
+    <HomeSection icon={LayoutTemplate} iconClass="bg-violet-100 text-violet-600" title="Footer" subtitle="Configuración del pie de página del sitio">
+      <FooterLandingManager />
+    </HomeSection>
   );
 }
