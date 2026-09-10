@@ -223,6 +223,18 @@
   }
 }
 
+/* Parpadeo del marcador del repartidor en el mapa de rastreo. */
+@keyframes deliveryBlink {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.35;
+    transform: scale(1.12);
+  }
+}
+
 @theme {
   --animate-popup-in-left: popupInLeft 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-popup-in-right: popupInRight 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;

@@ -508,7 +508,7 @@ function Sidebar({
 }) {
   return (
     <aside
-      className="flex flex-col h-full border-r border-white/[0.06] transition-all duration-300"
+      className="flex flex-col h-full border-r border-white/[0.06] transition-all duration-300 [&_button:not(:disabled)]:cursor-pointer"
       style={{ background: "#0C0C0D", width: collapsed ? 56 : 240 }}
     >
       {/* Logo */}

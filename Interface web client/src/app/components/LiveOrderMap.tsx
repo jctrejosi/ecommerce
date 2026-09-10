@@ -108,6 +108,7 @@ export function LiveOrderMap({
       el.style.height = "38px";
       el.style.fontSize = "20px";
       el.style.border = "3px solid #FFF200";
+      el.style.animation = "deliveryBlink 1.4s ease-in-out infinite";
       el.textContent = "🛵";
       markersRef.current.push(
         new maplibregl.Marker({ element: el, anchor: "center" })

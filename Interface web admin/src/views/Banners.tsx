@@ -25,6 +25,7 @@ import {
   type ProductOption,
   type AdminCategory,
 } from "../components/TargetingPickers";
+import { BrandEditorPanel, type AdminBrand } from "../components/BrandEditorPanel";
 
 const STATUS_BADGE: Record<string, string> = {
   activo: "bg-green-50 text-green-700 border-green-200",
@@ -1979,6 +1980,18 @@ function BrandsLandingManager({
     setItems((prev) => prev.map((b) => (b.id === id ? { ...b, selected: !b.selected } : b)));
   };
 
+  // Abre el mismo drawer de edición que la vista de Marcas del catálogo.
+  const [editingBrand, setEditingBrand] = useState<AdminBrand | null>(null);
+  const openBrandEditor = async (id: number) => {
+    try {
+      const list = await catalogService.getBrandsAdmin();
+      const found = list.find((b) => b.id === id);
+      if (found) setEditingBrand(found);
+    } catch {
+      /* noop */
+    }
+  };
+
   const toggleActive = async (b: LandingBrand) => {
     const newActive = !b.isActive;
     try {
@@ -2110,8 +2123,8 @@ function BrandsLandingManager({
         </div>
         <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-1">
           {filtered.map((b) => (
-            <div key={b.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
-              <label className="flex items-center gap-3 flex-1 cursor-pointer">
+            <div key={b.id} onClick={() => void openBrandEditor(b.id)} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer">
+              <label onClick={(e) => e.stopPropagation()} className="flex items-center gap-3 flex-1 cursor-pointer">
                 <input type="checkbox" checked={b.selected} onChange={() => toggleSelected(b.id)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
                 <div className="w-7 h-7 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
                   {b.imagePath ? (
@@ -2130,6 +2143,13 @@ function BrandsLandingManager({
               >
                 <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${b.isActive ? "left-4" : "left-0.5"}`} />
               </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); void openBrandEditor(b.id); }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold rounded-lg text-gray-600 border border-gray-200 hover:border-amber-300 hover:text-amber-600 transition-colors shrink-0"
+                title="Editar marca"
+              >
+                <Edit size={13} /> Editar
+              </button>
             </div>
           ))}
           {filtered.length === 0 && (
@@ -2141,6 +2161,16 @@ function BrandsLandingManager({
             {saving && <Loader2 size={14} className="animate-spin" />}Guardar selección
           </button>
         </div>
+
+      {/* Editor de marca (drawer compartido con la vista de Marcas) */}
+      {editingBrand && (
+        <BrandEditorPanel
+          creating={false}
+          brand={editingBrand}
+          onClose={() => setEditingBrand(null)}
+          onSaved={() => { setEditingBrand(null); onSaved(); }}
+        />
+      )}
     </div>
   );
 }
