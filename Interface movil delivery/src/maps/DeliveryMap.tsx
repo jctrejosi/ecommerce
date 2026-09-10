@@ -56,6 +56,8 @@ export function DeliveryMap({
 }: DeliveryMapProps) {
   const [ml, setMl] = useState<MapLibreModule | null>(null);
   const [failed, setFailed] = useState(false);
+  /** El mapa nativo ya terminó de cargar el estilo y los tiles. */
+  const [mapLoaded, setMapLoaded] = useState(false);
 
   useEffect(() => {
     if (MAP_UNAVAILABLE) {
@@ -82,6 +84,7 @@ export function DeliveryMap({
     return (
       <View style={styles.center}>
         <ActivityIndicator size="large" color={colors.primary} />
+        <Text style={styles.loadingText}>Cargando mapa…</Text>
       </View>
     );
   }
@@ -100,7 +103,11 @@ export function DeliveryMap({
 
   return (
     <View style={styles.container}>
-      <Map style={styles.map} mapStyle={BASEMAP_STYLE_URL}>
+      <Map
+        style={styles.map}
+        mapStyle={BASEMAP_STYLE_URL}
+        onDidFinishLoadingMap={() => setMapLoaded(true)}
+      >
         <Camera initialViewState={{ center, zoom: 13 }} />
 
         {route && (
@@ -141,6 +148,14 @@ export function DeliveryMap({
           </Marker>
         )}
       </Map>
+
+      {/* Pantalla de carga mientras el mapa termina de inicializar */}
+      {!mapLoaded && (
+        <View style={styles.loadingOverlay} pointerEvents="none">
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingText}>Cargando mapa…</Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -188,7 +203,25 @@ function MapFallback() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   map: { flex: 1 },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing(1.5),
+    backgroundColor: colors.background,
+  },
+  loadingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing(1.5),
+    backgroundColor: colors.background,
+  },
+  loadingText: { fontSize: 13, fontWeight: "700", color: colors.textMuted },
   fallback: {
     flex: 1,
     alignItems: "center",

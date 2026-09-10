@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
+import { Loader2 } from "lucide-react";
 import { resolveMapStyle } from "../lib/trackingMapStyle";
 import { decodePolyline } from "../lib/polyline";
 
@@ -38,6 +39,9 @@ export function LiveOrderMap({
   const lineSourceId = "track-line";
   // Fuerza repintar los marcadores cuando el estilo base termina de cargar.
   const [styleTick, setStyleTick] = useState(0);
+  // Pantalla de carga mientras el mapa (estilo + tiles) inicializa.
+  const [mapReady, setMapReady] = useState(false);
+  const [mapFailed, setMapFailed] = useState(false);
 
   // Crear el mapa una sola vez.
   useEffect(() => {
@@ -57,7 +61,10 @@ export function LiveOrderMap({
         });
         mapRef.current = map;
 
-        map.on("load", () => setStyleTick((t) => t + 1));
+        map.on("load", () => {
+          setMapReady(true);
+          setStyleTick((t) => t + 1);
+        });
         map.on("style.load", () => setStyleTick((t) => t + 1));
 
         map.on("style.load", () => {
@@ -81,6 +88,7 @@ export function LiveOrderMap({
       })
       .catch((err) => {
         console.error("[tracking-map] no se pudo resolver el estilo:", err);
+        setMapFailed(true);
       });
 
     return () => {
@@ -236,6 +244,22 @@ export function LiveOrderMap({
   return (
     <div className="relative h-full w-full overflow-hidden rounded-2xl">
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Pantalla de carga mientras el mapa inicializa */}
+      {!mapReady && (
+        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 bg-slate-100">
+          {mapFailed ? (
+            <p className="text-xs font-semibold text-slate-500">
+              No se pudo cargar el mapa
+            </p>
+          ) : (
+            <>
+              <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+              <p className="text-xs font-semibold text-slate-500">Cargando mapa…</p>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
