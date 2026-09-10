@@ -167,13 +167,18 @@ export function LiveOrderMap({
       add(destination);
     }
     if (branch) {
+      // Mismo marcador de tienda que la app móvil (círculo blanco + 🏪).
       const el = document.createElement("div");
-      el.style.width = "16px";
-      el.style.height = "16px";
-      el.style.borderRadius = "4px";
-      el.style.background = "#d97706";
-      el.style.border = "2px solid white";
-      el.style.boxShadow = "0 1px 6px rgba(0,0,0,.35)";
+      el.className = "flex items-center justify-center";
+      el.style.width = "34px";
+      el.style.height = "34px";
+      el.style.borderRadius = "17px";
+      el.style.background = "rgba(255,255,255,0.9)";
+      el.style.border = "1px solid #E2E8F0";
+      el.style.fontSize = "18px";
+      el.style.lineHeight = "1";
+      el.style.boxSizing = "border-box";
+      el.textContent = "🏪";
       el.title = "Sucursal de origen";
       markersRef.current.push(
         new maplibregl.Marker({ element: el, anchor: "center" })

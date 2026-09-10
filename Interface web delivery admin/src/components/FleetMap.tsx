@@ -7,7 +7,7 @@ import {
 } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { Map as MlMap, Marker, StyleSpecification } from 'maplibre-gl';
-import { Check, Layers } from 'lucide-react';
+import { Check, Layers, Loader2 } from 'lucide-react';
 import type { Feature } from 'geojson';
 import type { FleetDriver } from '../types';
 import { api } from '../services/api';
@@ -809,6 +809,14 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   return (
     <div className="relative h-full w-full">
       <div ref={containerRef} className="h-full w-full" />
+
+      {/* Pantalla de carga: solo cubre la sección del mapa mientras inicializa */}
+      {!styleReady && !mapError && (
+        <div className="absolute inset-0 z-600 flex flex-col items-center justify-center gap-3 bg-slate-100">
+          <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
+          <p className="text-xs font-semibold text-slate-500">Cargando mapa…</p>
+        </div>
+      )}
 
       {/* Selector de capas (esquina inferior izquierda) */}
       <button

@@ -30,6 +30,25 @@ import type { AppNotification } from "../../hooks/useNotifications";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
+// Prefijos telefónicos conocidos (los más largos primero).
+const WHATSAPP_PREFIXES = [
+  "+591", "+593", "+595", "+598", "+351",
+  "+57", "+52", "+51", "+54", "+56", "+58", "+55", "+34", "+44", "+49", "+33", "+39", "+1",
+];
+
+// Muestra el WhatsApp con el prefijo separado del número.
+function formatWhatsapp(raw: string): string {
+  const value = String(raw || "").trim();
+  if (!value) return "";
+  const spaced = value.match(/^(\+\d{1,4})\s+(.+)$/);
+  if (spaced) return `${spaced[1]} ${spaced[2].trim()}`;
+  const prefix = WHATSAPP_PREFIXES.find((p) => value.startsWith(p));
+  if (prefix && value.length > prefix.length) {
+    return `${prefix} ${value.slice(prefix.length)}`;
+  }
+  return value;
+}
+
 interface HeaderProps {
   cartCount: number;
   categories: CatalogCategory[];
@@ -741,7 +760,7 @@ export function Header({
               className="flex items-center gap-1.5 text-xs text-green-600 hover:text-green-700 transition-colors"
             >
               <MessageCircle className="w-3 h-3" />
-              <span>{storeWhatsapp}</span>
+              <span>{formatWhatsapp(storeWhatsapp)}</span>
             </a>
           )}
         </div>

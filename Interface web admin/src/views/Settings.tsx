@@ -8,6 +8,31 @@ const TABS = [
   { id: "payments", label: "Medios de pago", icon: CreditCard },
 ];
 
+// Prefijos telefónicos conocidos (los más largos primero para no cortar de más).
+const KNOWN_PHONE_PREFIXES = [
+  "+591", "+593", "+595", "+598", "+351",
+  "+57", "+52", "+51", "+54", "+56", "+58", "+55", "+34", "+44", "+49", "+33", "+39", "+1",
+];
+
+// Separa el WhatsApp guardado ("+57 3001234567" o "+573001234567") en prefijo y número.
+function splitWhatsapp(raw: string): { prefix: string; number: string } {
+  const value = String(raw || "").trim();
+  if (!value) return { prefix: "+57", number: "" };
+
+  const spaced = value.match(/^(\+\d{1,4})\s+(.+)$/);
+  if (spaced) return { prefix: spaced[1], number: spaced[2].trim() };
+
+  const prefix = KNOWN_PHONE_PREFIXES.find((p) => value.startsWith(p));
+  if (prefix) return { prefix, number: value.slice(prefix.length).trim() };
+
+  if (value.startsWith("+")) {
+    const m = value.match(/^(\+\d{1,3})(\d{6,})$/);
+    if (m) return { prefix: m[1], number: m[2] };
+  }
+
+  return { prefix: "+57", number: value };
+}
+
 function SettingRow({ label, sub, children }: { label: string; sub?: string; children: React.ReactNode }) {
   return (
     <div className="flex items-center justify-between py-4 border-b border-gray-100 last:border-0">
@@ -39,7 +64,8 @@ export default function SettingsView() {
   const [currency, setCurrency] = useState("COP");
   const [timezone, setTimezone] = useState("America/Bogota");
   const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
+  const [whatsappPrefix, setWhatsappPrefix] = useState("+57");
+  const [whatsappNumber, setWhatsappNumber] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -63,7 +89,11 @@ export default function SettingsView() {
         setCurrency(d.currencyCode || "COP");
         setTimezone(d.timezone || "America/Bogota");
         setPhone(d.phone || "");
-        setWhatsapp(d.whatsapp || "");
+        {
+          const { prefix, number } = splitWhatsapp(d.whatsapp || "");
+          setWhatsappPrefix(prefix);
+          setWhatsappNumber(number);
+        }
         setAddress(d.address || "");
       })
       .catch(() => {})
@@ -83,7 +113,9 @@ export default function SettingsView() {
           currencyCode: currency,
           timezone,
           phone,
-          whatsapp,
+          whatsapp: [whatsappPrefix.trim(), whatsappNumber.trim()]
+            .filter(Boolean)
+            .join(" "),
           address,
         }),
       });
@@ -301,7 +333,20 @@ export default function SettingsView() {
                   <input value={phone} onChange={(e) => setPhone(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" />
                 </SettingRow>
                 <SettingRow label="WhatsApp">
-                  <input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" placeholder="+57 3001234567" />
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={whatsappPrefix}
+                      onChange={(e) => setWhatsappPrefix(e.target.value)}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-20 text-center"
+                      placeholder="+57"
+                    />
+                    <input
+                      value={whatsappNumber}
+                      onChange={(e) => setWhatsappNumber(e.target.value)}
+                      className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-52"
+                      placeholder="3001234567"
+                    />
+                  </div>
                 </SettingRow>
                 <SettingRow label="Dirección">
                   <input value={address} onChange={(e) => setAddress(e.target.value)} className="px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 w-72" />
