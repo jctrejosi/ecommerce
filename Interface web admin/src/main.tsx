@@ -6,6 +6,20 @@ import './index.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
 
+// Título de la pestaña: "<nombre de tienda> admin | DSI".
+function setAppTitle(appLabel: string) {
+  fetch(`${API_URL}/admin/settings/public-info`)
+    .then((r) => (r.ok ? r.json() : {}))
+    .then((d: { tradeName?: string }) => {
+      const storeName = (d?.tradeName || 'Mercaldas').trim()
+      document.title = `${storeName} ${appLabel} | DSI`
+    })
+    .catch(() => {
+      document.title = `Mercaldas ${appLabel} | DSI`
+    })
+}
+setAppTitle('admin')
+
 // Interceptor global: si una petición al API responde 401 (token ausente o
 // expirado), se avisa a la app para que vuelva siempre al login.
 const originalFetch = window.fetch.bind(window)

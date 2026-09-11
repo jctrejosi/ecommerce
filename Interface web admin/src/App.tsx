@@ -21,7 +21,6 @@ import {
   LogOut,
   User,
   HelpCircle,
-  Command,
   Zap,
   Hash,
   FileText,
@@ -40,7 +39,7 @@ import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
 import Orders from "./views/Orders";
 import { ordersService } from "./services/orders.service";
-import { authService, type UserProfile } from "./services/auth.service";
+import { authService, AuthApiError, type UserProfile } from "./services/auth.service";
 import HomepageEditor from "./views/HomepageEditor";
 import {
   HomeHeroSection,
@@ -568,27 +567,6 @@ function Sidebar({
           </div>
         ))}
       </nav>
-
-      {/* User */}
-      <div className="shrink-0 border-t border-white/[0.06] p-3">
-        <div
-          className={`flex items-center gap-2.5 rounded-lg p-2 hover:bg-white/[0.06] cursor-pointer transition-colors ${collapsed ? "justify-center" : ""}`}
-        >
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold text-white">JR</span>
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-white/80 text-xs font-semibold truncate">
-                Jorge Ramírez
-              </p>
-              <p className="text-white/50 text-[10px] truncate">
-                Administrador
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
     </aside>
   );
 }
@@ -689,30 +667,39 @@ function TopBar({
             <ChevronDown size={13} className="text-gray-400" />
           </button>
           {userOpen && (
-            <div className="absolute right-0 top-full mt-2 w-52 bg-white rounded-xl shadow-xl border border-gray-200 py-1.5 z-40">
-              <div className="px-4 py-2 border-b border-gray-100 mb-1">
-                <p className="text-sm font-semibold text-gray-800">
-                  {displayName}
-                </p>
-                <p className="text-xs text-gray-500">{displayEmail}</p>
+            <div
+              className="absolute right-0 top-full mt-2 w-60 rounded-xl shadow-xl border border-white/[0.08] py-1.5 z-40 overflow-hidden"
+              style={{ background: "#0C0C0D" }}
+            >
+              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06]">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
+                  <span className="text-xs font-bold text-white">{initials}</span>
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white/90 truncate">
+                    {displayName}
+                  </p>
+                  <p className="text-xs text-white/50 truncate">{displayEmail}</p>
+                </div>
               </div>
-              {[
-                { icon: User, label: "Mi perfil" },
-                { icon: HelpCircle, label: "Ayuda y soporte" },
-                { icon: Command, label: "Atajos de teclado" },
-              ].map((item) => (
-                <button
-                  key={item.label}
-                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  <item.icon size={14} className="text-gray-400" />
-                  {item.label}
-                </button>
-              ))}
-              <div className="border-t border-gray-100 mt-1 pt-1">
+              <div className="pt-1">
+                {[
+                  { icon: User, label: "Mi perfil" },
+                  { icon: HelpCircle, label: "Ayuda y soporte" },
+                ].map((item) => (
+                  <button
+                    key={item.label}
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors"
+                  >
+                    <item.icon size={14} className="text-white/40" />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+              <div className="border-t border-white/[0.06] mt-1 pt-1">
                 <button
                   onClick={onLogout}
-                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
                 >
                   <LogOut size={14} />
                   Cerrar sesión
@@ -809,29 +796,65 @@ export default function App() {
     return () => window.removeEventListener("keydown", handler);
   }, []);
 
-  // Fetch unreviewed orders count
+  // Fetch unreviewed orders count (solo cuando hay sesión válida)
   useEffect(() => {
+    if (authState !== "in") return;
     const fetchCount = () => {
       ordersService.getUnreviewedCount().then((r) => setUnreviewedCount(r.count)).catch(() => {});
     };
     fetchCount();
     const interval = setInterval(fetchCount, 30000); // refresh every 30s
     return () => clearInterval(interval);
-  }, []);
+  }, [authState]);
 
-  // Fetch authenticated user profile. Sin token válido, siempre al login.
-  useEffect(() => {
-    authService
-      .getProfile()
-      .then((profile) => {
-        setUser(profile);
-        setAuthState("in");
-      })
-      .catch(() => {
+  // Valida la sesión contra el backend. `initial` distingue la carga inicial
+  // (cualquier fallo manda al login) de una revalidación (solo un 401/403
+  // cierra la sesión; un fallo de red transitorio no debe sacar al usuario).
+  const checkSession = useCallback(async (initial = false) => {
+    try {
+      const profile = await authService.getProfile();
+      setUser(profile);
+      setAuthState("in");
+    } catch (err) {
+      const unauthorized =
+        err instanceof AuthApiError && (err.status === 401 || err.status === 403);
+      if (initial || unauthorized) {
         setUser(null);
         setAuthState("out");
-      });
+      }
+    }
   }, []);
+
+  // Al montar: si no hay token vigente, siempre al login.
+  useEffect(() => {
+    void checkSession(true);
+  }, [checkSession]);
+
+  // Revalidar al volver a la pestaña o cambiar de ruta, para expulsar al login
+  // apenas el token deje de ser válido aunque no se haya hecho ninguna petición.
+  const authStateRef = useRef(authState);
+  useEffect(() => {
+    authStateRef.current = authState;
+  }, [authState]);
+
+  useEffect(() => {
+    if (authState !== "in") return;
+    const revalidate = () => void checkSession();
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") revalidate();
+    };
+    window.addEventListener("focus", revalidate);
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      window.removeEventListener("focus", revalidate);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [authState, checkSession]);
+
+  useEffect(() => {
+    if (authStateRef.current !== "in") return;
+    void checkSession();
+  }, [view, checkSession]);
 
   // Si cualquier petición al API responde 401, volver al login.
   useEffect(() => {

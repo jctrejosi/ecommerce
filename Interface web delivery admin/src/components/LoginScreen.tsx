@@ -1,6 +1,6 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
-import { api, ApiError } from '../services/api';
+import { api, ApiError, API_BASE_URL } from '../services/api';
 import type { AuthUser } from '../types';
 import logo from '../assets/logo.png';
 
@@ -14,6 +14,19 @@ export default function LoginScreen({ onLogin }: Props) {
   const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Logo de la tienda configurado en el panel (endpoint público).
+  const [storeLogo, setStoreLogo] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE_URL}/admin/landing/general-logo`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { url?: string } | null) => {
+        if (d?.url) setStoreLogo(d.url);
+      })
+      .catch(() => {
+        /* sin logo de tienda: se muestra solo el título */
+      });
+  }, []);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -35,22 +48,27 @@ export default function LoginScreen({ onLogin }: Props) {
   }
 
   return (
-    <div className="min-h-full flex items-center justify-center bg-slate-950 px-4">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex items-center justify-center rounded-2xl bg-white px-5 py-3 shadow-lg">
-            <img src={logo} alt="MercAldas" className="h-8 w-auto object-contain" />
+    <div className="flex min-h-full flex-col bg-slate-950 px-4 py-8">
+      <div className="flex flex-1 items-center justify-center">
+        <div className="w-full max-w-sm">
+          <div className="mb-8 text-center">
+            {storeLogo && (
+              <img
+                src={storeLogo}
+                alt="Tienda"
+                className="mx-auto mb-5 h-16 w-auto object-contain"
+              />
+            )}
+            <h1 className="text-2xl font-bold text-white">MercAldas Delivery</h1>
+            <p className="mt-1 text-sm text-slate-400">
+              Panel administrativo de repartidores
+            </p>
           </div>
-          <h1 className="text-2xl font-bold text-white">MercAldas Delivery</h1>
-          <p className="mt-1 text-sm text-slate-400">
-            Panel administrativo de repartidores
-          </p>
-        </div>
 
-        <form
-          onSubmit={handleSubmit}
-          className="rounded-2xl bg-white p-6 shadow-2xl"
-        >
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-2xl bg-white p-6 shadow-2xl"
+          >
           <label className="block text-sm font-semibold text-slate-700">
             Usuario o email
             <div className="relative mt-1.5">
@@ -108,6 +126,16 @@ export default function LoginScreen({ onLogin }: Props) {
         <p className="mt-6 text-center text-xs text-slate-500">
           Acceso restringido a administradores · MercAldas
         </p>
+        </div>
+      </div>
+
+      {/* Logo compartido (logo.png), sin fondo, al pie */}
+      <div className="flex shrink-0 justify-center pt-6">
+        <img
+          src={logo}
+          alt="MercAldas"
+          className="h-9 w-auto object-contain opacity-90"
+        />
       </div>
     </div>
   );

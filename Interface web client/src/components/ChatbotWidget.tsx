@@ -343,7 +343,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
       {/* Burbuja de atención sobre el botón (se oculta sola a los 9s) */}
       {showHint && !open && (
         <div
-          className="fixed bottom-20 sm:bottom-24 right-4 sm:right-5 z-[91] w-[280px] bg-white border-2 border-[#FFF200] rounded-2xl shadow-xl p-4"
+          className="fixed bottom-20 sm:bottom-24 right-3 sm:right-5 z-[91] w-[280px] max-w-[calc(100vw-1.5rem)] bg-white border-2 border-[#FFF200] rounded-2xl shadow-xl p-4"
           style={{ animation: "hintIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
         >
           <button
@@ -371,7 +371,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Daisy"
         style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
-        className="fixed bottom-4 right-4 sm:bottom-5 sm:right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
+        className="fixed bottom-4 right-3 sm:bottom-5 sm:right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
       >
         {showHint && !open && (
           <span className="absolute inset-0 rounded-full bg-[#FFF200]/40 animate-ping pointer-events-none" />
@@ -396,7 +396,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
       {/* Panel — en móvil ocupa la pantalla entera; en escritorio tarjeta flotante */}
       {open && (
         <div
-          className="fixed inset-0 z-[95] h-[100dvh] rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl"
+          className="fixed inset-0 z-[95] h-[100dvh] w-full max-w-full overflow-x-hidden rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl"
           style={{ animation: "panelIn 0.25s ease-out both" }}
         >
           {/* Header */}

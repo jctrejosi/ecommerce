@@ -1,5 +1,14 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
+export class AuthApiError extends Error {
+  status: number;
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AuthApiError";
+    this.status = status;
+  }
+}
+
 export type UserProfile = {
   id: number;
   email: string;
@@ -25,7 +34,14 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
     },
   });
   if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
+    const data = await response.json().catch(() => ({}));
+    const message = Array.isArray(data?.message)
+      ? data.message.join(", ")
+      : data?.message;
+    throw new AuthApiError(
+      message || `API error: ${response.status}`,
+      response.status,
+    );
   }
   return response.json();
 }
@@ -50,7 +66,7 @@ export const authService = {
       const message = Array.isArray(data?.message)
         ? data.message.join(", ")
         : data?.message;
-      throw new Error(message || "Credenciales inválidas");
+      throw new AuthApiError(message || "Credenciales inválidas", res.status);
     }
     return data.user as UserProfile;
   },

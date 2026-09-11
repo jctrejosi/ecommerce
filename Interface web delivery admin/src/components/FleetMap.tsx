@@ -268,8 +268,22 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     .sort()
     .join('|');
   const [routeTick, setRouteTick] = useState(0);
-  /** Evita reencuadrar el mapa más de una vez. */
-  const fittedRef = useRef(false);
+  /**
+   * Clave de los marcadores visibles (repartidores + destinos con entrega
+   * activa). Se usa para reencuadrar el mapa cuando cambia el conjunto de
+   * marcadores, sin reajustar en cada movimiento (los ids no cambian).
+   */
+  const markersKey = drivers
+    .filter((d) => d.location)
+    .map((d) =>
+      d.activeAssignment?.destination
+        ? `${d.id}:${d.activeAssignment.destination.lat.toFixed(5)},${d.activeAssignment.destination.lng.toFixed(5)}`
+        : String(d.id),
+    )
+    .sort()
+    .join('|');
+  /** Última clave de marcadores ya encuadrada (evita repetir el ajuste). */
+  const fittedMarkersRef = useRef<string | null>(null);
   /** Repartidor seleccionado (para resaltar su ruta y mostrar su ruta completa). */
   const selectedDriver = drivers.find((d) => d.id === selectedId) ?? null;
   const selFullFrom =
@@ -677,22 +691,6 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       }
       setRoutes(nextRoutes);
       setRouteState(nextState);
-
-      // Encuadra una sola vez al entrar, para que se vean todas las rutas.
-      const map = mapRef.current;
-      const pts = Object.values(nextRoutes).flatMap((r) => r.coords);
-      if (map && pts.length >= 2 && !fittedRef.current) {
-        fittedRef.current = true;
-        const lngs = pts.map((p) => p[0]);
-        const lats = pts.map((p) => p[1]);
-        map.fitBounds(
-          [
-            [Math.min(...lngs), Math.min(...lats)],
-            [Math.max(...lngs), Math.max(...lats)],
-          ],
-          { padding: 70, maxZoom: 15.5, duration: 600 },
-        );
-      }
     });
 
     return () => {
@@ -739,6 +737,44 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selOrderIdForFull, selFullFrom, routeTick]);
+
+  // ── Enfoque: abarcar los marcadores activos (repartidores + destinos) ──
+  // Se ajusta cuando cambia el conjunto de marcadores (no en cada movimiento,
+  // porque la clave usa los ids y las coordenadas del destino, que son fijas).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+    if (fittedMarkersRef.current === markersKey) return;
+
+    const pts: [number, number][] = [];
+    for (const d of driversRef.current) {
+      if (!d.location || hiddenIdsRef.current.has(d.id)) continue;
+      pts.push([d.location.lng, d.location.lat]);
+      const dest = d.activeAssignment?.destination;
+      if (dest) pts.push([dest.lng, dest.lat]);
+    }
+    if (!pts.length) return;
+    fittedMarkersRef.current = markersKey;
+
+    if (pts.length === 1) {
+      map.easeTo({
+        center: pts[0],
+        zoom: Math.max(map.getZoom(), 13.5),
+        duration: 600,
+      });
+      return;
+    }
+    const lngs = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      { padding: 80, maxZoom: 14.5, duration: 600 },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [styleReady, markersKey]);
 
   // ── Overlays: rutas y paradas ──
   useEffect(() => {

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import {
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -53,10 +54,11 @@ export default function LoginScreen() {
       >
         <View style={styles.wrap}>
           <View style={styles.header}>
-            <View style={styles.logoBox}>
-              <Text style={styles.logoText}>D</Text>
-            </View>
-            <Text style={styles.title}>Delivery</Text>
+            <Image
+              source={require("../assets/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
             <Text style={styles.subtitle}>
               Repartidores · Inicia sesión con tu usuario
             </Text>
@@ -117,17 +119,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   wrap: { flex: 1, justifyContent: "center", padding: spacing(5) },
   header: { alignItems: "center", marginBottom: spacing(6) },
-  logoBox: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: colors.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: spacing(3),
-  },
-  logoText: { color: "#fff", fontSize: 30, fontWeight: "800" },
-  title: { fontSize: 28, fontWeight: "800", color: colors.text },
+  logo: { width: 180, height: 58, marginBottom: spacing(3) },
   subtitle: { fontSize: 14, color: colors.textMuted, marginTop: spacing(1) },
   card: {
     backgroundColor: colors.card,

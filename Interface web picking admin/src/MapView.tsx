@@ -341,7 +341,7 @@ export default function MapView({
   return (
     <div>
       <div className="flex flex-wrap items-center gap-3 mb-4">
-        <p className="text-white/40 text-sm font-500">
+        <p className="text-white/40 text-sm font-medium">
           Arrastra cada estantería para ubicarla dentro de la bodega ·{' '}
           {items.length} estantería(s)
           {unplacedCount > 0 && <span className="text-amber-400"> · {unplacedCount} sin ubicar</span>}
@@ -350,7 +350,7 @@ export default function MapView({
           <button
             onClick={saveAll}
             disabled={saving}
-            className="px-4 py-2 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 disabled:opacity-40"
+            className="px-4 py-2 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40"
           >
             {saving ? 'Guardando…' : 'Guardar mapa'}
           </button>
@@ -358,7 +358,7 @@ export default function MapView({
       </div>
 
       {autoSeeded && (
-        <p className="text-white/30 text-xs font-500 mb-3">
+        <p className="text-white/30 text-xs font-medium mb-3">
           Las estanterías sin posición se colocaron automáticamente. Muévelas y guarda.
         </p>
       )}
@@ -393,7 +393,7 @@ export default function MapView({
 
           {/* Etiqueta de la bodega */}
           <span
-            className="absolute top-3 left-1/2 -translate-x-1/2 text-white/20 font-800 tracking-[0.3em] uppercase pointer-events-none select-none"
+            className="absolute top-3 left-1/2 -translate-x-1/2 text-white/20 font-extrabold tracking-[0.3em] uppercase pointer-events-none select-none"
             style={{ fontSize: Math.max(8, 10 * scale) }}
           >
             Bodega
@@ -420,7 +420,7 @@ export default function MapView({
                 }}
               >
                 <span
-                  className="text-white font-800 truncate px-1 pointer-events-none"
+                  className="text-white font-extrabold truncate px-1 pointer-events-none"
                   style={{
                     fontSize: Math.min(13, Math.max(9, w * 3 * Math.max(0.8, scale))),
                     textShadow: '0 1px 2px rgba(0,0,0,0.8)',
@@ -429,7 +429,7 @@ export default function MapView({
                   {s.code}
                 </span>
                 {s.rotation === 90 && (
-                  <span className="absolute top-0.5 right-1 text-white/40 text-[8px] font-700 pointer-events-none">90°</span>
+                  <span className="absolute top-0.5 right-1 text-white/40 text-[8px] font-bold pointer-events-none">90°</span>
                 )}
                 {/* Manijas de redimensionado (ancho/alto) — solo en la seleccionada */}
                 {isSelected && (
@@ -462,23 +462,23 @@ export default function MapView({
         <div className="mt-4 bg-[#161618] border border-white/10 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selected.color }} />
-            <span className="font-800">{selected.code} · {selected.name}</span>
-            <span className="text-white/40 text-xs font-500 ml-auto">
+            <span className="font-extrabold">{selected.code} · {selected.name}</span>
+            <span className="text-white/40 text-xs font-medium ml-auto">
               Posición X {selected.posX} · Y {selected.posY}
             </span>
           </div>
           <div className="flex flex-wrap items-end gap-4">
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Ancho (celdas)</span>
+              <span className="text-white/40 text-xs font-semibold">Ancho (celdas)</span>
               <DimInput value={selected.width} max={GRID_COLS} onCommit={(v) => setDim('width', v)} />
             </label>
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Alto (celdas)</span>
+              <span className="text-white/40 text-xs font-semibold">Alto (celdas)</span>
               <DimInput value={selected.height} max={GRID_ROWS} onCommit={(v) => setDim('height', v)} />
             </label>
             <button
               onClick={rotateSelected}
-              className="px-4 py-2 rounded-xl bg-white/10 text-sm font-700"
+              className="px-4 py-2 rounded-xl bg-white/10 text-sm font-bold"
             >
               Girar {selected.rotation === 90 ? 'a 0°' : 'a 90°'}
             </button>

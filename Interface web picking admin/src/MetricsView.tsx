@@ -92,7 +92,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
   return (
     <div>
       <div className="flex items-center gap-3 mb-4">
-        <p className="text-white/40 text-sm font-500">
+        <p className="text-white/40 text-sm font-medium">
           Estado en vivo ·{' '}
           <span className={connected ? 'text-green-400' : 'text-amber-400'}>
             {connected ? 'conectado (tiempo real)' : 'reconectando…'}
@@ -101,7 +101,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
         <button
           onClick={() => { setLoading(true); void load() }}
           disabled={loading}
-          className="ml-auto px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-700 disabled:opacity-40"
+          className="ml-auto px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-sm font-bold disabled:opacity-40"
         >
           {loading ? 'Actualizando…' : 'Actualizar'}
         </button>
@@ -116,26 +116,26 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
           <div key={p.id} className="bg-[#161618] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
             {/* Nombre */}
             <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-800">
+              <span className="w-10 h-10 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold">
                 {p.name[0]?.toUpperCase()}
               </span>
               <div className="min-w-0">
-                <p className="font-800 truncate">{p.name}</p>
-                <p className="text-white/35 text-xs font-500 truncate">{p.email}</p>
+                <p className="font-extrabold truncate">{p.name}</p>
+                <p className="text-white/35 text-xs font-medium truncate">{p.email}</p>
               </div>
             </div>
 
             {/* Pedido actual */}
             {p.currentOrder ? (
               <div className="bg-[#0C0C0D] border border-white/10 rounded-xl p-3">
-                <p className="text-white/35 text-[10px] font-700 uppercase tracking-wider mb-1">Alistando ahora</p>
-                <p className="font-800 text-sm">{p.currentOrder.referenceCode}</p>
-                <p className="text-white/45 text-xs font-500 truncate">{p.currentOrder.customerName}</p>
+                <p className="text-white/35 text-[10px] font-bold uppercase tracking-wider mb-1">Alistando ahora</p>
+                <p className="font-extrabold text-sm">{p.currentOrder.referenceCode}</p>
+                <p className="text-white/45 text-xs font-medium truncate">{p.currentOrder.customerName}</p>
                 <div className="flex items-center gap-2 mt-2">
-                  <span className={`text-[10px] font-800 px-2 py-0.5 rounded-full border ${STATUS_LABEL[p.currentOrder.status]?.cls ?? 'bg-white/10 text-white/60 border-white/20'}`}>
+                  <span className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${STATUS_LABEL[p.currentOrder.status]?.cls ?? 'bg-white/10 text-white/60 border-white/20'}`}>
                     {STATUS_LABEL[p.currentOrder.status]?.label ?? p.currentOrder.status}
                   </span>
-                  <span className="text-white/35 text-[10px] font-500">{fmtTime(p.currentOrder.pickedAt)}</span>
+                  <span className="text-white/35 text-[10px] font-medium">{fmtTime(p.currentOrder.pickedAt)}</span>
                 </div>
                 {/* Progreso */}
                 <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -146,37 +146,37 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                     }}
                   />
                 </div>
-                <p className="text-white/35 text-[10px] font-500 mt-1">
+                <p className="text-white/35 text-[10px] font-medium mt-1">
                   {p.currentOrder.scannedPieces}/{p.currentOrder.totalPieces} piezas · {p.currentOrder.itemsCount} producto(s)
                 </p>
                 <button
                   onClick={() => void openOrder(p.currentOrder!.id)}
-                  className="mt-2 w-full py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-700 hover:bg-white/10 transition-colors"
+                  className="mt-2 w-full py-2 rounded-lg bg-white/5 border border-white/10 text-xs font-bold hover:bg-white/10 transition-colors"
                 >
                   Abrir pedido (picker y productos)
                 </button>
               </div>
             ) : (
               <div className="bg-[#0C0C0D] border border-dashed border-white/10 rounded-xl p-3 text-center">
-                <p className="text-white/30 text-xs font-500">Sin pedido en curso</p>
+                <p className="text-white/30 text-xs font-medium">Sin pedido en curso</p>
               </div>
             )}
 
             {/* Contadores */}
             <div className="grid grid-cols-2 gap-2">
               <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
-                <p className="text-2xl font-800 text-green-400">{p.completedToday}</p>
-                <p className="text-white/35 text-[10px] font-700 uppercase tracking-wider">Entregados hoy</p>
+                <p className="text-2xl font-extrabold text-green-400">{p.completedToday}</p>
+                <p className="text-white/35 text-[10px] font-bold uppercase tracking-wider">Entregados hoy</p>
               </div>
               <div className="bg-white/5 border border-white/10 rounded-xl p-3 text-center">
-                <p className="text-2xl font-800">{p.dispatchedTotal}</p>
-                <p className="text-white/35 text-[10px] font-700 uppercase tracking-wider">Total despachado</p>
+                <p className="text-2xl font-extrabold">{p.dispatchedTotal}</p>
+                <p className="text-white/35 text-[10px] font-bold uppercase tracking-wider">Total despachado</p>
               </div>
             </div>
 
             <button
               onClick={() => void openHistory(p)}
-              className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-700 hover:bg-white/10 transition-colors"
+              className="w-full py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-bold hover:bg-white/10 transition-colors"
             >
               Ver historial completo →
             </button>
@@ -193,8 +193,8 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
           >
             <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="font-800 text-lg">Historial de {history.picker.name}</h2>
-                <p className="text-white/40 text-xs font-500">{history.orders.length} pedido(s) despachado(s)</p>
+                <h2 className="font-extrabold text-lg">Historial de {history.picker.name}</h2>
+                <p className="text-white/40 text-xs font-medium">{history.orders.length} pedido(s) despachado(s)</p>
               </div>
               <button
                 onClick={() => setHistory(null)}
@@ -214,7 +214,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
               ) : (
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-white/35 text-[10px] font-700 uppercase tracking-wider text-left">
+                    <tr className="text-white/35 text-[10px] font-bold uppercase tracking-wider text-left">
                       <th className="pb-2 pr-3">Pedido</th>
                       <th className="pb-2 pr-3">Cliente</th>
                       <th className="pb-2 pr-3 text-right">Total</th>
@@ -226,9 +226,9 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                   <tbody>
                     {history.orders.map((o) => (
                       <tr key={o.id} className="border-t border-white/5">
-                        <td className="py-2.5 pr-3 font-700">{o.referenceCode}</td>
+                        <td className="py-2.5 pr-3 font-bold">{o.referenceCode}</td>
                         <td className="py-2.5 pr-3 text-white/60 truncate max-w-[150px]">{o.customerName}</td>
-                        <td className="py-2.5 pr-3 text-right font-700">
+                        <td className="py-2.5 pr-3 text-right font-bold">
                           {o.grandTotal.toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })}
                         </td>
                         <td className="py-2.5 pr-3 text-center text-white/60">
@@ -238,7 +238,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                         <td className="py-2.5 text-right">
                           <button
                             onClick={() => void openOrder(o.id)}
-                            className="text-xs font-700 text-amber-400 hover:underline"
+                            className="text-xs font-bold text-amber-400 hover:underline"
                           >
                             Ver
                           </button>
@@ -262,8 +262,8 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
           >
             <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between shrink-0">
               <div>
-                <h2 className="font-800 text-lg">{order.referenceCode}</h2>
-                <p className="text-white/40 text-xs font-500">{order.customerName}</p>
+                <h2 className="font-extrabold text-lg">{order.referenceCode}</h2>
+                <p className="text-white/40 text-xs font-medium">{order.customerName}</p>
               </div>
               <button
                 onClick={() => setOrder(null)}
@@ -282,35 +282,35 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                 <>
                   {/* Picker asociado */}
                   <div className="bg-[#0C0C0D] border border-white/10 rounded-xl p-3 mb-4 flex items-center gap-3">
-                    <span className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-800">
+                    <span className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold">
                       {order.pickerName?.[0]?.toUpperCase() ?? '?'}
                     </span>
                     <div className="min-w-0">
-                      <p className="text-white/35 text-[10px] font-700 uppercase tracking-wider">Picker asociado</p>
-                      <p className="font-800 truncate">{order.pickerName ?? 'Sin asignar'}</p>
+                      <p className="text-white/35 text-[10px] font-bold uppercase tracking-wider">Picker asociado</p>
+                      <p className="font-extrabold truncate">{order.pickerName ?? 'Sin asignar'}</p>
                     </div>
-                    <span className={`ml-auto text-[10px] font-800 px-2 py-0.5 rounded-full border ${STATUS_LABEL[order.status]?.cls ?? 'bg-white/10 text-white/60 border-white/20'}`}>
+                    <span className={`ml-auto text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${STATUS_LABEL[order.status]?.cls ?? 'bg-white/10 text-white/60 border-white/20'}`}>
                       {STATUS_LABEL[order.status]?.label ?? order.status}
                     </span>
                   </div>
 
-                  <p className="text-white/35 text-[10px] font-700 uppercase tracking-wider mb-2">
+                  <p className="text-white/35 text-[10px] font-bold uppercase tracking-wider mb-2">
                     Productos ({order.itemsCount}) · {order.scannedPieces}/{order.totalPieces} piezas
                   </p>
                   <div className="space-y-2">
                     {order.items.map((it) => (
                       <div key={it.id} className="bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-700 truncate">{it.name}</p>
-                          <p className="text-white/35 text-[10px] font-500 truncate">
+                          <p className="text-sm font-bold truncate">{it.name}</p>
+                          <p className="text-white/35 text-[10px] font-medium truncate">
                             SKU {it.sku ?? '—'} · {it.barcode ?? 'sin código'}{it.plu ? ` · PLU ${it.plu}` : ''}
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className={`text-sm font-800 ${it.pickedQty >= it.quantity ? 'text-green-400' : 'text-amber-400'}`}>
+                          <p className={`text-sm font-extrabold ${it.pickedQty >= it.quantity ? 'text-green-400' : 'text-amber-400'}`}>
                             {it.pickedQty}/{it.quantity}
                           </p>
-                          <p className="text-white/30 text-[10px] font-500">piezas</p>
+                          <p className="text-white/30 text-[10px] font-medium">piezas</p>
                         </div>
                       </div>
                     ))}

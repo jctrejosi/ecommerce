@@ -18,6 +18,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { Logo } from "../Logo";
+import storeLogo from "../../assets/logo.png";
 import type { CartItem, CatalogCategory, Product } from "../types";
 import { catalogService } from "../../services/catalog.service";
 import { NotificationsDropdown } from "./NotificationsDropdown";
@@ -359,12 +360,14 @@ export function Header({
 
         <a
           href="#"
-          className="flex-shrink-0"
+          className="flex-shrink-0 flex items-center gap-2 md:gap-3"
           onClick={(e) => {
             e.preventDefault();
             onHome();
           }}
         >
+          <img src={storeLogo} alt="Mercaldas" className="h-7 md:h-8 w-auto object-contain" />
+          <span className="h-6 w-px bg-gray-300" aria-hidden="true" />
           <Logo dark={true} logoSrc={generalLogo?.url} hideTextOnMobile />
         </a>
 

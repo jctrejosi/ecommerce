@@ -89,10 +89,10 @@ export default function App() {
   const branch = branches.find((b) => b.id === branchId) ?? null
 
   return (
-    <div className="min-h-full bg-[#0C0C0D] text-white">
+    <div className="flex h-full flex-col overflow-hidden bg-[#0C0C0D] text-white">
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-slide-down">
-          <div className="bg-amber-400 text-[#0C0C0D] font-700 text-sm rounded-xl px-4 py-3 shadow-lg">
+          <div className="bg-amber-400 text-[#0C0C0D] font-bold text-sm rounded-xl px-4 py-3 shadow-lg">
             {toast}
           </div>
         </div>
@@ -104,36 +104,40 @@ export default function App() {
           <div className="mr-auto flex items-center gap-3">
             <img src={headerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
             <div>
-              <h1 className="text-2xl font-800 tracking-tight">Picking <span className="text-amber-400">Admin</span></h1>
-              <p className="text-white/40 text-xs font-500 mt-0.5">Estanterías y ubicaciones por sucursal</p>
+              <h1 className="text-2xl font-extrabold tracking-tight">Picking <span className="text-amber-400">Admin</span></h1>
+              <p className="text-white/40 text-xs font-medium mt-0.5">Estanterías y ubicaciones por sucursal</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto">
-            {branches.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setBranchId(b.id)}
-                className={`shrink-0 px-3.5 py-2 rounded-xl text-xs font-700 transition-all border ${
-                  branchId === b.id
-                    ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
-                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
-                }`}
-              >
-                {b.name}
-              </button>
-            ))}
+          <div className="flex flex-col items-start gap-2 max-w-full">
+            <span className="text-white/40 text-xs font-bold uppercase tracking-wider">Sucursales</span>
+            <div className="flex flex-wrap items-center gap-2">
+              {branches.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => setBranchId(b.id)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                    branchId === b.id
+                      ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
+                      : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
+                  }`}
+                >
+                  {b.name}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-5 pb-16">
+      <main className="flex-1 overflow-y-auto">
+        <div className="w-full max-w-6xl mx-auto px-5 pb-16">
         {/* Tabs */}
         <div className="flex gap-2 my-5">
           {(['shelves', 'map', 'products', 'metrics'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-full text-sm font-700 transition-all ${
+              className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
                 tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
               }`}
             >
@@ -145,7 +149,7 @@ export default function App() {
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm mb-5 flex items-center gap-3">
             <p className="flex-1">{error}</p>
-            <button onClick={() => setError(null)} className="font-800 underline">Cerrar</button>
+            <button onClick={() => setError(null)} className="font-extrabold underline">Cerrar</button>
           </div>
         )}
 
@@ -206,6 +210,7 @@ export default function App() {
             notify={notify}
           />
         )}
+        </div>
       </main>
 
       {/* Footer */}
@@ -281,12 +286,12 @@ function ShelvesView({
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-white/40 text-sm font-500">
+        <p className="text-white/40 text-sm font-medium">
           {loading ? 'Cargando…' : `${shelves.length} estanterías en ${branchName}`}
         </p>
         <button
           onClick={() => { setEditing(null); setCreating(true) }}
-          className="px-4 py-2 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 hover:bg-amber-300 transition-colors"
+          className="px-4 py-2 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold hover:bg-amber-300 transition-colors"
         >
           + Nueva estantería
         </button>
@@ -306,11 +311,11 @@ function ShelvesView({
             <div className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="font-800 text-lg leading-tight">
-                    <span className="text-white/40 font-700 mr-1.5">{s.code}</span>
+                  <h3 className="font-extrabold text-lg leading-tight">
+                    <span className="text-white/40 font-bold mr-1.5">{s.code}</span>
                     {s.name}
                   </h3>
-                  <p className="text-white/40 text-xs font-500 mt-0.5">
+                  <p className="text-white/40 text-xs font-medium mt-0.5">
                     {s.type === 'wall' ? '🧱 Contra la pared' : '🏬 Isla central'} · {s.rows.length} fila(s) ·{' '}
                     {s.productCount} producto(s)
                   </p>
@@ -340,10 +345,10 @@ function ShelvesView({
                 <div className="mt-3 space-y-1">
                   {s.rows.map((r) => (
                     <div key={r.id} className="flex items-center gap-2 text-xs">
-                      <span className="w-6 h-6 rounded-md flex items-center justify-center font-800 shrink-0" style={{ backgroundColor: s.color + '22', color: s.color }}>
+                      <span className="w-6 h-6 rounded-md flex items-center justify-center font-extrabold shrink-0" style={{ backgroundColor: s.color + '22', color: s.color }}>
                         {r.rowNumber}
                       </span>
-                      <span className="text-white/60 font-500 truncate">{r.label}</span>
+                      <span className="text-white/60 font-medium truncate">{r.label}</span>
                     </div>
                   ))}
                 </div>
@@ -423,9 +428,9 @@ function ShelfModal({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sticky top-0 bg-[#161618] px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
-          <h2 className="font-800 text-lg">
+          <h2 className="font-extrabold text-lg">
             {initial ? `Editar ${initial.code}` : 'Nueva estantería'}
-            <span className="block text-white/40 text-xs font-500">{branchName}</span>
+            <span className="block text-white/40 text-xs font-medium">{branchName}</span>
           </h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
@@ -437,16 +442,16 @@ function ShelfModal({
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Código *</span>
+              <span className="text-white/40 text-xs font-semibold">Código *</span>
               <input
                 value={form.code}
                 onChange={(e) => set('code', e.target.value.toUpperCase())}
                 placeholder="A1"
-                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-700 outline-none focus:border-amber-400"
+                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-amber-400"
               />
             </label>
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Nombre</span>
+              <span className="text-white/40 text-xs font-semibold">Nombre</span>
               <input
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
@@ -458,7 +463,7 @@ function ShelfModal({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Tipo</span>
+              <span className="text-white/40 text-xs font-semibold">Tipo</span>
               <select
                 value={form.type}
                 onChange={(e) => set('type', e.target.value as ShelfType)}
@@ -469,7 +474,7 @@ function ShelfModal({
               </select>
             </label>
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Rotación</span>
+              <span className="text-white/40 text-xs font-semibold">Rotación</span>
               <select
                 value={form.rotation}
                 onChange={(e) => set('rotation', Number(e.target.value) as 0 | 90)}
@@ -483,7 +488,7 @@ function ShelfModal({
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Posición X (celdas)</span>
+              <span className="text-white/40 text-xs font-semibold">Posición X (celdas)</span>
               <input
                 type="number"
                 value={form.posX}
@@ -492,7 +497,7 @@ function ShelfModal({
               />
             </label>
             <label className="block">
-              <span className="text-white/40 text-xs font-600">Posición Y (celdas)</span>
+              <span className="text-white/40 text-xs font-semibold">Posición Y (celdas)</span>
               <input
                 type="number"
                 value={form.posY}
@@ -503,7 +508,7 @@ function ShelfModal({
           </div>
 
           <div>
-            <span className="text-white/40 text-xs font-600">Color</span>
+            <span className="text-white/40 text-xs font-semibold">Color</span>
             <div className="mt-1.5 flex flex-wrap gap-2">
               {COLORS.map((c) => (
                 <button
@@ -521,13 +526,13 @@ function ShelfModal({
 
           <div>
             <div className="flex items-center justify-between mb-1.5">
-              <span className="text-white/40 text-xs font-600">Filas de la estantería</span>
-              <button onClick={addRow} className="text-xs font-800 text-amber-400">+ Añadir fila</button>
+              <span className="text-white/40 text-xs font-semibold">Filas de la estantería</span>
+              <button onClick={addRow} className="text-xs font-extrabold text-amber-400">+ Añadir fila</button>
             </div>
             <div className="space-y-2">
               {form.rows.map((r, idx) => (
                 <div key={idx} className="flex items-center gap-2">
-                  <span className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-800 shrink-0">
+                  <span className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-extrabold shrink-0">
                     {r.rowNumber}
                   </span>
                   <input
@@ -553,14 +558,14 @@ function ShelfModal({
         <div className="sticky bottom-0 bg-[#161618] border-t border-white/8 px-5 py-4 flex gap-3">
           <button
             onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-700"
+            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
           >
             Cancelar
           </button>
           <button
             onClick={() => valid && onSave(form)}
             disabled={!valid}
-            className="flex-1 py-3 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40"
           >
             {initial ? 'Guardar cambios' : 'Crear estantería'}
           </button>
@@ -722,11 +727,11 @@ function ProductsView({
             placeholder="Buscar producto, SKU o código de barras…"
             className="flex-1 bg-[#161618] border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-amber-400"
           />
-          <button onClick={onSearch} className="px-4 py-2.5 rounded-xl bg-white/10 text-sm font-700 hover:bg-white/15">
+          <button onClick={onSearch} className="px-4 py-2.5 rounded-xl bg-white/10 text-sm font-bold hover:bg-white/15">
             Buscar
           </button>
         </div>
-        <label className="flex items-center gap-2 text-sm text-white/50 font-500 cursor-pointer">
+        <label className="flex items-center gap-2 text-sm text-white/50 font-medium cursor-pointer">
           <input
             type="checkbox"
             checked={onlyUnassigned}
@@ -739,7 +744,7 @@ function ProductsView({
 
       {/* Asignación masiva */}
       <div className="bg-[#161618] border border-white/10 rounded-2xl p-4 mb-5">
-        <p className="text-white/40 text-xs font-600 mb-2">Asignación masiva — solo productos sin ubicación</p>
+        <p className="text-white/40 text-xs font-semibold mb-2">Asignación masiva — solo productos sin ubicación</p>
         <div className="flex flex-wrap gap-2 items-center">
           <select
             value={bulkShelfId}
@@ -766,18 +771,18 @@ function ProductsView({
             onClick={() => doBulk(true)}
             disabled={bulkBusy}
             title="Asigna solo los productos que aún no tienen estantería (no toca los ya asignados)"
-            className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-800 disabled:opacity-40"
+            className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40"
           >
             {bulkBusy ? 'Asignando…' : 'Solo sin ubicación'}
           </button>
         </div>
-        <p className="w-full text-white/30 text-xs font-500 mt-2 leading-relaxed">
-          <span className="text-white/60 font-700">Solo sin ubicación</span>: asigna únicamente los productos que
+        <p className="w-full text-white/30 text-xs font-medium mt-2 leading-relaxed">
+          <span className="text-white/60 font-bold">Solo sin ubicación</span>: asigna únicamente los productos que
           aún no tienen estantería (no toca los ya asignados).
         </p>
       </div>
 
-      <p className="text-white/40 text-xs font-500 mb-3">
+      <p className="text-white/40 text-xs font-medium mb-3">
         {loading ? 'Cargando…' : `${ordered.length} producto(s) · ${unassignedCount} sin estantería`}
         {appliedSearch ? ` para “${appliedSearch}”` : ''}
       </p>
@@ -787,7 +792,7 @@ function ProductsView({
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 pb-4">
         {unassignedCount > 0 && (
           <div className="flex items-center gap-3 pt-2 pb-1">
-            <span className="text-amber-400 text-xs font-800 uppercase tracking-wider">Sin estantería asignada ({unassignedCount})</span>
+            <span className="text-amber-400 text-xs font-extrabold uppercase tracking-wider">Sin estantería asignada ({unassignedCount})</span>
             <div className="flex-1 h-px bg-white/10" />
           </div>
         )}
@@ -802,14 +807,14 @@ function ProductsView({
             <Fragment key={p.productVariantId}>
               {showAssignedHeader && (
                 <div className="flex items-center gap-3 pt-3 pb-1">
-                  <span className="text-white/40 text-xs font-800 uppercase tracking-wider">Con estantería asignada ({ordered.length - unassignedCount})</span>
+                  <span className="text-white/40 text-xs font-extrabold uppercase tracking-wider">Con estantería asignada ({ordered.length - unassignedCount})</span>
                   <div className="flex-1 h-px bg-white/10" />
                 </div>
               )}
               <div className="bg-[#161618] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
                 <div className="min-w-0 flex-1 basis-56">
-                  <p className="font-700 text-sm truncate">{p.productName}</p>
-                  <p className="text-white/35 text-xs font-500 truncate">
+                  <p className="font-bold text-sm truncate">{p.productName}</p>
+                  <p className="text-white/35 text-xs font-medium truncate">
                     SKU {p.sku ?? '—'} · {p.barcode ?? 'sin código'} · stock {p.stock}
                   </p>
                 </div>
@@ -852,7 +857,7 @@ function ProductsView({
                   <button
                     onClick={() => saveLocation(p)}
                     disabled={savingId === p.productVariantId}
-                    className="px-3 py-2 rounded-lg bg-amber-400 text-[#0C0C0D] text-xs font-800 disabled:opacity-40"
+                    className="px-3 py-2 rounded-lg bg-amber-400 text-[#0C0C0D] text-xs font-extrabold disabled:opacity-40"
                   >
                     Guardar
                   </button>
@@ -860,7 +865,7 @@ function ProductsView({
                   <button
                     onClick={() => removeLocation(p)}
                     disabled={savingId === p.productVariantId}
-                    className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-700 disabled:opacity-40"
+                    className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold disabled:opacity-40"
                   >
                     Quitar
                   </button>
@@ -877,7 +882,7 @@ function ProductsView({
         {visible.length < ordered.length && (
           <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4">
             <div className="w-4 h-4 rounded-full border-2 border-white/15 border-t-amber-400 animate-spin" />
-            <span className="text-white/30 text-xs font-600">Cargando más…</span>
+            <span className="text-white/30 text-xs font-semibold">Cargando más…</span>
           </div>
         )}
       </div>

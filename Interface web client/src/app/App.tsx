@@ -884,7 +884,7 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-background"
+      className="min-h-screen bg-background overflow-x-hidden"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
       <Header {...headerProps} />
