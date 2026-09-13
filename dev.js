@@ -29,6 +29,8 @@ const LOGS_DIR = path.join(ROOT, "logs");
 const PIDS_FILE = path.join(LOGS_DIR, ".pids.json");
 const DELIVERY_DIR = path.join(ROOT, "Interface movil delivery");
 const DELIVERY_PORT = 8081;
+const PICKING_MOBILE_DIR = path.join(ROOT, "Interface movil picking");
+const PICKING_MOBILE_PORT = 8082;
 const OSRM_DIR = path.join(ROOT, "delivery-routing");
 const OSRM_PORT = 5000;
 
@@ -79,6 +81,7 @@ const C = {
   bot: "\x1b[35m",
   ia: "\x1b[33m",
   delivery: "\x1b[92m",
+  "picking-mobile": "\x1b[94m",
   osrm: "\x1b[90m",
   reset: "\x1b[0m",
 };
@@ -173,6 +176,8 @@ const APP_ALIASES = {
   "delivery-admin": "delivery-admin",
   bot: "bot",
   delivery: "delivery",
+  "picking-mobile": "picking-mobile",
+  "movil-picking": "picking-mobile",
   osrm: "osrm",
 };
 
@@ -189,6 +194,7 @@ const APP_DEPENDS = {
   bot: ["backend"],
   ia: ["backend"], // genera contenido vía el backend; no usa la BD de campañas
   delivery: ["backend", "osrm"], // API real: backend (+BD) + OSRM para rutas
+  "picking-mobile": ["backend"], // app móvil de picking (Expo, QR)
   osrm: [],
 };
 
@@ -518,57 +524,79 @@ function printUrls(services, showDb, showCampaigns, showOsrm) {
   console.log(`Logs: logs/*.log  (${started || "sin servicios"}). El DELIVERY imprime en esta terminal.`);
 }
 
-// ── Delivery app (Expo Go) ────────────────────────────────────
+// ── Apps móviles (Expo Go) ────────────────────────────────────
 
-function ensureDeliveryDeps() {
-  if (dirHasContent(path.join(DELIVERY_DIR, "node_modules"))) return true;
-  console.log(
-    `${C.delivery}[delivery]${C.reset} 📦 instalando dependencias (${PM})...`,
-  );
+function ensureExpoDeps(dir, color, label) {
+  if (dirHasContent(path.join(dir, "node_modules"))) return true;
+  console.log(`${color}[${label}]${C.reset} 📦 instalando dependencias (${PM})...`);
   const r = spawnSync(PM, ["install"], {
-    cwd: DELIVERY_DIR,
+    cwd: dir,
     stdio: "inherit",
     timeout: 300000,
   });
   if (r.status !== 0) {
-    console.error(
-      `${C.delivery}[delivery]${C.reset} ✘ falló la instalación de dependencias`,
-    );
+    console.error(`${color}[${label}]${C.reset} ✘ falló la instalación de dependencias`);
     return false;
   }
   return true;
 }
 
 /**
- * Arranca la delivery app con Expo en FOREGROUND (interactivo): así el QR de
- * Expo Go aparece en esta terminal. Ctrl+C detiene solo el delivery; el resto
- * de servicios sigue en background. Solo aplica en modo dev.
+ * Arranca una app Expo en FOREGROUND (interactivo): así el QR de Expo Go
+ * aparece en esta terminal. Ctrl+C detiene solo esa app; el resto de servicios
+ * sigue en background. Solo aplica en modo dev.
  */
-function startDeliveryExpo() {
-  if (!ensureDeliveryDeps()) return;
+function startExpoApp({ dir, port, color, label, title, hints = [], extraArgs = [] }) {
+  if (!ensureExpoDeps(dir, color, label)) return;
 
   console.log("");
   console.log(
-    `${C.delivery}📱 DELIVERY APP${C.reset} — escanea el QR con **Expo Go** (celular en la MISMA red Wi-Fi).`,
+    `${color}📱 ${title}${C.reset} — escanea el QR con **Expo Go** (celular en la MISMA red Wi-Fi).`,
   );
+  for (const hint of hints) {
+    console.log(`${color}[${label}]${C.reset}   ${hint}`);
+  }
   console.log(
-    `${C.delivery}[delivery]${C.reset}   Sin EXPO_PUBLIC_API_URL corre en modo mock (demo / demo1234).`,
-  );
-  console.log(
-    `${C.delivery}[delivery]${C.reset}   Ctrl+C aquí detiene SOLO el delivery; lo demás sigue en background.`,
+    `${color}[${label}]${C.reset}   Ctrl+C aquí detiene SOLO ${label}; lo demás sigue en background.`,
   );
   console.log("");
 
-  const r = spawnSync(PM, ["exec", "expo", "start"], {
-    cwd: DELIVERY_DIR,
+  const r = spawnSync(PM, ["exec", "expo", "start", ...extraArgs], {
+    cwd: dir,
     stdio: "inherit",
     env: { ...process.env, EXPO_NO_TELEMETRY: "1" },
   });
   if (r.status !== 0) {
     console.warn(
-      `${C.delivery}[delivery]${C.reset} ⚠️  expo terminó con código ${r.status ?? "?"} — ¿puerto ${DELIVERY_PORT} ocupado? (node dev.js --stop para liberar)`,
+      `${color}[${label}]${C.reset} ⚠️  expo terminó con código ${r.status ?? "?"} — ¿puerto ${port} ocupado? (node dev.js --stop para liberar)`,
     );
   }
+}
+
+function startDeliveryExpo() {
+  startExpoApp({
+    dir: DELIVERY_DIR,
+    port: DELIVERY_PORT,
+    color: C.delivery,
+    label: "delivery",
+    title: "DELIVERY APP",
+    hints: ["Sin EXPO_PUBLIC_API_URL corre en modo mock (demo / demo1234)."],
+  });
+}
+
+function startPickingMobileExpo() {
+  startExpoApp({
+    dir: PICKING_MOBILE_DIR,
+    port: PICKING_MOBILE_PORT,
+    color: C["picking-mobile"],
+    label: "picking-mobile",
+    title: "PICKING APP",
+    hints: [
+      "Configura EXPO_PUBLIC_API_URL con la IP de tu máquina (p. ej. http://192.168.x.x:3000).",
+      "Sin esa variable usa http://10.0.2.2:3000 (emulador Android).",
+    ],
+    extraArgs: ["--port", String(PICKING_MOBILE_PORT)],
+  });
 }
 
 // ── Detención ───────────────────────────────────────────────
@@ -606,6 +634,7 @@ function stopAll() {
     if (svc.url) killPort(new URL(svc.url).port);
   }
   killPort(DELIVERY_PORT); // expo/delivery (no queda registrado en pids)
+  killPort(PICKING_MOBILE_PORT); // expo/picking móvil (no queda registrado en pids)
 
   // OSRM corre como contenedor (no como proceso node): se detiene aparte.
   spawnSync("docker", ["compose", "stop"], { cwd: OSRM_DIR, stdio: "ignore" });
@@ -697,6 +726,7 @@ function printHelp() {
   out.push("");
   out.push("MÓVIL Y RUTAS");
   out.push("  --delivery   App móvil delivery (Expo, QR en :8081)  — levanta backend + OSRM + PostgreSQL");
+  out.push("  --picking-mobile  App móvil picking (Expo, QR en :8082) — levanta backend + PostgreSQL");
   out.push("  --osrm       Motor de rutas OSRM (:5000) — Manizales (sin apps)");
   out.push("");
   out.push("BASES DE DATOS");
@@ -710,6 +740,7 @@ function printHelp() {
   out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + BD");
   out.push("  node dev.js --analytics         → analytics + backend + BDs (incluye db-campaigns :5436)");
   out.push("  node dev.js --delivery          → API real (backend + OSRM + BD) y QR del delivery app");
+  out.push("  node dev.js --picking-mobile    → QR de la picking app + backend + BD");
   out.push("  node dev.js --admin --picking   → combina aplicativos");
   out.push("  node dev.js --prod --delivery-admin");
   out.push("");
@@ -738,6 +769,10 @@ async function main() {
       : plan.filter((n) => n !== "db" && n !== "db-campaigns" && n !== "osrm");
   const services = SERVICES.filter((s) => svcNames.includes(s.name));
   const wantDelivery = plan === null || plan.includes("delivery");
+  // La picking app (Expo) solo se lanza cuando se pide explícitamente: en
+  // `node dev.js` (todo) ya hay un Expo interactivo (delivery) y ambos compiten
+  // por la terminal.
+  const wantPickingMobile = plan !== null && plan.includes("picking-mobile");
 
   console.log(
     `🧪 MercAldas — modo ${MODE.toUpperCase()} · selección: ${selectionLabel(plan)}  (logs → logs/*.log)`,
@@ -828,9 +863,19 @@ async function main() {
       console.log(
         "\n⏹ Delivery detenido. El resto de servicios sigue corriendo.",
       );
-    } else {
+    }
+    if (wantPickingMobile) {
       console.log(
-        "\n✅ Listo — esta selección no incluye el delivery (agrega --delivery). Terminal libre.",
+        "\n✅ Servicios levantados (background). Ahora la picking app:",
+      );
+      startPickingMobileExpo(); // bloquea mostrando el QR hasta Ctrl+C
+      console.log(
+        "\n⏹ Picking app detenida. El resto de servicios sigue corriendo.",
+      );
+    }
+    if (!wantDelivery && !wantPickingMobile) {
+      console.log(
+        "\n✅ Listo — esta selección no incluye apps móviles (agrega --delivery o --picking-mobile). Terminal libre.",
       );
     }
   } else {
@@ -838,6 +883,10 @@ async function main() {
     if (wantDelivery)
       console.log(
         "   Delivery en --prod: corre desde el APK/dev build (carpeta android/), no usa Expo Go.",
+      );
+    if (wantPickingMobile)
+      console.log(
+        "   Picking app en --prod: corre desde el APK/dev build (carpeta android/), no usa Expo Go.",
       );
   }
 

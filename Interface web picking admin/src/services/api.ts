@@ -2,6 +2,7 @@
 import type {
   Branch,
   BulkAssignResult,
+  Category,
   PickerHistory,
   PickerSummary,
   PickingOrderDetail,
@@ -52,14 +53,19 @@ export interface ShelfPayload {
   name: string;
   type: ShelfType;
   color: string;
+  width?: number;
+  height?: number;
   posX: number;
   posY: number;
   rotation: 0 | 90;
+  categoryId: number | null;
   rows: { rowNumber: number; label: string }[];
 }
 
 export const api = {
   branches: () => fetchJson<Branch[]>('/picking-admin/branches'),
+
+  categories: () => fetchJson<Category[]>('/picking-admin/categories'),
 
   shelves: (branchId: number) =>
     fetchJson<Shelf[]>(`/picking-admin/shelves?branchId=${branchId}`),

@@ -4,10 +4,11 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, sql, type SQL } from 'drizzle-orm';
+import { and, asc, eq, getTableColumns, inArray, isNull, sql, type SQL } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   branches,
+  categories,
   inventory,
   productLocations,
   productVariants,
@@ -32,6 +33,7 @@ export interface CreateShelfDto {
   posX?: number;
   posY?: number;
   rotation?: 0 | 90;
+  categoryId?: number | null;
   rows?: ShelfRowDto[];
 }
 
@@ -45,6 +47,7 @@ export interface UpdateShelfDto {
   posX?: number;
   posY?: number;
   rotation?: 0 | 90;
+  categoryId?: number | null;
   rows?: ShelfRowDto[];
 }
 
@@ -91,6 +94,36 @@ export class ShelvesService {
     if (!row) throw new NotFoundException(`Sucursal ${branchId} no encontrada`);
   }
 
+  private async assertCategoryExists(categoryId: number) {
+    const [row] = await this.db
+      .select({ id: categories.id })
+      .from(categories)
+      .where(and(eq(categories.id, BigInt(categoryId)), isNull(categories.deletedAt)))
+      .limit(1);
+    if (!row) throw new NotFoundException(`Categoría ${categoryId} no encontrada`);
+  }
+
+  /** Categorías activas para asociar a las estanterías (selector del admin). */
+  async categories() {
+    const rows = await this.db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        parentId: categories.parentId,
+        level: categories.level,
+      })
+      .from(categories)
+      .where(and(isNull(categories.deletedAt), eq(categories.isActive, true)))
+      .orderBy(asc(categories.displayOrder), asc(categories.name));
+
+    return rows.map((r) => ({
+      id: Number(r.id),
+      name: r.name,
+      parentId: r.parentId != null ? Number(r.parentId) : null,
+      level: r.level ?? 0,
+    }));
+  }
+
   private async assertShelfExists(id: number) {
     const [row] = await this.db
       .select({ id: shelves.id, branchId: shelves.branchId })
@@ -130,8 +163,9 @@ export class ShelvesService {
   async listShelves(branchId?: number) {
     if (branchId) await this.assertBranchExists(branchId);
     const rows = await this.db
-      .select()
+      .select({ ...getTableColumns(shelves), categoryName: categories.name })
       .from(shelves)
+      .leftJoin(categories, eq(categories.id, shelves.categoryId))
       .where(branchId ? eq(shelves.branchId, branchId) : undefined)
       .orderBy(asc(shelves.code));
 
@@ -172,6 +206,8 @@ export class ShelvesService {
       posX: r.posX,
       posY: r.posY,
       rotation: r.rotation,
+      categoryId: r.categoryId != null ? Number(r.categoryId) : null,
+      categoryName: r.categoryName ?? null,
       productCount: counts.get(Number(r.id)) ?? 0,
       rows: rowsByShelf.get(Number(r.id)) ?? [],
     }));
@@ -179,6 +215,7 @@ export class ShelvesService {
 
   async createShelf(dto: CreateShelfDto) {
     await this.assertBranchExists(dto.branchId);
+    if (dto.categoryId != null) await this.assertCategoryExists(dto.categoryId);
     const code = (dto.code ?? '').trim().toUpperCase();
     if (!code) throw new BadRequestException('El código de la estantería es obligatorio');
     const [dup] = await this.db
@@ -201,6 +238,7 @@ export class ShelvesService {
         posX: dto.posX ?? 0,
         posY: dto.posY ?? 0,
         rotation: dto.rotation ?? 0,
+        categoryId: dto.categoryId ?? null,
       })
       .returning({ id: shelves.id });
 
@@ -211,8 +249,9 @@ export class ShelvesService {
 
   async findOne(id: number) {
     const [row] = await this.db
-      .select()
+      .select({ ...getTableColumns(shelves), categoryName: categories.name })
       .from(shelves)
+      .leftJoin(categories, eq(categories.id, shelves.categoryId))
       .where(eq(shelves.id, BigInt(id)))
       .limit(1);
     if (!row) throw new NotFoundException(`Estantería ${id} no encontrada`);
@@ -232,6 +271,8 @@ export class ShelvesService {
       posX: row.posX,
       posY: row.posY,
       rotation: row.rotation,
+      categoryId: row.categoryId != null ? Number(row.categoryId) : null,
+      categoryName: row.categoryName ?? null,
       productCount: cnt?.cnt ?? 0,
       rows: await this.rowsOfShelf(id),
     };
@@ -239,6 +280,8 @@ export class ShelvesService {
 
   async updateShelf(id: number, dto: UpdateShelfDto) {
     const shelf = await this.assertShelfExists(id);
+
+    if (dto.categoryId != null) await this.assertCategoryExists(dto.categoryId);
 
     if (dto.code !== undefined) {
       const code = dto.code.trim().toUpperCase();
@@ -259,7 +302,7 @@ export class ShelvesService {
     }
 
     const data: Record<string, unknown> = {};
-    for (const key of ['code', 'name', 'type', 'color', 'width', 'height', 'posX', 'posY', 'rotation'] as const) {
+    for (const key of ['code', 'name', 'type', 'color', 'width', 'height', 'posX', 'posY', 'rotation', 'categoryId'] as const) {
       if (dto[key] !== undefined) data[key] = dto[key];
     }
     if (Object.keys(data).length > 0) {

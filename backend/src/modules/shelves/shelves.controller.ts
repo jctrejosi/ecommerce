@@ -37,6 +37,12 @@ export class ShelvesController {
     return this.shelvesService.branches();
   }
 
+  @Get('categories')
+  @ApiOperation({ summary: 'Categorías para asociar a las estanterías' })
+  categories() {
+    return this.shelvesService.categories();
+  }
+
   // ── Estanterías ──
 
   @Get('shelves')

@@ -2007,6 +2007,8 @@ export const shelves = pgTable(
     posX: integer('pos_x').default(0).notNull(),
     posY: integer('pos_y').default(0).notNull(),
     rotation: integer().default(0).notNull(), // 0 | 90
+    // Categoría a la que pertenece la estantería (organización por categorías)
+    categoryId: bigint('category_id', { mode: 'number' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -2020,6 +2022,11 @@ export const shelves = pgTable(
       foreignColumns: [branches.id],
       name: 'shelves_branch_id_fkey',
     }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.categoryId],
+      foreignColumns: [categories.id],
+      name: 'shelves_category_id_fkey',
+    }).onDelete('set null'),
   ],
 );
 

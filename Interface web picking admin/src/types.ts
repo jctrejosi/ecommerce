@@ -22,11 +22,23 @@ export interface Shelf {
   name: string;
   type: ShelfType;
   color: string;
+  width: number;
+  height: number;
   posX: number;
   posY: number;
   rotation: 0 | 90;
+  categoryId: number | null;
+  categoryName: string | null;
   productCount: number;
   rows: ShelfRow[];
+}
+
+/** Categoría del catálogo (para asociar estanterías). */
+export interface Category {
+  id: number;
+  name: string;
+  parentId: number | null;
+  level: number;
 }
 
 export interface ProductWithLocation {

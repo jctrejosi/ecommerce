@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from './services/api'
-import type { Branch, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
+import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
 import footerLogo from './assets/logo.png'
@@ -23,6 +23,7 @@ const emptyShelf = () => ({
   posX: 0,
   posY: 0,
   rotation: 0 as 0 | 90,
+  categoryId: null as number | null,
   rows: [] as { rowNumber: number; label: string }[],
 })
 
@@ -33,6 +34,7 @@ export default function App() {
   const [branchId, setBranchId] = useState<number | null>(null)
   const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'metrics'>('shelves')
   const [shelves, setShelves] = useState<Shelf[]>([])
+  const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<ProductWithLocation[]>([])
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
@@ -56,6 +58,14 @@ export default function App() {
         if (bs.length > 0) setBranchId((prev) => prev ?? bs[0].id)
       })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar las sucursales'))
+  }, [])
+
+  // Categorías (para asociar a las estanterías)
+  useEffect(() => {
+    api
+      .categories()
+      .then(setCategories)
+      .catch(() => undefined)
   }, [])
 
   // Estanterías de la sucursal seleccionada
@@ -158,6 +168,7 @@ export default function App() {
             branchId={branchId}
             branchName={branch?.name ?? ''}
             shelves={shelves}
+            categories={categories}
             loading={loading}
             onChanged={() => {
               if (branchId) api.shelves(branchId).then(setShelves).catch(() => undefined)
@@ -237,6 +248,7 @@ function ShelvesView({
   branchId,
   branchName,
   shelves,
+  categories,
   loading,
   onChanged,
   notify,
@@ -244,6 +256,7 @@ function ShelvesView({
   branchId: number | null
   branchName: string
   shelves: Shelf[]
+  categories: Category[]
   loading: boolean
   onChanged: () => void
   notify: (m: string) => void
@@ -319,6 +332,9 @@ function ShelvesView({
                     {s.type === 'wall' ? '🧱 Contra la pared' : '🏬 Isla central'} · {s.rows.length} fila(s) ·{' '}
                     {s.productCount} producto(s)
                   </p>
+                  <p className="text-white/40 text-xs font-medium mt-0.5">
+                    {s.categoryName ? `🏷️ ${s.categoryName}` : 'Sin categoría'}
+                  </p>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button
@@ -362,6 +378,7 @@ function ShelvesView({
         <ShelfModal
           branchName={branchName}
           initial={editing ?? null}
+          categories={categories}
           onClose={() => { setCreating(false); setEditing(null) }}
           onSave={handleSave}
         />
@@ -375,11 +392,13 @@ function ShelvesView({
 function ShelfModal({
   branchName,
   initial,
+  categories,
   onClose,
   onSave,
 }: {
   branchName: string
   initial: Shelf | null
+  categories: Category[]
   onClose: () => void
   onSave: (data: ReturnType<typeof emptyShelf>) => void
 }) {
@@ -391,6 +410,7 @@ function ShelfModal({
     posX: initial?.posX ?? 0,
     posY: initial?.posY ?? 0,
     rotation: (initial?.rotation ?? 0) as 0 | 90,
+    categoryId: (initial?.categoryId ?? null) as number | null,
     rows: initial ? initial.rows.map((r) => ({ rowNumber: r.rowNumber, label: r.label })) : [{ rowNumber: 1, label: '' }],
   }))
 
@@ -485,6 +505,26 @@ function ShelfModal({
               </select>
             </label>
           </div>
+
+          <label className="block">
+            <span className="text-white/40 text-xs font-semibold">Categoría</span>
+            <select
+              value={form.categoryId ?? ''}
+              onChange={(e) => set('categoryId', e.target.value === '' ? null : Number(e.target.value))}
+              className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+            >
+              <option value="">Sin categoría</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {'\u00A0'.repeat(Math.max(0, c.level) * 2)}
+                  {c.name}
+                </option>
+              ))}
+            </select>
+            <span className="text-white/25 text-[11px] font-medium mt-1 block">
+              Organiza la estantería por la categoría de sus productos.
+            </span>
+          </label>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
