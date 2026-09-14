@@ -10,6 +10,7 @@ import {
   branches,
   categories,
   inventory,
+  productCategories,
   productLocations,
   productVariants,
   products,
@@ -77,12 +78,91 @@ export class ShelvesService {
         code: branches.code,
         name: branches.name,
         city: branches.city,
+        schedule: branches.schedule,
       })
       .from(branches)
       .where(isNull(branches.deletedAt))
       .orderBy(asc(branches.priority), asc(branches.name));
 
-    return rows.map((r) => ({ id: Number(r.id), code: r.code, name: r.name, city: r.city }));
+    return rows.map((r) => ({
+      id: Number(r.id),
+      code: r.code,
+      name: r.name,
+      city: r.city,
+      schedule: (r.schedule ?? null) as Record<string, string> | null,
+    }));
+  }
+
+  /** Horario (días → "HH:MM-HH:MM") de una sucursal. */
+  async getSchedule(branchId: number) {
+    await this.assertBranchExists(branchId);
+    const [row] = await this.db
+      .select({ schedule: branches.schedule })
+      .from(branches)
+      .where(eq(branches.id, BigInt(branchId)))
+      .limit(1);
+    return {
+      branchId,
+      schedule: (row.schedule ?? {}) as Record<string, string>,
+    };
+  }
+
+  private readonly DAY_KEYS = [
+    'monday',
+    'tuesday',
+    'wednesday',
+    'thursday',
+    'friday',
+    'saturday',
+    'sunday',
+  ] as const;
+
+  /** Guarda el horario de una sucursal. */
+  async saveSchedule(branchId: number, schedule: Record<string, string>) {
+    await this.assertBranchExists(branchId);
+
+    const clean: Record<string, string> = {};
+    for (const key of this.DAY_KEYS) {
+      const value = schedule[key];
+      if (value === undefined || value === null || String(value).trim() === '') continue;
+      const v = String(value).trim();
+      if (!/^\d{2}:\d{2}\s*-\s*\d{2}:\d{2}$/.test(v)) {
+        throw new BadRequestException(
+          `Horario inválido para ${key}: use el formato "08:00-20:00"`,
+        );
+      }
+      clean[key] = v.replace(/\s+/g, '');
+    }
+
+    await this.db
+      .update(branches)
+      .set({ schedule: clean })
+      .where(eq(branches.id, BigInt(branchId)));
+
+    return { branchId, schedule: clean };
+  }
+
+  /**
+   * Hora de cierre más tardía entre todas las sucursales para el día actual.
+   * La app la usa para vencer la sesión del picker a final del turno.
+   */
+  async shiftToday() {
+    const day = this.DAY_KEYS[(new Date().getDay() + 6) % 7]; // getDay(): 0=domingo
+    const rows = await this.db
+      .select({ schedule: branches.schedule })
+      .from(branches)
+      .where(isNull(branches.deletedAt));
+
+    let closeTime: string | null = null;
+    for (const row of rows) {
+      const sched = (row.schedule ?? {}) as Record<string, string>;
+      const range = sched[day];
+      if (!range) continue;
+      const close = range.split('-')[1]?.trim();
+      if (close && (!closeTime || close > closeTime)) closeTime = close;
+    }
+
+    return { day, closeTime };
   }
 
   private async assertBranchExists(branchId: number) {
@@ -116,12 +196,155 @@ export class ShelvesService {
       .where(and(isNull(categories.deletedAt), eq(categories.isActive, true)))
       .orderBy(asc(categories.displayOrder), asc(categories.name));
 
+    const ids = rows.map((r) => Number(r.id));
+    const countRows =
+      ids.length > 0
+        ? await this.db
+            .select({
+              categoryId: productCategories.categoryId,
+              n: sql<number>`COUNT(*)::int`,
+            })
+            .from(productCategories)
+            .where(inArray(productCategories.categoryId, ids))
+            .groupBy(productCategories.categoryId)
+        : [];
+    const countBy = new Map(countRows.map((c) => [Number(c.categoryId), c.n]));
+
     return rows.map((r) => ({
       id: Number(r.id),
       name: r.name,
       parentId: r.parentId != null ? Number(r.parentId) : null,
       level: r.level ?? 0,
+      productCount: countBy.get(Number(r.id)) ?? 0,
     }));
+  }
+
+  /**
+   * Organización de una categoría en una sucursal: sus estanterías y los
+   * productos de la categoría con su ubicación actual.
+   */
+  async categoryOrganization(categoryId: number, branchId?: number) {
+    const [cat] = await this.db
+      .select({
+        id: categories.id,
+        name: categories.name,
+        parentId: categories.parentId,
+        level: categories.level,
+      })
+      .from(categories)
+      .where(and(eq(categories.id, BigInt(categoryId)), isNull(categories.deletedAt)))
+      .limit(1);
+    if (!cat) throw new NotFoundException(`Categoría ${categoryId} no encontrada`);
+    if (branchId) await this.assertBranchExists(branchId);
+
+    // Estanterías asignadas a la categoría (en la sucursal si viene).
+    const catShelves = await this.db
+      .select({
+        id: shelves.id,
+        branchId: shelves.branchId,
+        code: shelves.code,
+        name: shelves.name,
+        color: shelves.color,
+      })
+      .from(shelves)
+      .where(
+        and(
+          eq(shelves.categoryId, categoryId),
+          branchId ? eq(shelves.branchId, branchId) : undefined,
+        ),
+      )
+      .orderBy(asc(shelves.code));
+
+    const shelfIds = catShelves.map((r) => Number(r.id));
+    const rowsByShelf = new Map<number, { rowNumber: number; label: string }[]>();
+    if (shelfIds.length > 0) {
+      const rr = await this.db
+        .select({
+          shelfId: shelfRows.shelfId,
+          rowNumber: shelfRows.rowNumber,
+          label: shelfRows.label,
+        })
+        .from(shelfRows)
+        .where(inArray(shelfRows.shelfId, shelfIds))
+        .orderBy(asc(shelfRows.rowNumber));
+      for (const row of rr) {
+        const sid = Number(row.shelfId);
+        if (!rowsByShelf.has(sid)) rowsByShelf.set(sid, []);
+        rowsByShelf.get(sid)!.push({ rowNumber: row.rowNumber, label: row.label });
+      }
+    }
+    const counts = await this.productCountByShelf();
+
+    // Productos de la categoría (variantes) con su ubicación en la sucursal.
+    const prodRows = branchId
+      ? await this.db
+          .select({
+            productVariantId: productVariants.id,
+            productId: products.id,
+            productName: products.name,
+            sku: productVariants.sku,
+            barcode: productVariants.barcode,
+            stock: inventory.stock,
+            shelfId: productLocations.shelfId,
+            rowNumber: productLocations.rowNumber,
+            shelfCode: shelves.code,
+            shelfName: shelves.name,
+          })
+          .from(productCategories)
+          .innerJoin(
+            productVariants,
+            eq(productVariants.productId, productCategories.productId),
+          )
+          .innerJoin(products, eq(products.id, productVariants.productId))
+          .leftJoin(
+            inventory,
+            and(
+              eq(inventory.productVariantId, productVariants.id),
+              eq(inventory.branchId, branchId),
+            ),
+          )
+          .leftJoin(
+            productLocations,
+            and(
+              eq(productLocations.productVariantId, productVariants.id),
+              eq(productLocations.branchId, branchId),
+            ),
+          )
+          .leftJoin(shelves, eq(shelves.id, productLocations.shelfId))
+          .where(eq(productCategories.categoryId, categoryId))
+          .orderBy(asc(products.name))
+          .limit(1000)
+      : [];
+
+    return {
+      category: {
+        id: Number(cat.id),
+        name: cat.name,
+        level: cat.level ?? 0,
+        parentId: cat.parentId != null ? Number(cat.parentId) : null,
+      },
+      shelves: catShelves.map((r) => ({
+        id: Number(r.id),
+        branchId: Number(r.branchId),
+        code: r.code,
+        name: r.name,
+        color: r.color,
+        productCount: counts.get(Number(r.id)) ?? 0,
+        rows: rowsByShelf.get(Number(r.id)) ?? [],
+      })),
+      products: prodRows.map((r) => ({
+        productVariantId: Number(r.productVariantId),
+        productId: Number(r.productId),
+        productName: r.productName,
+        sku: r.sku,
+        barcode: r.barcode,
+        stock: r.stock ?? 0,
+        shelfId: r.shelfId != null ? Number(r.shelfId) : null,
+        rowNumber: r.rowNumber ?? null,
+        shelfCode: r.shelfCode ?? null,
+        shelfName: r.shelfName ?? null,
+      })),
+    };
   }
 
   private async assertShelfExists(id: number) {

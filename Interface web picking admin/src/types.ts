@@ -39,6 +39,38 @@ export interface Category {
   name: string;
   parentId: number | null;
   level: number;
+  productCount: number;
+}
+
+/** Estantería dentro de la organización de una categoría. */
+export interface CategoryOrgShelf {
+  id: number;
+  branchId: number;
+  code: string;
+  name: string;
+  color: string;
+  productCount: number;
+  rows: { rowNumber: number; label: string }[];
+}
+
+/** Producto de una categoría con su ubicación. */
+export interface CategoryOrgProduct {
+  productVariantId: number;
+  productId: number;
+  productName: string;
+  sku: string | null;
+  barcode: string | null;
+  stock: number;
+  shelfId: number | null;
+  rowNumber: number | null;
+  shelfCode: string | null;
+  shelfName: string | null;
+}
+
+export interface CategoryOrganization {
+  category: { id: number; name: string; level: number; parentId: number | null };
+  shelves: CategoryOrgShelf[];
+  products: CategoryOrgProduct[];
 }
 
 export interface ProductWithLocation {

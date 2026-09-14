@@ -1,6 +1,7 @@
 import { StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
 import { formatMoney } from "@/lib/format";
 import { useOrder } from "@/picking/queries";
@@ -8,12 +9,21 @@ import { Button } from "@/ui/Button";
 
 export default function SuccessScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
   const orderId = Number(params.id);
   const { data: order } = useOrder(orderId);
 
   return (
-    <View style={styles.root}>
+    <View
+      style={[
+        styles.root,
+        {
+          paddingTop: insets.top + spacing(5),
+          paddingBottom: insets.bottom + spacing(5),
+        },
+      ]}
+    >
       <View style={styles.hero}>
         <View style={styles.check}>
           <Ionicons name="checkmark" size={54} color="#04120A" />

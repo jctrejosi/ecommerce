@@ -14,7 +14,7 @@ export function Screen({ children, scroll = true, padded = true }: ScreenProps) 
   const content = <View style={[styles.body, padded && styles.padded]}>{children}</View>;
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.safe} edges={["left", "right", "bottom"]}>
       {scroll ? (
         <ScrollView
           contentContainerStyle={styles.scroll}

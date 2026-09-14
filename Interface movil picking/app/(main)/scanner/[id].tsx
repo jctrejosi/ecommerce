@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   CameraView,
   useCameraPermissions,
@@ -41,6 +42,7 @@ type ScanState = "idle" | "success" | "error";
 
 export default function ScannerScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; itemId?: string }>();
   const orderId = Number(params.id);
 
@@ -83,6 +85,12 @@ export default function ScannerScreen() {
   useEffect(() => {
     if (scanState === "idle") inputRef.current?.focus();
   }, [scanState]);
+
+  // Al montar, deja el input listo para el gatillo desde el primer instante.
+  useEffect(() => {
+    const t = setTimeout(() => inputRef.current?.focus(), 350);
+    return () => clearTimeout(t);
+  }, []);
 
   const scheduleReset = (fn: () => void, ms: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -240,8 +248,9 @@ export default function ScannerScreen() {
         ) : null}
       </View>
 
-      {/* Tarjeta inferior: producto + ingreso manual */}
-      <View style={styles.bottom}>
+      {/* Tarjeta inferior: producto + ingreso manual. El paddingBottom
+          respeta los botones de navegación del dispositivo. */}
+      <View style={[styles.bottom, { paddingBottom: Math.max(spacing(4), insets.bottom + spacing(2)) }]}>
         {activeItem ? (
           <View style={styles.productCard}>
             <ProductImage uri={activeItem.image} seed={activeItem.sku ?? activeItem.name} size={52} />
@@ -289,6 +298,12 @@ export default function ScannerScreen() {
             value={input}
             onChangeText={setInput}
             onSubmitEditing={() => void handleScan(input)}
+            onBlur={() => {
+              // Recupera el foco para que el gatillo siga funcionando.
+              if (scanState === "idle") {
+                setTimeout(() => inputRef.current?.focus(), 120);
+              }
+            }}
             autoFocus
             showSoftInputOnFocus={false}
             keyboardType="number-pad"

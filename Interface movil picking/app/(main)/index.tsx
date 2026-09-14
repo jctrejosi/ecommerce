@@ -14,6 +14,7 @@ import { OrderCard } from "@/ui/OrderCard";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorBox } from "@/ui/ErrorBox";
 import { LoginModal } from "@/ui/LoginModal";
+import { SettingsModal } from "@/ui/SettingsModal";
 import { Toast } from "@/ui/Toast";
 
 // Restaurar la sesión solo una vez por arranque del proceso (no al volver a la lista).
@@ -23,9 +24,11 @@ export default function OrderListScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<QueueFilter>("nuevo");
   const [showLogin, setShowLogin] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const user = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const hydrated = useAuthStore((s) => s.hydrated);
 
   const { data: orders, isLoading, error, refetch, isRefetching } = useQueue();
@@ -92,7 +95,13 @@ export default function OrderListScreen() {
     };
   }, [router]);
 
-  // Pedir login si aún no hay sesión.
+  // Al abrir la app siempre se pide elegir usuario (si hay sesión guardada
+  // y vigente, el modal ofrece continuar con un toque).
+  useEffect(() => {
+    if (hydrated) setShowLogin(true);
+  }, [hydrated]);
+
+  // Si la sesión se vence en pleno uso (turno/inactividad), pide login.
   useEffect(() => {
     if (hydrated && !user) setShowLogin(true);
   }, [hydrated, user]);
@@ -103,21 +112,31 @@ export default function OrderListScreen() {
       <Header
         logo
         title="DSI Picking"
-        subtitle="Alistamiento · Bodega"
         right={
-          <Pressable
-            onPress={() => setShowLogin(true)}
-            style={({ pressed }) => [styles.pickerBtn, pressed && { opacity: 0.8 }]}
-          >
-            <View style={styles.pickerAvatar}>
-              <Text style={styles.pickerAvatarText}>
-                {(user?.name ?? "?").charAt(0).toUpperCase()}
+          <View style={styles.headerRight}>
+            <Pressable
+              onPress={() => setShowSettings(true)}
+              style={({ pressed }) => [styles.pickerBtn, pressed && { opacity: 0.8 }]}
+            >
+              <View style={styles.pickerAvatar}>
+                <Text style={styles.pickerAvatarText}>
+                  {(user?.name ?? "?").charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.pickerName} numberOfLines={1}>
+                {user?.name ?? "Iniciar sesión"}
               </Text>
-            </View>
-            <Text style={styles.pickerName} numberOfLines={1}>
-              {user?.name ?? "Iniciar sesión"}
-            </Text>
-          </Pressable>
+            </Pressable>
+            {user ? (
+              <Pressable
+                onPress={() => void logout()}
+                hitSlop={6}
+                style={({ pressed }) => [styles.logOutBtn, pressed && { opacity: 0.8 }]}
+              >
+                <Ionicons name="log-out-outline" size={18} color={colors.dangerText} />
+              </Pressable>
+            ) : null}
+          </View>
         }
       />
 
@@ -193,6 +212,15 @@ export default function OrderListScreen() {
         visible={showLogin}
         onClose={user ? () => setShowLogin(false) : undefined}
       />
+
+      <SettingsModal
+        visible={showSettings}
+        onClose={() => setShowSettings(false)}
+        onSwitchUser={() => {
+          setShowSettings(false);
+          setShowLogin(true);
+        }}
+      />
     </View>
   );
 }
@@ -210,7 +238,18 @@ const styles = StyleSheet.create({
     paddingLeft: spacing(1),
     paddingRight: spacing(3),
     paddingVertical: 4,
-    maxWidth: 180,
+    maxWidth: 150,
+  },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
+  logOutBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
   pickerAvatar: {
     width: 26,

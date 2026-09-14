@@ -32,8 +32,6 @@ const KIND_COLOR: Record<UserKind, string> = {
   delivery: "bg-blue-100 text-blue-700",
 };
 
-type TipoForm = "admin" | "picking" | "consulta";
-
 interface UserFormState {
   fullName: string;
   username: string;
@@ -42,7 +40,6 @@ interface UserFormState {
   password: string;
   isSuperuser: boolean;
   isActive: boolean;
-  isPicker: boolean;
   roleIds: number[];
 }
 
@@ -54,7 +51,6 @@ const EMPTY_USER_FORM: UserFormState = {
   password: "",
   isSuperuser: false,
   isActive: true,
-  isPicker: false,
   roleIds: [],
 };
 
@@ -162,7 +158,7 @@ export default function UsersView() {
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
     return users.filter((u) => {
-      if (kindFilter !== "all" && u.kind !== kindFilter) return false;
+      if (kindFilter !== "all" && !u.kinds.includes(kindFilter)) return false;
       if (!q) return true;
       return (
         u.fullName.toLowerCase().includes(q) ||
@@ -405,9 +401,13 @@ function UserTab({
                   </div>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${KIND_COLOR[u.kind]}`}>
-                    {KIND_LABEL[u.kind]}
-                  </span>
+                  <div className="flex flex-wrap gap-1">
+                    {u.kinds.map((k) => (
+                      <span key={k} className={`text-xs font-semibold px-2.5 py-1 rounded-full ${KIND_COLOR[k]}`}>
+                        {KIND_LABEL[k]}
+                      </span>
+                    ))}
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex flex-wrap gap-1 max-w-60">
@@ -635,14 +635,14 @@ function UserModal({
           password: "",
           isSuperuser: initial.isSuperuser,
           isActive: initial.isActive,
-          isPicker: initial.isPicker,
           roleIds: initial.roles.map((r) => r.id),
         }
       : { ...EMPTY_USER_FORM },
   );
-  const [tipo, setTipo] = useState<TipoForm>(() =>
-    initial ? (initial.isPicker ? "picking" : initial.roles.some((r) => r.name === "Consulta") ? "consulta" : "admin") : "admin",
+  const [kinds, setKinds] = useState<("picking" | "delivery")[]>(() =>
+    initial ? initial.kinds.filter((k): k is "picking" | "delivery" => k !== "admin") : [],
   );
+  const [vehicleType, setVehicleType] = useState("MOTO");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -650,22 +650,16 @@ function UserModal({
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  function applyTipo(next: TipoForm) {
-    setTipo(next);
-    const consulta = roles.find((r) => r.name === "Consulta")?.id;
-    const admin = roles.find((r) => r.name === "Administrador")?.id;
-    setForm((f) => ({
-      ...f,
-      isPicker: next === "picking",
-      roleIds:
-        next === "consulta" && consulta ? [consulta] : next === "admin" && admin ? [admin] : [],
-    }));
+  function toggleKind(k: "picking" | "delivery") {
+    setKinds((prev) => (prev.includes(k) ? prev.filter((x) => x !== k) : [...prev, k]));
   }
 
   async function submit() {
     setSaving(true);
     setErr(null);
     try {
+      const isPicker = kinds.includes("picking");
+      const isDelivery = kinds.includes("delivery");
       if (editing && initial) {
         await adminUsersService.updateUser(initial.id, {
           fullName: form.fullName,
@@ -674,7 +668,9 @@ function UserModal({
           phone: form.phone || undefined,
           isSuperuser: form.isSuperuser,
           isActive: form.isActive,
-          isPicker: form.isPicker,
+          isPicker,
+          isDelivery,
+          vehicleType: isDelivery ? vehicleType : undefined,
           roleIds: form.roleIds,
         });
       } else {
@@ -686,7 +682,9 @@ function UserModal({
           password: form.password,
           isSuperuser: form.isSuperuser,
           isActive: form.isActive,
-          isPicker: form.isPicker,
+          isPicker,
+          isDelivery,
+          vehicleType: isDelivery ? vehicleType : undefined,
           roleIds: form.roleIds,
         });
       }
@@ -726,16 +724,49 @@ function UserModal({
           </Field>
         )}
 
-        {!editing && (
-          <Field label="Tipo de usuario">
-            <select
-              className={inputCls}
-              value={tipo}
-              onChange={(e) => applyTipo(e.target.value as TipoForm)}
+        <Field label="Tipos de acceso">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setKinds([])}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors ${
+                kinds.length === 0
+                  ? "bg-amber-400 text-amber-900 border-amber-400"
+                  : "bg-white text-gray-500 border-gray-200 hover:text-gray-700"
+              }`}
             >
-              <option value="admin">Administrador</option>
-              <option value="picking">Picking</option>
-              <option value="consulta">Consulta (solo lectura)</option>
+              Admin
+            </button>
+            {(["picking", "delivery"] as const).map((k) => {
+              const active = kinds.includes(k);
+              return (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => toggleKind(k)}
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors ${
+                    active
+                      ? "bg-amber-400 text-amber-900 border-amber-400"
+                      : "bg-white text-gray-500 border-gray-200 hover:text-gray-700"
+                  }`}
+                >
+                  {KIND_LABEL[k]}
+                </button>
+              );
+            })}
+          </div>
+          {kinds.length === 0 && (
+            <p className="text-[11px] text-gray-400 mt-1">Usuario del panel (web admin).</p>
+          )}
+        </Field>
+
+        {kinds.includes("delivery") && (
+          <Field label="Tipo de vehículo">
+            <select className={inputCls} value={vehicleType} onChange={(e) => setVehicleType(e.target.value)}>
+              <option value="MOTO">Moto</option>
+              <option value="CARRO">Carro</option>
+              <option value="BICICLETA">Bicicleta</option>
+              <option value="FURGONETA">Furgoneta</option>
             </select>
           </Field>
         )}
@@ -770,7 +801,6 @@ function UserModal({
         <div className="space-y-2 pt-1">
           <Toggle checked={form.isSuperuser} onChange={(v) => set("isSuperuser", v)} label="Superadministrador (acceso total)" />
           <Toggle checked={form.isActive} onChange={(v) => set("isActive", v)} label="Cuenta activa" />
-          <Toggle checked={form.isPicker} onChange={(v) => set("isPicker", v)} label="Es usuario de picking" />
         </div>
 
         <div className="flex justify-end gap-2 pt-3">

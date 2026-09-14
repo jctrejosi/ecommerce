@@ -13,7 +13,7 @@ export type AdminUser = {
   isSuperuser: boolean;
   isActive: boolean;
   isPicker: boolean;
-  kind: UserKind;
+  kinds: UserKind[];
   driverId: number | null;
   lastLoginAt: string | null;
   createdAt: string;
@@ -46,6 +46,8 @@ export type CreateUserPayload = {
   isSuperuser?: boolean;
   isActive?: boolean;
   isPicker?: boolean;
+  isDelivery?: boolean;
+  vehicleType?: string;
   roleIds?: number[];
 };
 

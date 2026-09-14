@@ -1,24 +1,20 @@
 import axios from "axios";
 import type { AxiosError } from "axios";
 import { clearTokens, getTokens } from "@/auth/session";
+import { getApiUrl } from "./apiConfig";
 
 /**
- * URL del backend. En desarrollo: `http://10.0.2.2:3000` funciona en el
- * emulador de Android; en iOS simulator / web usa `http://localhost:3000`.
- * Se puede sobrescribir con `EXPO_PUBLIC_API_URL`.
+ * Cliente HTTP. La URL del backend es configurable en runtime
+ * (Ajustes → Servidor) y se aplica en cada petición.
  */
-export const API_URL = (
-  process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:3000"
-).replace(/\/+$/, "");
-
 export const http = axios.create({
-  baseURL: API_URL,
   timeout: 20_000,
   headers: { "Content-Type": "application/json" },
 });
 
 // Adjunta el token de sesión (si lo hay) a todas las peticiones.
 http.interceptors.request.use(async (config) => {
+  config.baseURL = getApiUrl();
   const tokens = await getTokens();
   if (tokens?.accessToken) {
     config.headers = config.headers ?? {};
@@ -29,7 +25,13 @@ http.interceptors.request.use(async (config) => {
 
 // Si el token expiró, cierra la sesión para forzar el login de nuevo.
 http.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // Cada respuesta cuenta como actividad (vencimiento por inactividad).
+    void import("@/auth/authStore").then(({ useAuthStore }) =>
+      useAuthStore.getState().touchActivity(),
+    );
+    return res;
+  },
   async (error: AxiosError) => {
     const status = error.response?.status;
     const url = String(error.config?.url ?? "");

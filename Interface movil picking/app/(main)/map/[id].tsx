@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
 import { isItemDone, scannedCount } from "@/picking/status";
 import { useLocations, useOrder, useShelves } from "@/picking/queries";
@@ -11,6 +12,7 @@ import { PickingMap, type MapSpot } from "@/ui/PickingMap";
 
 export default function MapScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; itemId?: string }>();
   const orderId = Number(params.id);
   const { width: windowWidth } = useWindowDimensions();
@@ -68,7 +70,7 @@ export default function MapScreen() {
     <View style={styles.root}>
       <Header title="Mapa de bodega" subtitle={order?.referenceCode} onBack={() => router.back()} />
 
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + spacing(4) }]}>
         {mapError ? (
           <ErrorBox
             message="No se pudo cargar el mapa de bodega."

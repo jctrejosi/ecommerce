@@ -3,6 +3,7 @@ import type {
   Branch,
   BulkAssignResult,
   Category,
+  CategoryOrganization,
   PickerHistory,
   PickerSummary,
   PickingOrderDetail,
@@ -103,6 +104,22 @@ export const api = {
   branches: () => fetchJson<Branch[]>('/picking-admin/branches'),
 
   categories: () => fetchJson<Category[]>('/picking-admin/categories'),
+
+  categoryOrganization: (categoryId: number, branchId: number) =>
+    fetchJson<CategoryOrganization>(
+      `/picking-admin/categories/${categoryId}/organization?branchId=${branchId}`,
+    ),
+
+  schedule: (branchId: number) =>
+    fetchJson<{ branchId: number; schedule: Record<string, string> }>(
+      `/picking-admin/branches/${branchId}/schedule`,
+    ),
+
+  saveSchedule: (branchId: number, schedule: Record<string, string>) =>
+    fetchJson<{ branchId: number; schedule: Record<string, string> }>(
+      `/picking-admin/branches/${branchId}/schedule`,
+      { method: 'PUT', body: JSON.stringify({ schedule }) },
+    ),
 
   shelves: (branchId: number) =>
     fetchJson<Shelf[]>(`/picking-admin/shelves?branchId=${branchId}`),

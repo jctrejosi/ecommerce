@@ -2,6 +2,11 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import type { FormEvent } from 'react'
 import { api, ApiError } from './services/api'
 import type { AuthUser, PickUser } from './services/api'
+import type {
+  CategoryOrganization,
+  CategoryOrgProduct,
+  CategoryOrgShelf,
+} from './types'
 import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
@@ -34,7 +39,7 @@ const emptyShelf = () => ({
 export default function App() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState<number | null>(null)
-  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'metrics' | 'users'>('shelves')
+  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'metrics' | 'users' | 'schedule' | 'categories'>('shelves')
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<ProductWithLocation[]>([])
@@ -196,22 +201,27 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto">
-        <div className="w-full max-w-6xl mx-auto px-5 pb-16">
-        {/* Tabs */}
-        <div className="flex gap-2 my-5">
-          {(['shelves', 'map', 'products', 'metrics', 'users'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
-              }`}
-            >
-              {t === 'shelves' ? 'Estanterías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'metrics' ? 'Informes' : 'Usuarios'}
-            </button>
-          ))}
+      <main className="flex-1 flex flex-col min-h-0">
+        {/* Tabs fijos (no scrolleables) */}
+        <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3 shrink-0">
+          <div className="flex gap-2 flex-wrap">
+            {(['shelves', 'categories', 'map', 'products', 'metrics', 'users', 'schedule'] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                  tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
+                }`}
+              >
+                {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'metrics' ? 'Informes' : t === 'users' ? 'Usuarios' : 'Horarios'}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {/* Contenido scrolleable */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="w-full max-w-6xl mx-auto px-5 pb-16">
 
         {error && (
           <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm mb-5 flex items-center gap-3">
@@ -227,6 +237,15 @@ export default function App() {
             shelves={shelves}
             categories={categories}
             loading={loading}
+            onChanged={() => {
+              if (branchId) api.shelves(branchId).then(setShelves).catch(() => undefined)
+            }}
+            notify={notify}
+          />
+        ) : tab === 'categories' ? (
+          <CategoriesView
+            branchId={branchId}
+            shelves={shelves}
             onChanged={() => {
               if (branchId) api.shelves(branchId).then(setShelves).catch(() => undefined)
             }}
@@ -249,6 +268,8 @@ export default function App() {
           <MetricsView notify={notify} />
         ) : tab === 'users' ? (
           <PickUsersView notify={notify} />
+        ) : tab === 'schedule' ? (
+          <ScheduleView branchId={branchId} branches={branches} notify={notify} />
         ) : (
           <ProductsView
             branchId={branchId}
@@ -280,6 +301,7 @@ export default function App() {
             notify={notify}
           />
         )}
+        </div>
         </div>
       </main>
 
@@ -1311,6 +1333,471 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Horarios por sucursal ────────────────────────────────────────────────────
+
+const DAYS: { key: string; label: string }[] = [
+  { key: 'monday', label: 'Lunes' },
+  { key: 'tuesday', label: 'Martes' },
+  { key: 'wednesday', label: 'Miércoles' },
+  { key: 'thursday', label: 'Jueves' },
+  { key: 'friday', label: 'Viernes' },
+  { key: 'saturday', label: 'Sábado' },
+  { key: 'sunday', label: 'Domingo' },
+]
+
+function ScheduleView({
+  branchId,
+  branches,
+  notify,
+}: {
+  branchId: number | null
+  branches: Branch[]
+  notify: (m: string) => void
+}) {
+  const [schedule, setSchedule] = useState<Record<string, string>>({})
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const branch = branches.find((b) => b.id === branchId) ?? null
+
+  useEffect(() => {
+    if (!branchId) return
+    setLoading(true)
+    setError(null)
+    api
+      .schedule(branchId)
+      .then((r) => setSchedule(r.schedule ?? {}))
+      .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudo cargar el horario'))
+      .finally(() => setLoading(false))
+  }, [branchId])
+
+  const setRange = (day: string, value: string) =>
+    setSchedule((prev) => ({ ...prev, [day]: value }))
+
+  const save = async () => {
+    if (!branchId) return
+    setSaving(true)
+    setError(null)
+    try {
+      await api.saveSchedule(branchId, schedule)
+      notify('Horario guardado')
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo guardar el horario')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-extrabold text-white">Horarios por sucursal</h2>
+          <p className="text-white/40 text-xs mt-0.5">
+            El cierre de turno define cuándo vence la sesión de los pickers en la app móvil.
+          </p>
+        </div>
+        {branch ? (
+          <span className="text-xs font-bold text-amber-400 bg-amber-400/10 border border-amber-400/30 rounded-full px-3 py-1.5">
+            {branch.name}
+          </span>
+        ) : null}
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm flex items-center gap-3">
+          <p className="flex-1">{error}</p>
+          <button onClick={() => setError(null)} className="font-extrabold underline">Cerrar</button>
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-white/35 text-xs font-semibold">
+          La sucursal se elige arriba (selector de sucursales).
+        </span>
+      </div>
+
+      {!branchId ? (
+        <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
+      ) : loading ? (
+        <p className="text-white/40 text-sm py-8 text-center">Cargando horario…</p>
+      ) : (
+        <div className="flex flex-col gap-2 max-w-2xl">
+          {DAYS.map((d) => {
+            const value = schedule[d.key] ?? ''
+            const parts = value.split('-')
+            return (
+              <div
+                key={d.key}
+                className="flex items-center gap-3 bg-[#141416] border border-white/10 rounded-xl px-4 py-2.5"
+              >
+                <span className="w-24 text-sm font-bold text-white/80">{d.label}</span>
+                <input
+                  type="time"
+                  value={parts[0] ?? ''}
+                  onChange={(e) =>
+                    setRange(d.key, `${e.target.value || '08:00'}-${parts[1] ?? '20:00'}`)
+                  }
+                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-amber-400"
+                />
+                <span className="text-white/30 text-xs font-bold">a</span>
+                <input
+                  type="time"
+                  value={parts[1] ?? ''}
+                  onChange={(e) =>
+                    setRange(d.key, `${parts[0] ?? '08:00'}-${e.target.value || '20:00'}`)
+                  }
+                  className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-sm text-white outline-none focus:border-amber-400"
+                />
+                {value && !/^\d{2}:\d{2}-\d{2}:\d{2}$/.test(value) && (
+                  <span className="text-red-400 text-[10px] font-bold">formato HH:MM-HH:MM</span>
+                )}
+              </div>
+            )
+          })}
+
+          <button
+            onClick={() => void save()}
+            disabled={saving}
+            className="mt-3 self-start px-5 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-bold disabled:opacity-40"
+          >
+            {saving ? 'Guardando…' : 'Guardar horario'}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Categorías: organizar estanterías y productos por categoría ─────────────
+
+function OrgProductRow({
+  product,
+  org,
+  branchId,
+  onMoved,
+  notify,
+}: {
+  product: CategoryOrgProduct
+  org: CategoryOrganization
+  branchId: number
+  onMoved: () => void
+  notify: (m: string) => void
+}) {
+  const [shelfId, setShelfId] = useState<number | null>(product.shelfId)
+  const [rowNumber, setRowNumber] = useState<number | null>(product.rowNumber)
+  const [busy, setBusy] = useState(false)
+
+  const selectedShelf = org.shelves.find((s) => s.id === shelfId) ?? null
+  const dirty =
+    shelfId !== product.shelfId ||
+    (shelfId !== null && rowNumber !== product.rowNumber)
+
+  const save = async () => {
+    setBusy(true)
+    try {
+      if (shelfId === null) {
+        await api.removeLocation(product.productVariantId, branchId)
+      } else if (rowNumber !== null) {
+        await api.setLocation(
+          product.productVariantId,
+          branchId,
+          shelfId,
+          rowNumber,
+        )
+      }
+      notify('Ubicación actualizada')
+      onMoved()
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'No se pudo mover el producto')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <tr className="border-t border-white/5">
+      <td className="py-2.5 pr-3">
+        <p className="text-sm font-semibold truncate max-w-[220px]">{product.productName}</p>
+        <p className="text-white/35 text-[10px] font-medium">
+          SKU {product.sku ?? '—'} · stock {product.stock}
+        </p>
+      </td>
+      <td className="py-2.5 pr-3 text-xs text-white/60">
+        {product.shelfCode ? `${product.shelfCode}${product.rowNumber ? ` · Fila ${product.rowNumber}` : ''}` : 'Sin ubicación'}
+      </td>
+      <td className="py-2.5 pr-2">
+        <select
+          value={shelfId ?? ''}
+          onChange={(e) => {
+            const v = e.target.value ? Number(e.target.value) : null
+            setShelfId(v)
+            if (v === null) setRowNumber(null)
+          }}
+          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-amber-400 max-w-[160px]"
+        >
+          <option value="">— Sin ubicación —</option>
+          {org.shelves.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.code} · {s.name}
+            </option>
+          ))}
+        </select>
+        {shelfId !== null && (
+          <select
+            value={rowNumber ?? ''}
+            onChange={(e) => setRowNumber(e.target.value ? Number(e.target.value) : null)}
+            className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-amber-400"
+          >
+            <option value="">Fila…</option>
+            {(selectedShelf?.rows ?? []).map((r) => (
+              <option key={r.rowNumber} value={r.rowNumber}>
+                {r.rowNumber} · {r.label}
+              </option>
+            ))}
+          </select>
+        )}
+      </td>
+      <td className="py-2.5 text-right">
+        <button
+          onClick={() => void save()}
+          disabled={busy || !dirty || (shelfId !== null && rowNumber === null)}
+          className="text-xs font-bold text-amber-400 hover:underline disabled:opacity-30"
+        >
+          {busy ? '…' : 'Mover'}
+        </button>
+      </td>
+    </tr>
+  )
+}
+
+function CategoriesView({
+  branchId,
+  shelves,
+  onChanged,
+  notify,
+}: {
+  branchId: number | null
+  shelves: Shelf[]
+  onChanged: () => void
+  notify: (m: string) => void
+}) {
+  const [categories, setCategories] = useState<Category[]>([])
+  const [search, setSearch] = useState('')
+  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [org, setOrg] = useState<CategoryOrganization | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [assignShelfId, setAssignShelfId] = useState<number | null>(null)
+
+  useEffect(() => {
+    api.categories().then(setCategories).catch(() => undefined)
+  }, [])
+
+  const loadOrg = useCallback(async (categoryId: number) => {
+    if (!branchId) return
+    setLoading(true)
+    try {
+      setOrg(await api.categoryOrganization(categoryId, branchId))
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'No se pudo cargar la categoría')
+    } finally {
+      setLoading(false)
+    }
+  }, [branchId, notify])
+
+  useEffect(() => {
+    if (selectedId) void loadOrg(selectedId)
+  }, [selectedId, loadOrg])
+
+  const filtered = categories.filter((c) =>
+    c.name.toLowerCase().includes(search.trim().toLowerCase()),
+  )
+
+  const assignShelf = async () => {
+    if (!selectedId || !assignShelfId) return
+    try {
+      await api.updateShelf(assignShelfId, { categoryId: selectedId })
+      notify('Estantería asignada a la categoría')
+      setAssignShelfId(null)
+      onChanged()
+      void loadOrg(selectedId)
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'No se pudo asignar la estantería')
+    }
+  }
+
+  const detachShelf = async (shelfId: number) => {
+    if (!selectedId) return
+    try {
+      await api.updateShelf(shelfId, { categoryId: null })
+      notify('Estantería quitada de la categoría')
+      onChanged()
+      void loadOrg(selectedId)
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'No se pudo quitar la estantería')
+    }
+  }
+
+  const branchShelves = shelves.filter((s) => s.branchId === branchId)
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4">
+      {/* Lista de categorías */}
+      <div className="flex flex-col gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar categoría…"
+          className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+        />
+        <div className="max-h-[70vh] overflow-y-auto flex flex-col gap-1.5 pr-1">
+          {filtered.map((c) => {
+            const shelfCount = shelves.filter((s) => s.categoryId === c.id).length
+            const active = c.id === selectedId
+            return (
+              <button
+                key={c.id}
+                onClick={() => setSelectedId(c.id)}
+                className={`text-left px-3 py-2.5 rounded-xl border transition-all ${
+                  active
+                    ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
+                    : 'bg-white/5 border-white/10 text-white/70 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm font-bold truncate">{c.name}</span>
+                  <span className={`text-[10px] font-extrabold ${active ? 'text-[#0C0C0D]/60' : 'text-white/40'}`}>
+                    {c.productCount} prod
+                  </span>
+                </div>
+                <span className={`text-[10px] font-semibold ${active ? 'text-[#0C0C0D]/60' : 'text-white/35'}`}>
+                  {shelfCount} estantería(s) en esta sucursal
+                </span>
+              </button>
+            )
+          })}
+          {filtered.length === 0 && (
+            <p className="text-white/30 text-sm text-center py-6">Sin resultados.</p>
+          )}
+        </div>
+      </div>
+
+      {/* Detalle de la categoría */}
+      <div className="flex flex-col gap-4">
+        {!selectedId ? (
+          <p className="text-white/30 text-sm py-10 text-center">
+            Selecciona una categoría para ver sus estanterías y productos.
+          </p>
+        ) : loading || !org || !branchId ? (
+          <p className="text-white/40 text-sm py-10 text-center">Cargando…</p>
+        ) : (
+          <>
+            <div>
+              <h2 className="text-lg font-extrabold text-white">{org.category.name}</h2>
+              <p className="text-white/40 text-xs mt-0.5">
+                {org.products.length} producto(s) en la categoría · {org.shelves.length} estantería(s)
+              </p>
+            </div>
+
+            {/* Estanterías de la categoría */}
+            <section className="flex flex-col gap-2">
+              <h3 className="text-white/35 text-[10px] font-bold uppercase tracking-wider">
+                Estanterías de esta categoría ({org.shelves.length})
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {org.shelves.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex items-center gap-2 bg-[#141416] border border-white/10 rounded-xl px-3 py-2"
+                  >
+                    <span className="w-3 h-3 rounded-full" style={{ background: s.color }} />
+                    <div>
+                      <p className="text-sm font-bold text-white">{s.code}</p>
+                      <p className="text-white/35 text-[10px] font-medium">{s.name} · {s.productCount} prod</p>
+                    </div>
+                    <button
+                      onClick={() => void detachShelf(s.id)}
+                      className="ml-2 text-[10px] font-bold text-red-400 hover:underline"
+                    >
+                      Quitar
+                    </button>
+                  </div>
+                ))}
+                {org.shelves.length === 0 && (
+                  <p className="text-white/30 text-xs">Ninguna estantería asignada aún.</p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-2 max-w-md">
+                <select
+                  value={assignShelfId ?? ''}
+                  onChange={(e) => setAssignShelfId(e.target.value ? Number(e.target.value) : null)}
+                  className="flex-1 bg-white/5 border border-white/10 rounded-lg px-2 py-2 text-xs text-white outline-none focus:border-amber-400"
+                >
+                  <option value="">Asignar estantería de la sucursal…</option>
+                  {branchShelves
+                    .filter((s) => s.categoryId !== org.category.id)
+                    .map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.code} · {s.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  onClick={() => void assignShelf()}
+                  disabled={!assignShelfId}
+                  className="px-3 py-2 rounded-lg bg-amber-400 text-[#0C0C0D] text-xs font-bold disabled:opacity-40"
+                >
+                  Asignar
+                </button>
+              </div>
+            </section>
+
+            {/* Productos de la categoría */}
+            <section>
+              <h3 className="text-white/35 text-[10px] font-bold uppercase tracking-wider mb-2">
+                Productos de la categoría ({org.products.length})
+              </h3>
+              <div className="bg-[#141416] border border-white/10 rounded-2xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-white/35 text-[10px] font-bold uppercase tracking-wider text-left border-b border-white/5 bg-white/5">
+                      <th className="px-4 py-2.5">Producto</th>
+                      <th className="px-4 py-2.5">Ubicación actual</th>
+                      <th className="px-4 py-2.5">Mover a</th>
+                      <th className="px-4 py-2.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {org.products.map((p) => (
+                      <OrgProductRow
+                        key={p.productVariantId}
+                        product={p}
+                        org={org}
+                        branchId={branchId}
+                        notify={notify}
+                        onMoved={() => void loadOrg(selectedId)}
+                      />
+                    ))}
+                    {org.products.length === 0 && (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-6 text-center text-white/30 text-sm">
+                          Esta categoría no tiene productos asociados.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </>
+        )}
+      </div>
     </div>
   )
 }

@@ -282,12 +282,10 @@ export class AdminUsersService implements OnModuleInit {
     row: UserRow,
     roleMap: Map<number, { id: number; name: string }[]>,
   ) {
-    const driver = row.driverId != null;
-    const kind: UserKind = driver
-      ? 'delivery'
-      : row.isPicker
-        ? 'picking'
-        : 'admin';
+    const kinds: UserKind[] = [];
+    if (row.isPicker) kinds.push('picking');
+    if (row.driverId != null) kinds.push('delivery');
+    if (kinds.length === 0) kinds.push('admin');
     return {
       id: Number(row.id),
       firstName: row.firstName,
@@ -299,8 +297,8 @@ export class AdminUsersService implements OnModuleInit {
       isSuperuser: row.isSuperuser,
       isActive: row.isActive,
       isPicker: row.isPicker,
-      kind,
-      driverId: driver ? Number(row.driverId) : null,
+      kinds,
+      driverId: row.driverId != null ? Number(row.driverId) : null,
       lastLoginAt: row.lastLoginAt,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
@@ -349,7 +347,13 @@ export class AdminUsersService implements OnModuleInit {
         driverId: deliveryDrivers.id,
       })
       .from(users)
-      .leftJoin(deliveryDrivers, eq(deliveryDrivers.authUserId, users.id))
+      .leftJoin(
+        deliveryDrivers,
+        and(
+          eq(deliveryDrivers.authUserId, users.id),
+          isNull(deliveryDrivers.deletedAt),
+        ),
+      )
       .where(isNull(users.deletedAt))
       .orderBy(asc(users.firstName), asc(users.lastName));
 
@@ -357,7 +361,7 @@ export class AdminUsersService implements OnModuleInit {
 
     return rows
       .map((r) => this.toUser(r, roleMap))
-      .filter((u) => !kind || u.kind === kind);
+      .filter((u) => !kind || u.kinds.includes(kind));
   }
 
   private async findUserRow(id: number) {
@@ -418,7 +422,27 @@ export class AdminUsersService implements OnModuleInit {
     }
   }
 
-  /** Crea un usuario de panel (web admin o picking). */
+  private async createDriverRow(
+    userId: number,
+    data: {
+      fullName: string;
+      phone: string | null;
+      email: string;
+      vehicleType?: string;
+    },
+  ) {
+    await this.db.insert(deliveryDrivers).values({
+      fullName: data.fullName,
+      phone: data.phone || '',
+      email: data.email,
+      authUserId: userId,
+      vehicleType: data.vehicleType?.trim() || 'MOTO',
+      isAvailable: true,
+      isActive: true,
+    });
+  }
+
+  /** Crea un usuario de panel (web admin / picking / delivery). */
   async createUser(dto: {
     fullName: string;
     username: string;
@@ -428,6 +452,8 @@ export class AdminUsersService implements OnModuleInit {
     isSuperuser?: boolean;
     isActive?: boolean;
     isPicker?: boolean;
+    isDelivery?: boolean;
+    vehicleType?: string;
     roleIds?: number[];
   }) {
     const email = dto.email.trim().toLowerCase();
@@ -452,6 +478,16 @@ export class AdminUsersService implements OnModuleInit {
       .returning({ id: users.id });
 
     await this.replaceUserRoles(Number(row.id), dto.roleIds ?? []);
+
+    if (dto.isDelivery) {
+      await this.createDriverRow(Number(row.id), {
+        fullName: dto.fullName.trim(),
+        phone: dto.phone?.trim() || null,
+        email,
+        vehicleType: dto.vehicleType,
+      });
+    }
+
     this.logger.log(`Usuario de panel creado: ${username}`);
     return this.getUser(Number(row.id));
   }
@@ -474,7 +510,13 @@ export class AdminUsersService implements OnModuleInit {
         driverId: deliveryDrivers.id,
       })
       .from(users)
-      .leftJoin(deliveryDrivers, eq(deliveryDrivers.authUserId, users.id))
+      .leftJoin(
+        deliveryDrivers,
+        and(
+          eq(deliveryDrivers.authUserId, users.id),
+          isNull(deliveryDrivers.deletedAt),
+        ),
+      )
       .where(and(eq(users.id, BigInt(id)), isNull(users.deletedAt)))
       .limit(1);
     if (!rows.length) throw new NotFoundException('Usuario no encontrado');
@@ -492,6 +534,8 @@ export class AdminUsersService implements OnModuleInit {
       isSuperuser?: boolean;
       isActive?: boolean;
       isPicker?: boolean;
+      isDelivery?: boolean;
+      vehicleType?: string;
       roleIds?: number[];
     },
   ) {
@@ -529,7 +573,94 @@ export class AdminUsersService implements OnModuleInit {
       await this.replaceUserRoles(id, dto.roleIds);
     }
 
+    await this.syncDriver(id, dto, patch, current);
+
     return this.getUser(id);
+  }
+
+  private async syncDriver(
+    userId: number,
+    dto: {
+      isDelivery?: boolean;
+      vehicleType?: string;
+    },
+    patch: Partial<typeof users.$inferInsert>,
+    current: {
+      firstName: string;
+      lastName: string;
+      email: string;
+      phone: string | null;
+    },
+  ) {
+    if (dto.isDelivery === undefined && dto.vehicleType === undefined) return;
+
+    const existing = await this.db
+      .select({ id: deliveryDrivers.id })
+      .from(deliveryDrivers)
+      .where(
+        and(
+          eq(deliveryDrivers.authUserId, userId),
+          isNull(deliveryDrivers.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    if (dto.isDelivery === false) {
+      if (existing.length) {
+        await this.db
+          .update(deliveryDrivers)
+          .set({
+            deletedAt: new Date().toISOString(),
+            isActive: false,
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(deliveryDrivers.id, existing[0].id));
+      }
+      return;
+    }
+
+    if (dto.isDelivery === true) {
+      if (existing.length) {
+        await this.db
+          .update(deliveryDrivers)
+          .set({ isActive: true, updatedAt: new Date().toISOString() })
+          .where(eq(deliveryDrivers.id, existing[0].id));
+        if (dto.vehicleType !== undefined) {
+          await this.db
+            .update(deliveryDrivers)
+            .set({
+              vehicleType: dto.vehicleType.trim() || null,
+              updatedAt: new Date().toISOString(),
+            })
+            .where(eq(deliveryDrivers.id, existing[0].id));
+        }
+      } else {
+        const fullName = [
+          patch.firstName ?? current.firstName,
+          patch.lastName ?? current.lastName,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .trim();
+        await this.createDriverRow(userId, {
+          fullName,
+          phone: (patch.phone ?? current.phone) || null,
+          email: patch.email ?? current.email,
+          vehicleType: dto.vehicleType,
+        });
+      }
+      return;
+    }
+
+    if (dto.vehicleType !== undefined && existing.length) {
+      await this.db
+        .update(deliveryDrivers)
+        .set({
+          vehicleType: dto.vehicleType.trim() || null,
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(deliveryDrivers.id, existing[0].id));
+    }
   }
 
   async resetPassword(id: number, password: string) {

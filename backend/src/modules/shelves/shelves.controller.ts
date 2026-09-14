@@ -11,8 +11,11 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SuperuserGuard } from '../delivery/superuser.guard';
 import type {
   CreateShelfDto,
   SetLocationDto,
@@ -37,10 +40,49 @@ export class ShelvesController {
     return this.shelvesService.branches();
   }
 
+  @Get('branches/:id/schedule')
+  @ApiOperation({ summary: 'Horario de una sucursal (días → HH:MM-HH:MM)' })
+  branchSchedule(@Param('id', ParseIntPipe) id: number) {
+    return this.shelvesService.getSchedule(id);
+  }
+
+  @Put('branches/:id/schedule')
+  @UseGuards(JwtAuthGuard, SuperuserGuard)
+  @ApiOperation({ summary: 'Guarda el horario de una sucursal' })
+  saveBranchSchedule(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: { schedule?: Record<string, string> },
+  ) {
+    if (!dto?.schedule) {
+      throw new BadRequestException('Se requiere el campo schedule');
+    }
+    return this.shelvesService.saveSchedule(id, dto.schedule);
+  }
+
+  @Get('shift-today')
+  @ApiOperation({ summary: 'Cierre de turno más tardío entre sucursales hoy' })
+  shiftToday() {
+    return this.shelvesService.shiftToday();
+  }
+
   @Get('categories')
   @ApiOperation({ summary: 'Categorías para asociar a las estanterías' })
   categories() {
     return this.shelvesService.categories();
+  }
+
+  @Get('categories/:id/organization')
+  @ApiOperation({
+    summary: 'Estanterías y productos de una categoría (organización por categoría)',
+  })
+  categoryOrganization(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.shelvesService.categoryOrganization(
+      id,
+      branchId ? Number(branchId) : undefined,
+    );
   }
 
   // ── Estanterías ──

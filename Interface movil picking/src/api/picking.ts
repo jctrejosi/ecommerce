@@ -48,6 +48,9 @@ export const pickingApi = {
   scan: (id: number, code: string) =>
     post<ScanResult>(`/picking/orders/${id}/scan`, { code }),
 
+  /** Cierre de turno de hoy (entre todas las sucursales). */
+  shiftToday: () => get<{ day: string; closeTime: string | null }>("/picking-admin/shift-today"),
+
   complete: (id: number) =>
     post<{ ok: boolean; status: string; already?: boolean }>(`/picking/orders/${id}/complete`),
 

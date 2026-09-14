@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
 
 interface HeaderProps {
@@ -13,8 +14,9 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle, onBack, right, logo = false }: HeaderProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { paddingTop: spacing(3) + insets.top }]}>
       <View style={styles.left}>
         {onBack ? (
           <Pressable
@@ -25,22 +27,30 @@ export function Header({ title, subtitle, onBack, right, logo = false }: HeaderP
             <Ionicons name="chevron-back" size={22} color={colors.text} />
           </Pressable>
         ) : logo ? (
-          <Image
-            source={require("../../assets/logo.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-        ) : null}
-        <View style={styles.titles}>
-          <Text style={styles.title} numberOfLines={1}>
-            {title}
-          </Text>
-          {subtitle ? (
-            <Text style={styles.subtitle} numberOfLines={1}>
-              {subtitle}
+          <View style={styles.logoBlock}>
+            <Image
+              source={require("../../assets/logo.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            {/* Título debajo del logo, al ancho del logo y en letra pequeña */}
+            <Text style={styles.logoTitle} numberOfLines={1}>
+              {title}
             </Text>
-          ) : null}
-        </View>
+          </View>
+        ) : null}
+        {!logo && (
+          <View style={styles.titles}>
+            <Text style={styles.title} numberOfLines={1}>
+              {title}
+            </Text>
+            {subtitle ? (
+              <Text style={styles.subtitle} numberOfLines={1}>
+                {subtitle}
+              </Text>
+            ) : null}
+          </View>
+        )}
       </View>
       {right ? <View style={styles.right}>{right}</View> : null}
     </View>
@@ -63,6 +73,15 @@ const styles = StyleSheet.create({
   titles: { flexShrink: 1 },
   right: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
   logo: { height: 30, width: 92 },
+  logoBlock: { alignItems: "center", width: 92 },
+  logoTitle: {
+    width: 92,
+    color: colors.textMuted,
+    fontSize: 10,
+    fontWeight: "700",
+    textAlign: "center",
+    marginTop: 2,
+  },
   backBtn: {
     width: 40,
     height: 40,

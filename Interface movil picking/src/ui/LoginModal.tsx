@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
 import { apiErrorMessage, type Picker } from "@/api";
 import { usePickers } from "@/picking/queries";
@@ -26,15 +27,27 @@ interface LoginModalProps {
  * actual) y, al elegir uno, se pide la contraseña.
  */
 export function LoginModal({ visible, onClose }: LoginModalProps) {
+  const insets = useSafeAreaInsets();
   const { data: pickers, isLoading } = usePickers();
   const current = useAuthStore((s) => s.user);
   const login = useAuthStore((s) => s.login);
   const logout = useAuthStore((s) => s.logout);
 
   const [selected, setSelected] = useState<Picker | null>(null);
+  const [showList, setShowList] = useState(false);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  // Al abrir el modal, vuelve al estado inicial (continuar/lista).
+  useEffect(() => {
+    if (visible) {
+      setSelected(null);
+      setShowList(false);
+      setPassword("");
+      setError(null);
+    }
+  }, [visible]);
 
   const reset = () => {
     setSelected(null);
@@ -65,10 +78,41 @@ export function LoginModal({ visible, onClose }: LoginModalProps) {
       onRequestClose={() => (selected ? reset() : onClose?.())}
     >
       <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.sheet} onPress={(e) => e.stopPropagation()}>
+        <Pressable
+          style={[styles.sheet, { paddingBottom: Math.max(spacing(6), insets.bottom + spacing(3)) }]}
+          onPress={(e) => e.stopPropagation()}
+        >
           <View style={styles.handle} />
 
-          {!selected ? (
+          {!selected && current && !showList ? (
+            <>
+              {/* Sesión guardada y vigente: continuar con un toque */}
+              <View style={styles.head}>
+                <Text style={styles.title}>¿Quién eres?</Text>
+                <Text style={styles.sub}>Tienes una sesión guardada</Text>
+              </View>
+
+              <View style={styles.quickCard}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {current.name.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <Text style={styles.name} numberOfLines={1}>
+                  {current.name}
+                </Text>
+                <Pressable
+                  onPress={() => onClose?.()}
+                  style={({ pressed }) => [styles.continueBtn, pressed && { opacity: 0.9 }]}
+                >
+                  <Text style={styles.continueText}>Continuar</Text>
+                </Pressable>
+                <Pressable onPress={() => setShowList(true)} style={styles.secondaryBtn}>
+                  <Text style={styles.secondaryBtnText}>Elegir otro usuario</Text>
+                </Pressable>
+              </View>
+            </>
+          ) : !selected ? (
             <>
               <View style={styles.head}>
                 <Text style={styles.title}>¿Quién eres?</Text>
@@ -210,6 +254,22 @@ const styles = StyleSheet.create({
   title: { color: colors.text, fontSize: 20, fontWeight: "800" },
   sub: { color: colors.textFaint, fontSize: 12, fontWeight: "500", marginTop: 2 },
   loader: { paddingVertical: spacing(8) },
+  quickCard: {
+    alignItems: "center",
+    gap: spacing(3),
+    paddingVertical: spacing(6),
+    paddingHorizontal: spacing(4),
+  },
+  continueBtn: {
+    alignSelf: "stretch",
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    alignItems: "center",
+    paddingVertical: spacing(3.5),
+  },
+  continueText: { color: colors.onAccent, fontSize: 15, fontWeight: "800" },
+  secondaryBtn: { paddingVertical: spacing(2) },
+  secondaryBtnText: { color: colors.textMuted, fontSize: 13, fontWeight: "700" },
   list: { paddingHorizontal: spacing(4) },
   row: {
     flexDirection: "row",

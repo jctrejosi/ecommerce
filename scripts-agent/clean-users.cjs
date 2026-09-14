@@ -1,11 +1,9 @@
 /**
- * Limpia los usuarios del sistema y deja exactamente 2:
- *   - admin / admin4231  → superusuario (entra a web admin, delivery admin y picking admin)
- *   - juan  / juan1234   → picker (app móvil de picking) + repartidor (app móvil delivery)
+ * Deja exactamente 2 usuarios y valida roles/permisos:
+ *   - admin / admdsi1234 → superusuario + rol "Administrador" (todos los permisos de los 3 admin)
+ *   - juan  / juan4231   → picker (app picking) + repartidor (app delivery)
  *
- * Reutiliza la fila del admin global existente (email admin@mercaldas.com.co) para
- * no romper las FK con datos (media.uploaded_by, prices.changed_by). Borra el resto
- * de usuarios y sus perfiles de repartidor.
+ * Elimina cualquier otro usuario y sus perfiles/asignaciones de repartidor.
  *
  * Uso (desde la raíz del repo):
  *   NODE_PATH=backend/node_modules node scripts-agent/clean-users.cjs          # dry-run
@@ -25,7 +23,7 @@ const ADMIN = {
   email: 'admin@mercaldas.com.co',
   firstName: 'Admin',
   lastName: 'Global',
-  password: 'admin4231',
+  password: 'admdsi4231',
   isSuperuser: true,
   isPicker: false,
 };
@@ -35,35 +33,10 @@ const JUAN = {
   email: 'juan@mercaldas.com.co',
   firstName: 'Juan',
   lastName: '',
-  password: 'juan1234',
+  password: 'juan4231',
   isSuperuser: false,
   isPicker: true,
 };
-
-const DELETE_RULE = {
-  a: 'NO ACTION',
-  r: 'RESTRICT',
-  c: 'CASCADE',
-  n: 'SET NULL',
-  d: 'SET DEFAULT',
-};
-
-async function fksToUsers(db) {
-  const r = await db.query(`
-    SELECT c.conname,
-           tc.relname AS table_name,
-           a.attname  AS column_name,
-           c.confdeltype AS delete_action,
-           a.attnotnull  AS not_null
-    FROM pg_constraint c
-    JOIN pg_class tc ON tc.oid = c.conrelid
-    JOIN pg_class rc ON rc.oid = c.confrelid
-    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]
-    WHERE c.contype = 'f' AND rc.relname = 'users'
-    ORDER BY tc.relname, a.attname
-  `);
-  return r.rows;
-}
 
 async function upsertUser(db, u) {
   const passwordHash = await bcrypt.hash(u.password, 10);
@@ -95,29 +68,11 @@ async function main() {
   try {
     await db.query('BEGIN');
 
-    const fks = await fksToUsers(db);
-    console.log(`FK -> users encontradas: ${fks.length}`);
-    const blockers = [];
-    for (const fk of fks) {
-      const rule = DELETE_RULE[fk.delete_action] || fk.delete_action;
-      const { rows } = await db.query(
-        `SELECT count(*)::int AS n FROM ${fk.table_name} WHERE ${fk.column_name} IS NOT NULL`,
-      );
-      if (rows[0].n > 0) {
-        console.log(
-          `  ${fk.table_name}.${fk.column_name}: ${rows[0].n} filas (on delete ${rule}${fk.not_null ? ', NOT NULL' : ''})`,
-        );
-        if (fk.delete_action === 'n' || fk.delete_action === 'c') continue;
-        blockers.push({ ...fk, n: rows[0].n, rule });
-      }
-    }
-
-    // 1. Upsert admin (reutiliza la fila existente por email) y juan.
     const adminId = await upsertUser(db, ADMIN);
     const juanId = await upsertUser(db, JUAN);
-    console.log(`\nadmin id=${adminId} | juan id=${juanId}`);
+    console.log(`admin id=${adminId} | juan id=${juanId}`);
 
-    // 2. Reasignar a admin las FK bloqueantes que apunten a usuarios a borrar.
+    // Usuarios a eliminar (todo lo que no sea admin/juan).
     const others = await db.query(
       `SELECT id, username FROM users WHERE id <> $1 AND id <> $2 ORDER BY id`,
       [adminId, juanId],
@@ -125,84 +80,117 @@ async function main() {
     const othersIds = others.rows.map((r) => Number(r.id));
     console.log(`Usuarios a eliminar (${othersIds.length}): ${others.rows.map((r) => r.username).join(', ') || '—'}`);
 
-    for (const fk of blockers) {
-      if (othersIds.length === 0) break;
-      const res = await db.query(
-        `UPDATE ${fk.table_name} SET ${fk.column_name} = $1 WHERE ${fk.column_name} = ANY($2::bigint[])`,
-        [adminId, othersIds],
-      );
-      console.log(`  reasignadas ${res.rowCount} filas en ${fk.table_name}.${fk.column_name} -> admin`);
-    }
-
-    // 3. Eliminar perfiles de repartidor de los usuarios a borrar.
     if (othersIds.length) {
-      const drv = await db.query(
+      // Repartidores vinculados a esos usuarios.
+      const drivers = await db.query(
+        `SELECT id FROM delivery_drivers WHERE auth_user_id = ANY($1::bigint[])`,
+        [othersIds],
+      );
+      const driverIds = drivers.rows.map((r) => Number(r.id));
+
+      // 1) Asignaciones de esos repartidores (FK RESTRICT).
+      if (driverIds.length) {
+        const a = await db.query(
+          `DELETE FROM delivery_assignments WHERE driver_id = ANY($1::bigint[])`,
+          [driverIds],
+        );
+        console.log(`  delivery_assignments eliminadas: ${a.rowCount}`);
+      }
+
+      // 2) Perfiles de repartidor (locations se borran por CASCADE).
+      const d = await db.query(
         `DELETE FROM delivery_drivers WHERE auth_user_id = ANY($1::bigint[])`,
         [othersIds],
       );
-      console.log(`  repartidores eliminados: ${drv.rowCount}`);
+      console.log(`  repartidores eliminados: ${d.rowCount}`);
+
+      // 3) Reasignar FKs con datos hacia el admin conservado.
+      await db.query(`UPDATE media SET uploaded_by = $1 WHERE uploaded_by = ANY($2::bigint[])`, [adminId, othersIds]);
+      await db.query(`UPDATE prices SET changed_by = $1 WHERE changed_by = ANY($2::bigint[])`, [adminId, othersIds]);
+
+      // 4) Usuarios.
+      const u = await db.query(`DELETE FROM users WHERE id = ANY($1::bigint[])`, [othersIds]);
+      console.log(`  usuarios eliminados: ${u.rowCount}`);
     }
 
-    // 4. Eliminar el resto de usuarios.
-    if (othersIds.length) {
-      const del = await db.query(`DELETE FROM users WHERE id = ANY($1::bigint[])`, [othersIds]);
-      console.log(`  usuarios eliminados: ${del.rowCount}`);
-    }
-
-    // 5. Perfil de repartidor para juan.
-    const existingDriver = await db.query(
-      `SELECT id FROM delivery_drivers WHERE auth_user_id = $1 LIMIT 1`,
+    // Perfil de repartidor para juan.
+    const drv = await db.query(
+      `INSERT INTO delivery_drivers
+         (full_name, phone, email, auth_user_id, vehicle_type, is_available, is_active)
+       SELECT 'Juan', '3000000000', $1, $2, 'MOTO', true, true
+       WHERE NOT EXISTS (SELECT 1 FROM delivery_drivers WHERE auth_user_id = $2)`,
+      [JUAN.email, juanId],
+    );
+    await db.query(
+      `UPDATE delivery_drivers SET is_active = true, is_available = true, deleted_at = NULL WHERE auth_user_id = $1`,
       [juanId],
     );
-    if (existingDriver.rowCount === 0) {
-      await db.query(
-        `INSERT INTO delivery_drivers
-           (full_name, phone, email, auth_user_id, vehicle_type, is_available, is_active)
-         VALUES ($1, $2, $3, $4, 'MOTO', true, true)`,
-        ['Juan', '3000000000', JUAN.email, juanId],
-      );
-      console.log('  perfil de repartidor creado para juan');
-    } else {
-      await db.query(
-        `UPDATE delivery_drivers SET is_active = true, deleted_at = NULL WHERE auth_user_id = $1`,
-        [juanId],
-      );
-      console.log('  perfil de repartidor de juan actualizado');
-    }
+    if (drv.rowCount) console.log('  perfil de repartidor de juan creado');
+    else console.log('  perfil de repartidor de juan actualizado');
 
-    // 6. Rol por defecto para admin.
-    const adminRole = await db.query(`SELECT id FROM roles WHERE name = 'Administrador' LIMIT 1`);
-    if (adminRole.rowCount > 0) {
+    // Rol "Administrador" para admin (todos los permisos de los 3 admin).
+    const role = await db.query(`SELECT id FROM roles WHERE name = 'Administrador' LIMIT 1`);
+    if (role.rowCount > 0) {
       await db.query(
-        `INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2)
-         ON CONFLICT (user_id, role_id) DO NOTHING`,
-        [adminId, adminRole.rows[0].id],
+        `INSERT INTO user_roles (user_id, role_id) VALUES ($1, $2) ON CONFLICT (user_id, role_id) DO NOTHING`,
+        [adminId, role.rows[0].id],
       );
       console.log('  rol Administrador asignado a admin');
+    } else {
+      console.log('  ⚠️ rol Administrador no encontrado (¿seed del backend?)');
     }
 
-    // 7. Revocar sesiones/tokens (forzar re-login).
-    await db.query(`DELETE FROM user_refresh_tokens WHERE user_id = ANY($1::bigint[])`, [
-      [adminId, juanId],
-    ]);
-    await db.query(`DELETE FROM user_sessions WHERE user_id = ANY($1::bigint[])`, [
-      [adminId, juanId],
-    ]);
+    // Revocar sesiones/tokens para forzar re-login con las nuevas claves.
+    await db.query(`DELETE FROM user_refresh_tokens WHERE user_id = ANY($1::bigint[])`, [[adminId, juanId]]);
+    await db.query(`DELETE FROM user_sessions WHERE user_id = ANY($1::bigint[])`, [[adminId, juanId]]);
 
-    const final = await db.query(
-      `SELECT id, username, email, is_superuser, is_picker, is_active
+    // ── VALIDACIÓN ─────────────────────────────────────────────────────────
+    console.log('\n===== VALIDACIÓN =====');
+    const users = await db.query(
+      `SELECT id, username, is_superuser, is_picker, is_active
        FROM users WHERE deleted_at IS NULL ORDER BY id`,
     );
-    console.log('\nUsuarios finales:');
-    for (const u of final.rows) {
-      console.log(
-        `  #${u.id} ${String(u.username).padEnd(10)} super=${u.is_superuser} picker=${u.is_picker} active=${u.is_active} <${u.email}>`,
+    console.log('Usuarios finales:');
+    for (const u of users.rows) {
+      const pw = await bcrypt.compare(
+        u.username === 'admin' ? ADMIN.password : JUAN.password,
+        (await db.query('SELECT password_hash FROM users WHERE id = $1', [u.id])).rows[0].password_hash,
       );
+      console.log(`  #${u.id} ${String(u.username).padEnd(8)} super=${u.is_superuser} picker=${u.is_picker} active=${u.is_active} password=${pw ? 'OK' : 'FALLA'}`);
     }
+
     const drivers = await db.query(
       `SELECT d.id, u.username FROM delivery_drivers d JOIN users u ON u.id = d.auth_user_id ORDER BY d.id`,
     );
     console.log(`Repartidores: ${drivers.rows.map((d) => `#${d.id}:${d.username}`).join(', ') || '—'}`);
+
+    const roles = await db.query(
+      `SELECT r.id, r.name, r.is_system,
+              count(rp.permission_id)::int AS nperms,
+              array_agg(p.code ORDER BY p.code) AS codes
+       FROM roles r
+       LEFT JOIN role_permissions rp ON rp.role_id = r.id
+       LEFT JOIN permissions p ON p.id = rp.permission_id
+       GROUP BY r.id, r.name, r.is_system
+       ORDER BY r.name`,
+    );
+    console.log('\nRoles y permisos:');
+    for (const r of roles.rows) {
+      console.log(`  ${r.name}${r.is_system ? ' (sistema)' : ''} — ${r.nperms} permisos`);
+      if (r.codes) console.log(`    ${r.codes.join(', ')}`);
+    }
+
+    const totalPerms = await db.query(`SELECT count(*)::int AS n FROM permissions`);
+    console.log(`\nTotal permisos en catálogo: ${totalPerms.rows[0].n}`);
+
+    const userRoles = await db.query(
+      `SELECT u.username, r.name AS role
+       FROM user_roles ur JOIN users u ON u.id = ur.user_id JOIN roles r ON r.id = ur.role_id
+       ORDER BY u.username, r.name`,
+    );
+    console.log('Asignaciones usuario→rol:');
+    if (userRoles.rowCount === 0) console.log('  (ninguna)');
+    for (const ur of userRoles.rows) console.log(`  ${ur.username} → ${ur.role}`);
 
     if (APPLY) {
       await db.query('COMMIT');

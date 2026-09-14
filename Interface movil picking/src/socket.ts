@@ -1,6 +1,6 @@
 import { io } from "socket.io-client";
 import type { Socket } from "socket.io-client";
-import { API_URL } from "@/api";
+import { getApiUrl } from "@/api/apiConfig";
 import { queryClient } from "@/lib/queryClient";
 import { PICKING_ROOT } from "@/picking/queries";
 
@@ -11,9 +11,9 @@ let socket: Socket | null = null;
  * cola cuando otro picker escanea, reclama o entrega un pedido.
  */
 export function connectPickingSocket(): void {
-  if (socket || !API_URL) return;
+  if (socket) return;
 
-  socket = io(`${API_URL}/picking-events`, {
+  socket = io(`${getApiUrl()}/picking-events`, {
     transports: ["websocket"],
     reconnection: true,
     reconnectionDelay: 1000,

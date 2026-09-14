@@ -47,6 +47,16 @@ export class CreateAdminUserDto {
   @IsBoolean()
   isPicker?: boolean;
 
+  /** Crea/vincula un perfil de repartidor (delivery). */
+  @IsOptional()
+  @IsBoolean()
+  isDelivery?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  vehicleType?: string;
+
   @IsOptional()
   @IsArray()
   @IsInt({ each: true })
@@ -87,6 +97,16 @@ export class UpdateAdminUserDto {
   @IsOptional()
   @IsBoolean()
   isPicker?: boolean;
+
+  /** Crea/vincula un perfil de repartidor (delivery). */
+  @IsOptional()
+  @IsBoolean()
+  isDelivery?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(50)
+  vehicleType?: string;
 
   /** Si se envía, reemplaza la asignación de roles del usuario. */
   @IsOptional()
