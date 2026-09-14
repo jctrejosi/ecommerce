@@ -33,11 +33,13 @@ export function connectDeliverySocket(accessToken: string): void {
   socket.on("delivery:order-updated", ({ orderId }: { orderId: number | string }) => {
     void queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
     void queryClient.invalidateQueries({ queryKey: orderKeys.active });
+    void queryClient.invalidateQueries({ queryKey: orderKeys.history });
   });
 
   socket.on("delivery:cancelled", ({ orderId }: { orderId: number | string }) => {
     void queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
     void queryClient.invalidateQueries({ queryKey: orderKeys.active });
+    void queryClient.invalidateQueries({ queryKey: orderKeys.history });
   });
 }
 

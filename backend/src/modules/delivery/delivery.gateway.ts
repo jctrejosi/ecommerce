@@ -69,6 +69,15 @@ export class DeliveryGateway implements OnGatewayConnection {
     });
   }
 
+  /** Emite un evento a la sala de un repartidor concreto (`driver:<userId>`). */
+  emitToDriver(
+    userId: number,
+    event: string,
+    payload: Record<string, unknown>,
+  ) {
+    this.server?.to(`driver:${userId}`).emit(event, payload);
+  }
+
   /** Cambios de estado de pedidos/disponibilidad para el panel administrativo. */
   emitFleetStatus(payload: Record<string, unknown>) {
     this.server?.to('fleet').emit('delivery:fleet-status', {

@@ -11,7 +11,7 @@ export const ACTIVE_STATUSES: DeliveryStatus[] = [
 ];
 
 export const STATUS_LABELS: Record<DeliveryStatus, string> = {
-  ASSIGNED: "Asignado",
+  ASSIGNED: "Nuevo",
   ACCEPTED: "Aceptado",
   READY_FOR_PICKUP: "Listo para recoger",
   PICKED_UP: "Recogido",

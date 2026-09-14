@@ -8,12 +8,12 @@ import { useMarkReviewed, useQueue } from "@/picking/queries";
 import { isItemDone, orderStatus, sortQueue } from "@/picking/status";
 import { clearSession, loadSession } from "@/picking/sessionStore";
 import { useAuthStore } from "@/auth/authStore";
+import { useGateStore } from "@/auth/gateStore";
 import { Header } from "@/ui/Header";
 import { Screen } from "@/ui/Screen";
 import { OrderCard } from "@/ui/OrderCard";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorBox } from "@/ui/ErrorBox";
-import { LoginModal } from "@/ui/LoginModal";
 import { SettingsModal } from "@/ui/SettingsModal";
 import { Toast } from "@/ui/Toast";
 
@@ -23,13 +23,11 @@ let restoredOnce = false;
 export default function OrderListScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<QueueFilter>("nuevo");
-  const [showLogin, setShowLogin] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const hydrated = useAuthStore((s) => s.hydrated);
 
   const { data: orders, isLoading, error, refetch, isRefetching } = useQueue();
   const markReviewed = useMarkReviewed();
@@ -95,16 +93,11 @@ export default function OrderListScreen() {
     };
   }, [router]);
 
-  // Al abrir la app siempre se pide elegir usuario (si hay sesión guardada
-  // y vigente, el modal ofrece continuar con un toque).
+  // Al abrir la app siempre se pide elegir usuario; si la sesión se vence en
+  // pleno uso (401/turno/inactividad), el login global del layout se encarga.
   useEffect(() => {
-    if (hydrated) setShowLogin(true);
-  }, [hydrated]);
-
-  // Si la sesión se vence en pleno uso (turno/inactividad), pide login.
-  useEffect(() => {
-    if (hydrated && !user) setShowLogin(true);
-  }, [hydrated, user]);
+    useGateStore.getState().request();
+  }, []);
 
   return (
     <View style={styles.root}>
@@ -208,17 +201,12 @@ export default function OrderListScreen() {
         )}
       </Screen>
 
-      <LoginModal
-        visible={showLogin}
-        onClose={user ? () => setShowLogin(false) : undefined}
-      />
-
       <SettingsModal
         visible={showSettings}
         onClose={() => setShowSettings(false)}
         onSwitchUser={() => {
           setShowSettings(false);
-          setShowLogin(true);
+          useGateStore.getState().request();
         }}
       />
     </View>

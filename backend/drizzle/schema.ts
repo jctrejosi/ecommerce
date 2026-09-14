@@ -2596,18 +2596,19 @@ export const deliveryAssignments = pgTable(
       'btree',
       table.driverId.asc().nullsLast().op('int8_ops'),
     ),
-    uniqueIndex('idx_delivery_assignment_order').using(
+    uniqueIndex('idx_delivery_assignment_shipment_driver').using(
       'btree',
       table.shipmentId.asc().nullsLast().op('int8_ops'),
+      table.driverId.asc().nullsLast().op('int8_ops'),
     ),
     index('idx_delivery_assignment_status').using(
       'btree',
       table.status.asc().nullsLast().op('enum_ops'),
     ),
-    uniqueIndex('idx_driver_active_assignment')
+    uniqueIndex('idx_driver_active_delivery')
       .using('btree', table.driverId.asc().nullsLast().op('int8_ops'))
       .where(
-        sql`(status = ANY (ARRAY['ASSIGNED'::delivery_assignment_status_enum, 'PICKED_UP'::delivery_assignment_status_enum, 'IN_TRANSIT'::delivery_assignment_status_enum]))`,
+        sql`(status = ANY (ARRAY['PICKED_UP'::delivery_assignment_status_enum, 'IN_DELIVERY'::delivery_assignment_status_enum]))`,
       ),
     foreignKey({
       columns: [table.driverId],

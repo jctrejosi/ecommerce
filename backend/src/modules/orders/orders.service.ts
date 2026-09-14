@@ -654,7 +654,21 @@ export class OrdersService {
       .select({ status: deliveryAssignments.status })
       .from(deliveryAssignments)
       .innerJoin(shipments, eq(shipments.id, deliveryAssignments.shipmentId))
-      .where(eq(shipments.orderId, Number(orderId)))
+      .where(
+        and(
+          eq(shipments.orderId, Number(orderId)),
+          // El estado relevante es el de la asignación vigente (no las
+          // ofertas del pool que quedaron canceladas/rechazadas).
+          inArray(deliveryAssignments.status, [
+            'ASSIGNED',
+            'ACCEPTED',
+            'READY_FOR_PICKUP',
+            'PICKED_UP',
+            'IN_DELIVERY',
+            'DELIVERED',
+          ]),
+        ),
+      )
       .orderBy(desc(deliveryAssignments.id))
       .limit(1);
 
@@ -719,7 +733,21 @@ export class OrdersService {
         driverId: deliveryAssignments.driverId,
       })
       .from(deliveryAssignments)
-      .where(eq(deliveryAssignments.shipmentId, Number(shipment.id)))
+      .where(
+        and(
+          eq(deliveryAssignments.shipmentId, Number(shipment.id)),
+          // Ignora ofertas canceladas/rechazadas del pool: la más reciente
+          // relevante refleja quién tiene realmente el pedido.
+          inArray(deliveryAssignments.status, [
+            'ASSIGNED',
+            'ACCEPTED',
+            'READY_FOR_PICKUP',
+            'PICKED_UP',
+            'IN_DELIVERY',
+            'DELIVERED',
+          ]),
+        ),
+      )
       .orderBy(desc(deliveryAssignments.id))
       .limit(1);
 

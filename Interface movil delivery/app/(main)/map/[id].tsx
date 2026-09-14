@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useOrder, useOrderRoute } from "@/api/orders";
 import { DeliveryMap } from "@/maps/DeliveryMap";
 import { openExternalNavigation } from "@/maps/navigation";
@@ -29,6 +30,7 @@ function phaseOf(status: DeliveryStatus): "to-store" | "at-store" | "to-customer
 export default function MapScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { data: order, isLoading, isError, error } = useOrder(id);
+  const insets = useSafeAreaInsets();
 
   const [origin, setOrigin] = useState<LatLng | null>(null);
 
@@ -144,8 +146,8 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {/* Acciones */}
-      <View style={styles.actions}>
+      {/* Acciones (sobre el borde seguro para no quedar tras la barra de navegación) */}
+      <View style={[styles.actions, { bottom: spacing(4) + insets.bottom }]}>
         <Button
           label="ABRIR NAVEGACIÓN"
           icon="navigate-outline"

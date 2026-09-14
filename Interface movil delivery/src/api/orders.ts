@@ -34,6 +34,8 @@ export function useHistory() {
   return useQuery({
     queryKey: HISTORY_KEY,
     queryFn: () => api.getHistory(),
+    // Se consulta seguido: la pestaña "Entregados" del día debe verse fresca.
+    refetchInterval: 15_000,
   });
 }
 

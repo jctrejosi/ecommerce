@@ -163,6 +163,47 @@ export default function ScannerScreen() {
     [handleScan, scanState],
   );
 
+  /**
+   * Modo prueba: confirma el item actual como si se hubiera escaneado el
+   * código correcto (llena todas las unidades pendientes del item).
+   */
+  const confirmItem = useCallback(async () => {
+    if (!activeItem || processingRef.current || scanState !== "idle") return;
+    const code = activeItem.barcode ?? activeItem.plu;
+    if (!code) {
+      setErrorMsg("Este producto no tiene código para confirmar");
+      setScanState("error");
+      scheduleReset(() => setScanState("idle"), 1800);
+      return;
+    }
+
+    const remaining = Math.max(1, activeItem.quantity - activeItem.pickedQty);
+    processingRef.current = true;
+    setErrorMsg("");
+    try {
+      let last: ScanResult | null = null;
+      for (let i = 0; i < remaining; i += 1) {
+        last = await scan.mutateAsync(code);
+      }
+      if (!last) return;
+      Vibration.vibrate(60);
+      setSuccessName(last.name);
+      setScanState("success");
+      scheduleReset(() => advance(last!), 800);
+    } catch (e) {
+      const payload = (e as { payload?: { expected?: string[] } })?.payload;
+      const expected = payload?.expected && payload.expected.length > 0
+        ? payload.expected
+        : [activeItem.barcode, activeItem.plu].filter(Boolean);
+      Vibration.vibrate([120, 60, 120]);
+      setErrorMsg(`No se pudo confirmar el item. Se esperaba: ${expected?.[0] ?? "otro código"}`);
+      setScanState("error");
+      scheduleReset(() => setScanState("idle"), 1800);
+    } finally {
+      processingRef.current = false;
+    }
+  }, [activeItem, scan, scanState, advance]);
+
   if (error) {
     return (
       <View style={styles.center}>
@@ -320,6 +361,16 @@ export default function ScannerScreen() {
             disabled={!input.trim()}
           />
         </View>
+
+        {/* Prueba sin escáner: confirma el item actual como correcto */}
+        <Button
+          label="Marcar item como correcto (prueba)"
+          variant="secondary"
+          icon="checkmark-circle-outline"
+          compact
+          onPress={() => void confirmItem()}
+          disabled={!activeItem || scanState !== "idle"}
+        />
       </View>
     </View>
   );

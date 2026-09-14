@@ -11,7 +11,7 @@ import {
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useLocalSearchParams } from "expo-router";
+import { Stack, useLocalSearchParams } from "expo-router";
 import { useChatMessages, useOrder, useSendChatMessage } from "@/api/orders";
 import type { ChatMessage } from "@/api/types";
 import { ErrorBox } from "@/ui/ErrorBox";
@@ -58,7 +58,16 @@ export default function OrderChatScreen() {
   };
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} bottomInset>
+      {/* Título del chat: nombre del cliente + código del pedido */}
+      <Stack.Screen
+        options={{
+          title: order
+            ? `${order.customer.name} · ${order.referenceCode}`
+            : "Chat del pedido",
+          headerBackTitle: "Pedido",
+        }}
+      />
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}

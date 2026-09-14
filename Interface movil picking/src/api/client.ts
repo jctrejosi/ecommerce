@@ -35,7 +35,8 @@ http.interceptors.response.use(
   async (error: AxiosError) => {
     const status = error.response?.status;
     const url = String(error.config?.url ?? "");
-    if (status === 401 && !url.includes("/auth/")) {
+    // Solo /auth/login queda exento (un login fallido no debe cerrar sesión).
+    if (status === 401 && !url.includes("/auth/login")) {
       await clearTokens();
       const { useAuthStore } = await import("@/auth/authStore");
       useAuthStore.getState().setUser(null);

@@ -1,6 +1,6 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
-import { api, ApiError } from './services/api'
+import { api, ApiError, setUnauthorizedHandler } from './services/api'
 import type { AuthUser, PickUser } from './services/api'
 import type {
   CategoryOrganization,
@@ -78,6 +78,15 @@ export default function App() {
         setAuthUser(null)
         setAuthState('out')
       })
+  }, [])
+
+  // Si una petición responde 401 (token vencido en pleno uso), volver al login.
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setAuthUser(null)
+      setAuthState('out')
+    })
+    return () => setUnauthorizedHandler(null)
   }, [])
 
   // Sucursales
@@ -1212,10 +1221,10 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
           </p>
         </div>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => setShowForm(true)}
           className="px-4 py-2 rounded-full text-sm font-bold bg-amber-400 text-[#0C0C0D]"
         >
-          {showForm ? 'Cancelar' : 'Nuevo usuario'}
+          Nuevo usuario
         </button>
       </div>
 
@@ -1226,41 +1235,74 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
         </div>
       )}
 
+      {/* Modal de nuevo usuario */}
       {showForm && (
-        <form
-          onSubmit={create}
-          className="bg-[#141416] border border-white/10 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3"
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6"
+          onClick={() => setShowForm(false)}
         >
-          {(
-            [
-              ['fullName', 'Nombre completo', 'text'],
-              ['username', 'Usuario', 'text'],
-              ['email', 'Email', 'email'],
-              ['phone', 'Teléfono (opcional)', 'text'],
-              ['password', 'Contraseña (mín. 8)', 'password'],
-            ] as const
-          ).map(([key, label, type]) => (
-            <label key={key} className="flex flex-col gap-1.5">
-              <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">{label}</span>
-              <input
-                type={type}
-                value={form[key]}
-                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                autoComplete="off"
-                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
-              />
-            </label>
-          ))}
-          <div className="sm:col-span-2 flex justify-end">
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white text-[#0C0C0D] disabled:opacity-40"
-            >
-              {saving ? 'Guardando…' : 'Crear usuario'}
-            </button>
-          </div>
-        </form>
+          <form
+            onSubmit={create}
+            onClick={(e) => e.stopPropagation()}
+            className="w-full sm:max-w-lg bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl p-5 flex flex-col gap-4"
+          >
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-extrabold text-lg text-white">Nuevo usuario</h3>
+                <p className="text-white/40 text-xs font-medium mt-0.5">
+                  Se crea como picker: podrá entrar a la app móvil de picking.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            {(
+              [
+                ['fullName', 'Nombre completo', 'text'],
+                ['username', 'Usuario', 'text'],
+                ['email', 'Email', 'email'],
+                ['phone', 'Teléfono (opcional)', 'text'],
+                ['password', 'Contraseña (mín. 8)', 'password'],
+              ] as const
+            ).map(([key, label, type]) => (
+              <label key={key} className="flex flex-col gap-1.5">
+                <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">{label}</span>
+                <input
+                  type={type}
+                  value={form[key]}
+                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                  autoComplete="off"
+                  className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+                />
+              </label>
+            ))}
+
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowForm(false)}
+                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white text-[#0C0C0D] disabled:opacity-40"
+              >
+                {saving ? 'Guardando…' : 'Crear usuario'}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
 
       {loading ? (

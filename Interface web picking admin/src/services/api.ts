@@ -15,6 +15,12 @@ import type {
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
+/** Handler que se dispara cuando una petición responde 401 (sesión vencida). */
+let onUnauthorized: (() => void) | null = null;
+export function setUnauthorizedHandler(handler: (() => void) | null): void {
+  onUnauthorized = handler;
+}
+
 export { API_BASE_URL };
 
 export class ApiError extends Error {
@@ -34,6 +40,8 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
   });
   if (!res.ok) {
+    // Token vencido o sesión inválida: avisa a la app para volver al login.
+    if (res.status === 401 && onUnauthorized) onUnauthorized();
     let payload: any = null;
     let message = `Error ${res.status}`;
     try {

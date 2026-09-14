@@ -28,5 +28,6 @@ import { SuperuserGuard } from './superuser.guard';
     DeliveryGateway,
     SuperuserGuard,
   ],
+  exports: [DeliveryOrdersService, DeliveryGateway],
 })
 export class DeliveryModule {}

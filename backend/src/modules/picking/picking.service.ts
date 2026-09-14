@@ -8,6 +8,7 @@ import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { PickingGateway } from './picking.gateway';
 import { OrdersGateway } from '../orders/orders.gateway';
+import { DeliveryOrdersService } from '../delivery/delivery-orders.service';
 import {
   orderItems,
   orders,
@@ -47,6 +48,7 @@ export class PickingService {
     private readonly drizzle: DrizzleService,
     private readonly gateway: PickingGateway,
     private readonly ordersGateway: OrdersGateway,
+    private readonly deliveryOrders: DeliveryOrdersService,
   ) {}
 
   private get db() {
@@ -470,6 +472,13 @@ export class PickingService {
       pickerId: order.pickerId ?? undefined,
       deliveredAt: new Date().toISOString(),
     });
+
+    // El pedido sale de picking → se ofrece a TODOS los repartidores activos
+    // como "Nuevo" (una asignación ASSIGNED por repartidor).
+    await this.deliveryOrders.broadcastNewOrderToAllDrivers(
+      id,
+      order.referenceCode,
+    );
 
     return { ok: true, status: 'delivered', already: false };
   }

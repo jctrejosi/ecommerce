@@ -8,16 +8,34 @@ interface ScreenProps {
   children: ReactNode;
   scroll?: boolean;
   padded?: boolean;
+  /**
+   * Respeta el borde inferior seguro (barra de navegación flotante).
+   * Úsalo en pantallas cuyo contenido llega hasta abajo (chat, detalle…).
+   */
+  bottomInset?: boolean;
 }
 
 /** Contenedor base de pantalla: SafeArea + título opcional + scroll opcional. */
-export function Screen({ title, children, scroll = true, padded = true }: ScreenProps) {
+export function Screen({
+  title,
+  children,
+  scroll = true,
+  padded = true,
+  bottomInset = false,
+}: ScreenProps) {
   const content = (
     <View style={[styles.body, padded && styles.padded]}>{children}</View>
   );
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "left", "right"]}>
+    <SafeAreaView
+      style={styles.safe}
+      edges={
+        bottomInset
+          ? ["top", "left", "right", "bottom"]
+          : ["top", "left", "right"]
+      }
+    >
       {title ? (
         <View style={styles.headerBar}>
           <Image

@@ -172,6 +172,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       now - meta.lastActivityAt > INACTIVITY_LIMIT_MS;
     if (expired) {
       await useAuthStore.getState().logout();
+      return;
     }
+    // Valida el token contra el backend: si responde 401, el interceptor
+    // cierra la sesión y el login global aparece solo.
+    void pickingApi.me().catch(() => undefined);
   },
 }));

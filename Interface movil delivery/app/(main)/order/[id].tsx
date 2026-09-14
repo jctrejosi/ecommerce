@@ -104,7 +104,7 @@ export default function OrderDetailScreen() {
   const actions = actionsFor(order.status);
 
   return (
-    <Screen>
+    <Screen bottomInset>
       {/* Cabecera */}
       <View style={styles.headerRow}>
         <Text style={styles.code}>Pedido {order.referenceCode}</Text>
@@ -116,24 +116,24 @@ export default function OrderDetailScreen() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Cliente</Text>
         <Text style={styles.strong}>{order.customer.name}</Text>
-        <View style={styles.rowBetween}>
-          <Text style={styles.muted}>{order.customer.phone}</Text>
-          <View style={styles.customerActions}>
-            {/* El chat solo se muestra mientras el pedido está en camino */}
-            {(order.status === "PICKED_UP" || order.status === "IN_DELIVERY") && (
+        <Text style={styles.muted}>{order.customer.phone}</Text>
+        <View style={styles.customerActions}>
+          {/* El chat solo se muestra mientras el pedido está en camino */}
+          {(order.status === "PICKED_UP" || order.status === "IN_DELIVERY") && (
+            <View style={styles.customerActionBtn}>
               <Button
                 label="Chat"
                 icon="chatbubble-outline"
                 variant="primary"
-                fullWidth={false}
                 onPress={() => router.push(`/chat/${order.id}`)}
               />
-            )}
+            </View>
+          )}
+          <View style={styles.customerActionBtn}>
             <Button
               label="Llamar"
               icon="call-outline"
               variant="secondary"
-              fullWidth={false}
               onPress={() => callPhone(order.customer.phone)}
             />
           </View>
@@ -339,9 +339,11 @@ const styles = StyleSheet.create({
   },
   customerActions: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "stretch",
     gap: spacing(2),
+    marginTop: spacing(3),
   },
+  customerActionBtn: { flex: 1 },
   notes: {
     backgroundColor: colors.warningBg,
     borderRadius: radius.md,

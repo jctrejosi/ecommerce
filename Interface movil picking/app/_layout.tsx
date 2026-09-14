@@ -6,6 +6,8 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/auth/authStore";
+import { useGateStore } from "@/auth/gateStore";
+import { LoginModal } from "@/ui/LoginModal";
 import { bootApiUrl } from "@/api/discovery";
 import { getApiUrl } from "@/api/apiConfig";
 import { connectPickingSocket, disconnectPickingSocket } from "@/socket";
@@ -13,6 +15,10 @@ import { colors } from "@/theme";
 
 export default function RootLayout() {
   const restore = useAuthStore((s) => s.restore);
+  const user = useAuthStore((s) => s.user);
+  const hydrated = useAuthStore((s) => s.hydrated);
+  const confirmed = useGateStore((s) => s.confirmed);
+  const confirm = useGateStore((s) => s.confirm);
   const [booting, setBooting] = useState(true);
 
   // 1) Descubre el backend en la red local (o usa la URL guardada si responde).
@@ -51,12 +57,20 @@ export default function RootLayout() {
             <Text style={styles.bootSub}>{getApiUrl()}</Text>
           </View>
         ) : (
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.background },
-            }}
-          />
+          <>
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.background },
+              }}
+            />
+            {/* Login global: aparece sobre cualquier pantalla si no hay
+                sesión o si el token venció (401 → sesión cerrada). */}
+            <LoginModal
+              visible={hydrated && (!confirmed || !user)}
+              onClose={user ? confirm : undefined}
+            />
+          </>
         )}
         <StatusBar style="light" />
       </QueryClientProvider>

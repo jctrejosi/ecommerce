@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   deliveryAssignments,
@@ -394,6 +394,76 @@ export class DeliveryOrdersService {
     return this.rowsToOrders(rows);
   }
 
+  /**
+   * Un pedido sale de picking: se ofrece como "Nuevo" a TODOS los
+   * repartidores activos (una asignación ASSIGNED por repartidor). Cuando
+   * uno lo acepta, las ofertas de los demás se cancelan en `transition`.
+   */
+  async broadcastNewOrderToAllDrivers(orderId: number, referenceCode: string) {
+    const [shipment] = await this.db
+      .select({ id: shipments.id })
+      .from(shipments)
+      .where(eq(shipments.orderId, orderId))
+      .limit(1);
+    if (!shipment) return;
+
+    const drivers = await this.db
+      .select({ id: deliveryDrivers.id, authUserId: deliveryDrivers.authUserId })
+      .from(deliveryDrivers)
+      .where(
+        and(
+          eq(deliveryDrivers.isActive, true),
+          isNull(deliveryDrivers.deletedAt),
+        ),
+      );
+
+    const now = new Date().toISOString();
+    const notifiedUserIds: number[] = [];
+
+    for (const driver of drivers) {
+      const [existing] = await this.db
+        .select({ id: deliveryAssignments.id })
+        .from(deliveryAssignments)
+        .where(
+          and(
+            eq(deliveryAssignments.shipmentId, Number(shipment.id)),
+            eq(deliveryAssignments.driverId, Number(driver.id)),
+          ),
+        )
+        .limit(1);
+      if (existing) continue;
+
+      await this.db
+        .insert(deliveryAssignments)
+        .values({
+          shipmentId: Number(shipment.id),
+          driverId: Number(driver.id),
+          status: 'ASSIGNED',
+          assignedAt: now,
+        })
+        .onConflictDoNothing();
+
+      if (driver.authUserId != null) {
+        notifiedUserIds.push(Number(driver.authUserId));
+      }
+    }
+
+    for (const userId of notifiedUserIds) {
+      this.gateway.emitToDriver(userId, 'delivery:assigned', {
+        orderId,
+        referenceCode,
+      });
+    }
+    if (notifiedUserIds.length) {
+      this.gateway.emitFleetStatus({
+        event: 'order-assigned',
+        orderId,
+        referenceCode,
+        drivers: notifiedUserIds.length,
+      });
+    }
+  }
+
   async transition(
     driverId: number,
     orderId: number,
@@ -424,6 +494,61 @@ export class DeliveryOrdersService {
       throw new BadRequestException('Debes indicar un motivo.');
     }
 
+    const now = new Date().toISOString();
+    const cancelledDriverIds: number[] = [];
+
+    // Pool de pedidos nuevos: si otro repartidor ya tomó este envío, se
+    // cancela la oferta propia y se rechaza la acción.
+    if (action === 'accept') {
+      const [taken] = await this.db
+        .select({ id: deliveryAssignments.id })
+        .from(deliveryAssignments)
+        .where(
+          and(
+            eq(deliveryAssignments.shipmentId, Number(assignment.shipment_id)),
+            ne(deliveryAssignments.driverId, driverId),
+            inArray(deliveryAssignments.status, [
+              'ACCEPTED',
+              'READY_FOR_PICKUP',
+              'PICKED_UP',
+              'IN_DELIVERY',
+            ]),
+          ),
+        )
+        .limit(1);
+      if (taken) {
+        await this.db
+          .update(deliveryAssignments)
+          .set({
+            status: 'CANCELLED',
+            cancelledAt: now,
+            cancelReason: 'Otro repartidor aceptó el pedido primero',
+          })
+          .where(eq(deliveryAssignments.id, BigInt(assignment.assignment_id)));
+        throw new ConflictException('Otro repartidor ya aceptó este pedido.');
+      }
+    }
+
+    // Un repartidor solo puede tener una entrega en curso a la vez.
+    if (action === 'pickup') {
+      const [other] = await this.db
+        .select({ id: deliveryAssignments.id })
+        .from(deliveryAssignments)
+        .where(
+          and(
+            eq(deliveryAssignments.driverId, driverId),
+            ne(deliveryAssignments.id, BigInt(assignment.assignment_id)),
+            inArray(deliveryAssignments.status, ['PICKED_UP', 'IN_DELIVERY']),
+          ),
+        )
+        .limit(1);
+      if (other) {
+        throw new ConflictException(
+          'Tienes otra entrega en curso; termínala antes de recoger este pedido.',
+        );
+      }
+    }
+
     // Prueba de entrega: la app exige 2 fotos (lugar + pedido) para confirmar.
     const proofLocationUrl = payload?.proofLocationUrl?.trim();
     const proofPackageUrl = payload?.proofPackageUrl?.trim();
@@ -433,7 +558,6 @@ export class DeliveryOrdersService {
       );
     }
 
-    const now = new Date().toISOString();
     const patch: AssignmentUpdate = {
       status: NEXT_STATUS[action] as AssignmentUpdate['status'],
       ...tsPatch(action, now),
@@ -450,6 +574,34 @@ export class DeliveryOrdersService {
         .update(deliveryAssignments)
         .set(patch)
         .where(eq(deliveryAssignments.id, BigInt(assignment.assignment_id)));
+
+      // Pool: al aceptar, se cancelan las ofertas de los demás repartidores.
+      if (action === 'accept') {
+        const others = await tx
+          .select({
+            id: deliveryAssignments.id,
+            driverId: deliveryAssignments.driverId,
+          })
+          .from(deliveryAssignments)
+          .where(
+            and(
+              eq(deliveryAssignments.shipmentId, Number(assignment.shipment_id)),
+              ne(deliveryAssignments.id, BigInt(assignment.assignment_id)),
+              eq(deliveryAssignments.status, 'ASSIGNED'),
+            ),
+          );
+        for (const other of others) {
+          await tx
+            .update(deliveryAssignments)
+            .set({
+              status: 'CANCELLED',
+              cancelledAt: now,
+              cancelReason: 'Otro repartidor aceptó el pedido',
+            })
+            .where(eq(deliveryAssignments.id, other.id));
+        }
+        cancelledDriverIds.push(...others.map((o) => Number(o.driverId)));
+      }
 
       if (action === 'deliver') {
         await tx
@@ -489,6 +641,27 @@ export class DeliveryOrdersService {
       driverId,
       status: NEXT_STATUS[action],
     });
+
+    // Avisa a los repartidores cuyas ofertas se cancelaron para que
+    // refresquen su lista de pedidos nuevos.
+    if (cancelledDriverIds.length) {
+      const cancelledRows = await this.db
+        .select({ authUserId: deliveryDrivers.authUserId })
+        .from(deliveryDrivers)
+        .where(
+          inArray(
+            deliveryDrivers.id,
+            cancelledDriverIds.map((n) => BigInt(n)),
+          ),
+        );
+      for (const row of cancelledRows) {
+        if (row.authUserId != null) {
+          this.gateway.emitToDriver(Number(row.authUserId), 'delivery:order-updated', {
+            orderId,
+          });
+        }
+      }
+    }
 
     // El cliente recibe la notificación (con botón para ver el rastreo) cuando
     // el repartidor sale con el pedido.

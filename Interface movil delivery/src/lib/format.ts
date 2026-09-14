@@ -52,3 +52,11 @@ export function formatDuration(startIso: string | null, endIso: string | null): 
   const m = mins % 60;
   return `${h} h ${m.toString().padStart(2, "0")} min`;
 }
+
+/** ¿El timestamp corresponde al día de hoy (hora local del celular)? */
+export function isToday(iso?: string | null): boolean {
+  if (!iso) return false;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return false;
+  return d.toDateString() === new Date().toDateString();
+}
