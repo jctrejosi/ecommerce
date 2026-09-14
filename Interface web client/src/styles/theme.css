@@ -178,6 +178,13 @@
     line-height: 1.5;
   }
 
+  /* Tailwind v4 ya no pone `cursor: pointer` en los botones; se restaura aquí
+     para todo el sitio (navbar, header, etc.). Las utilidades `cursor-*`
+     siguen pudiendo sobreescribirlo. */
+  button:not(:disabled) {
+    cursor: pointer;
+  }
+
   input {
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);

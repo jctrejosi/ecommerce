@@ -60,6 +60,7 @@ export default function ScannerScreen() {
   const [qty, setQty] = useState(0);
   const processingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<TextInput>(null);
 
   // Ítem activo: el del parámetro o el primer pendiente.
   const activeItem =
@@ -75,6 +76,13 @@ export default function ScannerScreen() {
   useEffect(() => () => {
     if (timerRef.current) clearTimeout(timerRef.current);
   }, []);
+
+  // Escáner de hardware (Zebra DataWedge): inyecta el código como keystrokes en
+  // el campo enfocado y termina con ENTER. Mantenemos el foco en el input
+  // (sin abrir el teclado) para que el gatillo físico funcione en cualquier momento.
+  useEffect(() => {
+    if (scanState === "idle") inputRef.current?.focus();
+  }, [scanState]);
 
   const scheduleReset = (fn: () => void, ms: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -277,11 +285,14 @@ export default function ScannerScreen() {
 
         <View style={styles.inputRow}>
           <TextInput
+            ref={inputRef}
             value={input}
             onChangeText={setInput}
             onSubmitEditing={() => void handleScan(input)}
+            autoFocus
+            showSoftInputOnFocus={false}
             keyboardType="number-pad"
-            placeholder="Ingresar código manual…"
+            placeholder="Escanea con el gatillo o ingresa el código…"
             placeholderTextColor={colors.textHint}
             style={styles.input}
             returnKeyType="done"

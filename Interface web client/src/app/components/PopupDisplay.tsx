@@ -157,6 +157,9 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
         // Position styles (siempre fixed)
         const positionStyles: React.CSSProperties = { position: "fixed" };
         const cardStyles: React.CSSProperties = {};
+        // En móvil los paneles ocupan el ancho completo (con padding por lado);
+        // a partir de `sm` recuperan su ancho de panel.
+        let panelSideClass = "";
 
         if (p.position === "header") {
           positionStyles.top = 0;
@@ -168,12 +171,10 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
           positionStyles.right = 0;
         } else if (p.position === "left") {
           positionStyles.top = "88px";
-          positionStyles.left = 0;
-          cardStyles.width = "min(88vw, 380px)";
+          panelSideClass = "left-4 sm:left-0";
         } else if (p.position === "right") {
           positionStyles.top = "88px";
-          positionStyles.right = 0;
-          cardStyles.width = "min(88vw, 380px)";
+          panelSideClass = "right-4 sm:right-0";
         }
 
         // Altura máxima configurable: limita el alto del popup en la web.
@@ -196,13 +197,15 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
               : p.position === "left"
                 ? "animate-popup-out-left"
                 : "animate-popup-out-right";
-        const containerClass = isHorizontal
-          ? `cursor-pointer ${p.position === "header" ? "z-[60]" : "z-40"} ${
-              isClosing ? exitClass : "animate-slide-down"
-            }`
-          : p.position === "left"
-            ? `cursor-pointer z-[70] ${isClosing ? exitClass : "animate-popup-in-left"}`
-            : `cursor-pointer z-[70] ${isClosing ? exitClass : "animate-popup-in-right"}`;
+        const containerClass =
+          (isHorizontal
+            ? `cursor-pointer ${p.position === "header" ? "z-[60]" : "z-40"} ${
+                isClosing ? exitClass : "animate-slide-down"
+              }`
+            : p.position === "left"
+              ? `cursor-pointer z-[70] ${isClosing ? exitClass : "animate-popup-in-left"}`
+              : `cursor-pointer z-[70] ${isClosing ? exitClass : "animate-popup-in-right"}`) +
+          ` ${panelSideClass}`;
 
         return (
           <div
@@ -214,7 +217,7 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
             <div
               className={
                 isPanel
-                  ? "relative bg-white rounded-3xl overflow-hidden shadow-lg border border-black/5"
+                  ? "relative w-[calc(100vw-2rem)] sm:w-[380px] max-h-[calc(100vh-7rem)] overflow-y-auto bg-white rounded-3xl shadow-lg border border-black/5"
                   : "relative"
               }
               style={isPanel ? cardStyles : undefined}

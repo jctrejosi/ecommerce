@@ -301,6 +301,8 @@ export const users = pgTable(
     phone: varchar({ length: 50 }),
     isSuperuser: boolean('is_superuser').default(false).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
+    // Marca que el usuario puede iniciar sesión en la app móvil de picking.
+    isPicker: boolean('is_picker').default(false).notNull(),
     lastLoginAt: timestamp('last_login_at', {
       withTimezone: true,
       mode: 'string',

@@ -1,5 +1,6 @@
 import axios from "axios";
 import type { AxiosError } from "axios";
+import { clearTokens, getTokens } from "@/auth/session";
 
 /**
  * URL del backend. En desarrollo: `http://10.0.2.2:3000` funciona en el
@@ -15,6 +16,31 @@ export const http = axios.create({
   timeout: 20_000,
   headers: { "Content-Type": "application/json" },
 });
+
+// Adjunta el token de sesión (si lo hay) a todas las peticiones.
+http.interceptors.request.use(async (config) => {
+  const tokens = await getTokens();
+  if (tokens?.accessToken) {
+    config.headers = config.headers ?? {};
+    config.headers.Authorization = `Bearer ${tokens.accessToken}`;
+  }
+  return config;
+});
+
+// Si el token expiró, cierra la sesión para forzar el login de nuevo.
+http.interceptors.response.use(
+  (res) => res,
+  async (error: AxiosError) => {
+    const status = error.response?.status;
+    const url = String(error.config?.url ?? "");
+    if (status === 401 && !url.includes("/auth/")) {
+      await clearTokens();
+      const { useAuthStore } = await import("@/auth/authStore");
+      useAuthStore.getState().setUser(null);
+    }
+    return Promise.reject(error);
+  },
+);
 
 /** Error de API que conserva el payload del backend (p. ej. `expected` del scan). */
 export class ApiError extends Error {

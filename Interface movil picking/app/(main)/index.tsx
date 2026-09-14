@@ -4,16 +4,16 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing } from "@/theme";
 import { QUEUE_FILTERS, pickingApi, type QueueFilter } from "@/api";
-import { useMarkReviewed, usePickers, useQueue } from "@/picking/queries";
+import { useMarkReviewed, useQueue } from "@/picking/queries";
 import { isItemDone, orderStatus, sortQueue } from "@/picking/status";
 import { clearSession, loadSession } from "@/picking/sessionStore";
-import { usePickerStore } from "@/picking/pickerStore";
+import { useAuthStore } from "@/auth/authStore";
 import { Header } from "@/ui/Header";
 import { Screen } from "@/ui/Screen";
 import { OrderCard } from "@/ui/OrderCard";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorBox } from "@/ui/ErrorBox";
-import { PickerModal } from "@/ui/PickerModal";
+import { LoginModal } from "@/ui/LoginModal";
 import { Toast } from "@/ui/Toast";
 
 // Restaurar la sesión solo una vez por arranque del proceso (no al volver a la lista).
@@ -22,16 +22,13 @@ let restoredOnce = false;
 export default function OrderListScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<QueueFilter>("nuevo");
-  const [showPicker, setShowPicker] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
-  const pickerId = usePickerStore((s) => s.pickerId);
-  const pickerName = usePickerStore((s) => s.pickerName);
-  const hydrated = usePickerStore((s) => s.hydrated);
-  const selectPicker = usePickerStore((s) => s.select);
+  const user = useAuthStore((s) => s.user);
+  const hydrated = useAuthStore((s) => s.hydrated);
 
   const { data: orders, isLoading, error, refetch, isRefetching } = useQueue();
-  const { data: pickers, isLoading: pickersLoading } = usePickers();
   const markReviewed = useMarkReviewed();
 
   const knownIds = useRef<Set<number>>(new Set());
@@ -87,38 +84,37 @@ export default function OrderListScreen() {
     };
   }, [router]);
 
-  // Forzar la selección de picker si no hay ninguno o el guardado ya no existe.
+  // Pedir login si aún no hay sesión.
   useEffect(() => {
-    if (!hydrated || !pickers || pickers.length === 0) return;
-    if (pickerId == null || !pickers.some((p) => p.id === pickerId)) setShowPicker(true);
-  }, [hydrated, pickerId, pickers]);
+    if (hydrated && !user) setShowLogin(true);
+  }, [hydrated, user]);
 
   return (
     <View style={styles.root}>
       <Toast message={toast} onHide={() => setToast(null)} />
       <Header
         logo
-        title="Picking"
+        title="DSI Picking"
         subtitle="Alistamiento · Bodega"
         right={
           <Pressable
-            onPress={() => setShowPicker(true)}
+            onPress={() => setShowLogin(true)}
             style={({ pressed }) => [styles.pickerBtn, pressed && { opacity: 0.8 }]}
           >
             <View style={styles.pickerAvatar}>
               <Text style={styles.pickerAvatarText}>
-                {(pickerName ?? "?").charAt(0).toUpperCase()}
+                {(user?.name ?? "?").charAt(0).toUpperCase()}
               </Text>
             </View>
             <Text style={styles.pickerName} numberOfLines={1}>
-              {pickerName ?? "Elige usuario"}
+              {user?.name ?? "Iniciar sesión"}
             </Text>
           </Pressable>
         }
       />
 
       <Screen scroll>
-        {/* Filtros */}
+        {/* Filtros (control segmentado, cabe en pantallas pequeñas) */}
         <View style={styles.tabs}>
           {QUEUE_FILTERS.map((t) => {
             const active = filter === t.key;
@@ -129,9 +125,21 @@ export default function OrderListScreen() {
                 onPress={() => setFilter(t.key)}
                 style={[styles.tab, active && styles.tabActive]}
               >
-                <Text style={[styles.tabText, active && styles.tabTextActive]}>
-                  {t.label} ({count})
+                <Text
+                  style={[styles.tabText, active && styles.tabTextActive]}
+                  numberOfLines={1}
+                  allowFontScaling={false}
+                >
+                  {t.label}
                 </Text>
+                <View style={[styles.countBadge, active && styles.countBadgeActive]}>
+                  <Text
+                    style={[styles.countText, active && styles.countTextActive]}
+                    allowFontScaling={false}
+                  >
+                    {count}
+                  </Text>
+                </View>
               </Pressable>
             );
           })}
@@ -169,16 +177,9 @@ export default function OrderListScreen() {
         )}
       </Screen>
 
-      <PickerModal
-        visible={showPicker}
-        pickers={pickers ?? []}
-        currentId={pickerId}
-        loading={pickersLoading}
-        onSelect={async (p) => {
-          await selectPicker(p.id, p.name);
-          setShowPicker(false);
-        }}
-        onClose={pickerId != null ? () => setShowPicker(false) : undefined}
+      <LoginModal
+        visible={showLogin}
+        onClose={user ? () => setShowLogin(false) : undefined}
       />
     </View>
   );
@@ -209,18 +210,39 @@ const styles = StyleSheet.create({
   },
   pickerAvatarText: { color: colors.onAccent, fontSize: 12, fontWeight: "800" },
   pickerName: { color: colors.textMuted, fontSize: 12, fontWeight: "700", flexShrink: 1 },
-  tabs: { flexDirection: "row", gap: spacing(2), marginBottom: spacing(4) },
-  tab: {
-    paddingHorizontal: spacing(3.5),
-    paddingVertical: spacing(2),
-    borderRadius: radius.pill,
+  tabs: {
+    flexDirection: "row",
     backgroundColor: colors.chip,
     borderWidth: 1,
     borderColor: colors.border,
+    borderRadius: radius.md,
+    padding: 3,
+    marginBottom: spacing(4),
   },
-  tabActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  tabText: { color: colors.textFaint, fontSize: 13, fontWeight: "700" },
+  tab: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    paddingVertical: spacing(2.5),
+    borderRadius: radius.sm,
+  },
+  tabActive: { backgroundColor: colors.accent },
+  tabText: { color: colors.textFaint, fontSize: 11, fontWeight: "700" },
   tabTextActive: { color: colors.onAccent },
+  countBadge: {
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    borderRadius: 9,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+  },
+  countBadgeActive: { backgroundColor: "rgba(12,12,13,0.22)" },
+  countText: { color: colors.textFaint, fontSize: 10, fontWeight: "800" },
+  countTextActive: { color: "#FFFFFF" },
   mb: { marginBottom: spacing(4) },
   loader: { paddingVertical: spacing(12) },
   refreshing: { color: colors.textHint, fontSize: 11, fontWeight: "600", marginBottom: spacing(2) },

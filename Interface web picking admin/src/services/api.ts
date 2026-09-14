@@ -47,6 +47,43 @@ async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export interface AuthUser {
+  id: number;
+  email: string;
+  username: string;
+  fullName: string;
+  isSuperuser: boolean;
+  isActive: boolean;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  user: AuthUser;
+}
+
+/** Usuario de picking tal como lo devuelve el panel. */
+export interface PickUser {
+  id: number;
+  name: string;
+  email: string;
+  username: string;
+  phone: string | null;
+  isActive: boolean;
+  isSuperuser: boolean;
+  /** Si puede iniciar sesión en la app móvil de picking. */
+  isPicker: boolean;
+}
+
+export interface CreatePickUserPayload {
+  fullName: string;
+  username: string;
+  email: string;
+  phone?: string;
+  password: string;
+}
+
 export interface ShelfPayload {
   branchId: number;
   code: string;
@@ -116,6 +153,48 @@ export const api = {
     fetchJson<PickerHistory>(`/picking-admin/pickers/${id}/history`),
 
   orderDetail: (id: number) => fetchJson<PickingOrderDetail>(`/picking/orders/${id}`),
+
+  // ─── Sesión ────────────────────────────────────────────────────────────────
+  me: () => fetchJson<AuthUser>('/auth/me'),
+
+  login: (identifier: string, password: string) =>
+    fetchJson<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ identifier, password }),
+    }),
+
+  logout: () =>
+    fetchJson<{ success: boolean }>('/auth/logout', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    }),
+
+  // ─── Usuarios de picking ───────────────────────────────────────────────────
+  users: () => fetchJson<PickUser[]>('/picking-admin/users'),
+
+  createUser: (payload: CreatePickUserPayload) =>
+    fetchJson<PickUser>('/picking-admin/users', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateUser: (
+    id: number,
+    payload: Partial<Omit<CreatePickUserPayload, 'password'>> & {
+      isActive?: boolean;
+      isPicker?: boolean;
+    },
+  ) =>
+    fetchJson<PickUser>(`/picking-admin/users/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
+  resetUserPassword: (id: number, password: string) =>
+    fetchJson<{ success: boolean }>(`/picking-admin/users/${id}/reset-password`, {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    }),
 };
 
 export type { ShelfRow };

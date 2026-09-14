@@ -6,7 +6,7 @@ import { formatMoney } from "@/lib/format";
 import { isItemDone, scannedCount } from "@/picking/status";
 import { useClaimOrder, useOrder } from "@/picking/queries";
 import { saveSession } from "@/picking/sessionStore";
-import { usePickerStore } from "@/picking/pickerStore";
+import { useAuthStore } from "@/auth/authStore";
 import { Header } from "@/ui/Header";
 import { Screen } from "@/ui/Screen";
 import { Button } from "@/ui/Button";
@@ -19,7 +19,7 @@ export default function OrderDetailScreen() {
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
 
-  const pickerId = usePickerStore((s) => s.pickerId);
+  const pickerId = useAuthStore((s) => s.user?.id ?? null);
   const { data: order, isLoading, error, refetch } = useOrder(id);
   const claim = useClaimOrder();
   const claimedRef = useRef(false);

@@ -1,5 +1,7 @@
 import { http, toApiError } from "./client";
 import type {
+  AuthMe,
+  LoginResponse,
   Picker,
   PickingLocation,
   PickingOrder,
@@ -26,6 +28,13 @@ async function post<T>(url: string, body?: unknown): Promise<T> {
 }
 
 export const pickingApi = {
+  /** Inicia sesión con email o username + contraseña. */
+  login: (identifier: string, password: string) =>
+    post<LoginResponse>("/auth/login", { identifier, password }),
+
+  /** Perfil del usuario autenticado (valida el token guardado). */
+  me: () => get<AuthMe>("/auth/me"),
+
   queue: (status?: string) =>
     get<PickingOrder[]>(`/picking/orders${status ? `?status=${status}` : ""}`),
 

@@ -1,12 +1,17 @@
 {
   "expo": {
-    "name": "Picking DSI",
+    "name": "DSI Picking",
     "slug": "picking-dsi",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon-dsi.png",
     "scheme": "pickingapp",
     "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0C0C0D"
+    },
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
@@ -16,10 +21,9 @@
     "android": {
       "package": "com.dsi.pickingapp",
       "adaptiveIcon": {
-        "backgroundColor": "#0C0C0D",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/android-icon-foreground-dsi.png",
+        "monochromeImage": "./assets/android-icon-monochrome-dsi.png"
       },
       "predictiveBackGestureEnabled": false,
       "usesCleartextTraffic": true,

@@ -1,5 +1,12 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import * as bcrypt from 'bcryptjs';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   orders,
@@ -25,7 +32,10 @@ export class PickersService {
     return `${u.firstName} ${u.lastName}`.trim();
   }
 
-  /** Usuarios disponibles para picking (activos, sin borrar). */
+  /**
+   * Usuarios que pueden iniciar sesión en la app de picking: activos, sin
+   * borrar y marcados explícitamente como pickers desde el panel.
+   */
   async list() {
     const rows = await this.db
       .select({
@@ -37,7 +47,13 @@ export class PickersService {
         phone: users.phone,
       })
       .from(users)
-      .where(and(eq(users.isActive, true), isNull(users.deletedAt)))
+      .where(
+        and(
+          eq(users.isActive, true),
+          eq(users.isPicker, true),
+          isNull(users.deletedAt),
+        ),
+      )
       .orderBy(asc(users.firstName), asc(users.lastName));
 
     return rows.map((u) => ({
@@ -47,6 +63,178 @@ export class PickersService {
       username: u.username,
       phone: u.phone,
     }));
+  }
+
+  /** Columnas que devuelve la gestión de usuarios del panel. */
+  private readonly pickerColumns = {
+    id: users.id,
+    firstName: users.firstName,
+    lastName: users.lastName,
+    email: users.email,
+    username: users.username,
+    phone: users.phone,
+    isActive: users.isActive,
+    isSuperuser: users.isSuperuser,
+    isPicker: users.isPicker,
+  };
+
+  private toPicker(u: {
+    id: bigint;
+    firstName: string;
+    lastName: string;
+    email: string;
+    username: string;
+    phone: string | null;
+    isActive: boolean;
+    isSuperuser: boolean;
+    isPicker: boolean;
+  }) {
+    return {
+      id: Number(u.id),
+      name: this.nameOf(u),
+      email: u.email,
+      username: u.username,
+      phone: u.phone,
+      isActive: u.isActive,
+      isSuperuser: u.isSuperuser,
+      isPicker: u.isPicker,
+    };
+  }
+
+  /** Todos los usuarios (incluye inactivos) para la gestión desde el panel. */
+  async listAll() {
+    const rows = await this.db
+      .select(this.pickerColumns)
+      .from(users)
+      .where(isNull(users.deletedAt))
+      .orderBy(asc(users.firstName), asc(users.lastName));
+
+    return rows.map((u) => this.toPicker(u));
+  }
+
+  private async findRow(id: number) {
+    const rows = await this.db
+      .select(this.pickerColumns)
+      .from(users)
+      .where(and(eq(users.id, BigInt(id)), isNull(users.deletedAt)))
+      .limit(1);
+    if (!rows.length) throw new NotFoundException('Usuario no encontrado');
+    return rows[0];
+  }
+
+  /** Crea una cuenta de acceso a la app móvil de picking. */
+  async create(dto: {
+    fullName: string;
+    username: string;
+    email: string;
+    phone?: string;
+    password: string;
+  }) {
+    const email = dto.email.trim().toLowerCase();
+    const username = dto.username.trim();
+
+    const existing = await this.db
+      .select({ id: users.id })
+      .from(users)
+      .where(or(eq(users.email, email), eq(users.username, username)))
+      .limit(1);
+    if (existing.length) {
+      throw new ConflictException(
+        'Ya existe un usuario con ese email o nombre de usuario.',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(dto.password, 10);
+    const parts = dto.fullName.trim().split(/\s+/);
+    const [row] = await this.db
+      .insert(users)
+      .values({
+        email,
+        username,
+        passwordHash,
+        firstName: parts[0] || dto.fullName.trim(),
+        lastName: parts.slice(1).join(' '),
+        phone: dto.phone?.trim() || null,
+        isSuperuser: false,
+        isActive: true,
+        // Los usuarios creados desde el panel nacen como pickers.
+        isPicker: true,
+      })
+      .returning(this.pickerColumns);
+
+    this.logger.log(`Usuario de picking creado: ${username}`);
+    return this.toPicker(row);
+  }
+
+  /** Actualiza los datos de un usuario de picking. */
+  async update(
+    id: number,
+    dto: {
+      fullName?: string;
+      username?: string;
+      email?: string;
+      phone?: string;
+      isActive?: boolean;
+      isPicker?: boolean;
+    },
+  ) {
+    await this.findRow(id);
+
+    const email = dto.email?.trim().toLowerCase();
+    const username = dto.username?.trim();
+    if (email || username) {
+      const conflicts: SQL[] = [];
+      if (email) conflicts.push(eq(users.email, email));
+      if (username) conflicts.push(eq(users.username, username));
+      const dup = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(or(...conflicts), ne(users.id, BigInt(id))))
+        .limit(1);
+      if (dup.length) {
+        throw new ConflictException(
+          'Ya existe otro usuario con ese email o nombre de usuario.',
+        );
+      }
+    }
+
+    const patch: Partial<typeof users.$inferInsert> = {
+      updatedAt: new Date().toISOString(),
+    };
+    if (dto.fullName !== undefined) {
+      const parts = dto.fullName.trim().split(/\s+/);
+      patch.firstName = parts[0] || dto.fullName.trim();
+      patch.lastName = parts.slice(1).join(' ');
+    }
+    if (username !== undefined) patch.username = username;
+    if (email !== undefined) patch.email = email;
+    if (dto.phone !== undefined) patch.phone = dto.phone.trim() || null;
+    if (dto.isActive !== undefined) patch.isActive = dto.isActive;
+    if (dto.isPicker !== undefined) patch.isPicker = dto.isPicker;
+
+    const [row] = await this.db
+      .update(users)
+      .set(patch)
+      .where(eq(users.id, BigInt(id)))
+      .returning(this.pickerColumns);
+
+    return this.toPicker(row);
+  }
+
+  /** Restablece la contraseña y desbloquea la cuenta. */
+  async resetPassword(id: number, password: string) {
+    await this.findRow(id);
+    const passwordHash = await bcrypt.hash(password, 10);
+    await this.db
+      .update(users)
+      .set({
+        passwordHash,
+        lockedUntil: null,
+        failedAttempts: 0,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(users.id, BigInt(id)));
+    return { success: true };
   }
 
   /**

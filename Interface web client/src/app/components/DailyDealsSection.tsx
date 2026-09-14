@@ -104,7 +104,23 @@ export function DailyDealsSection({
   const [localQtys, setLocalQtys] = useState<Record<number, number>>({});
   const carouselRef = useRef<HTMLDivElement>(null);
 
-  const VISIBLE = 3;
+  // En móvil (< md) el carrusel avanza de uno en uno; en escritorio muestra 3.
+  const [visible, setVisible] = useState(3);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 768px)");
+    const update = () => setVisible(mq.matches ? 3 : 1);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
+  const VISIBLE = visible;
+
+  // Al cambiar el ancho (o el número de ofertas), evita quedar fuera de rango.
+  useEffect(() => {
+    setCarouselStart((prev) =>
+      Math.min(prev, Math.max(0, carouselProducts.length - VISIBLE)),
+    );
+  }, [VISIBLE, carouselProducts.length]);
 
   // Rotación sincronizada: el display izquierdo y el carrusel derecho avanzan
   // juntos con un solo timer (más lento y sin desfase)
@@ -117,7 +133,7 @@ export function DailyDealsSection({
       setSlideDir(1);
     }, 8000);
     return () => clearInterval(t);
-  }, [featuredItems.length, carouselProducts.length]);
+  }, [featuredItems.length, carouselProducts.length, VISIBLE]);
 
   const scrollCarousel = (dir: number) => {
     const next = carouselStart + dir;
@@ -287,7 +303,7 @@ export function DailyDealsSection({
               <div
                 ref={carouselRef}
                 key={`grid-${carouselStart}`}
-                className="grid grid-cols-2 md:grid-cols-3 gap-3"
+                className="grid grid-cols-1 md:grid-cols-3 gap-3"
                 style={{
                   animation:
                     slideDir === 1

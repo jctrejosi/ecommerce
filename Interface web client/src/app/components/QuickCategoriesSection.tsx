@@ -37,7 +37,7 @@ function ProductTypeButton({
       }`}
     >
       <div
-        className="w-12 h-12 rounded-xl flex items-center justify-center text-lg"
+        className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl"
         style={{ background: "#F4F4F6", color: "#6B7280" }}
       >
         {productTypeIcon(pt.code, index)}

@@ -1,5 +1,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { FormEvent } from 'react'
 import { api, ApiError } from './services/api'
+import type { AuthUser, PickUser } from './services/api'
 import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
@@ -32,7 +34,7 @@ const emptyShelf = () => ({
 export default function App() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState<number | null>(null)
-  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'metrics'>('shelves')
+  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'metrics' | 'users'>('shelves')
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<ProductWithLocation[]>([])
@@ -42,12 +44,35 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null)
+  const [authState, setAuthState] = useState<'checking' | 'out' | 'in'>('checking')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const notify = useCallback((msg: string) => {
     setToast(msg)
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 3500)
+  }, [])
+
+  // Sesión: se valida con la cookie httpOnly que deja el login.
+  useEffect(() => {
+    api
+      .me()
+      .then((u) => {
+        setAuthUser(u)
+        setAuthState('in')
+      })
+      .catch(() => setAuthState('out'))
+  }, [])
+
+  const handleLogout = useCallback(() => {
+    api
+      .logout()
+      .catch(() => undefined)
+      .finally(() => {
+        setAuthUser(null)
+        setAuthState('out')
+      })
   }, [])
 
   // Sucursales
@@ -98,6 +123,25 @@ export default function App() {
 
   const branch = branches.find((b) => b.id === branchId) ?? null
 
+  if (authState === 'checking') {
+    return (
+      <div className="flex h-full items-center justify-center bg-[#0C0C0D] text-white/60 text-sm">
+        Validando sesión…
+      </div>
+    )
+  }
+
+  if (authState === 'out') {
+    return (
+      <LoginScreen
+        onSuccess={(u) => {
+          setAuthUser(u)
+          setAuthState('in')
+        }}
+      />
+    )
+  }
+
   return (
     <div className="flex h-full flex-col overflow-hidden bg-[#0C0C0D] text-white">
       {toast && (
@@ -136,6 +180,19 @@ export default function App() {
               ))}
             </div>
           </div>
+
+          <div className="flex items-center gap-2">
+            <div className="text-right leading-tight hidden sm:block">
+              <p className="text-white/80 text-xs font-bold">{authUser?.fullName ?? authUser?.username}</p>
+              <p className="text-white/35 text-[10px] font-medium">Administrador</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="px-3 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/60 hover:text-white/90 transition-all"
+            >
+              Salir
+            </button>
+          </div>
         </div>
       </header>
 
@@ -143,7 +200,7 @@ export default function App() {
         <div className="w-full max-w-6xl mx-auto px-5 pb-16">
         {/* Tabs */}
         <div className="flex gap-2 my-5">
-          {(['shelves', 'map', 'products', 'metrics'] as const).map((t) => (
+          {(['shelves', 'map', 'products', 'metrics', 'users'] as const).map((t) => (
             <button
               key={t}
               onClick={() => setTab(t)}
@@ -151,7 +208,7 @@ export default function App() {
                 tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
               }`}
             >
-              {t === 'shelves' ? 'Estanterías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : 'Informes'}
+              {t === 'shelves' ? 'Estanterías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'metrics' ? 'Informes' : 'Usuarios'}
             </button>
           ))}
         </div>
@@ -190,6 +247,8 @@ export default function App() {
           )
         ) : tab === 'metrics' ? (
           <MetricsView notify={notify} />
+        ) : tab === 'users' ? (
+          <PickUsersView notify={notify} />
         ) : (
           <ProductsView
             branchId={branchId}
@@ -926,6 +985,332 @@ function ProductsView({
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+// ─── Login ────────────────────────────────────────────────────────────────────
+
+function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
+  const [identifier, setIdentifier] = useState('')
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    setBusy(true)
+    setError(null)
+    try {
+      const res = await api.login(identifier.trim(), password)
+      if (!res.user.isSuperuser) {
+        throw new Error('Se requiere un usuario administrador.')
+      }
+      onSuccess(res.user)
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : 'No se pudo iniciar sesión',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="flex h-full items-center justify-center bg-[#0C0C0D] px-5">
+      <form
+        onSubmit={submit}
+        className="w-full max-w-sm bg-[#141416] border border-white/10 rounded-2xl p-6 flex flex-col gap-4"
+      >
+        <div className="text-center mb-1">
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">
+            Picking <span className="text-amber-400">Admin</span>
+          </h1>
+          <p className="text-white/40 text-xs font-medium mt-1">
+            Inicia sesión con tu usuario administrador
+          </p>
+        </div>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">Usuario o email</span>
+          <input
+            value={identifier}
+            onChange={(e) => setIdentifier(e.target.value)}
+            autoFocus
+            autoCapitalize="none"
+            autoCorrect="off"
+            className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+            placeholder="admin"
+          />
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">Contraseña</span>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+            placeholder="••••••••"
+          />
+        </label>
+
+        {error && (
+          <p className="text-red-400 text-xs font-semibold bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={busy || !identifier || !password}
+          className="mt-1 bg-amber-400 text-[#0C0C0D] font-bold text-sm rounded-xl px-4 py-2.5 disabled:opacity-40 transition-all"
+        >
+          {busy ? 'Ingresando…' : 'Ingresar'}
+        </button>
+      </form>
+    </div>
+  )
+}
+
+// ─── Usuarios de picking ──────────────────────────────────────────────────────
+
+const emptyUserForm = () => ({ fullName: '', username: '', email: '', phone: '', password: '' })
+
+function PickUsersView({ notify }: { notify: (msg: string) => void }) {
+  const [users, setUsers] = useState<PickUser[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [showForm, setShowForm] = useState(false)
+  const [form, setForm] = useState(emptyUserForm())
+  const [saving, setSaving] = useState(false)
+  const [resetId, setResetId] = useState<number | null>(null)
+  const [resetPwd, setResetPwd] = useState('')
+  const [resetError, setResetError] = useState<string | null>(null)
+
+  const load = useCallback(() => {
+    setLoading(true)
+    api
+      .users()
+      .then(setUsers)
+      .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar los usuarios'))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    load()
+  }, [load])
+
+  const create = async (e: FormEvent) => {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+    try {
+      await api.createUser({
+        fullName: form.fullName.trim(),
+        username: form.username.trim(),
+        email: form.email.trim(),
+        phone: form.phone.trim() || undefined,
+        password: form.password,
+      })
+      notify('Usuario creado')
+      setForm(emptyUserForm())
+      setShowForm(false)
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo crear el usuario')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const toggleActive = async (u: PickUser) => {
+    try {
+      await api.updateUser(u.id, { isActive: !u.isActive })
+      notify(u.isActive ? `${u.name} desactivado` : `${u.name} activado`)
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo actualizar el usuario')
+    }
+  }
+
+  const togglePicker = async (u: PickUser) => {
+    try {
+      await api.updateUser(u.id, { isPicker: !u.isPicker })
+      notify(u.isPicker ? `${u.name} ya no es picker` : `${u.name} ahora es picker`)
+      load()
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'No se pudo actualizar el usuario')
+    }
+  }
+
+  const submitReset = async (u: PickUser) => {
+    if (resetPwd.length < 8) {
+      setResetError('La contraseña debe tener al menos 8 caracteres')
+      return
+    }
+    try {
+      await api.resetUserPassword(u.id, resetPwd)
+      notify(`Contraseña actualizada para ${u.name}`)
+      setResetId(null)
+      setResetPwd('')
+      setResetError(null)
+    } catch (err) {
+      setResetError(err instanceof ApiError ? err.message : 'No se pudo cambiar la contraseña')
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-extrabold text-white">Usuarios de picking</h2>
+          <p className="text-white/40 text-xs mt-0.5">
+            Solo las cuentas marcadas como <span className="text-amber-400 font-semibold">picker</span> aparecen en
+            el login de la app móvil. Un usuario nuevo se crea ya como picker.
+          </p>
+        </div>
+        <button
+          onClick={() => setShowForm((v) => !v)}
+          className="px-4 py-2 rounded-full text-sm font-bold bg-amber-400 text-[#0C0C0D]"
+        >
+          {showForm ? 'Cancelar' : 'Nuevo usuario'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm flex items-center gap-3">
+          <p className="flex-1">{error}</p>
+          <button onClick={() => setError(null)} className="font-extrabold underline">Cerrar</button>
+        </div>
+      )}
+
+      {showForm && (
+        <form
+          onSubmit={create}
+          className="bg-[#141416] border border-white/10 rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3"
+        >
+          {(
+            [
+              ['fullName', 'Nombre completo', 'text'],
+              ['username', 'Usuario', 'text'],
+              ['email', 'Email', 'email'],
+              ['phone', 'Teléfono (opcional)', 'text'],
+              ['password', 'Contraseña (mín. 8)', 'password'],
+            ] as const
+          ).map(([key, label, type]) => (
+            <label key={key} className="flex flex-col gap-1.5">
+              <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">{label}</span>
+              <input
+                type={type}
+                value={form[key]}
+                onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                autoComplete="off"
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+              />
+            </label>
+          ))}
+          <div className="sm:col-span-2 flex justify-end">
+            <button
+              type="submit"
+              disabled={saving}
+              className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white text-[#0C0C0D] disabled:opacity-40"
+            >
+              {saving ? 'Guardando…' : 'Crear usuario'}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {loading ? (
+        <p className="text-white/40 text-sm py-8 text-center">Cargando usuarios…</p>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {users.map((u) => (
+            <div key={u.id} className="bg-[#141416] border border-white/10 rounded-2xl p-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] font-extrabold flex items-center justify-center text-sm">
+                  {u.name.charAt(0).toUpperCase() || '?'}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-white text-sm font-bold truncate">{u.name}</p>
+                  <p className="text-white/40 text-xs truncate">
+                    @{u.username} · {u.email}
+                  </p>
+                </div>
+                {u.isPicker && (
+                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-400/15 text-amber-400">
+                    Picker
+                  </span>
+                )}
+                <span
+                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
+                    u.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/8 text-white/40'
+                  }`}
+                >
+                  {u.isActive ? 'Activo' : 'Inactivo'}
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <button
+                  onClick={() => {
+                    setResetId(resetId === u.id ? null : u.id)
+                    setResetPwd('')
+                    setResetError(null)
+                  }}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
+                >
+                  {resetId === u.id ? 'Cancelar' : 'Cambiar contraseña'}
+                </button>
+                <button
+                  onClick={() => toggleActive(u)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
+                >
+                  {u.isActive ? 'Desactivar' : 'Activar'}
+                </button>
+                <button
+                  onClick={() => togglePicker(u)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
+                    u.isPicker
+                      ? 'bg-amber-400/15 border-amber-400/40 text-amber-400'
+                      : 'bg-white/5 border-white/10 text-white/70 hover:text-white'
+                  }`}
+                >
+                  {u.isPicker ? 'Quitar de picking' : 'Habilitar picking'}
+                </button>
+              </div>
+
+              {resetId === u.id && (
+                <div className="flex flex-col sm:flex-row gap-2 mt-3">
+                  <input
+                    type="password"
+                    value={resetPwd}
+                    onChange={(e) => setResetPwd(e.target.value)}
+                    placeholder="Nueva contraseña"
+                    autoComplete="new-password"
+                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-amber-400"
+                  />
+                  <button
+                    onClick={() => submitReset(u)}
+                    className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-400 text-[#0C0C0D]"
+                  >
+                    Guardar contraseña
+                  </button>
+                  {resetError && <p className="text-red-400 text-xs font-semibold self-center">{resetError}</p>}
+                </div>
+              )}
+            </div>
+          ))}
+          {users.length === 0 && (
+            <p className="text-white/30 text-sm text-center py-10">Aún no hay usuarios.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

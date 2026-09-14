@@ -82,6 +82,26 @@ export interface Picker {
   phone?: string | null;
 }
 
+/** Respuesta de `POST /auth/login` (usuario administrador/picker). */
+export interface AuthMe {
+  id: number;
+  email: string;
+  username: string;
+  firstName: string | null;
+  lastName: string | null;
+  fullName: string;
+  isSuperuser: boolean;
+  isActive: boolean;
+  phone?: string | null;
+}
+
+export interface LoginResponse {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  user: AuthMe;
+}
+
 /** Status que acepta `GET /picking/orders?status=`. */
 export type QueueFilter = "nuevo" | "preparando" | "completado";
 
