@@ -36,6 +36,10 @@ export default function MainLayout() {
         name="map/[id]"
         options={{ title: "Mapa de entrega", headerBackTitle: "Pedido" }}
       />
+      <Stack.Screen
+        name="chat/[id]"
+        options={{ title: "Chat del pedido", headerBackTitle: "Pedido" }}
+      />
     </Stack>
   );
 }

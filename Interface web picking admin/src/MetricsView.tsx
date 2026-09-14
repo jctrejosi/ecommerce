@@ -14,6 +14,18 @@ const fmtTime = (s: string | null) => {
   })
 }
 
+/** Duración en mm:ss (o h:mm:ss) a partir de milisegundos. */
+const fmtDuration = (ms: number) => {
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  const s = Math.floor(ms / 1000)
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  const mm = String(m).padStart(2, '0')
+  const ss = String(sec).padStart(2, '0')
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`
+}
+
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   paid: { label: 'En cola', cls: 'bg-amber-400/15 text-amber-400 border-amber-400/30' },
   preparing: { label: 'Alistando', cls: 'bg-sky-400/15 text-sky-400 border-sky-400/30' },
@@ -28,6 +40,13 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
   const [order, setOrder] = useState<PickingOrderDetail | null>(null)
   const [orderLoading, setOrderLoading] = useState(false)
   const socketRef = useRef<Socket | null>(null)
+  // Reloj para el tiempo transcurrido del pedido en curso.
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
 
   const load = useCallback(async () => {
     try {
@@ -123,6 +142,15 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                 <p className="font-extrabold truncate">{p.name}</p>
                 <p className="text-white/35 text-xs font-medium truncate">{p.email}</p>
               </div>
+              <span
+                className={`ml-auto shrink-0 text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
+                  p.currentOrder
+                    ? 'bg-sky-400/15 text-sky-400 border-sky-400/30'
+                    : 'bg-emerald-400/15 text-emerald-400 border-emerald-400/30'
+                }`}
+              >
+                {p.currentOrder ? 'Alistando' : 'Disponible'}
+              </span>
             </div>
 
             {/* Pedido actual */}
@@ -136,6 +164,11 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                     {STATUS_LABEL[p.currentOrder.status]?.label ?? p.currentOrder.status}
                   </span>
                   <span className="text-white/35 text-[10px] font-medium">{fmtTime(p.currentOrder.pickedAt)}</span>
+                  {p.currentOrder.pickedAt && (
+                    <span className="ml-auto text-[11px] font-extrabold text-amber-400 tabular-nums">
+                      ⏱ {fmtDuration(now - Date.parse(p.currentOrder.pickedAt))}
+                    </span>
+                  )}
                 </div>
                 {/* Progreso */}
                 <div className="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden">
@@ -147,7 +180,11 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                   />
                 </div>
                 <p className="text-white/35 text-[10px] font-medium mt-1">
-                  {p.currentOrder.scannedPieces}/{p.currentOrder.totalPieces} piezas · {p.currentOrder.itemsCount} producto(s)
+                  {p.currentOrder.scannedPieces}/{p.currentOrder.totalPieces} piezas ·
+                  faltan{' '}
+                  <span className="text-amber-400 font-bold">
+                    {p.currentOrder.remainingPieces} pieza(s) · {p.currentOrder.remainingItems} producto(s)
+                  </span>
                 </p>
                 <button
                   onClick={() => void openOrder(p.currentOrder!.id)}
@@ -219,6 +256,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                       <th className="pb-2 pr-3">Cliente</th>
                       <th className="pb-2 pr-3 text-right">Total</th>
                       <th className="pb-2 pr-3 text-center">Piezas</th>
+                      <th className="pb-2 pr-3 text-right">Duración</th>
                       <th className="pb-2 pr-3">Entregado</th>
                       <th className="pb-2" />
                     </tr>
@@ -233,6 +271,11 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                         </td>
                         <td className="py-2.5 pr-3 text-center text-white/60">
                           {o.scannedPieces}/{o.totalPieces}
+                        </td>
+                        <td className="py-2.5 pr-3 text-right text-amber-400 font-bold tabular-nums">
+                          {o.pickedAt && o.completedAt
+                            ? fmtDuration(Date.parse(o.completedAt) - Date.parse(o.pickedAt))
+                            : '—'}
                         </td>
                         <td className="py-2.5 pr-3 text-white/45 text-xs">{fmtTime(o.deliveredAt)}</td>
                         <td className="py-2.5 text-right">

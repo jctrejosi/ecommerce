@@ -346,7 +346,7 @@ export const userRefreshTokens = pgTable(
     id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     userId: bigint('user_id', { mode: 'number' }).notNull(),
-    token: varchar({ length: 255 }).notNull(),
+    token: text().notNull(),
     expiresAt: timestamp('expires_at', {
       withTimezone: true,
       mode: 'string',
@@ -1621,7 +1621,7 @@ export const customerRefreshTokens = pgTable(
     customerId: bigint('customer_id', { mode: 'number' })
       .notNull()
       .references(() => customers.id, { onDelete: 'cascade' }),
-    token: varchar({ length: 255 }).notNull().unique(),
+    token: text().notNull().unique(),
     expiresAt: timestamp('expires_at', {
       withTimezone: true,
       mode: 'string',
@@ -1856,6 +1856,8 @@ export const orders = pgTable(
     // Picker (usuario de picking) que alista el pedido
     pickerId: bigint('picker_id', { mode: 'number' }),
     pickedAt: timestamp('picked_at', { withTimezone: true, mode: 'string' }),
+    // Cuándo terminó el alistamiento (para medir la duración por pedido)
+    completedAt: timestamp('completed_at', { withTimezone: true, mode: 'string' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -4004,5 +4006,54 @@ export const campaignHistory = pgTable(
   },
   (table) => [
     index('idx_campaign_history_campaign').on(table.campaignId),
+  ],
+);
+
+/**
+ * Chat por pedido: mensajes entre el repartidor y el cliente.
+ * senderType distingue quién escribió; la identidad del repartidor se guarda
+ * en senderUserId (cuenta users) y la del invitado en senderGuestSessionId.
+ * La identidad del cliente registrado vive en la orden (customer_id).
+ */
+export const orderChatSenderEnum = pgEnum('order_chat_sender_enum', [
+  'customer',
+  'delivery',
+]);
+
+export const orderChatMessages = pgTable(
+  'order_chat_messages',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    orderId: bigint('order_id', { mode: 'bigint' }).notNull(),
+    senderType: orderChatSenderEnum('sender_type').notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    senderUserId: bigint('sender_user_id', { mode: 'number' }),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    senderGuestSessionId: bigint('sender_guest_session_id', { mode: 'number' }),
+    body: text().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_order_chat_messages_order').using(
+      'btree',
+      table.orderId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.orderId],
+      foreignColumns: [orders.id],
+      name: 'order_chat_messages_order_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.senderUserId],
+      foreignColumns: [users.id],
+      name: 'order_chat_messages_sender_user_id_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.senderGuestSessionId],
+      foreignColumns: [guestSessions.id],
+      name: 'order_chat_messages_sender_guest_session_id_fkey',
+    }).onDelete('set null'),
   ],
 );

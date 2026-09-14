@@ -25,6 +25,7 @@ import {
   media,
   orderItems,
   orders,
+  orderChatMessages,
   orderStatusHistory,
   paymentIntents,
   payments,
@@ -550,10 +551,92 @@ export class OrdersService {
         ? [shipment.addressLine1, shipment.city].filter(Boolean).join(', ')
         : '',
       paymentMethod: this.reverseMapPaymentMethod(row.paymentMethod),
-      status:
-        mappedStatus === 'confirmado' ? 'preparando' : mappedStatus,
+      status: mappedStatus,
       customerName: row.customerName ?? shipment?.recipientName ?? null,
       customerPhone: row.customerPhone ?? shipment?.recipientPhone ?? null,
+    };
+  }
+
+  /** Resuelve el pedido por su código público (secreto compartido con el cliente). */
+  private async resolveOrderByCode(referenceCode: string) {
+    const code = (referenceCode || '').trim().toUpperCase();
+    if (!code) {
+      throw new BadRequestException('Ingresa el código del pedido');
+    }
+
+    const [row] = await this.db
+      .select({
+        id: orders.id,
+        customerId: orders.customerId,
+        guestSessionId: orders.guestSessionId,
+      })
+      .from(orders)
+      .where(eq(orders.referenceCode, code))
+      .limit(1);
+
+    if (!row) {
+      throw new NotFoundException(
+        `No encontramos el pedido ${code}. Verifica el código e intenta de nuevo.`,
+      );
+    }
+
+    return row;
+  }
+
+  /** Mensajes del chat del pedido (cliente ↔ repartidor), por código público. */
+  async getChatMessages(referenceCode: string) {
+    const order = await this.resolveOrderByCode(referenceCode);
+
+    const rows = await this.db
+      .select({
+        id: orderChatMessages.id,
+        senderType: orderChatMessages.senderType,
+        body: orderChatMessages.body,
+        createdAt: orderChatMessages.createdAt,
+      })
+      .from(orderChatMessages)
+      .where(eq(orderChatMessages.orderId, order.id))
+      .orderBy(asc(orderChatMessages.id))
+      .limit(300);
+
+    return rows.map((r) => ({
+      id: String(r.id),
+      senderType: r.senderType,
+      body: r.body,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /** Envía un mensaje del cliente en el chat del pedido (público por código). */
+  async sendChatMessage(referenceCode: string, body: string) {
+    const text = (body ?? '').trim();
+    if (!text) {
+      throw new BadRequestException('Escribe un mensaje.');
+    }
+    if (text.length > 2000) {
+      throw new BadRequestException('El mensaje no puede superar 2000 caracteres.');
+    }
+
+    const order = await this.resolveOrderByCode(referenceCode);
+
+    const [row] = await this.db
+      .insert(orderChatMessages)
+      .values({
+        orderId: order.id,
+        senderType: 'customer',
+        // La identidad del cliente vive en la orden (customer_id / guest_session_id),
+        // no en users; aquí solo se conserva la sesión invitado si la hubo.
+        senderUserId: null,
+        senderGuestSessionId: order.guestSessionId ?? null,
+        body: text,
+      })
+      .returning();
+
+    return {
+      id: String(row.id),
+      senderType: row.senderType,
+      body: row.body,
+      createdAt: row.createdAt,
     };
   }
 
@@ -900,13 +983,13 @@ export class OrdersService {
   private mapOrderStatus(status: string | null) {
     switch (status) {
       case 'created':
-        return 'preparando';
+        return 'pendiente';
       case 'confirmed':
-        return 'confirmado';
+        return 'preparando';
       case 'payment_pending':
         return 'pendiente';
       case 'paid':
-        return 'confirmado';
+        return 'preparando';
       case 'preparing':
         return 'preparando';
       case 'shipped':
@@ -916,7 +999,7 @@ export class OrdersService {
       case 'cancelled':
         return 'cancelado';
       default:
-        return 'preparando';
+        return 'pendiente';
     }
   }
 
@@ -1103,6 +1186,8 @@ export class OrdersService {
         city: customerAddresses.city,
         paymentMethod: payments.paymentMethod,
         paymentStatus: payments.status,
+        pickedAt: orders.pickedAt,
+        completedAt: orders.completedAt,
         pickerName: sql<string>`NULLIF(TRIM(CONCAT(${users.firstName}, ' ', ${users.lastName})), '')`,
         driverName: sql<string>`(SELECT dd.full_name FROM delivery_assignments da JOIN shipments s ON s.id = da.shipment_id JOIN delivery_drivers dd ON dd.id = da.driver_id WHERE s.order_id = ${orders.id} ORDER BY da.id DESC LIMIT 1)`,
       })
@@ -1141,21 +1226,37 @@ export class OrdersService {
     // Get item counts per order
     const orderIds = uniqueRows.map((r) => Number(r.id));
     const itemCounts = new Map<number, number>();
+    const itemProgress = new Map<
+      number,
+      { pieces: number; scanned: number; remaining: number }
+    >();
     if (orderIds.length > 0) {
       const countRows = await this.db
         .select({
           orderId: orderItems.orderId,
           count: sql<number>`COUNT(*)::int`,
+          pieces: sql<number>`COALESCE(SUM(${orderItems.quantity}),0)::int`,
+          scanned: sql<number>`COALESCE(SUM(${orderItems.pickedQty}),0)::int`,
+          remaining: sql<number>`COUNT(*) FILTER (WHERE ${orderItems.pickedQty} < ${orderItems.quantity})::int`,
         })
         .from(orderItems)
         .where(inArray(orderItems.orderId, orderIds))
         .groupBy(orderItems.orderId);
       for (const cr of countRows) {
         itemCounts.set(Number(cr.orderId), Number(cr.count));
+        itemProgress.set(Number(cr.orderId), {
+          pieces: cr.pieces,
+          scanned: cr.scanned,
+          remaining: cr.remaining,
+        });
       }
     }
 
-    return uniqueRows.map((row) => ({
+    return uniqueRows.map((row) => {
+      const prog = itemProgress.get(Number(row.id));
+      const pieces = prog?.pieces ?? 0;
+      const scanned = prog?.scanned ?? 0;
+      return {
       id: row.referenceCode,
       orderId: Number(row.id),
       customer: row.customerName ?? row.customerEmail ?? 'Cliente',
@@ -1179,7 +1280,15 @@ export class OrdersService {
       note: row.notes ?? undefined,
       pickerName: row.pickerName ?? null,
       driverName: row.driverName ?? null,
-    }));
+      // Progreso y tiempos de alistamiento (picking)
+      pickedAt: row.pickedAt,
+      completedAt: row.completedAt,
+      totalPieces: pieces,
+      scannedPieces: scanned,
+      remainingPieces: Math.max(0, pieces - scanned),
+      remainingItems: prog?.remaining ?? 0,
+    };
+    });
   }
 
   async getOrderById(orderId: number) {

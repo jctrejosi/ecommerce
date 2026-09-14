@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { API_BASE_URL, apiFetch as fetchJson } from "../lib/api";
 
 export type CampaignStatus =
   | "borrador"
@@ -46,23 +46,7 @@ export type UpdateCampaignData = Partial<CreateCampaignData> & {
   scheduledAt?: string | null;
 };
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(
-      (err as { message?: string })?.message ?? `API error: ${response.status}`,
-    );
-  }
-  return response.json();
-}
+
 
 export const newsletterService = {
   // ── Subscribers ──

@@ -19,6 +19,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { Public } from '../../common/decorators/public.decorator';
 import { CustomerJwtAuthGuard } from '../customer-auth/guards/customer-jwt-auth.guard';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { SendMessageDto } from './dto/send-message.dto';
 import { OrdersService } from './orders.service';
 
 interface AuthenticatedCustomer {
@@ -77,6 +78,27 @@ export class OrdersController {
   @ApiOperation({ summary: 'Ruta por calles del pedido (por código)' })
   liveRoute(@Param('referenceCode') referenceCode: string) {
     return this.ordersService.getLiveRoute(referenceCode);
+  }
+
+  /** Mensajes del chat del pedido (cliente ↔ repartidor), por código público. */
+  @Public()
+  @Get('track/:referenceCode/messages')
+  @ApiOperation({ summary: 'Mensajes del chat del pedido (por código)' })
+  trackChatMessages(@Param('referenceCode') referenceCode: string) {
+    return this.ordersService.getChatMessages(referenceCode);
+  }
+
+  /** Envía un mensaje del cliente en el chat del pedido. */
+  @Public()
+  @Post('track/:referenceCode/messages')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Enviar mensaje del cliente en el chat (por código)' })
+  @ApiBody({ type: SendMessageDto })
+  trackSendChatMessage(
+    @Param('referenceCode') referenceCode: string,
+    @Body() dto: SendMessageDto,
+  ) {
+    return this.ordersService.sendChatMessage(referenceCode, dto.body);
   }
 
   @Get()

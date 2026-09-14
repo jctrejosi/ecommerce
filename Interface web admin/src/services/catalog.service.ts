@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { API_BASE_URL, apiFetch as fetchJson } from "../lib/api";
 
 export type CatalogProduct = {
   id: number;
@@ -71,20 +71,7 @@ export type ProductsQuery = {
   uncategorized?: boolean;
 };
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-  return response.json();
-}
+
 
 export const catalogService = {
   async getProducts(params?: ProductsQuery): Promise<CatalogProduct[]> {

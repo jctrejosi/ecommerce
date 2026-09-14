@@ -261,6 +261,7 @@ export class PickersService {
         items: sql<number>`(SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = orders.id)`,
         pieces: sql<number>`(SELECT COALESCE(SUM(oi.quantity),0)::int FROM order_items oi WHERE oi.order_id = orders.id)`,
         scanned: sql<number>`(SELECT COALESCE(SUM(oi.picked_qty),0)::int FROM order_items oi WHERE oi.order_id = orders.id)`,
+        remainingItems: sql<number>`(SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = orders.id AND oi.picked_qty < oi.quantity)`,
       })
       .from(orders)
       .where(
@@ -325,6 +326,8 @@ export class PickersService {
               itemsCount: cur.items,
               totalPieces: cur.pieces,
               scannedPieces: cur.scanned,
+              remainingPieces: Math.max(0, cur.pieces - cur.scanned),
+              remainingItems: cur.remainingItems,
             }
           : null,
         completedToday: todayByPicker.get(p.id) ?? 0,
@@ -349,6 +352,8 @@ export class PickersService {
         customerName: orders.customerName,
         grandTotal: orders.grandTotal,
         status: orders.status,
+        pickedAt: orders.pickedAt,
+        completedAt: orders.completedAt,
         deliveredAt: orderStatusHistory.createdAt,
       })
       .from(orderStatusHistory)
@@ -394,6 +399,8 @@ export class PickersService {
           customerName: r.customerName ?? 'Cliente',
           grandTotal: Number(r.grandTotal),
           status: r.status,
+          pickedAt: r.pickedAt,
+          completedAt: r.completedAt ?? r.deliveredAt,
           deliveredAt: r.deliveredAt,
           itemsCount: agg.items,
           totalPieces: agg.pieces,

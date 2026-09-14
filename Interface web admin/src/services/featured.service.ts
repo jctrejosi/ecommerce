@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { API_BASE_URL, apiFetch as jsonFetch } from "../lib/api";
 
 export type FeaturedTab = {
   id: number;
@@ -26,15 +26,7 @@ export type FeaturedProduct = {
   isActive: boolean;
 };
 
-async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, {
-    credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-    ...init,
-  });
-  if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
-  return res.json() as Promise<T>;
-}
+
 
 export const featuredService = {
   getTabs: () =>

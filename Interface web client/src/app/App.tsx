@@ -11,6 +11,7 @@ import { useOrderSocket } from "../hooks/useOrderSocket";
 import { useNotifications } from "../hooks/useNotifications";
 import { useBackendStatus } from "../hooks/useBackendStatus";
 import { ChatbotWidget } from "../components/ChatbotWidget";
+import { OrderChatWidget } from "./components/OrderChatWidget";
 import type { BotCart } from "../services/chatbot.service";
 import { cartService } from "../services/cart.service";
 import { apiStatusService } from "../services/api-status.service";
@@ -734,11 +735,9 @@ export default function App() {
         address: response.address.address + ", " + response.address.city,
         paymentMethod: response.paymentMethod,
         status: ((s) =>
-          s === "payment_pending"
+          s === "payment_pending" || s === "created"
             ? "pendiente"
-            : s === "paid" || s === "created"
-              ? "preparando"
-              : "preparando")(response.status),
+            : "preparando")(response.status),
       };
       setOrders((prev) => [o, ...prev]);
       setLastOrderId(response.referenceCode);
@@ -1096,6 +1095,9 @@ export default function App() {
         onApplyCart={applyBotCart}
         pageCartItems={cartItems}
       />
+
+      {/* Chat por pedido (repartidor ↔ cliente) cuando hay pedidos en camino */}
+      <OrderChatWidget orders={orders} />
 
       {/* Aviso de backend caído */}
       {backendOnline === false && !reloadingSite && (

@@ -13,6 +13,7 @@ import {
   Percent,
   Shield,
   Settings,
+  SlidersHorizontal,
   Search,
   Bell,
   ChevronRight,
@@ -154,7 +155,7 @@ const NAV: NavSection[] = [
       { id: "homeBranches", label: "Sucursales", icon: Store },
       { id: "homeBenefits", label: "Beneficios", icon: Star },
       { id: "homeFooter", label: "Footer", icon: LayoutTemplate },
-      { id: "general", label: "General", icon: Settings },
+      { id: "general", label: "General", icon: SlidersHorizontal },
     ],
   },
   {

@@ -12,6 +12,6 @@ import { NotificationsModule } from '../notifications/notifications.module';
   imports: [PaymentsModule, NotificationsModule],
   controllers: [OrdersController, AdminOrdersController, WebhookController],
   providers: [OrdersService, OrdersGateway, PaymentVerificationService],
-  exports: [OrdersService],
+  exports: [OrdersService, OrdersGateway],
 })
 export class OrdersModule {}

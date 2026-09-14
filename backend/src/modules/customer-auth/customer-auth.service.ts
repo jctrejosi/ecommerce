@@ -18,6 +18,7 @@ import {
   settings,
 } from '../../../drizzle/schema';
 import { eq, and, desc, sql } from 'drizzle-orm';
+import { randomUUID } from 'crypto';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { CustomerSocialLoginDto } from './dto/customer-social-login.dto';
@@ -1202,10 +1203,15 @@ export class CustomerAuthService {
       this.configService.get<string>('jwt.refreshExpiresIn') ??
       '30d';
 
-    return this.jwtService.sign(payload, {
-      secret: this.jwtSecret,
-      expiresIn: this.parseDurationToSeconds(refreshExpiresIn),
-    });
+    // jti único: sin él, dos logins del mismo cliente en el mismo segundo
+    // generan el mismo JWT y viola customer_refresh_tokens_token_unique.
+    return this.jwtService.sign(
+      { ...payload, jti: randomUUID() },
+      {
+        secret: this.jwtSecret,
+        expiresIn: this.parseDurationToSeconds(refreshExpiresIn),
+      },
+    );
   }
 
   private getJwtExpiration(): number {

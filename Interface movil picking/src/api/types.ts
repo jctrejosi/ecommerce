@@ -29,6 +29,8 @@ export interface PickingOrder {
   reviewed: boolean;
   createdAt: string;
   branchId: number;
+  /** Usuario (picker) que tiene/reclamó el pedido; útil para "Completados". */
+  pickerId: number | null;
   itemsCount: number;
   totalPieces: number;
   scannedPieces: number;

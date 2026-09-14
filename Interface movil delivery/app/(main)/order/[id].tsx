@@ -118,13 +118,22 @@ export default function OrderDetailScreen() {
         <Text style={styles.strong}>{order.customer.name}</Text>
         <View style={styles.rowBetween}>
           <Text style={styles.muted}>{order.customer.phone}</Text>
-          <Button
-            label="Llamar"
-            icon="call-outline"
-            variant="secondary"
-            fullWidth={false}
-            onPress={() => callPhone(order.customer.phone)}
-          />
+          <View style={styles.customerActions}>
+            <Button
+              label="Chat"
+              icon="chatbubble-outline"
+              variant="primary"
+              fullWidth={false}
+              onPress={() => router.push(`/chat/${order.id}`)}
+            />
+            <Button
+              label="Llamar"
+              icon="call-outline"
+              variant="secondary"
+              fullWidth={false}
+              onPress={() => callPhone(order.customer.phone)}
+            />
+          </View>
         </View>
       </View>
 
@@ -324,6 +333,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginTop: spacing(2),
+  },
+  customerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2),
   },
   notes: {
     backgroundColor: colors.warningBg,

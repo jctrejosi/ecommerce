@@ -1,180 +1,941 @@
-import { useState } from "react";
-import { Plus, Shield, Edit, MoreHorizontal, Check, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  Plus,
+  Shield,
+  Check,
+  X,
+  Users as UsersIcon,
+  Loader2,
+  Trash2,
+  KeyRound,
+  Search,
+  Edit,
+  Save,
+} from "lucide-react";
+import {
+  adminUsersService,
+  type AdminUser,
+  type PermissionModule,
+  type Role,
+  type UserKind,
+} from "../services/admin-users.service";
 
-const ROLES = [
-  { id: "R1", name: "Administrador", users: 2, color: "bg-red-100 text-red-700", perms: 42 },
-  { id: "R2", name: "Supervisor de Tienda", users: 5, color: "bg-amber-100 text-amber-700", perms: 28 },
-  { id: "R3", name: "Cajero", users: 12, color: "bg-blue-100 text-blue-700", perms: 12 },
-  { id: "R4", name: "Bodeguero", users: 8, color: "bg-green-100 text-green-700", perms: 15 },
-  { id: "R5", name: "Marketing", users: 3, color: "bg-purple-100 text-purple-700", perms: 18 },
-];
+const KIND_LABEL: Record<UserKind, string> = {
+  admin: "Admin",
+  picking: "Picking",
+  delivery: "Delivery",
+};
 
-const USERS = [
-  { id: "U1", name: "Jorge Ramírez", email: "jorge@mercaldas.com", role: "Administrador", status: "activo", lastLogin: "Hoy, 08:32", avatar: "JR" },
-  { id: "U2", name: "Carolina Mejía", email: "carolina@mercaldas.com", role: "Supervisor de Tienda", status: "activo", lastLogin: "Hoy, 09:15", avatar: "CM" },
-  { id: "U3", name: "David Arango", email: "david@mercaldas.com", role: "Marketing", status: "activo", lastLogin: "Ayer, 18:22", avatar: "DA" },
-  { id: "U4", name: "Sandra Ríos", email: "sandra@mercaldas.com", role: "Bodeguero", status: "activo", lastLogin: "Hoy, 07:45", avatar: "SR" },
-  { id: "U5", name: "Felipe Zuluaga", email: "felipe@mercaldas.com", role: "Cajero", status: "inactivo", lastLogin: "hace 3 días", avatar: "FZ" },
-];
+const KIND_COLOR: Record<UserKind, string> = {
+  admin: "bg-red-100 text-red-700",
+  picking: "bg-green-100 text-green-700",
+  delivery: "bg-blue-100 text-blue-700",
+};
 
-const AUDIT = [
-  { user: "Jorge Ramírez", action: "Actualizó precio de Leche Alquería 1.1L", time: "hace 10m", type: "edit" },
-  { user: "Carolina Mejía", action: "Aprobó pedido #MC-3821", time: "hace 22m", type: "approve" },
-  { user: "David Arango", action: "Creó banner Flash Sale Viernes", time: "hace 1h", type: "create" },
-  { user: "Sandra Ríos", action: "Actualizó stock de Huevos AA x30", time: "hace 2h", type: "edit" },
-  { user: "Jorge Ramírez", action: "Eliminó promoción expirada", time: "hace 3h", type: "delete" },
-];
+type TipoForm = "admin" | "picking" | "consulta";
 
-const TYPE_COLOR: Record<string, string> = { edit: "bg-blue-100 text-blue-600", approve: "bg-green-100 text-green-600", create: "bg-amber-100 text-amber-600", delete: "bg-red-100 text-red-600" };
+interface UserFormState {
+  fullName: string;
+  username: string;
+  email: string;
+  phone: string;
+  password: string;
+  isSuperuser: boolean;
+  isActive: boolean;
+  isPicker: boolean;
+  roleIds: number[];
+}
 
-const PERMS = ["Ver productos", "Editar productos", "Crear productos", "Eliminar productos", "Ver pedidos", "Gestionar pedidos", "Ver clientes", "Gestionar clientes", "Gestionar banners", "Editar homepage", "Gestionar usuarios"];
+const EMPTY_USER_FORM: UserFormState = {
+  fullName: "",
+  username: "",
+  email: "",
+  phone: "",
+  password: "",
+  isSuperuser: false,
+  isActive: true,
+  isPicker: false,
+  roleIds: [],
+};
+
+function Modal({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
+      <div className="mt-10 w-full max-w-lg bg-white rounded-2xl shadow-xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">{title}</h3>
+          <button
+            onClick={onClose}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
+          >
+            <X size={16} />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}: {
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className="block">
+      <span className="block text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">
+        {label}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+const inputCls =
+  "w-full px-3 py-2 text-sm text-gray-800 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300";
 
 export default function UsersView() {
-  const [tab, setTab] = useState<"usuarios" | "roles" | "auditoria">("usuarios");
+  const [tab, setTab] = useState<"usuarios" | "roles">("usuarios");
+
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [permissionModules, setPermissionModules] = useState<PermissionModule[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [kindFilter, setKindFilter] = useState<UserKind | "all">("all");
+  const [search, setSearch] = useState("");
+
+  // Modales
+  const [userModal, setUserModal] = useState<{ mode: "create" } | { mode: "edit"; user: AdminUser } | null>(null);
+  const [resetModal, setResetModal] = useState<AdminUser | null>(null);
+  const [roleModal, setRoleModal] = useState<{ mode: "create" } | { mode: "edit"; role: Role } | null>(null);
+
+  // Matriz de permisos
+  const [selectedRole, setSelectedRole] = useState<Role | null>(null);
+  const [selectedCodes, setSelectedCodes] = useState<Set<string>>(new Set());
+  const [savingPerms, setSavingPerms] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const [u, r, p] = await Promise.all([
+        adminUsersService.getUsers(),
+        adminUsersService.getRoles(),
+        adminUsersService.getPermissions(),
+      ]);
+      setUsers(u);
+      setRoles(r);
+      setPermissionModules(p);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar los datos");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const refreshUsers = useCallback(async () => {
+    const u = await adminUsersService.getUsers();
+    setUsers(u);
+  }, []);
+
+  const refreshRoles = useCallback(async () => {
+    const r = await adminUsersService.getRoles();
+    setRoles(r);
+  }, []);
+
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return users.filter((u) => {
+      if (kindFilter !== "all" && u.kind !== kindFilter) return false;
+      if (!q) return true;
+      return (
+        u.fullName.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q) ||
+        u.username.toLowerCase().includes(q)
+      );
+    });
+  }, [users, kindFilter, search]);
+
+  async function openRolePermissions(role: Role) {
+    setSelectedRole(role);
+    try {
+      const { permissionCodes } = await adminUsersService.getRolePermissions(role.id);
+      setSelectedCodes(new Set(permissionCodes));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al cargar permisos");
+    }
+  }
+
+  async function togglePermission(code: string) {
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(code)) next.delete(code);
+      else next.add(code);
+      return next;
+    });
+  }
+
+  async function savePermissions() {
+    if (!selectedRole) return;
+    setSavingPerms(true);
+    setError(null);
+    try {
+      await adminUsersService.setRolePermissions(selectedRole.id, Array.from(selectedCodes));
+      await refreshRoles();
+      setSelectedRole((r) => (r ? { ...r, permissionCount: selectedCodes.size } : r));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Error al guardar permisos");
+    } finally {
+      setSavingPerms(false);
+    }
+  }
 
   return (
-    <div className="relative">
-      <div className="absolute inset-0 z-10 bg-gray-300/40 backdrop-blur-[3px] flex items-start justify-center pointer-events-none" style={{ minHeight: "60vh" }}>
-        <div className="mt-20 flex flex-col items-center gap-3 bg-white/80 rounded-3xl px-10 py-7 shadow-lg">
-          <span className="text-5xl select-none">🚧</span>
-          <p className="text-sm font-bold text-gray-500 uppercase tracking-widest">En Construcción</p>
-          <p className="text-xs text-gray-400">Próximamente disponible</p>
-        </div>
-      </div>
-      <div className="pointer-events-none opacity-35 select-none">
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Usuarios y Permisos</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Gestiona el acceso del equipo</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            Gestiona el acceso al panel, delivery y picking
+          </p>
         </div>
-        <button className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors">
+        <button
+          onClick={() => setUserModal({ mode: "create" })}
+          className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+        >
           <Plus size={14} /> Nuevo usuario
         </button>
       </div>
 
       <div className="flex gap-1 border-b border-gray-100">
-        {(["usuarios", "roles", "auditoria"] as const).map((t) => (
-          <button key={t} onClick={() => setTab(t)} className={`px-4 py-2.5 text-sm font-medium border-b-2 capitalize transition-colors ${tab === t ? "border-amber-400 text-amber-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}>
-            {t.charAt(0).toUpperCase() + t.slice(1)}
+        {(["usuarios", "roles"] as const).map((t) => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 capitalize transition-colors ${
+              tab === t
+                ? "border-amber-400 text-amber-600"
+                : "border-transparent text-gray-500 hover:text-gray-700"
+            }`}
+          >
+            {t === "roles" ? "Roles y permisos" : "Usuarios"}
           </button>
         ))}
       </div>
 
-      {tab === "usuarios" && (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <table className="w-full">
-            <thead>
-              <tr className="border-b border-gray-100 bg-gray-50">
-                {["Usuario", "Rol", "Estado", "Último acceso", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {USERS.map((u) => (
-                <tr key={u.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold shrink-0">{u.avatar}</div>
-                      <div>
-                        <p className="text-sm font-semibold text-gray-800">{u.name}</p>
-                        <p className="text-xs text-gray-400">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${ROLES.find((r) => r.name === u.role)?.color || "bg-gray-100 text-gray-600"}`}>
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.status === "activo" ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
-                      {u.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-sm text-gray-500">{u.lastLogin}</td>
-                  <td className="px-4 py-3">
-                    <button className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"><Edit size={13} /></button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {error && (
+        <div className="px-4 py-3 rounded-xl bg-red-50 text-red-700 text-sm flex items-center gap-2">
+          <X size={14} /> {error}
         </div>
       )}
 
-      {tab === "roles" && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 lg:grid-cols-5 gap-3">
-            {ROLES.map((r) => (
-              <div key={r.id} className="bg-white rounded-2xl border border-gray-100 p-4 text-center hover:shadow-sm transition-shadow">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center mx-auto mb-2 ${r.color}`}>
-                  <Shield size={16} />
-                </div>
-                <p className="text-sm font-bold text-gray-900">{r.name}</p>
-                <p className="text-xs text-gray-400 mt-1">{r.users} usuarios</p>
-                <p className="text-xs text-gray-400">{r.perms} permisos</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Permissions matrix */}
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900 text-sm">Matriz de permisos</h3>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100 bg-gray-50">
-                    <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500">Permiso</th>
-                    {ROLES.map((r) => (
-                      <th key={r.id} className="px-3 py-2.5 text-center text-xs font-semibold text-gray-500 min-w-20">{r.name.split(" ")[0]}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {PERMS.map((perm, i) => (
-                    <tr key={perm} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-2.5 text-sm text-gray-700">{perm}</td>
-                      {ROLES.map((r, j) => {
-                        const hasIt = r.id === "R1" || (r.id === "R2" && i < 8) || (r.id === "R3" && i === 4) || (r.id === "R4" && [7, 9].includes(i)) || (r.id === "R5" && [8, 9].includes(i));
-                        return (
-                          <td key={r.id} className="px-3 py-2.5 text-center">
-                            {hasIt
-                              ? <Check size={14} className="mx-auto text-green-500" />
-                              : <X size={14} className="mx-auto text-gray-200" />}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+      {loading ? (
+        <div className="flex items-center justify-center py-20 text-gray-400 gap-2">
+          <Loader2 size={18} className="animate-spin" /> Cargando…
         </div>
+      ) : (
+        <>
+          {tab === "usuarios" && (
+            <UserTab
+              users={filteredUsers}
+              kindFilter={kindFilter}
+              setKindFilter={setKindFilter}
+              search={search}
+              setSearch={setSearch}
+              onEdit={(u) => setUserModal({ mode: "edit", user: u })}
+              onReset={(u) => setResetModal(u)}
+            />
+          )}
+
+          {tab === "roles" && (
+            <RoleTab
+              roles={roles}
+              permissionModules={permissionModules}
+              selectedRole={selectedRole}
+              selectedCodes={selectedCodes}
+              savingPerms={savingPerms}
+              onSelectRole={openRolePermissions}
+              onCreateRole={() => setRoleModal({ mode: "create" })}
+              onEditRole={(r) => setRoleModal({ mode: "edit", role: r })}
+              onDeleteRole={async (r) => {
+                if (!window.confirm(`¿Eliminar el rol "${r.name}"?`)) return;
+                try {
+                  await adminUsersService.deleteRole(r.id);
+                  await refreshRoles();
+                  setSelectedRole(null);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : "Error al eliminar rol");
+                }
+              }}
+              onTogglePermission={togglePermission}
+              onSavePermissions={savePermissions}
+            />
+          )}
+        </>
       )}
 
-      {tab === "auditoria" && (
-        <div className="bg-white rounded-2xl border border-gray-100">
-          <div className="px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Historial de auditoría</h3>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {AUDIT.map((a, i) => (
-              <div key={i} className="flex items-center gap-4 px-5 py-3">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${TYPE_COLOR[a.type]}`}>{a.type}</span>
-                <p className="flex-1 text-sm text-gray-700"><strong className="text-gray-900">{a.user}</strong> {a.action}</p>
-                <span className="text-xs text-gray-400 shrink-0">{a.time}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {userModal && (
+        <UserModal
+          initial={userModal.mode === "edit" ? userModal.user : null}
+          roles={roles}
+          onClose={() => setUserModal(null)}
+          onSaved={async () => {
+            setUserModal(null);
+            await refreshUsers();
+          }}
+        />
       )}
+
+      {resetModal && (
+        <ResetModal
+          user={resetModal}
+          onClose={() => setResetModal(null)}
+        />
+      )}
+
+      {roleModal && (
+        <RoleModal
+          initial={roleModal.mode === "edit" ? roleModal.role : null}
+          onClose={() => setRoleModal(null)}
+          onSaved={async () => {
+            setRoleModal(null);
+            await refreshRoles();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── Usuarios ─────────────────────────────────────────────────────────────── */
+
+function UserTab({
+  users,
+  kindFilter,
+  setKindFilter,
+  search,
+  setSearch,
+  onEdit,
+  onReset,
+}: {
+  users: AdminUser[];
+  kindFilter: UserKind | "all";
+  setKindFilter: (k: UserKind | "all") => void;
+  search: string;
+  setSearch: (s: string) => void;
+  onEdit: (u: AdminUser) => void;
+  onReset: (u: AdminUser) => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="flex items-center gap-2 bg-white border border-gray-100 rounded-xl px-3 py-2">
+          <Search size={14} className="text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Buscar usuario…"
+            className="text-sm bg-transparent outline-none w-48"
+          />
+        </div>
+        <div className="flex gap-1">
+          {(["all", "admin", "picking", "delivery"] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setKindFilter(k)}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-full capitalize transition-colors ${
+                kindFilter === k
+                  ? "bg-gray-900 text-white"
+                  : "bg-white border border-gray-200 text-gray-500 hover:text-gray-700"
+              }`}
+            >
+              {k === "all" ? "Todos" : KIND_LABEL[k]}
+            </button>
+          ))}
+        </div>
       </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+        <table className="w-full">
+          <thead>
+            <tr className="border-b border-gray-100 bg-gray-50">
+              {["Usuario", "Tipo", "Roles", "Estado", "Último acceso", ""].map((h) => (
+                <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {users.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">
+                  No hay usuarios que coincidan.
+                </td>
+              </tr>
+            )}
+            {users.map((u) => (
+              <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-full bg-linear-to-br from-amber-400 to-amber-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                      {u.firstName?.[0] || "?"}
+                      {u.lastName?.[0] || ""}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-800">{u.fullName}</p>
+                      <p className="text-xs text-gray-400">{u.email}</p>
+                    </div>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${KIND_COLOR[u.kind]}`}>
+                    {KIND_LABEL[u.kind]}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-wrap gap-1 max-w-60">
+                    {u.isSuperuser && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">
+                        Super
+                      </span>
+                    )}
+                    {u.roles.map((r) => (
+                      <span key={r.id} className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                        {r.name}
+                      </span>
+                    ))}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${u.isActive ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-500"}`}>
+                    {u.isActive ? "activo" : "inactivo"}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-sm text-gray-500">
+                  {u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString("es-CO") : "—"}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-1 justify-end">
+                    <button
+                      onClick={() => onReset(u)}
+                      title="Restablecer contraseña"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
+                    >
+                      <KeyRound size={13} />
+                    </button>
+                    <button
+                      onClick={() => onEdit(u)}
+                      title="Editar"
+                      className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
+                    >
+                      <Edit size={13} />
+                    </button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
+  );
+}
+
+/* ── Roles y permisos ─────────────────────────────────────────────────────── */
+
+function RoleTab({
+  roles,
+  permissionModules,
+  selectedRole,
+  selectedCodes,
+  savingPerms,
+  onSelectRole,
+  onCreateRole,
+  onEditRole,
+  onDeleteRole,
+  onTogglePermission,
+  onSavePermissions,
+}: {
+  roles: Role[];
+  permissionModules: PermissionModule[];
+  selectedRole: Role | null;
+  selectedCodes: Set<string>;
+  savingPerms: boolean;
+  onSelectRole: (r: Role) => void;
+  onCreateRole: () => void;
+  onEditRole: (r: Role) => void;
+  onDeleteRole: (r: Role) => void;
+  onTogglePermission: (code: string) => void;
+  onSavePermissions: () => void;
+}) {
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {roles.map((r) => (
+          <button
+            key={r.id}
+            onClick={() => onSelectRole(r)}
+            className={`bg-white rounded-2xl border p-4 text-left hover:shadow-sm transition-shadow ${
+              selectedRole?.id === r.id ? "border-amber-400 ring-1 ring-amber-200" : "border-gray-100"
+            }`}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <Shield size={15} />
+                </div>
+                <p className="text-sm font-bold text-gray-900">{r.name}</p>
+              </div>
+              {r.isSystem && (
+                <span className="text-[10px] font-bold uppercase text-gray-400">Sistema</span>
+              )}
+            </div>
+            <p className="text-xs text-gray-400 mt-2 line-clamp-2">{r.description}</p>
+            <div className="flex items-center gap-3 mt-2 text-xs text-gray-400">
+              <span>{r.userCount} usuarios</span>
+              <span>{r.permissionCount} permisos</span>
+            </div>
+          </button>
+        ))}
+
+        <button
+          onClick={onCreateRole}
+          className="rounded-2xl border-2 border-dashed border-gray-200 p-4 text-left hover:border-amber-300 transition-colors flex items-center justify-center gap-2 text-sm font-semibold text-gray-400 hover:text-amber-600"
+        >
+          <Plus size={15} /> Nuevo rol
+        </button>
+      </div>
+
+      {selectedRole ? (
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+            <div>
+              <h3 className="font-semibold text-gray-900 text-sm">
+                Permisos del rol: {selectedRole.name}
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Marca los permisos que tendrá este rol en cada interface.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              {!selectedRole.isSystem && (
+                <>
+                  <button
+                    onClick={() => onEditRole(selectedRole)}
+                    className="px-2.5 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg"
+                  >
+                    Editar
+                  </button>
+                  <button
+                    onClick={() => onDeleteRole(selectedRole)}
+                    className="px-2.5 py-1.5 text-xs font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg flex items-center gap-1"
+                  >
+                    <Trash2 size={12} /> Eliminar
+                  </button>
+                </>
+              )}
+              <button
+                onClick={onSavePermissions}
+                disabled={savingPerms}
+                className="px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg flex items-center gap-1 disabled:opacity-60"
+              >
+                {savingPerms ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                Guardar
+              </button>
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-50">
+            {permissionModules.map((mod) => (
+              <div key={mod.module} className="px-5 py-4">
+                <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-3">
+                  {mod.module === "admin"
+                    ? "Web Admin"
+                    : mod.module === "delivery"
+                      ? "Delivery Admin"
+                      : "Picking Admin"}
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                  {mod.permissions.map((p) => {
+                    const active = selectedCodes.has(p.code);
+                    return (
+                      <button
+                        key={p.code}
+                        onClick={() => onTogglePermission(p.code)}
+                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-sm transition-colors ${
+                          active ? "bg-amber-50 text-gray-800" : "text-gray-500 hover:bg-gray-50"
+                        }`}
+                      >
+                        <span
+                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                            active ? "bg-amber-400 border-amber-400 text-amber-900" : "border-gray-300"
+                          }`}
+                        >
+                          {active && <Check size={11} />}
+                        </span>
+                        <span>
+                          <span className="block font-medium">{p.description}</span>
+                          <span className="block text-[11px] text-gray-400 font-mono">{p.code}</span>
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gray-100 py-16 text-center text-sm text-gray-400">
+          Selecciona un rol para gestionar sus permisos.
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Modales ──────────────────────────────────────────────────────────────── */
+
+function UserModal({
+  initial,
+  roles,
+  onClose,
+  onSaved,
+}: {
+  initial: AdminUser | null;
+  roles: Role[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const editing = Boolean(initial);
+  const [form, setForm] = useState<UserFormState>(() =>
+    initial
+      ? {
+          fullName: initial.fullName,
+          username: initial.username,
+          email: initial.email,
+          phone: initial.phone ?? "",
+          password: "",
+          isSuperuser: initial.isSuperuser,
+          isActive: initial.isActive,
+          isPicker: initial.isPicker,
+          roleIds: initial.roles.map((r) => r.id),
+        }
+      : { ...EMPTY_USER_FORM },
+  );
+  const [tipo, setTipo] = useState<TipoForm>(() =>
+    initial ? (initial.isPicker ? "picking" : initial.roles.some((r) => r.name === "Consulta") ? "consulta" : "admin") : "admin",
+  );
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  function set<K extends keyof UserFormState>(key: K, value: UserFormState[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function applyTipo(next: TipoForm) {
+    setTipo(next);
+    const consulta = roles.find((r) => r.name === "Consulta")?.id;
+    const admin = roles.find((r) => r.name === "Administrador")?.id;
+    setForm((f) => ({
+      ...f,
+      isPicker: next === "picking",
+      roleIds:
+        next === "consulta" && consulta ? [consulta] : next === "admin" && admin ? [admin] : [],
+    }));
+  }
+
+  async function submit() {
+    setSaving(true);
+    setErr(null);
+    try {
+      if (editing && initial) {
+        await adminUsersService.updateUser(initial.id, {
+          fullName: form.fullName,
+          username: form.username,
+          email: form.email,
+          phone: form.phone || undefined,
+          isSuperuser: form.isSuperuser,
+          isActive: form.isActive,
+          isPicker: form.isPicker,
+          roleIds: form.roleIds,
+        });
+      } else {
+        await adminUsersService.createUser({
+          fullName: form.fullName,
+          username: form.username,
+          email: form.email,
+          phone: form.phone || undefined,
+          password: form.password,
+          isSuperuser: form.isSuperuser,
+          isActive: form.isActive,
+          isPicker: form.isPicker,
+          roleIds: form.roleIds,
+        });
+      }
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={editing ? "Editar usuario" : "Nuevo usuario"} onClose={onClose}>
+      <div className="space-y-3">
+        {err && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">{err}</div>}
+
+        <Field label="Nombre completo">
+          <input className={inputCls} value={form.fullName} onChange={(e) => set("fullName", e.target.value)} />
+        </Field>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Usuario">
+            <input className={inputCls} value={form.username} onChange={(e) => set("username", e.target.value)} />
+          </Field>
+          <Field label="Teléfono">
+            <input className={inputCls} value={form.phone} onChange={(e) => set("phone", e.target.value)} />
+          </Field>
+        </div>
+
+        <Field label="Email">
+          <input className={inputCls} type="email" value={form.email} onChange={(e) => set("email", e.target.value)} />
+        </Field>
+
+        {!editing && (
+          <Field label="Contraseña">
+            <input className={inputCls} type="password" value={form.password} onChange={(e) => set("password", e.target.value)} />
+          </Field>
+        )}
+
+        {!editing && (
+          <Field label="Tipo de usuario">
+            <select
+              className={inputCls}
+              value={tipo}
+              onChange={(e) => applyTipo(e.target.value as TipoForm)}
+            >
+              <option value="admin">Administrador</option>
+              <option value="picking">Picking</option>
+              <option value="consulta">Consulta (solo lectura)</option>
+            </select>
+          </Field>
+        )}
+
+        <Field label="Roles">
+          <div className="flex flex-wrap gap-2">
+            {roles.map((r) => {
+              const active = form.roleIds.includes(r.id);
+              return (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() =>
+                    set(
+                      "roleIds",
+                      active ? form.roleIds.filter((id) => id !== r.id) : [...form.roleIds, r.id],
+                    )
+                  }
+                  className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors ${
+                    active
+                      ? "bg-amber-400 text-amber-900 border-amber-400"
+                      : "bg-white text-gray-500 border-gray-200 hover:text-gray-700"
+                  }`}
+                >
+                  {r.name}
+                </button>
+              );
+            })}
+          </div>
+        </Field>
+
+        <div className="space-y-2 pt-1">
+          <Toggle checked={form.isSuperuser} onChange={(v) => set("isSuperuser", v)} label="Superadministrador (acceso total)" />
+          <Toggle checked={form.isActive} onChange={(v) => set("isActive", v)} label="Cuenta activa" />
+          <Toggle checked={form.isPicker} onChange={(v) => set("isPicker", v)} label="Es usuario de picking" />
+        </div>
+
+        <div className="flex justify-end gap-2 pt-3">
+          <button onClick={onClose} className="px-3 py-2 text-sm font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-xl">
+            Cancelar
+          </button>
+          <button
+            onClick={submit}
+            disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl disabled:opacity-60"
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            Guardar
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      className="flex items-center gap-2 text-sm text-gray-700"
+    >
+      <span
+        className={`w-9 h-5 rounded-full relative transition-colors ${
+          checked ? "bg-amber-400" : "bg-gray-200"
+        }`}
+      >
+        <span
+          className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+            checked ? "translate-x-4.5" : "translate-x-0.5"
+          }`}
+        />
+      </span>
+      {label}
+    </button>
+  );
+}
+
+function ResetModal({ user, onClose }: { user: AdminUser; onClose: () => void }) {
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+
+  async function submit() {
+    setSaving(true);
+    setErr(null);
+    try {
+      await adminUsersService.resetPassword(user.id, password);
+      setDone(true);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error al restablecer");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={`Restablecer contraseña — ${user.fullName}`} onClose={onClose}>
+      {done ? (
+        <div className="space-y-4 text-center">
+          <p className="text-sm text-gray-600">Contraseña actualizada correctamente.</p>
+          <button onClick={onClose} className="px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 rounded-xl">
+            Listo
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {err && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">{err}</div>}
+          <Field label="Nueva contraseña">
+            <input className={inputCls} type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          </Field>
+          <div className="flex justify-end gap-2">
+            <button onClick={onClose} className="px-3 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl">
+              Cancelar
+            </button>
+            <button
+              onClick={submit}
+              disabled={saving || password.length < 8}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 rounded-xl disabled:opacity-60"
+            >
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              Restablecer
+            </button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function RoleModal({
+  initial,
+  onClose,
+  onSaved,
+}: {
+  initial: Role | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const editing = Boolean(initial);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setSaving(true);
+    setErr(null);
+    try {
+      if (editing && initial) {
+        await adminUsersService.updateRole(initial.id, { name, description });
+      } else {
+        await adminUsersService.createRole({ name, description });
+      }
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Error al guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={editing ? "Editar rol" : "Nuevo rol"} onClose={onClose}>
+      <div className="space-y-3">
+        {err && <div className="px-3 py-2 rounded-lg bg-red-50 text-red-700 text-sm">{err}</div>}
+        <Field label="Nombre">
+          <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Descripción">
+          <textarea
+            className={inputCls}
+            rows={3}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </Field>
+        <div className="flex justify-end gap-2 pt-2">
+          <button onClick={onClose} className="px-3 py-2 text-sm font-semibold text-gray-600 bg-gray-100 rounded-xl">
+            Cancelar
+          </button>
+          <button
+            onClick={submit}
+            disabled={saving || name.trim().length < 2}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 rounded-xl disabled:opacity-60"
+          >
+            {saving && <Loader2 size={14} className="animate-spin" />}
+            Guardar
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }

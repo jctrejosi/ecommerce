@@ -15,6 +15,7 @@ import { DeliveryOrdersService } from './delivery-orders.service';
 import { TransitionDto } from './dto/transition.dto';
 import { AvailabilityDto } from './dto/availability.dto';
 import { PushTokenDto } from './dto/push-token.dto';
+import { SendMessageDto } from './dto/send-message.dto';
 
 @Controller('delivery')
 @UseGuards(JwtAuthGuard)
@@ -36,6 +37,31 @@ export class DeliveryOrdersController {
   get(@CurrentUser('sub') userId: bigint, @Param('id') id: string) {
     return this.delivery.resolveDriver(Number(userId)).then((driver) =>
       this.orders.getOrder(Number(driver.id), Number(id)),
+    );
+  }
+
+  // Importante: estas rutas van ANTES de 'orders/:id/:action' para que
+  // 'messages' no se interprete como una acción de transición.
+  @Get('orders/:id/messages')
+  messages(@CurrentUser('sub') userId: bigint, @Param('id') id: string) {
+    return this.delivery.resolveDriver(Number(userId)).then((driver) =>
+      this.orders.getChatMessages(Number(driver.id), Number(id)),
+    );
+  }
+
+  @Post('orders/:id/messages')
+  sendMessage(
+    @CurrentUser('sub') userId: bigint,
+    @Param('id') id: string,
+    @Body() dto: SendMessageDto,
+  ) {
+    return this.delivery.resolveDriver(Number(userId)).then((driver) =>
+      this.orders.sendChatMessage(
+        Number(driver.id),
+        Number(id),
+        Number(userId),
+        dto.body,
+      ),
     );
   }
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./index";
 import type { TransitionKey, TransitionPayload } from "./contract";
+import type { ChatMessage } from "./types";
 
 const ACTIVE_KEY = ["delivery", "orders", "active"] as const;
 const HISTORY_KEY = ["delivery", "orders", "history"] as const;
@@ -9,6 +10,7 @@ export const orderKeys = {
   active: ACTIVE_KEY,
   history: HISTORY_KEY,
   detail: (id: number | string) => ["delivery", "orders", "detail", id] as const,
+  chat: (id: number | string) => ["delivery", "orders", "chat", id] as const,
 };
 
 /** Pedidos activos (asignados al repartidor). Refresca cada 5 s. */
@@ -87,6 +89,32 @@ export function useAvailability() {
     mutationFn: (available: boolean) => api.setAvailability(available),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ACTIVE_KEY });
+    },
+  });
+}
+
+/** Mensajes del chat de un pedido. Refresca cada 3 s mientras la pantalla
+ *  está abierta (mismo patrón de polling que los pedidos activos). */
+export function useChatMessages(orderId: number | string | undefined) {
+  return useQuery({
+    queryKey: orderKeys.chat(orderId ?? ""),
+    queryFn: () => api.getChatMessages(orderId!),
+    enabled: orderId !== undefined,
+    refetchInterval: 3_000,
+  });
+}
+
+/** Envía un mensaje del repartidor y lo agrega optimistamente a la caché. */
+export function useSendChatMessage(orderId: number | string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (body: string) => api.sendChatMessage(orderId, body),
+    onSuccess: (msg) => {
+      const key = orderKeys.chat(orderId);
+      queryClient.setQueryData<ChatMessage[]>(key, (prev) =>
+        prev ? [...prev, msg] : [msg],
+      );
     },
   });
 }

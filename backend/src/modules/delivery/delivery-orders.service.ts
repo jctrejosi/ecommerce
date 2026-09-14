@@ -4,12 +4,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   deliveryAssignments,
   deliveryDrivers,
   deliveryProofMedia,
+  orderChatMessages,
   orders,
   shipments,
 } from '../../../drizzle/schema';
@@ -306,6 +307,67 @@ export class DeliveryOrdersService {
     );
     if (!rows.length) throw new NotFoundException('Pedido no encontrado.');
     return (await this.rowsToOrders(rows))[0];
+  }
+
+  /** Mensajes del chat del pedido. Solo el repartidor asignado puede leerlos. */
+  async getChatMessages(driverId: number, orderId: number) {
+    // getOrder lanza 404 si el pedido no está asignado a este repartidor.
+    await this.getOrder(driverId, orderId);
+
+    const rows = await this.db
+      .select({
+        id: orderChatMessages.id,
+        senderType: orderChatMessages.senderType,
+        body: orderChatMessages.body,
+        createdAt: orderChatMessages.createdAt,
+      })
+      .from(orderChatMessages)
+      .where(eq(orderChatMessages.orderId, BigInt(orderId)))
+      .orderBy(asc(orderChatMessages.id))
+      .limit(300);
+
+    return rows.map((r) => ({
+      id: String(r.id),
+      senderType: r.senderType,
+      body: r.body,
+      createdAt: r.createdAt,
+    }));
+  }
+
+  /** Envía un mensaje del repartidor en el chat del pedido asignado. */
+  async sendChatMessage(
+    driverId: number,
+    orderId: number,
+    userId: number,
+    body: string,
+  ) {
+    // getOrder lanza 404 si el pedido no está asignado a este repartidor.
+    await this.getOrder(driverId, orderId);
+
+    const text = (body ?? '').trim();
+    if (!text) {
+      throw new BadRequestException('Escribe un mensaje.');
+    }
+    if (text.length > 2000) {
+      throw new BadRequestException('El mensaje no puede superar 2000 caracteres.');
+    }
+
+    const [row] = await this.db
+      .insert(orderChatMessages)
+      .values({
+        orderId: BigInt(orderId),
+        senderType: 'delivery',
+        senderUserId: userId,
+        body: text,
+      })
+      .returning();
+
+    return {
+      id: String(row.id),
+      senderType: row.senderType,
+      body: row.body,
+      createdAt: row.createdAt,
+    };
   }
 
   async history(driverId: number) {

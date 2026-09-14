@@ -27,6 +27,7 @@ import { PickersModule } from './modules/pickers/pickers.module';
 import { DashboardModule } from './modules/dashboard/dashboard.module';
 import { InventoryModule } from './modules/inventory/inventory.module';
 import { DeliveryModule } from './modules/delivery/delivery.module';
+import { AdminUsersModule } from './modules/admin-users/admin-users.module';
 import { StatusGateway } from './modules/status/status.gateway';
 import { SettingsController } from './modules/settings/settings.controller';
 import {
@@ -82,6 +83,7 @@ import {
     DashboardModule,
     InventoryModule,
     DeliveryModule,
+    AdminUsersModule,
   ],
   controllers: [AppController, SettingsController],
   providers: [AppService, StatusGateway],

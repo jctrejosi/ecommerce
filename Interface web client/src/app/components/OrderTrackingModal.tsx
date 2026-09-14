@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, Home, Navigation, PackageCheck, Loader2 } from "lucide-react";
+import { X, Home, Navigation, PackageCheck, Loader2, MessageCircle } from "lucide-react";
 import {
   ordersService,
   type OrderLiveRoute,
   type OrderLiveTracking,
 } from "../../services/orders.service";
 import { LiveOrderMap } from "./LiveOrderMap";
+import { OrderChatConversation } from "./OrderChatConversation";
 
 const STATUS_TEXT: Record<string, { label: string; tone: string; showMap: boolean }> = {
   ASSIGNED: { label: "Repartidor asignado", tone: "#F59E0B", showMap: false },
@@ -45,6 +46,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
   const [route, setRoute] = useState<OrderLiveRoute | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [chatOpen, setChatOpen] = useState(false);
   const timerRef = useRef<number | null>(null);
   const routeTimerRef = useRef<number | null>(null);
 
@@ -122,6 +124,14 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
           </button>
         </div>
 
+        {chatOpen ? (
+          <OrderChatConversation
+            orderCode={orderCode}
+            title={`Pedido ${orderCode}`}
+            onBack={() => setChatOpen(false)}
+            onClose={onClose}
+          />
+        ) : (
         <div className="flex-1 overflow-y-auto">
           {loading && !data ? (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
@@ -208,6 +218,13 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
                         .join(" · ") || "Repartidor"}
                     </p>
                   </div>
+                  <button
+                    onClick={() => setChatOpen(true)}
+                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#1A1A2E] bg-[#FFF200] hover:brightness-95 transition-all"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    Chatear
+                  </button>
                   {data.updatedAt && (
                     <span className="text-[10px] text-muted-foreground shrink-0">
                       Últ. ubicación {fmtTime(data.updatedAt)}
@@ -229,6 +246,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
             </div>
           ) : null}
         </div>
+        )}
       </div>
     </div>
   );

@@ -247,6 +247,36 @@ export const ordersService = {
       `${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}/route`,
     );
   },
+
+  /** Mensajes del chat del pedido (cliente ↔ repartidor). */
+  async chatMessages(referenceCode: string): Promise<OrderChatMessage[]> {
+    return fetchJson<OrderChatMessage[]>(
+      `${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}/messages`,
+    );
+  },
+
+  /** Envía un mensaje del cliente en el chat del pedido. */
+  async sendChatMessage(
+    referenceCode: string,
+    body: string,
+  ): Promise<OrderChatMessage> {
+    return fetchJson<OrderChatMessage>(
+      `${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}/messages`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      },
+    );
+  },
+};
+
+export type OrderChatMessage = {
+  id: string;
+  /** Quién escribió: 'customer' (tú) o 'delivery' (tu repartidor). */
+  senderType: "customer" | "delivery";
+  body: string;
+  createdAt: string | null;
 };
 
 export type Point = { lat: number; lng: number };

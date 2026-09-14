@@ -76,6 +76,8 @@ export interface PickerSummary {
     itemsCount: number;
     totalPieces: number;
     scannedPieces: number;
+    remainingPieces: number;
+    remainingItems: number;
   } | null;
   completedToday: number;
   dispatchedTotal: number;
@@ -87,6 +89,8 @@ export interface PickerHistoryOrder {
   customerName: string;
   grandTotal: number;
   status: string;
+  pickedAt: string | null;
+  completedAt: string | null;
   deliveredAt: string;
   itemsCount: number;
   totalPieces: number;

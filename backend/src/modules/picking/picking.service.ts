@@ -7,6 +7,7 @@ import {
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { PickingGateway } from './picking.gateway';
+import { OrdersGateway } from '../orders/orders.gateway';
 import {
   orderItems,
   orders,
@@ -29,6 +30,13 @@ const QUEUE_STATUSES = [
   'delivered',
 ] as const;
 
+/** Estados que pasan a "preparing" al reclamar o escanear el pedido. */
+const PICKING_TRIGGER_STATUSES = ['created', 'payment_pending', 'paid'] as const;
+
+function isPickingTrigger(status: string): boolean {
+  return (PICKING_TRIGGER_STATUSES as readonly string[]).includes(status);
+}
+
 type QueueTab = 'nuevo' | 'preparando' | 'completado' | 'todos';
 
 @Injectable()
@@ -38,6 +46,7 @@ export class PickingService {
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly gateway: PickingGateway,
+    private readonly ordersGateway: OrdersGateway,
   ) {}
 
   private get db() {
@@ -76,6 +85,7 @@ export class PickingService {
         createdAt: orders.createdAt,
         reviewedAt: orders.reviewedAt,
         branchId: orders.branchId,
+        pickerId: orders.pickerId,
       })
       .from(orders)
       .where(where)
@@ -116,6 +126,7 @@ export class PickingService {
         createdAt: r.createdAt,
         reviewed: r.reviewedAt !== null,
         branchId: Number(r.branchId),
+        pickerId: r.pickerId == null ? null : Number(r.pickerId),
         itemsCount: agg.items,
         totalPieces: agg.pieces,
         scannedPieces: agg.scanned,
@@ -249,7 +260,7 @@ export class PickingService {
   /** Asignar el picker (usuario) que alista el pedido. */
   async claim(id: number, pickerId: number) {
     const [order] = await this.db
-      .select({ id: orders.id, pickerId: orders.pickerId })
+      .select({ id: orders.id, pickerId: orders.pickerId, status: orders.status })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
@@ -262,13 +273,35 @@ export class PickingService {
       .limit(1);
     if (!user) throw new NotFoundException(`El usuario ${pickerId} no existe`);
 
-    await this.db
-      .update(orders)
-      .set({
-        pickerId,
-        pickedAt: order.pickerId == null ? new Date().toISOString() : undefined,
-      })
-      .where(eq(orders.id, BigInt(id)));
+    // Al reclamar, el pedido pasa a "preparing" (alistamiento en curso).
+    const nextStatus = isPickingTrigger(order.status) ? 'preparing' : order.status;
+
+    await this.db.transaction(async (tx) => {
+      await tx
+        .update(orders)
+        .set({
+          pickerId,
+          status: nextStatus,
+          pickedAt: order.pickerId == null ? new Date().toISOString() : undefined,
+        })
+        .where(eq(orders.id, BigInt(id)));
+
+      if (nextStatus !== order.status) {
+        await tx.insert(orderStatusHistory).values({
+          orderId: id,
+          status: nextStatus,
+          oldStatus: order.status,
+          pickerId,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    });
+
+    // Refleja el cambio de estado en la app del cliente.
+    if (nextStatus !== order.status) {
+      this.ordersGateway.notifyOrderStatus(String(id), nextStatus);
+    }
+
     this.gateway.emit('picking:claim', {
       orderId: id,
       pickerId,
@@ -288,7 +321,7 @@ export class PickingService {
     if (!order) {
       throw new NotFoundException(`No existe el pedido ${id}`);
     }
-    if (order.status !== 'paid' && order.status !== 'preparing') {
+    if (!isPickingTrigger(order.status) && order.status !== 'preparing') {
       throw new ConflictException('Este pedido no está en alistamiento');
     }
 
@@ -324,7 +357,7 @@ export class PickingService {
     }
 
     const newPicked = matched.pickedQty + 1;
-    const nextStatus = order.status === 'paid' ? 'preparing' : order.status;
+    const nextStatus = isPickingTrigger(order.status) ? 'preparing' : order.status;
 
     await this.db.transaction(async (tx) => {
       await tx
@@ -346,6 +379,11 @@ export class PickingService {
         });
       }
     });
+
+    // Refleja el cambio de estado en la app del cliente.
+    if (nextStatus !== order.status) {
+      this.ordersGateway.notifyOrderStatus(String(id), nextStatus);
+    }
 
     const allDone = items.every((i) =>
       i.id === matched.id ? newPicked >= i.quantity : i.pickedQty >= i.quantity,
@@ -415,7 +453,7 @@ export class PickingService {
     await this.db.transaction(async (tx) => {
       await tx
         .update(orders)
-        .set({ status: 'delivered' })
+        .set({ status: 'delivered', completedAt: new Date().toISOString() })
         .where(eq(orders.id, BigInt(id)));
       await tx.insert(orderStatusHistory).values({
         orderId: id,

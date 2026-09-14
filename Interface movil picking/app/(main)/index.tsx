@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -35,8 +35,16 @@ export default function OrderListScreen() {
   const firstLoad = useRef(true);
 
   const filtered = useMemo(
-    () => sortQueue((orders ?? []).filter((o) => orderStatus(o) === filter)),
-    [orders, filter],
+    () =>
+      sortQueue(
+        (orders ?? []).filter((o) => {
+          if (orderStatus(o) !== filter) return false;
+          // "Completados" se ve por usuario: solo los que alistó el picker activo.
+          if (filter === "completado") return o.pickerId === user?.id;
+          return true;
+        }),
+      ),
+    [orders, filter, user?.id],
   );
 
   // Aviso de pedido nuevo (no revisado y con id desconocido).
@@ -118,7 +126,11 @@ export default function OrderListScreen() {
         <View style={styles.tabs}>
           {QUEUE_FILTERS.map((t) => {
             const active = filter === t.key;
-            const count = (orders ?? []).filter((o) => orderStatus(o) === t.key).length;
+            const count = (orders ?? []).filter(
+              (o) =>
+                orderStatus(o) === t.key &&
+                (t.key !== "completado" || o.pickerId === user?.id),
+            ).length;
             return (
               <Pressable
                 key={t.key}
@@ -155,7 +167,7 @@ export default function OrderListScreen() {
           <ActivityIndicator color={colors.accent} style={styles.loader} />
         ) : filtered.length === 0 ? (
           <EmptyState
-            title={filter === "completado" ? "Sin pedidos completados" : "No hay pedidos pendientes"}
+            title={filter === "completado" ? "Aún no has completado pedidos" : "No hay pedidos pendientes"}
             message="Cuando lleguen pedidos aparecerán aquí"
             icon="file-tray-outline"
           />

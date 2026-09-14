@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { API_BASE_URL, apiFetch as fetchJson } from "../lib/api";
 
 export type Branch = {
   id: number;
@@ -63,11 +63,7 @@ export type DeliveryZone = {
   isActive: boolean;
 };
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(input, { ...init, credentials: "include", headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) } });
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
-  return res.json();
-}
+
 
 export const branchesService = {
   getAll: () => fetchJson<Branch[]>(`${API_BASE_URL}/admin/branches`),

@@ -59,6 +59,14 @@ export interface OrderItem {
   image?: string | null;
 }
 
+/** Mensaje del chat por pedido (repartidor ↔ cliente). */
+export interface ChatMessage {
+  id: string;
+  senderType: "customer" | "delivery";
+  body: string;
+  createdAt: string | null;
+}
+
 export interface OrderCustomer {
   name: string;
   phone: string;

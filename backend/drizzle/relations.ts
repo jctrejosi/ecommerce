@@ -67,6 +67,7 @@ import {
   favorites,
   productTaxClasses,
   promotionProducts,
+  orderChatMessages,
 } from './schema';
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -501,7 +502,26 @@ export const ordersRelations = relations(orders, ({ one, many }) => ({
   refunds: many(refunds),
   invoices: many(invoices),
   couponRedemptions: many(couponRedemptions),
+  chatMessages: many(orderChatMessages),
 }));
+
+export const orderChatMessagesRelations = relations(
+  orderChatMessages,
+  ({ one }) => ({
+    order: one(orders, {
+      fields: [orderChatMessages.orderId],
+      references: [orders.id],
+    }),
+    senderUser: one(users, {
+      fields: [orderChatMessages.senderUserId],
+      references: [users.id],
+    }),
+    senderGuestSession: one(guestSessions, {
+      fields: [orderChatMessages.senderGuestSessionId],
+      references: [guestSessions.id],
+    }),
+  }),
+);
 
 export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   order: one(orders, {

@@ -31,6 +31,57 @@ const STATUS_ICONS: Record<OrderStatus, typeof Clock> = {
 
 const fmt = (n: number) => "$" + n.toLocaleString("es-CO");
 
+/** Duración en mm:ss (o h:mm:ss) a partir de milisegundos. */
+const fmtDuration = (ms: number) => {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mm = String(m).padStart(2, "0");
+  const ss = String(sec).padStart(2, "0");
+  return h > 0 ? `${h}:${mm}:${ss}` : `${m}:${ss}`;
+};
+
+/** Tiempo de alistamiento: en curso (cronómetro) o terminado (duración). */
+function PickingTime({ order, now }: { order: Order; now: number }) {
+  if (!order.pickedAt) return <span className="text-xs text-gray-300">—</span>;
+  const end = order.completedAt ? Date.parse(order.completedAt) : now;
+  const ms = end - Date.parse(order.pickedAt);
+  return (
+    <span className="text-xs font-mono font-bold text-amber-600">
+      {order.completedAt ? "✓ " : "⏱ "}
+      {fmtDuration(ms)}
+    </span>
+  );
+}
+
+/** Progreso del alistamiento: piezas escaneadas y faltantes. */
+function PickingProgress({ order }: { order: Order }) {
+  const total = order.totalPieces ?? 0;
+  if (!total) return <span className="text-xs text-gray-300">—</span>;
+  const scanned = order.scannedPieces ?? 0;
+  const pct = Math.min(100, (scanned / total) * 100);
+  const done = (order.remainingPieces ?? 0) === 0;
+  return (
+    <div className="flex flex-col gap-1 min-w-[110px]">
+      <div className="flex items-center justify-between text-[11px] font-semibold">
+        <span className={done ? "text-emerald-600" : "text-gray-600"}>
+          {scanned}/{total} piezas
+        </span>
+        {!done && <span className="text-amber-600">faltan {order.remainingPieces}</span>}
+      </div>
+      <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+        <div
+          className={`h-full rounded-full transition-all ${done ? "bg-emerald-500" : "bg-amber-500"}`}
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      {done && <span className="text-[10px] text-emerald-600 font-semibold">Listo</span>}
+    </div>
+  );
+}
+
 const DELIVERY_STATUSES: OrderStatus[] = ["en camino", "entregado"];
 
 /** Persona responsable del pedido: repartidor (entrega) o preparador (picking). */
@@ -68,7 +119,7 @@ function ResponsibleTag({ order }: { order: Order }) {
   );
 }
 
-function KanbanCard({ order, onClick, onConfirmPayment }: { order: Order; onClick: () => void; onConfirmPayment?: (o: Order) => void }) {
+function KanbanCard({ order, onClick, onConfirmPayment, now }: { order: Order; onClick: () => void; onConfirmPayment?: (o: Order) => void; now: number }) {
   const cfg = STATUS_CONFIG[order.status];
   const isPending = order.status === "pendiente";
   return (
@@ -99,8 +150,19 @@ function KanbanCard({ order, onClick, onConfirmPayment }: { order: Order; onClic
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>{order.payment}</span>
         {order.note && <span className="text-[10px] text-gray-400">📝 nota</span>}
       </div>
-      <div className="mt-2 pt-2 border-t border-gray-50">
+      {order.totalPieces ? (
+        <div className="mt-2 flex items-center justify-between text-[11px] font-semibold">
+          <span className={(order.remainingPieces ?? 0) === 0 ? "text-emerald-600" : "text-gray-600"}>
+            {order.scannedPieces}/{order.totalPieces} piezas
+          </span>
+          {(order.remainingPieces ?? 0) > 0 && (
+            <span className="text-amber-600">faltan {order.remainingPieces}</span>
+          )}
+        </div>
+      ) : null}
+      <div className="mt-2 pt-2 border-t border-gray-50 flex items-center justify-between">
         <ResponsibleTag order={order} />
+        <PickingTime order={order} now={now} />
       </div>
       </div>
     </div>
@@ -310,6 +372,13 @@ export default function Orders() {
     order: Order;
     toStatus: OrderStatus;
   } | null>(null);
+  // Reloj para el cronómetro de alistamiento en vivo.
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
@@ -547,7 +616,7 @@ export default function Orders() {
                   </div>
                   <div className="space-y-2">
                     {col.map((o) => (
-                      <KanbanCard key={o.id} order={o} onClick={() => setSelected(o)} onConfirmPayment={handleConfirmPayment} />
+                      <KanbanCard key={o.id} order={o} now={now} onClick={() => setSelected(o)} onConfirmPayment={handleConfirmPayment} />
                     ))}
                     {col.length === 0 && (
                       <div className="text-center py-6 text-xs text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
@@ -574,6 +643,8 @@ export default function Orders() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Responsable</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Progreso</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Alistamiento</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pago</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Hora</th>
@@ -599,6 +670,12 @@ export default function Orders() {
                         </td>
                         <td className="px-4 py-3">
                           <ResponsibleTag order={o} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <PickingProgress order={o} />
+                        </td>
+                        <td className="px-4 py-3">
+                          <PickingTime order={o} now={now} />
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span className="text-sm font-bold text-gray-900">{fmt(o.total)}</span>
@@ -627,7 +704,7 @@ export default function Orders() {
                   })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
+                      <td colSpan={10} className="px-4 py-8 text-center text-sm text-gray-400">
                         No se encontraron pedidos
                       </td>
                     </tr>

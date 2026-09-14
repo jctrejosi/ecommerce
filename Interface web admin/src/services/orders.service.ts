@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+import { API_BASE_URL, apiFetch as fetchJson } from "../lib/api";
 
 export type OrderItem = {
   name: string;
@@ -30,6 +30,12 @@ export type Order = {
   note?: string;
   pickerName?: string | null;
   driverName?: string | null;
+  pickedAt?: string | null;
+  completedAt?: string | null;
+  totalPieces?: number;
+  scannedPieces?: number;
+  remainingPieces?: number;
+  remainingItems?: number;
 };
 
 export type OrderDetail = Order & {
@@ -44,20 +50,7 @@ type GetAllOrdersParams = {
   offset?: number;
 };
 
-async function fetchJson<T>(input: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(input, {
-    ...init,
-    credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`API error: ${response.status}`);
-  }
-  return response.json();
-}
+
 
 export const ordersService = {
   async getAll(params?: GetAllOrdersParams): Promise<Order[]> {

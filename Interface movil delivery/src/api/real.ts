@@ -7,6 +7,7 @@ import type {
   TransitionKey,
 } from "./contract";
 import type {
+  ChatMessage,
   DeliveryOrder,
   DriverUser,
   HistoryEntry,
@@ -117,6 +118,24 @@ export const realApi: DeliveryApi = {
       return unwrap<DriverUser>(res.data);
     } catch (err) {
       throw new Error(apiErrorMessage(err, "No se pudo actualizar la disponibilidad."));
+    }
+  },
+
+  async getChatMessages(orderId) {
+    try {
+      const res = await http.get(`/orders/${orderId}/messages`);
+      return unwrap<ChatMessage[]>(res.data);
+    } catch (err) {
+      throw new Error(apiErrorMessage(err, "No se pudo cargar el chat."));
+    }
+  },
+
+  async sendChatMessage(orderId, body) {
+    try {
+      const res = await http.post(`/orders/${orderId}/messages`, { body });
+      return unwrap<ChatMessage>(res.data);
+    } catch (err) {
+      throw new Error(apiErrorMessage(err, "No se pudo enviar el mensaje."));
     }
   },
 

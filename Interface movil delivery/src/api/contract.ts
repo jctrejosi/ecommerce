@@ -1,4 +1,5 @@
 import type {
+  ChatMessage,
   DeliveryOrder,
   DriverUser,
   HistoryEntry,
@@ -75,4 +76,8 @@ export interface DeliveryApi {
   sendLocation(ping: LocationPing): Promise<void>;
   setPushToken(token: string): Promise<void>;
   setAvailability(available: boolean): Promise<DriverUser>;
+
+  // chat por pedido (repartidor ↔ cliente)
+  getChatMessages(orderId: number | string): Promise<ChatMessage[]>;
+  sendChatMessage(orderId: number | string, body: string): Promise<ChatMessage>;
 }

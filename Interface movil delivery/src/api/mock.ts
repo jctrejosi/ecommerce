@@ -1,5 +1,6 @@
 import type { DeliveryApi, TransitionKey, TransitionPayload } from "./contract";
 import type {
+  ChatMessage,
   DeliveryOrder,
   DriverUser,
   HistoryEntry,
@@ -144,6 +145,31 @@ const history: HistoryEntry[] = [
 
 function clone<T>(o: T): T {
   return JSON.parse(JSON.stringify(o)) as T;
+}
+
+/** Chat por pedido en memoria (solo modo mock). */
+const chatStore = new Map<number, ChatMessage[]>();
+
+function chatFor(orderId: number): ChatMessage[] {
+  let msgs = chatStore.get(orderId);
+  if (!msgs) {
+    msgs = [
+      {
+        id: `seed-${orderId}-1`,
+        senderType: "customer",
+        body: "¡Hola! ¿Ya vienes en camino con mi pedido? 😊",
+        createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+      },
+      {
+        id: `seed-${orderId}-2`,
+        senderType: "delivery",
+        body: "¡Sí! Voy en camino, llego pronto 🛵",
+        createdAt: new Date(Date.now() - 9 * 60_000).toISOString(),
+      },
+    ];
+    chatStore.set(orderId, msgs);
+  }
+  return msgs;
 }
 
 let autoAssigned = false;
@@ -291,5 +317,22 @@ export const mockApi: DeliveryApi = {
   async setAvailability(available) {
     await delay(300);
     return { ...clone(demoUser), isAvailable: available };
+  },
+
+  async getChatMessages(orderId) {
+    await delay(250);
+    return clone(chatFor(Number(orderId)));
+  },
+
+  async sendChatMessage(orderId, body) {
+    await delay(250);
+    const msg: ChatMessage = {
+      id: `m-${Date.now()}`,
+      senderType: "delivery",
+      body,
+      createdAt: new Date().toISOString(),
+    };
+    chatFor(Number(orderId)).push(msg);
+    return clone(msg);
   },
 };
