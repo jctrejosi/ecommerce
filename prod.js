@@ -15,7 +15,13 @@
  * El siguiente paso para exponerlo con dominios (HTTPS) es un Caddy por delante
  * que rutee cada dominio → estos puertos internos; eso se monta aparte.
  *
+ * Configuración: `prod.config.json` (o el que pases con --config) define los
+ * dominios/IP. prod.js deriva de ahí `VITE_API_URL` (build de los fronts) y
+ * `CORS_ORIGIN` (backend), y al terminar imprime los registros DNS a crear.
+ *
  * Uso rápido:
+ *   node prod.js --init-config     → crea prod.config.json (plantilla)
+ *   node prod.js --dns             → imprime los registros DNS a configurar
  *   node prod.js --build           → compila TODO y levanta
  *   node prod.js                   → levanta TODO (usa los dist ya existentes)
  *   node prod.js --web --backend   → solo cliente web + API (+ sus dependencias)
@@ -39,6 +45,13 @@ const STOP = ARGS.includes("--stop");
 const HELP = ARGS.includes("--help");
 const BUILD = ARGS.includes("--build");
 const NO_BUILD = ARGS.includes("--no-build");
+const DNS_ONLY = ARGS.includes("--dns");
+const INIT_CONFIG = ARGS.includes("--init-config");
+const CONFIG_IDX = ARGS.indexOf("--config");
+const CONFIG_PATH =
+  CONFIG_IDX >= 0 && ARGS[CONFIG_IDX + 1]
+    ? path.resolve(ROOT, ARGS[CONFIG_IDX + 1])
+    : path.join(ROOT, "prod.config.json");
 
 // ── Gestor de paquetes ──────────────────────────────────────
 // Los fronts del ecommerce usan pnpm (pnpm-lock.yaml). Si no está instalado,
@@ -186,7 +199,16 @@ const APP_DEPENDS = {
   osrm: [],
 };
 
-const NO_SELECTOR_FLAGS = new Set(["--stop", "--help", "--build", "--no-build", "--all"]);
+const NO_SELECTOR_FLAGS = new Set([
+  "--stop",
+  "--help",
+  "--build",
+  "--no-build",
+  "--all",
+  "--dns",
+  "--init-config",
+  "--config",
+]);
 
 /** null ⇒ levantar todo (comportamiento por defecto). */
 function resolveSelection() {
@@ -415,13 +437,14 @@ function ensureDeps(svc) {
 
 // ── Compilación ────────────────────────────────────────────
 
-function runSteps(color, name, cwd, steps) {
+function runSteps(color, name, cwd, steps, env = process.env) {
   for (const step of steps) {
     console.log(`${color}[${name}]${C.reset} 🔨 ${step.join(" ")}`);
     const r = spawnSync(step[0], step.slice(1), {
       cwd,
       stdio: "inherit",
       shell: process.platform === "win32",
+      env,
     });
     if (r.status !== 0) {
       console.error(`${color}[${name}]${C.reset} ✘ falló: ${step.join(" ")}`);
@@ -458,7 +481,8 @@ function buildService(svc) {
   }
 
   if (Array.isArray(svc.build) && svc.build.length) {
-    return runSteps(color, svc.name, cwd, svc.build);
+    // Los fronts Vite hornean `VITE_API_URL` en el bundle → se lo pasamos al build.
+    return runSteps(color, svc.name, cwd, svc.build, frontBuildEnv());
   }
 
   return true; // bot / ia-service: Python, nada que compilar
@@ -523,6 +547,7 @@ function startService(svc) {
     stdio: ["ignore", fd, fd],
     detached: true, // grupo de procesos propio: sobrevive a la terminal
     shell: process.platform === "win32",
+    env: serviceEnv(svc),
   });
 
   child.on("error", (err) => {
@@ -642,6 +667,9 @@ function printHelp() {
   out.push("  node prod.js --build <flags>       → compila y levanta solo lo pedido");
   out.push("  node prod.js --no-build            → fuerza no recompilar (equivale al comportamiento por defecto)");
   out.push("  node prod.js --stop                → detiene los servicios de prod.js");
+  out.push("  node prod.js --init-config         → crea prod.config.json (plantilla de dominios)");
+  out.push("  node prod.js --dns                 → muestra los registros DNS a configurar en tu proveedor");
+  out.push("  node prod.js --config <ruta>       → usa otro archivo de configuración");
   out.push("  node prod.js --help                → esta ayuda");
   out.push("");
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
@@ -677,11 +705,16 @@ function printHelp() {
   out.push("  db-campaigns (:5436) solo con --analytics o sin flags (todo).");
   out.push("  --osrm   Motor de rutas OSRM (:5000) — Manizales (sin apps).");
   out.push("");
+  out.push("CONFIGURACIÓN (prod.config.json)");
+  out.push("  Define aquí los dominios y la IP; prod.js deriva de ahí VITE_API_URL (build de los");
+  out.push("  fronts) y CORS_ORIGIN (backend), y te imprime los registros DNS a crear.");
+  out.push("    { \"baseDomain\": \"tudominio.com\", \"publicIp\": \"<IP_WAN>\", \"acmeEmail\": \"admin@tudominio.com\" }");
+  out.push("  (con solo baseDomain se generan client.<dom>, admin.<dom>, api.<dom>, ml.<dom>, …)");
+  out.push("");
   out.push("CONFIGURACIÓN DE ENTORNO");
   out.push("  El backend lee sus variables desde backend/.env (DATABASE_URL, JWT_SECRET,");
-  out.push("  CORS_ORIGIN, claves Cloudinary/DeepSeek/Wompi/Epayco/Resend, etc.).");
-  out.push("  Los fronts se compilan con VITE_API_URL; definela al compilar:");
-  out.push("    VITE_API_URL=https://api.tudominio node prod.js --build --web");
+  out.push("  claves Cloudinary/DeepSeek/Wompi/Epayco/Resend, etc.). prod.js añade NODE_ENV=production");
+  out.push("  y CORS_ORIGIN a partir de prod.config.json.");
   out.push("");
   out.push("EJEMPLOS");
   out.push("  node prod.js --build --delivery-admin   → compila delivery admin + backend + BD");
@@ -692,6 +725,187 @@ function printHelp() {
   console.log(out.join("\n"));
 }
 
+// ── Configuración (prod.config.json) ────────────────────────
+
+// Etiqueta por defecto de cada host cuando solo defines `baseDomain`.
+const HOST_LABELS = {
+  web: "client",
+  admin: "admin",
+  analytics: "analytics",
+  picking: "picking",
+  "picking-admin": "picking-admin",
+  "delivery-admin": "delivery-admin",
+  api: "api",
+  ml: "ml",
+};
+const FRONT_SERVICES = ["web", "admin", "analytics", "picking", "picking-admin", "delivery-admin"];
+
+let CONFIG = null;
+
+/** IP pública WAN (best-effort). Sirve para imprimir el valor correcto del DNS. */
+function detectPublicIp() {
+  for (const url of ["https://api.ipify.org", "https://ifconfig.me"]) {
+    try {
+      const r = spawnSync("curl", ["-s", "--max-time", "5", url], { encoding: "utf8" });
+      const ip = (r.stdout || "").trim();
+      if (r.status === 0 && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return ip;
+    } catch {
+      /* sin red: se deja vacío */
+    }
+  }
+  return "";
+}
+
+/** Lee prod.config.json (o el indicado con --config) y completa hosts por defecto. */
+function loadConfig() {
+  let raw = {};
+  try {
+    raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  } catch (e) {
+    const rel = path.relative(ROOT, CONFIG_PATH) || CONFIG_PATH;
+    if (fs.existsSync(CONFIG_PATH)) {
+      console.warn(`⚠️  No se pudo leer ${rel}: ${e.message}`);
+    } else {
+      console.warn(`⚠️  No existe ${rel} — usando localhost. Créalo con: node prod.js --init-config`);
+    }
+  }
+
+  const baseDomain = (raw.baseDomain || "").trim();
+  const hosts = {};
+  for (const [key, label] of Object.entries(HOST_LABELS)) {
+    const explicit = raw.hosts?.[key];
+    hosts[key] = explicit || (baseDomain ? `${label}.${baseDomain}` : "");
+  }
+
+  return {
+    baseDomain,
+    publicIp: (raw.publicIp || "").trim() || detectPublicIp(),
+    localIp: (raw.localIp || "").trim(),
+    acmeEmail: (raw.acmeEmail || "").trim(),
+    tls: raw.tls !== false,
+    hosts,
+  };
+}
+
+function schemeOf(cfg) {
+  return cfg && cfg.tls ? "https" : "http";
+}
+
+/** URL pública del backend (se hornea en los fronts como VITE_API_URL). */
+function apiBaseUrl() {
+  if (!CONFIG || !CONFIG.hosts.api) return "http://localhost:3000";
+  return `${schemeOf(CONFIG)}://${CONFIG.hosts.api}`;
+}
+
+/** Orígenes permitidos por CORS: las URLs públicas de cada front. */
+function corsOrigins() {
+  if (!CONFIG) return [];
+  return FRONT_SERVICES.map((s) => CONFIG.hosts[s])
+    .filter(Boolean)
+    .map((h) => `${schemeOf(CONFIG)}://${h}`);
+}
+
+function frontBuildEnv() {
+  return { ...process.env, VITE_API_URL: apiBaseUrl() };
+}
+
+function serviceEnv(svc) {
+  if (svc.name === "backend") {
+    const cors = corsOrigins();
+    return {
+      ...process.env,
+      NODE_ENV: "production",
+      ...(cors.length ? { CORS_ORIGIN: cors.join(",") } : {}),
+    };
+  }
+  return process.env;
+}
+
+/** Heurística: IP privada, loopback o CGNAT (no sirve para exponer). */
+function isPrivateIp(ip) {
+  if (!ip) return true;
+  if (/^(10\.|127\.|192\.168\.|169\.254\.)/.test(ip)) return true;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
+  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip)) return true; // CGNAT 100.64/10
+  return false;
+}
+
+/** Imprime los registros DNS a configurar en el proveedor de dominio. */
+function printDns() {
+  const cfg = CONFIG || loadConfig();
+  const scheme = schemeOf(cfg);
+
+  const rows = [];
+  const push = (host, target) => {
+    if (host) rows.push({ host, target });
+  };
+  push(cfg.hosts.api, "backend (3000) · bot (8000) · ia-service (8002)");
+  push(cfg.hosts.ml, "Astaroth (ML)");
+  for (const s of FRONT_SERVICES) push(cfg.hosts[s], s);
+
+  console.log("\n━━━━━━━━━━━ DNS a configurar en tu proveedor de dominio ━━━━━━━━━━━");
+  if (!rows.length) {
+    console.log("  ⚠️  No hay dominios configurados. Crea prod.config.json (node prod.js --init-config)");
+    console.log("     y define `baseDomain` o el mapa `hosts`, luego vuelve a ejecutar prod.js.");
+    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+    return;
+  }
+
+  console.log(`  Dominio base : ${cfg.baseDomain || "(no definido)"}`);
+  console.log(`  IP pública   : ${cfg.publicIp || "(no definida — averíguala o configura DDNS)"}`);
+  if (cfg.publicIp && isPrivateIp(cfg.publicIp)) {
+    console.log(`  ⚠️  Esa IP es privada/CGNAT: apunta los DNS a la IP WAN del router (no a ${cfg.publicIp}).`);
+  }
+
+  console.log("\n  1) Registros DNS (tipo A → tu IP pública):");
+  const wHost = Math.max(...rows.map((r) => r.host.length));
+  for (const r of rows) {
+    console.log(`     ${r.host.padEnd(wHost)}   A   ${cfg.publicIp || "<TU_IP_PUBLICA>"}`);
+  }
+  console.log("     (si tu IP es dinámica, usa DDNS o un CNAME a un host DDNS)");
+
+  console.log("\n  2) Reenvío de puertos en el router:");
+  console.log(`     TCP 80   → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}   (solo para emitir/renovar TLS)`);
+  console.log(`     TCP 443  → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}`);
+  console.log("     NO reenvíes 5432, 5436 ni 5000: son internos (base de datos y rutas).");
+
+  console.log("\n  3) Mapa dominio → servicio interno (lo aplica el proxy Caddy):");
+  for (const r of rows) {
+    console.log(`     ${scheme}://${r.host}  →  ${r.target}`);
+  }
+  if (!cfg.acmeEmail) {
+    console.log("\n  ℹ️  Define `acmeEmail` en prod.config.json para Let's Encrypt (avisos de expiración).");
+  }
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+}
+
+function initConfig() {
+  const rel = path.relative(ROOT, CONFIG_PATH) || CONFIG_PATH;
+  if (fs.existsSync(CONFIG_PATH)) {
+    console.log(`ℹ️  Ya existe ${rel} — edítalo o usa --config <ruta>.`);
+    return;
+  }
+  const template = {
+    baseDomain: "tudominio.com",
+    publicIp: "",
+    localIp: "",
+    acmeEmail: "admin@tudominio.com",
+    tls: true,
+    hosts: {
+      web: "client.tudominio.com",
+      admin: "admin.tudominio.com",
+      analytics: "analytics.tudominio.com",
+      picking: "picking.tudominio.com",
+      "picking-admin": "picking-admin.tudominio.com",
+      "delivery-admin": "delivery-admin.tudominio.com",
+      api: "api.tudominio.com",
+      ml: "ml.tudominio.com",
+    },
+  };
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(template, null, 2) + "\n");
+  console.log(`✅ Creado ${rel} — edita dominios/IP y vuelve a ejecutar prod.js.`);
+}
+
 // ── Main ────────────────────────────────────────────────────
 
 async function main() {
@@ -699,6 +913,10 @@ async function main() {
     printHelp();
     return;
   }
+  if (INIT_CONFIG) return initConfig();
+
+  CONFIG = loadConfig();
+  if (DNS_ONLY) return printDns();
   if (STOP) return stopAll();
 
   fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -716,6 +934,10 @@ async function main() {
   console.log(
     `🚀 MercAldas — PRODUCCIÓN · selección: ${selectionLabel(plan)}${BUILD ? " (con build)" : ""}  (logs → logs/*.prod.log)`,
   );
+  console.log(
+    `🌐 API pública (VITE_API_URL): ${apiBaseUrl()}` +
+      (CONFIG.baseDomain ? `  ·  dominio base: ${CONFIG.baseDomain}` : "  ·  (sin prod.config.json → localhost)"),
+  );
   if (PM === "npm")
     console.warn(`${C.picking}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm en los fronts.`);
   console.log("");
@@ -729,6 +951,12 @@ async function main() {
   // 2. Compilación (--build).
   if (BUILD && !NO_BUILD) {
     console.log("");
+    if (apiBaseUrl() === "http://localhost:3000") {
+      console.warn(
+        `${C.web}[build]${C.reset} ⚠️  VITE_API_URL quedaría en localhost: los fronts compilados NO podrán hablar con el backend remoto.\n` +
+          `             Configura prod.config.json (hosts.api) antes de compilar los fronts.`,
+      );
+    }
     for (const svc of services) {
       if (sinDeps.has(svc.name)) continue;
       if (!buildService(svc)) {
@@ -798,6 +1026,7 @@ async function main() {
   }
 
   printUrls(services, wantDb, wantCampaigns, wantOsrm);
+  printDns();
 }
 
 main();

@@ -111,7 +111,7 @@ export default function OrderListScreen() {
       <Toast message={toast} onHide={() => setToast(null)} />
       <Header
         logo
-        title="DSI Picking"
+        title="Picking | DSI"
         right={
           <View style={styles.headerRight}>
             <Pressable
