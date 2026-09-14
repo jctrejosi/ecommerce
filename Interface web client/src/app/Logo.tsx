@@ -2,24 +2,28 @@ export function Logo({
   dark = true,
   logoSrc,
   hideTextOnMobile = false,
+  imgClassName = "h-7 md:h-8 w-auto object-contain",
+  boxClassName = "w-7 h-7 md:w-8 md:h-8",
 }: {
   dark?: boolean;
   logoSrc?: string | null;
   hideTextOnMobile?: boolean;
+  imgClassName?: string;
+  boxClassName?: string;
 }) {
   if (logoSrc) {
     return (
       <img
         src={logoSrc}
-        alt="MercAldas"
-        className="h-7 md:h-8 w-auto object-contain"
+        alt="Mercaldas"
+        className={imgClassName}
       />
     );
   }
   return (
     <div className="flex items-center gap-1 select-none">
       <div
-        className="w-7 h-7 md:w-8 md:h-8 rounded-lg flex items-center justify-center font-black text-base md:text-lg leading-none"
+        className={`${boxClassName} rounded-lg flex items-center justify-center font-black text-base md:text-lg leading-none`}
         style={{
           background: "#FFF200",
           color: "#1A1A2E",

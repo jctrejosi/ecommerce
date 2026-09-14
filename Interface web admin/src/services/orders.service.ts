@@ -28,6 +28,8 @@ export type Order = {
   date: string;
   time: string;
   note?: string;
+  pickerName?: string | null;
+  driverName?: string | null;
 };
 
 export type OrderDetail = Order & {

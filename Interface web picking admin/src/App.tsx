@@ -141,7 +141,7 @@ export default function App() {
                 tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
               }`}
             >
-              {t === 'shelves' ? 'Estanterías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : 'Métricas'}
+              {t === 'shelves' ? 'Estanterías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : 'Informes'}
             </button>
           ))}
         </div>

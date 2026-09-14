@@ -3,6 +3,7 @@ import {
   LayoutGrid, List, Search, Download, Eye, Package,
   Clock, CheckCircle, Truck, XCircle, ChevronRight, MoreHorizontal,
   MapPin, Phone, CreditCard, Printer, RefreshCw, X, AlertTriangle,
+  ListFilter, Layers, PackageCheck, CheckCheck, UserRound,
 } from "lucide-react";
 import { ordersService, type Order, type OrderDetail, type OrderStatus } from "../services/orders.service";
 
@@ -18,7 +19,54 @@ const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: str
 
 const STATUSES: OrderStatus[] = ["pendiente", "confirmado", "preparando", "listo", "en camino", "entregado", "cancelado"];
 
+const STATUS_ICONS: Record<OrderStatus, typeof Clock> = {
+  pendiente: Clock,
+  confirmado: CheckCircle,
+  preparando: Package,
+  listo: PackageCheck,
+  "en camino": Truck,
+  entregado: CheckCheck,
+  cancelado: XCircle,
+};
+
 const fmt = (n: number) => "$" + n.toLocaleString("es-CO");
+
+const DELIVERY_STATUSES: OrderStatus[] = ["en camino", "entregado"];
+
+/** Persona responsable del pedido: repartidor (entrega) o preparador (picking). */
+function responsibleOf(
+  order: Order,
+): { role: string; name: string; type: "driver" | "picker" } | null {
+  if (DELIVERY_STATUSES.includes(order.status) && order.driverName) {
+    return { role: "Repartidor", name: order.driverName, type: "driver" };
+  }
+  if (order.pickerName) {
+    return { role: "Preparador", name: order.pickerName, type: "picker" };
+  }
+  if (order.driverName) {
+    return { role: "Repartidor", name: order.driverName, type: "driver" };
+  }
+  return null;
+}
+
+function ResponsibleTag({ order }: { order: Order }) {
+  const responsible = responsibleOf(order);
+  if (!responsible) {
+    return (
+      <span className="flex items-center gap-1 text-[10px] text-gray-400 italic">
+        <UserRound size={11} className="shrink-0" /> Sin asignar
+      </span>
+    );
+  }
+  const Icon = responsible.type === "driver" ? Truck : UserRound;
+  return (
+    <span className="flex items-center gap-1 text-[10px] text-gray-500 min-w-0">
+      <Icon size={11} className="text-gray-400 shrink-0" />
+      <span className="font-semibold text-gray-600 shrink-0">{responsible.role}:</span>
+      <span className="truncate">{responsible.name}</span>
+    </span>
+  );
+}
 
 function KanbanCard({ order, onClick, onConfirmPayment }: { order: Order; onClick: () => void; onConfirmPayment?: (o: Order) => void }) {
   const cfg = STATUS_CONFIG[order.status];
@@ -50,6 +98,9 @@ function KanbanCard({ order, onClick, onConfirmPayment }: { order: Order; onClic
       <div className="mt-2 flex items-center gap-1.5">
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color}`}>{order.payment}</span>
         {order.note && <span className="text-[10px] text-gray-400">📝 nota</span>}
+      </div>
+      <div className="mt-2 pt-2 border-t border-gray-50">
+        <ResponsibleTag order={order} />
       </div>
       </div>
     </div>
@@ -161,6 +212,12 @@ function OrderDetail({ order: initialOrder, onClose, onStatusChange }: { order: 
             </div>
           </div>
 
+          {/* Responsable */}
+          <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-100 px-4 py-3">
+            <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider shrink-0">Responsable</span>
+            <ResponsibleTag order={initialOrder} />
+          </div>
+
           {/* Estado actual */}
           <div className={`rounded-xl p-4 border ${cfg.bg} ${cfg.border}`}>
             <div className="flex items-center justify-between">
@@ -246,7 +303,7 @@ export default function Orders() {
   const [mode, setMode] = useState<"kanban" | "table">("kanban");
   const [selected, setSelected] = useState<Order | null>(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | "todos">("todos");
+  const [statusFilters, setStatusFilters] = useState<OrderStatus[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [confirmAction, setConfirmAction] = useState<{
@@ -258,7 +315,6 @@ export default function Orders() {
     setLoading(true);
     try {
       const data = await ordersService.getAll({
-        status: statusFilter !== "todos" ? statusFilter : undefined,
         search: search || undefined,
         limit: 100,
       });
@@ -268,7 +324,7 @@ export default function Orders() {
     } finally {
       setLoading(false);
     }
-  }, [statusFilter, search]);
+  }, [search]);
 
   // Cambio de estado manual: primero se pide confirmación (acción administrativa)
   const requestStatusChange = (o: Order, toStatus: OrderStatus) => {
@@ -302,6 +358,16 @@ export default function Orders() {
     requestStatusChange(o, "confirmado");
   };
 
+  const toggleStatusFilter = (s: OrderStatus) => {
+    setStatusFilters((prev) =>
+      prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s],
+    );
+  };
+
+  const clearStatusFilters = () => {
+    setStatusFilters([]);
+  };
+
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
@@ -320,7 +386,8 @@ export default function Orders() {
       !search ||
       o.customer.toLowerCase().includes(search.toLowerCase()) ||
       o.id.toLowerCase().includes(search.toLowerCase());
-    const matchStatus = statusFilter === "todos" || o.status === statusFilter;
+    const matchStatus =
+      statusFilters.length === 0 || statusFilters.includes(o.status);
     return matchSearch && matchStatus;
   });
 
@@ -331,6 +398,8 @@ export default function Orders() {
     },
     {} as Record<OrderStatus, number>,
   );
+
+  const hasFilters = statusFilters.length > 0;
 
   return (
     <>
@@ -352,7 +421,11 @@ export default function Orders() {
                 <List size={14} /> Tabla
               </button>
             </div>
-            <button className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors">
+            <button
+              disabled
+              title="Exportación próximamente"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-400 bg-white border border-gray-200 rounded-xl cursor-not-allowed opacity-60"
+            >
               <Download size={14} /> Exportar
             </button>
           </div>
@@ -366,11 +439,15 @@ export default function Orders() {
             return (
               <button
                 key={s}
-                onClick={() => setStatusFilter(statusFilter === s ? "todos" : s)}
-                className={`rounded-xl border p-3 text-left transition-all hover:shadow-sm cursor-pointer ${statusFilter === s ? `${cfg.bg} ${cfg.border}` : "bg-white border-gray-100"}`}
+                onClick={() => toggleStatusFilter(s)}
+                className={`rounded-xl border p-3 text-left transition-colors cursor-pointer ${
+                  statusFilters.includes(s)
+                    ? `${cfg.bg} ${cfg.color} border-transparent ring-2 ring-inset ring-current`
+                    : "bg-white border-gray-200 hover:bg-gray-50"
+                }`}
               >
-                <p className={`text-lg font-bold ${statusFilter === s ? cfg.color : "text-gray-800"}`}>{count}</p>
-                <p className={`text-[10px] font-semibold ${statusFilter === s ? cfg.color : "text-gray-500"}`}>{cfg.label}</p>
+                <p className={`text-lg font-bold ${statusFilters.includes(s) ? cfg.color : "text-gray-800"}`}>{count}</p>
+                <p className={`text-[10px] font-semibold ${statusFilters.includes(s) ? cfg.color : "text-gray-500"}`}>{cfg.label}</p>
               </button>
             );
           })}
@@ -388,43 +465,76 @@ export default function Orders() {
             />
           </div>
 
-          {/* Status filter tags below search */}
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              onClick={() => setStatusFilter("todos")}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all cursor-pointer ${
-                statusFilter === "todos"
-                  ? "bg-gray-800 text-white border-gray-800"
-                  : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700"
-              }`}
-            >
-              Todos
-            </button>
-            {STATUSES.map((s) => {
-              const cfg = STATUS_CONFIG[s];
-              const isActive = statusFilter === s;
-              return (
-                <button
-                  key={s}
-                  onClick={() => setStatusFilter(isActive ? "todos" : s)}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 cursor-pointer ${
-                    isActive
-                      ? `${cfg.bg} ${cfg.color} ${cfg.border}`
-                      : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700"
-                  }`}
-                >
-                  {cfg.label}
-                  {isActive && <X size={12} />}
-                </button>
-              );
-            })}
+          {/* Filtros por estado (multiselección) */}
+          <div>
+            <div className="mb-2">
+              <h3 className="flex items-center gap-1.5 text-xs font-bold text-gray-700 uppercase tracking-wider">
+                <ListFilter size={14} className="text-gray-400" />
+                Filtrar por estado
+              </h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={clearStatusFilters}
+                title="Ver todos los pedidos"
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 cursor-pointer ${
+                  !hasFilters
+                    ? "bg-gray-800 text-white border-gray-800 shadow-sm"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-gray-300 hover:text-gray-700 hover:shadow-sm"
+                }`}
+              >
+                <Layers size={12} />
+                Todos
+              </button>
+              {STATUSES.map((s) => {
+                const cfg = STATUS_CONFIG[s];
+                const Icon = STATUS_ICONS[s];
+                const isActive = statusFilters.includes(s);
+                return (
+                  <button
+                    key={s}
+                    onClick={() => toggleStatusFilter(s)}
+                    title={isActive ? `Quitar filtro: ${cfg.label}` : `Filtrar por estado: ${cfg.label}`}
+                    className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 cursor-pointer ${cfg.bg} ${cfg.color} ${cfg.border} ${
+                      isActive
+                        ? "ring-2 ring-current ring-offset-1 shadow-sm"
+                        : "opacity-70 hover:opacity-100 hover:shadow-sm"
+                    }`}
+                  >
+                    <Icon size={12} />
+                    {cfg.label}
+                    <X size={12} className={isActive ? "" : "opacity-0"} />
+                  </button>
+                );
+              })}
+              <button
+                onClick={clearStatusFilters}
+                title="Quitar todos los filtros"
+                className={`text-xs font-semibold px-3 py-1.5 rounded-full border border-dashed border-gray-300 text-gray-500 hover:border-gray-400 hover:text-gray-700 transition-all flex items-center gap-1.5 cursor-pointer ${
+                  hasFilters ? "" : "invisible"
+                }`}
+              >
+                <X size={12} /> Limpiar filtros
+              </button>
+            </div>
           </div>
+        </div>
+
+        {/* Pedidos listados (resultado de los filtros) */}
+        <div className="flex items-center gap-2 pt-1">
+          <Package size={16} className="text-amber-500" />
+          <h2 className="text-sm font-bold text-gray-800">Listado de pedidos</h2>
+          {!loading && (
+            <span className="text-xs font-semibold text-gray-400">
+              {filtered.length} {filtered.length === 1 ? "pedido" : "pedidos"}
+            </span>
+          )}
         </div>
 
         {/* Kanban */}
         {mode === "kanban" && (
           <div className="flex gap-4 overflow-x-auto pb-4">
-            {STATUSES.map((s) => {
+            {(hasFilters ? statusFilters : STATUSES).map((s) => {
               const cfg = STATUS_CONFIG[s];
               const col = filtered.filter((o) => o.status === s);
               return (
@@ -463,6 +573,7 @@ export default function Orders() {
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pedido</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Responsable</th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Pago</th>
                     <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Hora</th>
@@ -485,6 +596,9 @@ export default function Orders() {
                           <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
                             {cfg.label}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <ResponsibleTag order={o} />
                         </td>
                         <td className="px-4 py-3 text-right">
                           <span className="text-sm font-bold text-gray-900">{fmt(o.total)}</span>
@@ -513,7 +627,7 @@ export default function Orders() {
                   })}
                   {filtered.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-sm text-gray-400">
+                      <td colSpan={8} className="px-4 py-8 text-center text-sm text-gray-400">
                         No se encontraron pedidos
                       </td>
                     </tr>

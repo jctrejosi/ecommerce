@@ -146,12 +146,9 @@ export const catalogService = {
   },
 
   async getRelatedProducts(product: Product): Promise<Product[]> {
-    const products = await this.getProducts({
-      categoryIds: product.categoryId ? [product.categoryId] : undefined,
-      limit: 20,
-    });
-
-    return products.filter((item) => item.id !== product.id);
+    // Mismo backend que el modal del carrito: prioriza el tipo de producto.
+    const related = await this.getRelatedProductsById(product.id);
+    return related.filter((item) => item.id !== product.id);
   },
 
   /** Relacionados por id (misma categoría o marca, calculado en backend). */

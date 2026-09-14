@@ -32,6 +32,7 @@ import {
   productVariants,
   products,
   shipments,
+  users,
 } from '../../../drizzle/schema';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { randomUUID } from 'node:crypto';
@@ -1102,6 +1103,8 @@ export class OrdersService {
         city: customerAddresses.city,
         paymentMethod: payments.paymentMethod,
         paymentStatus: payments.status,
+        pickerName: sql<string>`NULLIF(TRIM(CONCAT(${users.firstName}, ' ', ${users.lastName})), '')`,
+        driverName: sql<string>`(SELECT dd.full_name FROM delivery_assignments da JOIN shipments s ON s.id = da.shipment_id JOIN delivery_drivers dd ON dd.id = da.driver_id WHERE s.order_id = ${orders.id} ORDER BY da.id DESC LIMIT 1)`,
       })
       .from(orders)
       .leftJoin(customers, eq(customers.id, orders.customerId))
@@ -1109,7 +1112,8 @@ export class OrdersService {
         customerAddresses,
         eq(customerAddresses.id, orders.customerAddressId),
       )
-      .leftJoin(payments, eq(payments.orderId, orders.id));
+      .leftJoin(payments, eq(payments.orderId, orders.id))
+      .leftJoin(users, eq(users.id, orders.pickerId));
 
     if (conditions.length > 0) {
       query.where(and(...conditions));
@@ -1173,6 +1177,8 @@ export class OrdersService {
           })
         : '',
       note: row.notes ?? undefined,
+      pickerName: row.pickerName ?? null,
+      driverName: row.driverName ?? null,
     }));
   }
 
@@ -1195,6 +1201,8 @@ export class OrdersService {
         addressLine2: customerAddresses.addressLine2,
         city: customerAddresses.city,
         paymentMethod: payments.paymentMethod,
+        pickerName: sql<string>`NULLIF(TRIM(CONCAT(${users.firstName}, ' ', ${users.lastName})), '')`,
+        driverName: sql<string>`(SELECT dd.full_name FROM delivery_assignments da JOIN shipments s ON s.id = da.shipment_id JOIN delivery_drivers dd ON dd.id = da.driver_id WHERE s.order_id = ${orders.id} ORDER BY da.id DESC LIMIT 1)`,
       })
       .from(orders)
       .leftJoin(customers, eq(customers.id, orders.customerId))
@@ -1203,6 +1211,7 @@ export class OrdersService {
         eq(customerAddresses.id, orders.customerAddressId),
       )
       .leftJoin(payments, eq(payments.orderId, orders.id))
+      .leftJoin(users, eq(users.id, orders.pickerId))
       .where(eq(orders.id, BigInt(orderId)))
       .limit(1);
 
@@ -1275,6 +1284,8 @@ export class OrdersService {
           })
         : '',
       note: o.notes ?? undefined,
+      pickerName: o.pickerName ?? null,
+      driverName: o.driverName ?? null,
       statusHistory: history.map((h) => ({
         status: this.mapOrderStatus(h.status),
         note: h.note ?? undefined,

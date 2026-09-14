@@ -122,6 +122,8 @@ export function Header({
   );
   const searchRef = useRef<HTMLDivElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  // Una vez abierto el menú por primera vez, el punto deja de titilar.
+  const [mobileMenuSeen, setMobileMenuSeen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const categoriesRef = useRef<HTMLDivElement>(null);
   const [notifOpen, setNotifOpen] = useState(false);
@@ -132,6 +134,16 @@ export function Header({
   );
   const [storePhone, setStorePhone] = useState("");
   const [storeWhatsapp, setStoreWhatsapp] = useState("");
+  // Sombra solo cuando la fila del buscador está flotando sobre el contenido
+  // (así no queda una línea de sombra entre el buscador y la tira de contacto).
+  const [isStuck, setIsStuck] = useState(false);
+
+  useEffect(() => {
+    const onScroll = () => setIsStuck(window.scrollY > 4);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
 
   // Load default address when customer changes
   useEffect(() => {
@@ -347,31 +359,63 @@ export function Header({
   }
 
   return (
-    <header className="sticky top-0 z-50 bg-white border-b border-border shadow-sm">
+    <>
+      <header
+        className={`sticky top-0 z-50 bg-white border-b border-border transition-shadow ${isStuck ? "shadow-sm" : ""}`}
+      >
 
       {/* Main header row */}
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-3">
         <button
-          className="md:hidden p-2 rounded-lg hover:bg-muted transition-colors"
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+          className="md:hidden order-1 relative p-2 rounded-lg hover:bg-muted transition-colors"
+          onClick={() => {
+            if (!mobileMenuOpen) setMobileMenuSeen(true);
+            setMobileMenuOpen(!mobileMenuOpen);
+          }}
+          aria-label="Abrir menú"
         >
           <Menu className="w-5 h-5" />
+          {(unreadNotifCount > 0 || ordersCount > 0) && (
+            <span
+              className="pointer-events-none absolute top-1 right-1 w-2.5 h-2.5"
+              aria-hidden="true"
+            >
+              {!mobileMenuSeen && (
+                <span
+                  className="absolute inset-0 rounded-full border-2 animate-ping"
+                  style={{ borderColor: "#FF4444" }}
+                />
+              )}
+              <span
+                className={`absolute inset-0 rounded-full border-2 border-white ${
+                  mobileMenuSeen ? "" : "animate-blink"
+                }`}
+                style={{ background: "#FF4444" }}
+              />
+            </span>
+          )}
         </button>
 
         <a
           href="#"
-          className="flex-shrink-0 flex items-center gap-2 md:gap-3"
+          className="flex-shrink-0 order-4 md:order-none flex flex-col md:flex-row items-center gap-1 md:gap-3"
           onClick={(e) => {
             e.preventDefault();
             onHome();
           }}
         >
-          <img src={storeLogo} alt="Mercaldas" className="h-7 md:h-8 w-auto object-contain" />
-          <span className="h-6 w-px bg-gray-300" aria-hidden="true" />
-          <Logo dark={true} logoSrc={generalLogo?.url} hideTextOnMobile />
+          <img src={storeLogo} alt="Mercaldas" className="h-4 md:h-7 w-auto object-contain" />
+          <span className="hidden md:block h-6 w-px bg-gray-300" aria-hidden="true" />
+          <Logo
+            dark={true}
+            logoSrc={generalLogo?.url}
+            hideTextOnMobile
+            imgClassName="h-5 md:h-8 w-auto object-contain"
+            boxClassName="w-5 h-5 md:w-8 md:h-8"
+          />
         </a>
 
-        <div className="flex-1 max-w-2xl mx-auto" ref={searchRef}>
+        <div className="flex-1 max-w-2xl mx-auto order-2 md:order-none" ref={searchRef}>
           <div className="relative">
             {/* Input */}
             <div className="relative flex items-center">
@@ -633,7 +677,7 @@ export function Header({
           </div>
         </div>
 
-        <div className="flex items-center gap-0.5">
+        <div className="flex items-center gap-0.5 order-3 md:order-none">
           <button
             onClick={() => {
               if (customer) {
@@ -704,6 +748,9 @@ export function Header({
             onClick={onCartOpen}
             className="relative flex items-center gap-1.5 px-3 py-2 rounded-lg hover:bg-muted transition-colors text-sm font-medium"
           >
+            {cartCount > 0 && (
+              <span className="cart-trace" aria-hidden="true" />
+            )}
             <ShoppingCart className="w-5 h-5" />
             <span className="hidden lg:inline">Carrito</span>
             {cartCount > 0 && (
@@ -718,17 +765,17 @@ export function Header({
         </div>
       </div>
 
-      {/* Mobile dropdown */}
+      {/* Mobile dropdown (flotante: no desplaza el contenido) */}
       {mobileMenuOpen && (
-        <div className="md:hidden border-t border-border bg-white px-4 py-3 flex flex-col gap-1">
+        <div className="md:hidden absolute left-0 right-0 top-full z-50 border-t border-b border-border bg-white px-4 py-3 flex flex-col gap-1 shadow-xl rounded-b-2xl max-h-[80vh] overflow-y-auto">
           {(customer
-            ? ["Inicio", "Catálogo", "Mi cuenta"]
-            : ["Inicio", "Catálogo"]
+            ? ["Inicio", "Catálogo", "Mi carrito", "Pedidos", "Notificaciones", "Mi cuenta"]
+            : ["Inicio", "Catálogo", "Mi carrito", "Pedidos"]
           ).map((item) => (
             <a
               key={item}
               href="#"
-              className="py-2.5 px-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors border-b border-border last:border-0"
+              className="flex items-center justify-between py-2.5 px-2 text-sm font-medium rounded-lg hover:bg-muted transition-colors border-b border-border last:border-0"
               onClick={(e) => {
                 e.preventDefault();
                 if (item === "Inicio") onHome();
@@ -736,15 +783,43 @@ export function Header({
                 if (item === "Catalogo") onOpenCatalog();
                 if (item === "Catálogo") onOpenCatalog();
                 if (item === "Catálogo") onOpenCatalog();
+                if (item === "Mi carrito") onCartOpen();
+                if (item === "Pedidos") onOrdersOpen();
+                if (item === "Notificaciones") onNavigateNotifs();
                 if (item === "Mi cuenta" && onAccount) onAccount();
                 setMobileMenuOpen(false);
               }}
             >
-              {item}
+              <span>{item}</span>
+              {item === "Mi carrito" && cartCount > 0 && (
+                <span
+                  className="w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center"
+                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                >
+                  {cartCount}
+                </span>
+              )}
+              {item === "Pedidos" && ordersCount > 0 && (
+                <span
+                  className="w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center"
+                  style={{ background: "#FF4444", color: "#fff" }}
+                >
+                  {ordersCount}
+                </span>
+              )}
+              {item === "Notificaciones" && unreadNotifCount > 0 && (
+                <span
+                  className="w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center"
+                  style={{ background: "#FF4444", color: "#fff" }}
+                >
+                  {unreadNotifCount}
+                </span>
+              )}
             </a>
           ))}
         </div>
       )}
+      </header>
 
       {/* Contact strip */}
       {(storePhone || storeWhatsapp) && (
@@ -881,6 +956,6 @@ export function Header({
         onLoginModal={onLoginModal}
         onAddressesChange={(addr) => setDefaultAddress(addr)}
       />
-    </header>
+    </>
   );
 }

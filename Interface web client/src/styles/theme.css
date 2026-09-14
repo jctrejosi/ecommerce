@@ -128,13 +128,13 @@
 
   html {
     font-size: var(--font-size);
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
-    overflow-x: hidden;
+    overflow-x: clip;
   }
 
   /**
@@ -240,6 +240,16 @@
 @theme {
   --animate-popup-in-left: popupInLeft 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-popup-in-right: popupInRight 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-blink: blink 1s ease-in-out infinite;
+
+  @keyframes blink {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.2;
+    }
+  }
 
   @keyframes popupInRight {
     from {
@@ -312,4 +322,40 @@
       transform: translateX(100%);
     }
   }
+}
+
+/* ── Línea animada alrededor del botón del carrito cuando tiene ítems ── */
+@property --cart-trace-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes cartTrace {
+  to {
+    --cart-trace-angle: 360deg;
+  }
+}
+
+.cart-trace {
+  position: absolute;
+  inset: -2px;
+  padding: 2px;
+  border-radius: 10px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--cart-trace-angle),
+    transparent 0deg,
+    #fff200 70deg,
+    transparent 140deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: cartTrace 1.6s linear infinite;
 }

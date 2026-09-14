@@ -69,6 +69,23 @@ export function CatalogPage({
   >([]);
   const [brandSearch, setBrandSearch] = useState("");
 
+  // ── Animación del drawer de filtros móvil (entrada/salida suave) ──
+  // `mounted` mantiene el drawer en el DOM durante la animación de salida,
+  // `active` dispara la transición (slide + fade del fondo).
+  const [filtersMounted, setFiltersMounted] = useState(false);
+  const [filtersActive, setFiltersActive] = useState(false);
+
+  useEffect(() => {
+    if (mobileFiltersOpen) {
+      setFiltersMounted(true);
+      const raf = requestAnimationFrame(() => setFiltersActive(true));
+      return () => cancelAnimationFrame(raf);
+    }
+    setFiltersActive(false);
+    const timer = setTimeout(() => setFiltersMounted(false), 300);
+    return () => clearTimeout(timer);
+  }, [mobileFiltersOpen]);
+
   // ── Expansión del árbol de categorías (hover en desktop, chevron en móvil) ──
   const [hoverCat, setHoverCat] = useState<number | null>(null);
   const [pinCat, setPinCat] = useState<number | null>(null);
@@ -934,13 +951,23 @@ export function CatalogPage({
       </div>
 
       {/* Mobile filters drawer */}
-      {mobileFiltersOpen && (
-        <div className="fixed inset-0 z-50 flex md:hidden">
+      {filtersMounted && (
+        <div
+          className={`fixed inset-0 z-50 flex md:hidden ${
+            filtersActive ? "pointer-events-auto" : "pointer-events-none"
+          }`}
+        >
           <div
-            className="absolute inset-0 bg-black/40"
+            className={`absolute inset-0 bg-black/40 transition-opacity duration-300 ${
+              filtersActive ? "opacity-100" : "opacity-0"
+            }`}
             onClick={() => setMobileFiltersOpen(false)}
           />
-          <div className="relative ml-auto w-72 bg-white h-full flex flex-col shadow-2xl">
+          <div
+            className={`relative ml-auto w-72 bg-white h-full flex flex-col shadow-2xl transition-transform duration-300 ease-out ${
+              filtersActive ? "translate-x-0" : "translate-x-full"
+            }`}
+          >
             <div className="flex items-center justify-between px-4 py-4 border-b border-border">
               <h2 className="font-bold text-base">Filtros</h2>
               <button
@@ -956,10 +983,22 @@ export function CatalogPage({
             <div className="border-t border-border p-4">
               <button
                 onClick={() => setMobileFiltersOpen(false)}
-                className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95"
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95"
                 style={{ background: "#1A1A2E", color: "#FFF200" }}
               >
-                Ver {filtered.length} productos
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.5"
+                >
+                  <line x1="4" y1="6" x2="20" y2="6" />
+                  <line x1="8" y1="12" x2="16" y2="12" />
+                  <line x1="11" y1="18" x2="13" y2="18" />
+                </svg>
+                Aplicar filtros
               </button>
             </div>
           </div>

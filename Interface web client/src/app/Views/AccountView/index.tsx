@@ -26,6 +26,7 @@ import {
   Check,
   RotateCcw,
   Truck,
+  Navigation,
   Phone,
   Pencil,
   Copy,
@@ -47,7 +48,7 @@ import {
 } from "lucide-react";
 import type { CartItem, Order, Product } from "../../types";
 import type { AppNotification } from "../../../hooks/useNotifications";
-import { ordersService } from "../../../services/orders.service";
+import { ordersService, type OrderLiveTracking } from "../../../services/orders.service";
 import { catalogService } from "../../../services/catalog.service";
 import {
   customerAuthService,
@@ -1050,6 +1051,7 @@ export function UserAdminView({
   const [section, setSection] = useState<AccountSection>(initialSection);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
   const [trackingOrderId, setTrackingOrderId] = useState<string>("");
+  const [selectedTracking, setSelectedTracking] = useState<OrderLiveTracking | null>(null);
   const [favorites, setFavorites] = useState<Product[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
   const [lists, setLists] = useState<
@@ -1241,6 +1243,26 @@ export function UserAdminView({
       setTrackingOrderId((prev) => prev || apiOrders[0].id);
     }
   }, [apiOrders]);
+
+  // Repartidor asignado al pedido que se está viendo (para el detalle).
+  useEffect(() => {
+    if (!selectedOrderId) {
+      setSelectedTracking(null);
+      return;
+    }
+    let cancelled = false;
+    ordersService
+      .liveTracking(selectedOrderId)
+      .then((d) => {
+        if (!cancelled) setSelectedTracking(d);
+      })
+      .catch(() => {
+        if (!cancelled) setSelectedTracking(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedOrderId]);
 
   const unreadNotifs = unreadNotifCount;
 
@@ -1614,6 +1636,15 @@ export function UserAdminView({
 
     const timelineSteps = buildTimeline(order.status);
 
+    // Repartidor y ruta del pedido seleccionado.
+    const driver = selectedTracking?.driver ?? null;
+    const deliveryStatus = selectedTracking?.deliveryStatus ?? null;
+    const onTheWay =
+      order.status === "en camino" ||
+      deliveryStatus === "PICKED_UP" ||
+      deliveryStatus === "IN_DELIVERY";
+    const canOpenMap = onTheWay && Boolean(onOpenTracking);
+
     return (
       <div>
         <button
@@ -1781,6 +1812,41 @@ export function UserAdminView({
                 <PaymentMethodIcon method={order.paymentMethod} />
                 <span className="capitalize">{order.paymentMethod}</span>
               </p>
+
+              {driver && (
+                <div className="mt-3 pt-3 border-t border-border flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#FFF200] shrink-0">
+                    <Truck className="w-5 h-5" style={{ color: "#1A1A2E" }} />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-bold text-foreground truncate">
+                      {driver.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {[driver.vehicleType, driver.vehiclePlate]
+                        .filter(Boolean)
+                        .join(" · ") || "Repartidor"}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {onTheWay && !driver && (
+                <p className="text-[11px] text-muted-foreground mt-3 pt-3 border-t border-border">
+                  Asignando repartidor…
+                </p>
+              )}
+
+              {canOpenMap && (
+                <button
+                  onClick={() => onOpenTracking?.(order.id)}
+                  className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-opacity hover:opacity-90"
+                  style={{ background: "#1A1A2E", color: "#FFF200" }}
+                >
+                  <Navigation className="w-4 h-4" />
+                  Ver mapa en vivo
+                </button>
+              )}
             </AcctCard>
           </div>
         </div>

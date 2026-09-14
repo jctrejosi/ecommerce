@@ -1953,12 +1953,22 @@ export class CatalogService {
       .where(eq(productCategories.productId, productId));
     const categoryIds = catRows.map((r) => Number(r.categoryId));
 
+    // El tipo de producto (p. ej. "Lácteos", "Despensa") es el agrupamiento
+    // fiable; las categorías de este catálogo están muy mezcladas, así que se
+    // usan solo como relleno.
+    const typeRows = await this.drizzleService.db
+      .select({ productTypeId: productTypeAssignments.productTypeId })
+      .from(productTypeAssignments)
+      .where(eq(productTypeAssignments.productId, productId));
+    const typeIds = typeRows.map((r) => Number(r.productTypeId));
+
     const [prod] = await this.drizzleService.db
-      .select({ brandId: products.brandId })
+      .select({ brandId: products.brandId, name: products.name })
       .from(products)
       .where(eq(products.id, BigInt(productId)))
       .limit(1);
     const brandId = prod?.brandId ? Number(prod.brandId) : null;
+    const originalName = prod?.name ?? '';
 
     const rows = await this.drizzleService.db
       .select({
@@ -1974,10 +1984,13 @@ export class CatalogService {
         image: media.path,
         categoryId: categories.id,
         categoryName: categories.name,
+        productTypeId: productTypeAssignments.productTypeId,
         productTypeCode: productTypes.code,
         productTypeName: productTypes.name,
         plu: products.plu,
         barcode: productVariants.barcode,
+        // Relevancia por similitud de nombre (pg_trgm).
+        score: sql<number>`similarity(${products.name}, ${originalName})`,
       })
       .from(products)
       .innerJoin(productVariants, eq(productVariants.productId, products.id))
@@ -2005,6 +2018,9 @@ export class CatalogService {
           isNull(productVariants.deletedAt),
           ne(products.id, BigInt(productId)),
           or(
+            typeIds.length
+              ? inArray(productTypeAssignments.productTypeId, typeIds)
+              : undefined,
             categoryIds.length
               ? inArray(productCategories.categoryId, categoryIds)
               : undefined,
@@ -2013,41 +2029,70 @@ export class CatalogService {
         ),
       )
       .orderBy(asc(products.name))
-      .limit(Math.max(limit * 2, 12));
+      .limit(200);
 
-    const unique = new Map<number, CatalogProductResponse>();
+    // Prioridad: mismo tipo de producto (0) > misma categoría (1) > misma
+    // marca (2). Dentro de cada nivel, más parecido el nombre, primero.
+    const typeSet = new Set(typeIds);
+    const catSet = new Set(categoryIds);
+    const unique = new Map<
+      number,
+      { priority: number; score: number; product: CatalogProductResponse }
+    >();
     for (const row of rows) {
       const id = Number(row.id);
-      if (unique.has(id)) continue;
+      const score = Number(row.score ?? 0);
+      const existing = unique.get(id);
+      if (existing) {
+        if (score > existing.score) existing.score = score;
+        continue;
+      }
+      const priority =
+        row.productTypeId != null && typeSet.has(Number(row.productTypeId))
+          ? 0
+          : row.categoryId != null && catSet.has(Number(row.categoryId))
+            ? 1
+            : 2;
       unique.set(id, {
-        id,
-        externalId: row.externalId,
-        slug: row.slug,
-        name: row.name,
-        description: row.description,
-        price: Number(row.price ?? 0),
-        ...(row.originalPrice
-          ? { originalPrice: Number(row.originalPrice) }
-          : {}),
-        image: row.image,
-        images: row.image ? [row.image] : [],
-        category: row.categoryName ?? '',
-        categoryId: row.categoryId ? Number(row.categoryId) : 0,
-        brandId: row.brandId ? Number(row.brandId) : null,
-        brandName: row.brandName ?? null,
-        plu: row.plu ?? null,
-        barcode: row.barcode ?? null,
-        productTypeCode: row.productTypeCode,
-        productTypeName: row.productTypeName,
-        isActive: true,
-        isFeatured: false,
-        isPublic: true,
-        stock: 0,
+        priority,
+        score,
+        product: {
+          id,
+          externalId: row.externalId,
+          slug: row.slug,
+          name: row.name,
+          description: row.description,
+          price: Number(row.price ?? 0),
+          ...(row.originalPrice
+            ? { originalPrice: Number(row.originalPrice) }
+            : {}),
+          image: row.image,
+          images: row.image ? [row.image] : [],
+          category: row.categoryName ?? '',
+          categoryId: row.categoryId ? Number(row.categoryId) : 0,
+          brandId: row.brandId ? Number(row.brandId) : null,
+          brandName: row.brandName ?? null,
+          plu: row.plu ?? null,
+          barcode: row.barcode ?? null,
+          productTypeCode: row.productTypeCode,
+          productTypeName: row.productTypeName,
+          isActive: true,
+          isFeatured: false,
+          isPublic: true,
+          stock: 0,
+        },
       });
-      if (unique.size >= limit) break;
     }
 
-    return Array.from(unique.values());
+    return Array.from(unique.values())
+      .sort(
+        (a, b) =>
+          a.priority - b.priority ||
+          b.score - a.score ||
+          a.product.name.localeCompare(b.product.name),
+      )
+      .slice(0, limit)
+      .map((entry) => entry.product);
   }
 
   async exportProducts(res: Response) {

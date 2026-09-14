@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ChevronLeft, ChevronRight, X, Search } from "lucide-react";
 import { productTypeIcon } from "../productTypeIcons";
@@ -59,35 +59,96 @@ export function QuickCategoriesSection({
 }: QuickCategoriesSectionProps) {
   const [expanded, setExpanded] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [hasOverflow, setHasOverflow] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // Carousel móvil: avanza UN ítem a la vez (pausa al hacer hover).
-  // En escritorio (lg+) se muestra una grilla, sin carousel.
   const pausedRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+
+  const GAP = 16; // gap-4 entre ítems
+
+  // Ancho de una "copia" completa de la lista = distancia entre un ítem y su
+  // duplicado. Ese periodo es el que se resta/suma para el loop continuo sin
+  // que se note el salto (el contenido duplicado es idéntico).
+  const measureSetWidth = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return 0;
+    const items = el.querySelectorAll<HTMLElement>("[data-carousel-item]");
+    const n = productTypes.length;
+    if (n > 0 && items.length >= n * 2) {
+      return items[n].offsetLeft - items[0].offsetLeft;
+    }
+    return 0;
+  }, [productTypes.length]);
+
+  // Desvanecido por posición: los ítems plenamente visibles quedan opacos y
+  // los que entran/salen (recortados por el borde) se van transparentando.
+  const applyEdgeFade = useCallback(() => {
+    rafRef.current = null;
+    const el = scrollRef.current;
+    if (!el) return;
+    const cont = el.getBoundingClientRect();
+    el.querySelectorAll<HTMLElement>("[data-carousel-item]").forEach((item) => {
+      const r = item.getBoundingClientRect();
+      const visible = Math.min(r.right, cont.right) - Math.max(r.left, cont.left);
+      const fraction =
+        r.width > 0 ? Math.max(0, Math.min(1, visible / r.width)) : 1;
+      item.style.opacity = String(0.15 + 0.85 * fraction);
+    });
+  }, []);
+
+  const scheduleEdgeFade = useCallback(() => {
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(applyEdgeFade);
+  }, [applyEdgeFade]);
+
+  // Avanza exactamente un ítem con scroll suave y mantiene el loop continuo.
+  const step = useCallback(
+    (dir: 1 | -1) => {
+      const el = scrollRef.current;
+      if (!el) return;
+      const first = el.querySelector<HTMLElement>("[data-carousel-item]");
+      const pitch = (first?.offsetWidth ?? 120) + GAP;
+      const overflow = el.scrollWidth - el.clientWidth > 8;
+      const setWidth = measureSetWidth();
+      // Solo hace wrap si hay una copia completa de margen (evita saltos
+      // raros cuando la lista es tan corta que casi no desborda).
+      if (overflow && setWidth >= el.clientWidth + GAP) {
+        // Salto del periodo (invisible, el contenido es idéntico).
+        if (dir === 1 && el.scrollLeft >= setWidth) {
+          el.scrollLeft -= setWidth;
+        } else if (dir === -1 && el.scrollLeft <= 1) {
+          el.scrollLeft += setWidth;
+        }
+      }
+      el.scrollBy({ left: dir * pitch, behavior: "smooth" });
+    },
+    [measureSetWidth],
+  );
+
+  // Detecta si hay desbordamiento (para mostrar las flechas) y aplica el fade
+  // inicial, también al redimensionar.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const update = () => {
+      setHasOverflow(el.scrollWidth - el.clientWidth > 8);
+      scheduleEdgeFade();
+    };
+    update();
+    window.addEventListener("resize", update);
+    return () => window.removeEventListener("resize", update);
+  }, [productTypes.length, scheduleEdgeFade]);
+
+  // Auto-avance: un ítem a la vez. Se pausa al hacer hover/tocar.
   useEffect(() => {
     const el = scrollRef.current;
     if (!el || productTypes.length === 0 || expanded) return;
     if (window.matchMedia("(min-width: 1024px)").matches) return;
-    const step = () => {
-      if (pausedRef.current || !el) return;
-      const item = el.querySelector(
-        "[data-carousel-item]",
-      ) as HTMLElement | null;
-      const gap = 16; // gap-4
-      const w = (item?.offsetWidth ?? 120) + gap;
-      if (el.scrollLeft >= el.scrollWidth / 2 - w) {
-        el.scrollLeft = 0; // loop infinito
-      } else {
-        el.scrollLeft += w;
-      }
-    };
-    const id = setInterval(step, 2500);
+    const id = setInterval(() => {
+      if (!pausedRef.current) step(1);
+    }, 2500);
     return () => clearInterval(id);
-  }, [productTypes.length, expanded]);
-
-  const scrollBy = (dir: number) => {
-    scrollRef.current?.scrollBy({ left: dir * 300, behavior: "smooth" });
-  };
+  }, [productTypes.length, expanded, step]);
 
   if (productTypes.length === 0) {
     return (
@@ -120,28 +181,28 @@ export function QuickCategoriesSection({
 
         {/* Móvil / tablet / escritorio pequeño: carousel que avanza de uno en uno */}
         <div
-          className="relative group lg:hidden"
+          className="group lg:hidden flex items-center gap-1"
           onMouseEnter={() => (pausedRef.current = true)}
           onMouseLeave={() => (pausedRef.current = false)}
+          onTouchStart={() => (pausedRef.current = true)}
+          onTouchEnd={() => (pausedRef.current = false)}
         >
-          <button
-            onClick={() => scrollBy(-1)}
-            className="absolute left-0 top-1/2 -translate-y-1/2 -translate-x-2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted cursor-pointer"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => scrollBy(1)}
-            className="absolute right-0 top-1/2 -translate-y-1/2 translate-x-2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-muted cursor-pointer"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+          {hasOverflow && (
+            <button
+              onClick={() => step(-1)}
+              aria-label="Anterior"
+              className="shrink-0 w-8 h-8 rounded-full bg-white shadow-md border border-border flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+          )}
           <div
             ref={scrollRef}
-            className="flex gap-4 overflow-x-auto pb-2"
+            onScroll={scheduleEdgeFade}
+            className="flex-1 min-w-0 flex gap-4 overflow-x-auto pb-2"
             style={{ scrollbarWidth: "none" }}
           >
-            {/* Duplicados para el loop infinito */}
+            {/* Duplicados para el loop continuo */}
             {[...productTypes, ...productTypes].map((pt, i) => (
               <ProductTypeButton
                 key={`${pt.id}-${i >= productTypes.length ? "b" : "a"}`}
@@ -151,6 +212,15 @@ export function QuickCategoriesSection({
               />
             ))}
           </div>
+          {hasOverflow && (
+            <button
+              onClick={() => step(1)}
+              aria-label="Siguiente"
+              className="shrink-0 w-8 h-8 rounded-full bg-white shadow-md border border-border flex items-center justify-center hover:bg-muted transition-colors cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
         {/* Escritorio: filas sin carousel */}

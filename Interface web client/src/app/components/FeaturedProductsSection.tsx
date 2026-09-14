@@ -1,4 +1,5 @@
-import { ChevronRight } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { CartItem, Product } from "../types";
 import { ProductCard } from "../Views/CatalogView/ProductCard";
 import { SkeletonCard } from "../Views/CatalogView/SkeletonCard";
@@ -37,6 +38,36 @@ export function FeaturedProductsSection({
 }: FeaturedProductsSectionProps) {
   const hasTabs = tabs.length > 0;
 
+  const tabsScrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollHints = () => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    const maxScrollLeft = el.scrollWidth - el.clientWidth;
+    setCanScrollLeft(el.scrollLeft > 1);
+    setCanScrollRight(el.scrollLeft < maxScrollLeft - 1);
+  };
+
+  const scrollTabs = (dir: -1 | 1) => {
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    updateScrollHints();
+    const el = tabsScrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", updateScrollHints, { passive: true });
+    window.addEventListener("resize", updateScrollHints);
+    return () => {
+      el.removeEventListener("scroll", updateScrollHints);
+      window.removeEventListener("resize", updateScrollHints);
+    };
+  }, [tabs]);
+
   return (
     <section className="py-10 bg-background">
       <div className="max-w-7xl mx-auto px-4">
@@ -70,24 +101,49 @@ export function FeaturedProductsSection({
           </div>
         ) : (
           <>
-            <div
-              className="flex gap-2 mb-6 overflow-x-auto pb-1"
-              style={{ scrollbarWidth: "none" }}
-            >
-              {tabs.map((tab) => (
+            <div className="relative mb-6">
+              <div
+                ref={tabsScrollRef}
+                className="flex gap-2 overflow-x-auto pb-1"
+                style={{ scrollbarWidth: "none" }}
+              >
+                {tabs.map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => onTabChange(tab.slug)}
+                    className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer"
+                    style={
+                      activeTab === tab.slug
+                        ? { background: "#FFF200", color: "#1A1A2E" }
+                        : { background: "#F4F4F6", color: "#6B7280" }
+                    }
+                  >
+                    {tab.name}
+                  </button>
+                ))}
+              </div>
+
+              {canScrollLeft && (
                 <button
-                  key={tab.id}
-                  onClick={() => onTabChange(tab.slug)}
-                  className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer"
-                  style={
-                    activeTab === tab.slug
-                      ? { background: "#FFF200", color: "#1A1A2E" }
-                      : { background: "#F4F4F6", color: "#6B7280" }
-                  }
+                  type="button"
+                  aria-label="Desplazar filtros a la izquierda"
+                  onClick={() => scrollTabs(-1)}
+                  className="md:hidden absolute left-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-border flex items-center justify-center cursor-pointer"
                 >
-                  {tab.name}
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-              ))}
+              )}
+
+              {canScrollRight && (
+                <button
+                  type="button"
+                  aria-label="Desplazar filtros a la derecha"
+                  onClick={() => scrollTabs(1)}
+                  className="md:hidden absolute right-0 top-1/2 -translate-y-1/2 z-10 w-8 h-8 rounded-full bg-white shadow-md border border-border flex items-center justify-center cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              )}
             </div>
 
             {loading ? (
