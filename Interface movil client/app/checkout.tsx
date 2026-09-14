@@ -14,19 +14,24 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ordersApi, type PaymentMethod } from "../src/api/orders";
 import { useAuthStore } from "../src/stores/auth";
 import { useCartStore } from "../src/stores/cart";
-import { colors, fmtCOP, radius, spacing } from "../src/theme";
+import { colors, fmtCOP, fonts, radii, spacing, text } from "../src/theme";
 
 const SHIPPING_TYPES = [
-  { key: "standard", label: "Estándar (1-2 h)" },
-  { key: "express", label: "Express (60 min)" },
+  { key: "standard", label: "Envío estándar", desc: "2-3 horas hábiles" },
+  { key: "express", label: "Envío express", desc: "45-60 minutos" },
 ] as const;
 
-const PAYMENT_METHODS: { key: PaymentMethod; label: string; icon: string }[] = [
-  { key: "efectivo", label: "Efectivo contra entrega", icon: "cash-outline" },
-  { key: "nequi", label: "Nequi", icon: "phone-portrait-outline" },
-  { key: "pse", label: "PSE", icon: "globe-outline" },
-  { key: "tarjeta", label: "Tarjeta", icon: "card-outline" },
-  { key: "breb", label: "Botón Bancolombia (Breb)", icon: "apps-outline" },
+const PAYMENT_METHODS: {
+  key: PaymentMethod;
+  label: string;
+  icon: string;
+  desc: string;
+}[] = [
+  { key: "efectivo", label: "Efectivo contra entrega", icon: "cash-outline", desc: "Paga al recibir tu pedido" },
+  { key: "nequi", label: "Nequi", icon: "phone-portrait-outline", desc: "Transferencia inmediata" },
+  { key: "pse", label: "PSE", icon: "globe-outline", desc: "Débito bancario en línea" },
+  { key: "tarjeta", label: "Tarjeta débito / crédito", icon: "card-outline", desc: "Visa, Mastercard, Amex" },
+  { key: "breb", label: "Bre-B (Transferencia entre bancos)", icon: "apps-outline", desc: "Transferencia entre bancos" },
 ];
 
 export default function CheckoutScreen() {
@@ -105,9 +110,9 @@ export default function CheckoutScreen() {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
         <View style={styles.doneWrap}>
-          <Ionicons name="checkmark-circle" size={72} color={colors.success} />
+          <Ionicons name="checkmark-circle" size={64} color={colors.success} />
           <Text style={styles.doneTitle}>¡Pedido registrado!</Text>
-          <Text style={styles.doneCode}>Código: {done}</Text>
+          <Text style={styles.doneCode}>Nº de pedido: {done}</Text>
           <Text style={styles.doneText}>
             Te notificaremos cuando esté listo. Puedes verlo en Mi cuenta → Pedidos.
           </Text>
@@ -129,69 +134,108 @@ export default function CheckoutScreen() {
         <View style={{ width: 20 }} />
       </View>
 
-      <ScrollView contentContainerStyle={{ padding: spacing.lg, gap: spacing.lg }}>
+      <ScrollView contentContainerStyle={styles.content}>
         {/* Dirección */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Datos de entrega</Text>
-          <TextInput style={styles.input} placeholder="Nombre de quien recibe" placeholderTextColor={colors.muted} value={name} onChangeText={setName} />
-          <TextInput style={styles.input} placeholder="Teléfono (celular, 10 dígitos)" placeholderTextColor={colors.muted} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
-          <TextInput style={styles.input} placeholder="Correo" placeholderTextColor={colors.muted} autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
-          <TextInput style={styles.input} placeholder="Dirección" placeholderTextColor={colors.muted} value={address} onChangeText={setAddress} />
-          <TextInput style={styles.input} placeholder="Ciudad" placeholderTextColor={colors.muted} value={city} onChangeText={setCity} />
-          <TextInput style={styles.input} placeholder="Notas (opcional)" placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes} />
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Dirección de entrega</Text>
+          <View style={styles.card}>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Nombre completo</Text>
+              <TextInput style={styles.input} placeholder="Carlos Ríos" placeholderTextColor={colors.mutedForeground} value={name} onChangeText={setName} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Celular</Text>
+              <TextInput style={styles.input} placeholder="300 123 4567" placeholderTextColor={colors.mutedForeground} keyboardType="phone-pad" value={phone} onChangeText={setPhone} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Email</Text>
+              <TextInput style={styles.input} placeholder="correo@ejemplo.com" placeholderTextColor={colors.mutedForeground} autoCapitalize="none" keyboardType="email-address" value={email} onChangeText={setEmail} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Dirección</Text>
+              <TextInput style={styles.input} placeholder="Cra 23 #45-67, Barrio San José" placeholderTextColor={colors.mutedForeground} value={address} onChangeText={setAddress} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Ciudad</Text>
+              <TextInput style={styles.input} placeholder="Manizales" placeholderTextColor={colors.mutedForeground} value={city} onChangeText={setCity} />
+            </View>
+            <View style={styles.field}>
+              <Text style={styles.fieldLabel}>Indicaciones adicionales (opcional)</Text>
+              <TextInput style={styles.input} placeholder="Apto 301, timbre no funciona..." placeholderTextColor={colors.mutedForeground} value={notes} onChangeText={setNotes} />
+            </View>
+          </View>
         </View>
 
         {/* Envío */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Tipo de envío</Text>
-          {SHIPPING_TYPES.map((t) => (
-            <Pressable
-              key={t.key}
-              style={[styles.option, shippingType === t.key && styles.optionActive]}
-              onPress={() => setShippingType(t.key)}
-            >
-              <Text style={styles.optionLabel}>{t.label}</Text>
-              <Text style={styles.optionValue}>
-                {t.key === "express" ? fmtCOP(9900) : fmtCOP(4900)}
-              </Text>
-            </Pressable>
-          ))}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Tipo de envío</Text>
+          <View style={styles.card}>
+            {SHIPPING_TYPES.map((t) => (
+              <Pressable
+                key={t.key}
+                style={[styles.option, shippingType === t.key && styles.optionActive]}
+                onPress={() => setShippingType(t.key)}
+              >
+                <View style={[styles.radio, shippingType === t.key && styles.radioActive]}>
+                  {shippingType === t.key && <View style={styles.radioDot} />}
+                </View>
+                <View style={styles.optionInfo}>
+                  <Text style={styles.optionLabel}>{t.label}</Text>
+                  <Text style={styles.optionDesc}>{t.desc}</Text>
+                </View>
+                <Text style={styles.optionValue}>
+                  {t.key === "express" ? fmtCOP(9900) : fmtCOP(4900)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {/* Pago */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Método de pago</Text>
-          {PAYMENT_METHODS.map((m) => (
-            <Pressable
-              key={m.key}
-              style={[styles.option, paymentMethod === m.key && styles.optionActive]}
-              onPress={() => setPaymentMethod(m.key)}
-            >
-              <Ionicons
-                name={m.icon as never}
-                size={18}
-                color={colors.foreground}
-              />
-              <Text style={styles.optionLabel}>{m.label}</Text>
-            </Pressable>
-          ))}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Método de pago</Text>
+          <View style={styles.card}>
+            {PAYMENT_METHODS.map((m) => (
+              <Pressable
+                key={m.key}
+                style={[styles.option, paymentMethod === m.key && styles.optionActive]}
+                onPress={() => setPaymentMethod(m.key)}
+              >
+                <View style={[styles.radio, paymentMethod === m.key && styles.radioActive]}>
+                  {paymentMethod === m.key && <View style={styles.radioDot} />}
+                </View>
+                <Ionicons
+                  name={m.icon as never}
+                  size={20}
+                  color={colors.mutedForeground}
+                />
+                <View style={styles.optionInfo}>
+                  <Text style={styles.optionLabel}>{m.label}</Text>
+                  <Text style={styles.optionDesc}>{m.desc}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
         </View>
 
         {error && <Text style={styles.error}>{error}</Text>}
 
-        {/* Total */}
-        <View style={styles.card}>
-          <View style={styles.sumRow}>
-            <Text style={styles.sumLabel}>Subtotal</Text>
-            <Text style={styles.sumValue}>{fmtCOP(subtotal)}</Text>
-          </View>
-          <View style={styles.sumRow}>
-            <Text style={styles.sumLabel}>Domicilio</Text>
-            <Text style={styles.sumValue}>{fmtCOP(shippingCost)}</Text>
-          </View>
-          <View style={[styles.sumRow, styles.sumTotal]}>
-            <Text style={styles.sumTotalLabel}>Total</Text>
-            <Text style={styles.sumTotalValue}>{fmtCOP(total)}</Text>
+        {/* Resumen */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Resumen del pedido</Text>
+          <View style={styles.card}>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Subtotal</Text>
+              <Text style={styles.sumValue}>{fmtCOP(subtotal)}</Text>
+            </View>
+            <View style={styles.sumRow}>
+              <Text style={styles.sumLabel}>Domicilio</Text>
+              <Text style={styles.sumValue}>{fmtCOP(shippingCost)}</Text>
+            </View>
+            <View style={[styles.sumRow, styles.sumTotal]}>
+              <Text style={styles.sumTotalLabel}>Total</Text>
+              <Text style={styles.sumTotalValue}>{fmtCOP(total)}</Text>
+            </View>
           </View>
         </View>
 
@@ -201,7 +245,7 @@ export default function CheckoutScreen() {
           disabled={sending}
         >
           {sending ? (
-            <ActivityIndicator color={colors.foreground} />
+            <ActivityIndicator color={colors.primaryForeground} />
           ) : (
             <Text style={styles.primaryBtnText}>Confirmar pedido</Text>
           )}
@@ -212,7 +256,7 @@ export default function CheckoutScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
+  safe: { flex: 1, backgroundColor: colors.background },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -222,66 +266,137 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
-  headerTitle: { fontSize: 16, fontWeight: "800", color: colors.foreground },
+  headerTitle: {
+    fontSize: text.lg,
+    fontFamily: fonts.displayBlack,
+    color: colors.foreground,
+  },
+  content: { padding: spacing.lg, gap: spacing.lg },
+  section: { gap: spacing.sm },
+  sectionTitle: {
+    fontSize: text.base,
+    fontFamily: fonts.displayBlack,
+    color: colors.foreground,
+  },
   card: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radii.twoXl,
     padding: spacing.lg,
     gap: spacing.md,
+    backgroundColor: colors.card,
   },
-  cardTitle: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: colors.muted,
+  field: { gap: spacing.xs },
+  fieldLabel: {
+    fontSize: text.xs,
+    fontFamily: fonts.sansSemibold,
+    color: colors.mutedForeground,
     textTransform: "uppercase",
   },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.md,
-    paddingVertical: 10,
-    fontSize: 14,
+    borderRadius: radii.xl,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    fontSize: text.sm,
     color: colors.foreground,
-    backgroundColor: "#fff",
+    backgroundColor: colors.white,
   },
   option: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
     gap: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.sm,
+    borderRadius: radii.xl,
     padding: spacing.md,
   },
-  optionActive: { borderColor: colors.accent, backgroundColor: "#FFFBE6" },
-  optionLabel: { fontSize: 14, fontWeight: "600", color: colors.foreground },
-  optionValue: { fontSize: 13, color: colors.muted },
-  error: { color: colors.danger, fontSize: 13, textAlign: "center" },
+  optionActive: {
+    borderColor: colors.primary,
+    borderWidth: 2,
+  },
+  radio: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderColor: colors.mutedForeground,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  radioActive: { borderColor: colors.primary },
+  radioDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: colors.foreground,
+  },
+  optionInfo: { flex: 1, gap: 2 },
+  optionLabel: {
+    fontSize: text.sm,
+    fontFamily: fonts.sansSemibold,
+    color: colors.foreground,
+  },
+  optionDesc: {
+    fontSize: text.xs,
+    fontFamily: fonts.sans,
+    color: colors.mutedForeground,
+  },
+  optionValue: {
+    fontSize: text.sm,
+    fontFamily: fonts.sansBold,
+    color: colors.foreground,
+  },
+  error: {
+    color: colors.accent,
+    fontSize: text.sm,
+    fontFamily: fonts.sansMedium,
+    textAlign: "center",
+  },
   sumRow: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "center",
     paddingVertical: 2,
   },
-  sumLabel: { fontSize: 13, color: colors.muted },
-  sumValue: { fontSize: 13, color: colors.foreground },
+  sumLabel: {
+    fontSize: text.sm,
+    fontFamily: fonts.sans,
+    color: colors.mutedForeground,
+  },
+  sumValue: {
+    fontSize: text.sm,
+    fontFamily: fonts.sansSemibold,
+    color: colors.foreground,
+  },
   sumTotal: {
     borderTopWidth: 1,
     borderTopColor: colors.border,
     marginTop: spacing.sm,
     paddingTop: spacing.md,
   },
-  sumTotalLabel: { fontSize: 15, fontWeight: "800", color: colors.foreground },
-  sumTotalValue: { fontSize: 18, fontWeight: "900", color: colors.foreground },
+  sumTotalLabel: {
+    fontSize: text.base,
+    fontFamily: fonts.displayBlack,
+    color: colors.foreground,
+  },
+  sumTotalValue: {
+    fontSize: text.twoXl,
+    fontFamily: fonts.displayBlack,
+    color: colors.foreground,
+  },
   primaryBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    borderRadius: radii.xl,
     paddingVertical: 14,
     alignItems: "center",
   },
-  primaryBtnText: { fontWeight: "800", fontSize: 15, color: colors.foreground },
+  primaryBtnText: {
+    fontSize: 14,
+    fontFamily: fonts.sansBold,
+    color: colors.primaryForeground,
+  },
   doneWrap: {
     flex: 1,
     alignItems: "center",
@@ -289,11 +404,21 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     padding: spacing.xl,
   },
-  doneTitle: { fontSize: 20, fontWeight: "900", color: colors.foreground },
-  doneCode: { fontSize: 14, fontWeight: "700", color: colors.muted },
+  doneTitle: {
+    fontSize: text.twoXl,
+    fontFamily: fonts.displayBlack,
+    color: colors.foreground,
+    textAlign: "center",
+  },
+  doneCode: {
+    fontSize: text.sm,
+    fontFamily: fonts.sansSemibold,
+    color: colors.mutedForeground,
+  },
   doneText: {
-    fontSize: 13,
-    color: colors.muted,
+    fontSize: text.sm,
+    fontFamily: fonts.sans,
+    color: colors.mutedForeground,
     textAlign: "center",
   },
 });

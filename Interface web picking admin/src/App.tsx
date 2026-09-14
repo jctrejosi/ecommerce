@@ -158,45 +158,60 @@ export default function App() {
       )}
 
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-[#0C0C0D]/90 backdrop-blur border-b border-white/8 px-5 pt-5 pb-4">
-        <div className="max-w-6xl mx-auto flex flex-wrap items-center gap-4">
-          <div className="mr-auto flex items-center gap-3">
-            <img src={headerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
-            <div>
-              <h1 className="text-2xl font-extrabold tracking-tight">Picking <span className="text-amber-400">Admin</span></h1>
-              <p className="text-white/40 text-xs font-medium mt-0.5">Estanterías y ubicaciones por sucursal</p>
+      <header className="sticky top-0 z-40 bg-[#0C0C0D]/90 backdrop-blur border-b border-white/8 px-5 pt-4 pb-3">
+        <div className="max-w-6xl mx-auto flex flex-col gap-3">
+          {/* Fila superior: marca + usuario */}
+          <div className="flex items-center gap-4">
+            <div className="mr-auto flex items-center gap-3">
+              <img src={headerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+              <div>
+                <h1 className="text-2xl font-extrabold tracking-tight">Picking <span className="text-amber-400">Admin</span></h1>
+                <p className="text-white/40 text-xs font-medium mt-0.5">Estanterías y ubicaciones por sucursal</p>
+              </div>
             </div>
-          </div>
-          <div className="flex flex-col items-start gap-2 max-w-full">
-            <span className="text-white/40 text-xs font-bold uppercase tracking-wider">Sucursales</span>
-            <div className="flex flex-wrap items-center gap-2">
-              {branches.map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => setBranchId(b.id)}
-                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-                    branchId === b.id
-                      ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
-                      : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
-                  }`}
-                >
-                  {b.name}
-                </button>
-              ))}
+
+            {/* Usuario y salir */}
+            <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-full pl-1 pr-3.5 py-1">
+                <span className="w-8 h-8 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold text-sm">
+                  {(authUser?.fullName ?? authUser?.username ?? '?').charAt(0).toUpperCase()}
+                </span>
+                <div className="leading-tight">
+                  <p className="text-white/90 text-xs font-bold truncate max-w-[160px]">
+                    {authUser?.fullName ?? authUser?.username}
+                  </p>
+                  <p className="text-white/40 text-[10px] font-semibold">Administrador</p>
+                </div>
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-1.5 px-3.5 py-2.5 rounded-full text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M16 17l5-5-5-5M21 12H9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                Salir
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <div className="text-right leading-tight hidden sm:block">
-              <p className="text-white/80 text-xs font-bold">{authUser?.fullName ?? authUser?.username}</p>
-              <p className="text-white/35 text-[10px] font-medium">Administrador</p>
-            </div>
-            <button
-              onClick={handleLogout}
-              className="px-3 py-2 rounded-xl text-xs font-bold bg-white/5 border border-white/10 text-white/60 hover:text-white/90 transition-all"
-            >
-              Salir
-            </button>
+          {/* Fila inferior: selector de sucursales */}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">Sucursales</span>
+            {branches.map((b) => (
+              <button
+                key={b.id}
+                onClick={() => setBranchId(b.id)}
+                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                  branchId === b.id
+                    ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
+                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
+                }`}
+              >
+                {b.name}
+              </button>
+            ))}
           </div>
         </div>
       </header>

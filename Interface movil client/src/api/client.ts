@@ -1,12 +1,19 @@
 import * as SecureStore from "expo-secure-store";
+import Constants from "expo-constants";
 
 /**
  * Cliente HTTP del backend (misma API del web client).
  * Guarda el JWT en SecureStore y refresca el access token una vez ante un 401.
  */
 
+/**
+ * URL de la API. Precedencia: `app.json` → `extra.apiUrl` → `EXPO_PUBLIC_API_URL`
+ * (`.env`) → localhost. Así se puede cambiar sin editar el `.env` (que está bloqueado).
+ */
 export const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
+  (Constants.expoConfig?.extra?.apiUrl as string | undefined) ||
+  process.env.EXPO_PUBLIC_API_URL ||
+  "http://localhost:3000";
 
 const ACCESS_KEY = "mercaldas.accessToken";
 const REFRESH_KEY = "mercaldas.refreshToken";

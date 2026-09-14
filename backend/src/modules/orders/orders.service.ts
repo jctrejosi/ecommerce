@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -46,6 +47,9 @@ import { OrdersGateway } from './orders.gateway';
 const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
 /** La vista pública del cliente puede refrescar seguido: cachear la ruta. */
 const LIVE_ROUTE_TTL_MS = 30_000;
+
+/** Estados de la entrega en los que el chat por pedido está habilitado. */
+const CHAT_ACTIVE_STATUSES = ['PICKED_UP', 'IN_DELIVERY'] as const;
 
 export interface LiveRoute {
   polyline: string;
@@ -618,6 +622,7 @@ export class OrdersService {
     }
 
     const order = await this.resolveOrderByCode(referenceCode);
+    await this.assertChatActive(order.id);
 
     const [row] = await this.db
       .insert(orderChatMessages)
@@ -638,6 +643,31 @@ export class OrdersService {
       body: row.body,
       createdAt: row.createdAt,
     };
+  }
+
+  /**
+   * El chat solo se puede escribir mientras la entrega está en camino.
+   * La lectura sigue disponible después (historial del pedido).
+   */
+  private async assertChatActive(orderId: bigint) {
+    const [assignment] = await this.db
+      .select({ status: deliveryAssignments.status })
+      .from(deliveryAssignments)
+      .innerJoin(shipments, eq(shipments.id, deliveryAssignments.shipmentId))
+      .where(eq(shipments.orderId, Number(orderId)))
+      .orderBy(desc(deliveryAssignments.id))
+      .limit(1);
+
+    if (
+      !assignment ||
+      !CHAT_ACTIVE_STATUSES.includes(
+        assignment.status as (typeof CHAT_ACTIVE_STATUSES)[number],
+      )
+    ) {
+      throw new ConflictException(
+        'El chat está disponible solo mientras el pedido está en camino.',
+      );
+    }
   }
 
   /**

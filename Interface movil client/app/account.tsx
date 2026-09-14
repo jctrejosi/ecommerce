@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,7 +19,7 @@ import {
 import { ordersApi } from "../src/api/orders";
 import type { Order } from "../src/api/types";
 import { useAuthStore } from "../src/stores/auth";
-import { colors, fmtCOP, radius, spacing } from "../src/theme";
+import { colors, fmtCOP, fonts, radii, spacing, text } from "../src/theme";
 import Constants from "expo-constants";
 
 const GOOGLE_CLIENT_ID =
@@ -35,6 +36,14 @@ const STATUS_LABEL: Record<Order["status"], string> = {
   "en camino": "En camino",
   entregado: "Entregado",
   cancelado: "Cancelado",
+};
+
+const STATUS_BADGE: Record<Order["status"], { bg: string; fg: string }> = {
+  pendiente: { bg: colors.accent, fg: "#FFFFFF" },
+  preparando: { bg: colors.accent, fg: "#FFFFFF" },
+  "en camino": { bg: colors.accent, fg: "#FFFFFF" },
+  entregado: { bg: colors.muted, fg: colors.mutedForeground },
+  cancelado: { bg: colors.muted, fg: colors.mutedForeground },
 };
 
 function GoogleIcon() {
@@ -61,11 +70,21 @@ export default function AccountScreen() {
   const [acceptsTerms, setAcceptsTerms] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const orders = useQuery({
     queryKey: ["orders"],
     queryFn: () => ordersApi.getOrders(),
     enabled: !!customer,
+  });
+
+  const expandedOrder =
+    orders.data?.find((o) => o.id === expandedOrderId) ?? null;
+
+  const tracking = useQuery({
+    queryKey: ["order-tracking", expandedOrderId],
+    queryFn: () => ordersApi.liveTracking(expandedOrderId as string),
+    enabled: expandedOrder !== null && expandedOrder.status === "en camino",
   });
 
   useEffect(() => {
@@ -138,6 +157,20 @@ export default function AccountScreen() {
     }
   };
 
+  const openMap = (order: Order) => {
+    const location = tracking.data?.driver?.location ?? null;
+    const address = tracking.data?.destination?.address ?? order.address;
+    if (location && typeof location.lat === "number" && typeof location.lng === "number") {
+      void Linking.openURL(
+        `https://www.google.com/maps?q=${location.lat},${location.lng}`,
+      );
+    } else {
+      void Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`,
+      );
+    }
+  };
+
   if (!customer) {
     return (
       <SafeAreaView style={styles.safe} edges={["top"]}>
@@ -159,21 +192,21 @@ export default function AccountScreen() {
               <TextInput
                 style={styles.input}
                 placeholder="Nombre"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.mutedForeground}
                 value={firstName}
                 onChangeText={setFirstName}
               />
               <TextInput
                 style={styles.input}
                 placeholder="Apellido"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.mutedForeground}
                 value={lastName}
                 onChangeText={setLastName}
               />
               <TextInput
                 style={styles.input}
                 placeholder="Teléfono (opcional)"
-                placeholderTextColor={colors.muted}
+                placeholderTextColor={colors.mutedForeground}
                 keyboardType="phone-pad"
                 value={phone}
                 onChangeText={setPhone}
@@ -183,7 +216,7 @@ export default function AccountScreen() {
           <TextInput
             style={styles.input}
             placeholder="Correo"
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.mutedForeground}
             autoCapitalize="none"
             keyboardType="email-address"
             value={email}
@@ -192,7 +225,7 @@ export default function AccountScreen() {
           <TextInput
             style={styles.input}
             placeholder="Contraseña"
-            placeholderTextColor={colors.muted}
+            placeholderTextColor={colors.mutedForeground}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
@@ -222,7 +255,7 @@ export default function AccountScreen() {
             disabled={busy}
           >
             {busy ? (
-              <ActivityIndicator color={colors.foreground} />
+              <ActivityIndicator color={colors.primaryForeground} />
             ) : (
               <Text style={styles.primaryBtnText}>
                 {mode === "login" ? "Entrar" : "Registrarme"}
@@ -270,7 +303,7 @@ export default function AccountScreen() {
         {/* Perfil */}
         <View style={styles.profile}>
           <View style={styles.avatar}>
-            <Ionicons name="person" size={28} color={colors.foreground} />
+            <Ionicons name="person" size={28} color={colors.primaryForeground} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>
@@ -279,7 +312,7 @@ export default function AccountScreen() {
             <Text style={styles.profileEmail}>{customer.email}</Text>
           </View>
           <Pressable onPress={() => void logout()} hitSlop={8}>
-            <Ionicons name="log-out-outline" size={22} color={colors.muted} />
+            <Ionicons name="log-out-outline" size={22} color={colors.mutedForeground} />
           </Pressable>
         </View>
 
@@ -288,19 +321,109 @@ export default function AccountScreen() {
         {orders.isLoading ? (
           <ActivityIndicator style={{ marginTop: 32 }} color={colors.foreground} />
         ) : orders.data && orders.data.length > 0 ? (
-          orders.data.map((o) => (
-            <View key={o.id} style={styles.orderCard}>
-              <View style={styles.orderHead}>
-                <Text style={styles.orderId}>{o.id}</Text>
-                <Text style={styles.orderStatus}>{STATUS_LABEL[o.status]}</Text>
-              </View>
-              <Text style={styles.orderDate}>{o.date}</Text>
-              <Text style={styles.orderItems} numberOfLines={2}>
-                {o.items.map((i) => `${i.quantity}× ${i.name}`).join(" · ")}
-              </Text>
-              <Text style={styles.orderTotal}>{fmtCOP(o.total)}</Text>
-            </View>
-          ))
+          orders.data.map((o) => {
+            const isExpanded = o.id === expandedOrderId;
+            const isOnTheWay = o.status === "en camino";
+            const badge = STATUS_BADGE[o.status];
+            const driver = tracking.data?.driver ?? null;
+            const vehicle = driver
+              ? [driver.vehicleType, driver.vehiclePlate].filter(Boolean).join(" · ")
+              : "";
+            const destination =
+              tracking.data?.destination?.address ?? o.address;
+
+            return (
+              <Pressable
+                key={o.id}
+                style={styles.orderCard}
+                onPress={() => setExpandedOrderId(isExpanded ? null : o.id)}
+              >
+                <View style={styles.orderHead}>
+                  <Text style={styles.orderId}>{o.id}</Text>
+                  <View style={[styles.badge, { backgroundColor: badge.bg }]}>
+                    <Text style={[styles.badgeText, { color: badge.fg }]}>
+                      {STATUS_LABEL[o.status]}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.orderDate}>{o.date}</Text>
+                <Text style={styles.orderItems} numberOfLines={2}>
+                  {o.items.map((i) => `${i.quantity}× ${i.name}`).join(" · ")}
+                </Text>
+                <View style={styles.orderFoot}>
+                  <Text style={styles.orderTotal}>{fmtCOP(o.total)}</Text>
+                  <Ionicons
+                    name={isExpanded ? "chevron-up" : "chevron-down"}
+                    size={16}
+                    color={colors.mutedForeground}
+                  />
+                </View>
+
+                {isExpanded && (
+                  <View style={styles.orderDetail}>
+                    <Text style={styles.detailHeading}>Productos</Text>
+                    {o.items.map((i) => (
+                      <View key={i.id} style={styles.detailItemRow}>
+                        <Text style={styles.detailItemName} numberOfLines={1}>
+                          {i.name}
+                        </Text>
+                        <Text style={styles.detailItemQty}>× {i.quantity}</Text>
+                        <Text style={styles.detailItemPrice}>
+                          {fmtCOP(i.price * i.quantity)}
+                        </Text>
+                      </View>
+                    ))}
+
+                    {isOnTheWay ? (
+                      <>
+                        {tracking.isLoading && (
+                          <ActivityIndicator
+                            size="small"
+                            color={colors.foreground}
+                            style={{ alignSelf: "flex-start" }}
+                          />
+                        )}
+                        {driver && (
+                          <View style={styles.detailBlock}>
+                            <Text style={styles.detailHeading}>Lo lleva</Text>
+                            <Text style={styles.detailValue}>
+                              {driver.name}
+                              {vehicle ? ` · ${vehicle}` : ""}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.detailBlock}>
+                          <Text style={styles.detailHeading}>
+                            Dirección de entrega
+                          </Text>
+                          <Text style={styles.detailValue}>{destination}</Text>
+                        </View>
+                        <Pressable
+                          style={styles.mapBtn}
+                          onPress={() => openMap(o)}
+                        >
+                          <Text style={styles.mapBtnText}>Ver mapa</Text>
+                        </Pressable>
+                      </>
+                    ) : (
+                      <View style={styles.detailBlock}>
+                        <Text style={styles.detailHeading}>Dirección</Text>
+                        <Text style={styles.detailValue}>{o.address}</Text>
+                      </View>
+                    )}
+
+                    <View style={styles.detailDivider} />
+                    <View style={styles.detailTotalRow}>
+                      <Text style={styles.detailTotalLabel}>Total</Text>
+                      <Text style={styles.detailTotalValue}>
+                        {fmtCOP(o.total)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+              </Pressable>
+            );
+          })
         ) : (
           <Text style={styles.noOrders}>Aún no tienes pedidos.</Text>
         )}
@@ -310,22 +433,32 @@ export default function AccountScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
+  safe: { flex: 1, backgroundColor: colors.background },
   authWrap: {
     flexGrow: 1,
     justifyContent: "center",
     padding: spacing.xl,
     gap: spacing.md,
   },
-  authTitle: { fontSize: 24, fontWeight: "900", color: colors.foreground },
-  authSubtitle: { fontSize: 13, color: colors.muted, marginBottom: spacing.sm },
+  authTitle: {
+    fontFamily: fonts.displayBlack,
+    fontSize: text.xl,
+    color: colors.foreground,
+  },
+  authSubtitle: {
+    fontFamily: fonts.sans,
+    fontSize: text.sm,
+    color: colors.mutedForeground,
+    marginBottom: spacing.sm,
+  },
   input: {
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radii.xl,
     paddingHorizontal: spacing.lg,
-    paddingVertical: 12,
-    fontSize: 14,
+    paddingVertical: 10,
+    fontFamily: fonts.sans,
+    fontSize: text.sm,
     color: colors.foreground,
   },
   termsRow: {
@@ -333,16 +466,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: spacing.sm,
   },
-  termsText: { fontSize: 13, color: colors.foreground },
-  error: { color: colors.danger, fontSize: 13, textAlign: "center" },
-  hint: { fontSize: 11, color: colors.muted, textAlign: "center" },
+  termsText: { fontFamily: fonts.sans, fontSize: text.xs, color: colors.foreground },
+  error: {
+    fontFamily: fonts.sans,
+    fontSize: text.sm,
+    color: colors.accent,
+    textAlign: "center",
+  },
+  hint: {
+    fontFamily: fonts.sans,
+    fontSize: text.xs,
+    color: colors.mutedForeground,
+    textAlign: "center",
+  },
   primaryBtn: {
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    paddingVertical: 14,
+    backgroundColor: colors.primary,
+    borderRadius: radii.xl,
+    paddingVertical: spacing.md,
     alignItems: "center",
   },
-  primaryBtnText: { fontWeight: "800", fontSize: 15, color: colors.foreground },
+  primaryBtnText: {
+    fontFamily: fonts.sansBold,
+    fontSize: text.sm,
+    color: colors.primaryForeground,
+  },
   dividerRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -350,7 +497,11 @@ const styles = StyleSheet.create({
     marginVertical: spacing.xs,
   },
   divider: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { fontSize: 12, color: colors.muted },
+  dividerText: {
+    fontFamily: fonts.sans,
+    fontSize: text.xs,
+    color: colors.mutedForeground,
+  },
   googleBtn: {
     flexDirection: "row",
     alignItems: "center",
@@ -358,13 +509,13 @@ const styles = StyleSheet.create({
     gap: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingVertical: 12,
-    backgroundColor: "#fff",
+    borderRadius: radii.xl,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.background,
   },
   googleBtnText: {
-    fontSize: 14,
-    fontWeight: "700",
+    fontFamily: fonts.sansSemibold,
+    fontSize: text.sm,
     color: colors.foreground,
   },
   googleG: {
@@ -378,15 +529,15 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   googleGText: {
+    fontFamily: fonts.sansBold,
     fontSize: 15,
-    fontWeight: "900",
     color: "#4285F4",
   },
   switchText: {
     textAlign: "center",
     color: colors.foreground,
-    fontSize: 13,
-    fontWeight: "600",
+    fontFamily: fonts.sansSemibold,
+    fontSize: text.xs,
   },
   profile: {
     flexDirection: "row",
@@ -400,15 +551,23 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: colors.accent,
+    backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
   },
-  profileName: { fontSize: 16, fontWeight: "800", color: colors.foreground },
-  profileEmail: { fontSize: 12, color: colors.muted },
+  profileName: {
+    fontFamily: fonts.sansBold,
+    fontSize: text.base,
+    color: colors.foreground,
+  },
+  profileEmail: {
+    fontFamily: fonts.sans,
+    fontSize: text.xs,
+    color: colors.mutedForeground,
+  },
   sectionTitle: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontFamily: fonts.displayBlack,
+    fontSize: text.twoXl,
     color: colors.foreground,
     paddingHorizontal: spacing.lg,
     paddingTop: spacing.xl,
@@ -419,22 +578,128 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radii.xl,
     padding: spacing.lg,
-    gap: 4,
+    gap: spacing.sm,
   },
   orderHead: {
     flexDirection: "row",
     justifyContent: "space-between",
+    alignItems: "flex-start",
   },
-  orderId: { fontSize: 14, fontWeight: "800", color: colors.foreground },
-  orderStatus: { fontSize: 12, fontWeight: "700", color: colors.muted },
-  orderDate: { fontSize: 12, color: colors.muted },
-  orderItems: { fontSize: 12, color: colors.muted },
-  orderTotal: { fontSize: 14, fontWeight: "800", color: colors.foreground },
+  orderId: {
+    fontFamily: fonts.displayBlack,
+    fontSize: text.sm,
+    color: colors.foreground,
+  },
+  badge: {
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 3,
+    borderRadius: radii.full,
+    alignSelf: "flex-start",
+  },
+  badgeText: {
+    fontFamily: fonts.sansBold,
+    fontSize: text.xs,
+  },
+  orderDate: {
+    fontFamily: fonts.sans,
+    fontSize: text.xs,
+    color: colors.mutedForeground,
+  },
+  orderItems: {
+    fontFamily: fonts.sans,
+    fontSize: text.xs,
+    color: colors.mutedForeground,
+  },
+  orderFoot: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  orderTotal: {
+    fontFamily: fonts.displayBlack,
+    fontSize: text.base,
+    color: colors.foreground,
+  },
+  orderDetail: {
+    marginTop: spacing.sm,
+    paddingTop: spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    gap: spacing.sm,
+  },
+  detailHeading: {
+    fontFamily: fonts.displayBlack,
+    fontSize: text.xs,
+    color: colors.mutedForeground,
+    textTransform: "uppercase",
+    letterSpacing: 0.6,
+  },
+  detailItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.sm,
+  },
+  detailItemName: {
+    flex: 1,
+    fontFamily: fonts.sansSemibold,
+    fontSize: text.xs,
+    color: colors.foreground,
+  },
+  detailItemQty: {
+    fontFamily: fonts.sans,
+    fontSize: text.xs,
+    color: colors.mutedForeground,
+  },
+  detailItemPrice: {
+    fontFamily: fonts.sansBold,
+    fontSize: text.xs,
+    color: colors.foreground,
+  },
+  detailBlock: { gap: 2 },
+  detailValue: {
+    fontFamily: fonts.sans,
+    fontSize: text.sm,
+    color: colors.foreground,
+  },
+  detailDivider: {
+    height: 1,
+    backgroundColor: colors.border,
+    marginVertical: spacing.xs,
+  },
+  detailTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  detailTotalLabel: {
+    fontFamily: fonts.displayBlack,
+    fontSize: text.sm,
+    color: colors.foreground,
+  },
+  detailTotalValue: {
+    fontFamily: fonts.displayBlack,
+    fontSize: text.base,
+    color: colors.foreground,
+  },
+  mapBtn: {
+    backgroundColor: colors.secondary,
+    borderRadius: radii.xl,
+    paddingVertical: 10,
+    alignItems: "center",
+    marginTop: spacing.xs,
+  },
+  mapBtnText: {
+    fontFamily: fonts.sansSemibold,
+    fontSize: text.sm,
+    color: colors.secondaryForeground,
+  },
   noOrders: {
     textAlign: "center",
-    color: colors.muted,
+    color: colors.mutedForeground,
+    fontFamily: fonts.sans,
+    fontSize: text.sm,
     marginTop: spacing.xl,
   },
 });

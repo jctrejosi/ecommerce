@@ -5,6 +5,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useFonts } from "expo-font";
+import {
+  Inter_400Regular,
+  Inter_500Medium,
+  Inter_600SemiBold,
+  Inter_700Bold,
+} from "@expo-google-fonts/inter";
+import {
+  BricolageGrotesque_400Regular,
+  BricolageGrotesque_600SemiBold,
+  BricolageGrotesque_700Bold,
+  BricolageGrotesque_800ExtraBold,
+} from "@expo-google-fonts/bricolage-grotesque";
 import { colors } from "../src/theme";
 import { useCartStore } from "../src/stores/cart";
 import { useAuthStore } from "../src/stores/auth";
@@ -26,7 +39,7 @@ function CartTabIcon({ color }: { color: ColorValue }) {
             minWidth: 16,
             height: 16,
             borderRadius: 8,
-            backgroundColor: colors.danger,
+            backgroundColor: colors.accent,
             alignItems: "center",
             justifyContent: "center",
             paddingHorizontal: 3,
@@ -44,9 +57,23 @@ function CartTabIcon({ color }: { color: ColorValue }) {
 export default function RootLayout() {
   const initAuth = useAuthStore((s) => s.init);
 
+  // Fuentes del web client: Inter (texto) y Bricolage Grotesque (títulos).
+  const [fontsLoaded, fontError] = useFonts({
+    Inter_400Regular,
+    Inter_500Medium,
+    Inter_600SemiBold,
+    Inter_700Bold,
+    BricolageGrotesque_400Regular,
+    BricolageGrotesque_600SemiBold,
+    BricolageGrotesque_700Bold,
+    BricolageGrotesque_800ExtraBold,
+  });
+
   useEffect(() => {
     void initAuth();
   }, [initAuth]);
+
+  if (!fontsLoaded && !fontError) return null;
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -56,7 +83,7 @@ export default function RootLayout() {
           screenOptions={{
             headerShown: false,
             tabBarActiveTintColor: colors.foreground,
-            tabBarInactiveTintColor: colors.muted,
+            tabBarInactiveTintColor: colors.mutedForeground,
             tabBarStyle: {
               borderTopColor: colors.border,
               backgroundColor: "#fff",

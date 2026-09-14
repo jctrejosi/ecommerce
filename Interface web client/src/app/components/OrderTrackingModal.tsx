@@ -218,13 +218,17 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
                         .join(" · ") || "Repartidor"}
                     </p>
                   </div>
-                  <button
-                    onClick={() => setChatOpen(true)}
-                    className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#1A1A2E] bg-[#FFF200] hover:brightness-95 transition-all"
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" />
-                    Chatear
-                  </button>
+                  {/* El chat solo se muestra mientras el pedido está en camino */}
+                  {(data.deliveryStatus === "PICKED_UP" ||
+                    data.deliveryStatus === "IN_DELIVERY") && (
+                    <button
+                      onClick={() => setChatOpen(true)}
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#1A1A2E] bg-[#FFF200] hover:brightness-95 transition-all"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5" />
+                      Chatear
+                    </button>
+                  )}
                   {data.updatedAt && (
                     <span className="text-[10px] text-muted-foreground shrink-0">
                       Últ. ubicación {fmtTime(data.updatedAt)}

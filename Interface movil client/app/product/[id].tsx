@@ -16,7 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { catalogApi } from "../../src/api/catalog";
 import { ProductCard } from "../../src/components/ProductCard";
 import { useCartStore } from "../../src/stores/cart";
-import { colors, fmtCOP, radius, spacing } from "../../src/theme";
+import { colors, fmtCOP, fonts, radii, spacing, text } from "../../src/theme";
 
 export default function ProductDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -48,7 +48,7 @@ export default function ProductDetailScreen() {
   if (!p) {
     return (
       <SafeAreaView style={styles.safe}>
-        <Text style={{ textAlign: "center", marginTop: 80, color: colors.muted }}>
+        <Text style={{ textAlign: "center", marginTop: 80, color: colors.mutedForeground }}>
           Producto no encontrado
         </Text>
       </SafeAreaView>
@@ -79,7 +79,7 @@ export default function ProductDetailScreen() {
             <Image source={{ uri: p.image }} style={styles.image} />
           ) : (
             <View style={[styles.image, styles.placeholder]}>
-              <Ionicons name="basket-outline" size={48} color={colors.muted} />
+              <Ionicons name="basket-outline" size={48} color={colors.mutedForeground} />
             </View>
           )}
           {discountPct > 0 && (
@@ -115,14 +115,14 @@ export default function ProductDetailScreen() {
                 style={styles.qtyBtn}
                 onPress={() => setQty((q) => Math.max(1, q - 1))}
               >
-                <Ionicons name="remove" size={18} color={colors.foreground} />
+                <Ionicons name="remove" size={16} color={colors.foreground} />
               </Pressable>
               <Text style={styles.qtyText}>{qty}</Text>
               <Pressable
                 style={styles.qtyBtn}
                 onPress={() => setQty((q) => q + 1)}
               >
-                <Ionicons name="add" size={18} color={colors.foreground} />
+                <Ionicons name="add" size={16} color={colors.foreground} />
               </Pressable>
             </View>
             <Pressable
@@ -132,7 +132,7 @@ export default function ProductDetailScreen() {
                 router.push("/cart");
               }}
             >
-              <Ionicons name="cart-outline" size={18} color={colors.foreground} />
+              <Ionicons name="cart-outline" size={18} color={colors.primaryForeground} />
               <Text style={styles.addBtnText}>
                 Agregar {fmtCOP(p.price * qty)}
               </Text>
@@ -143,15 +143,16 @@ export default function ProductDetailScreen() {
         {/* Relacionados */}
         {related.data && related.data.length > 0 && (
           <View style={styles.related}>
-            <Text style={styles.relatedTitle}>También te puede interesar</Text>
+            <Text style={styles.relatedTitle}>Productos relacionados</Text>
             <FlatList
-              horizontal
-              showsHorizontalScrollIndicator={false}
+              scrollEnabled={false}
+              numColumns={2}
               data={related.data}
               keyExtractor={(r) => String(r.id)}
+              columnWrapperStyle={{ gap: spacing.md }}
               contentContainerStyle={{ gap: spacing.md, paddingHorizontal: spacing.lg }}
               renderItem={({ item }) => (
-                <View style={{ width: 170 }}>
+                <View style={{ flex: 1 }}>
                   <ProductCard
                     product={item}
                     onPress={(x) => router.push(`/product/${x.id}`)}
@@ -167,28 +168,31 @@ export default function ProductDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#fff" },
+  safe: { flex: 1, backgroundColor: colors.background },
   topBar: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: spacing.lg,
     paddingVertical: spacing.md,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
   },
   back: { padding: 4 },
   topBarTitle: {
     flex: 1,
     textAlign: "center",
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: text.sm,
+    fontFamily: fonts.sansBold,
     color: colors.foreground,
   },
-  imageWrap: { position: "relative" },
+  imageWrap: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.md,
+    borderRadius: radii.twoXl,
+    overflow: "hidden",
+    backgroundColor: colors.muted,
+  },
   image: { width: "100%", aspectRatio: 1 },
   placeholder: {
-    backgroundColor: colors.surface,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -196,38 +200,70 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: spacing.lg,
     left: spacing.lg,
-    backgroundColor: colors.danger,
-    borderRadius: 999,
+    backgroundColor: colors.accent,
+    borderRadius: radii.full,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  badgeText: { color: "#fff", fontSize: 12, fontWeight: "800" },
-  body: { padding: spacing.lg, gap: spacing.sm },
-  category: { fontSize: 12, color: colors.muted, textTransform: "uppercase" },
-  name: { fontSize: 20, fontWeight: "800", color: colors.foreground },
+  badgeText: { color: "#fff", fontSize: text.xs, fontFamily: fonts.sansBold },
+  body: { padding: spacing.lg, gap: spacing.md },
+  category: {
+    fontSize: text.xs,
+    fontFamily: fonts.sansSemibold,
+    color: colors.mutedForeground,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  name: {
+    fontSize: text.twoXl,
+    fontFamily: fonts.displayBlack,
+    lineHeight: 30,
+    color: colors.foreground,
+  },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: spacing.md },
-  price: { fontSize: 22, fontWeight: "900", color: colors.foreground },
+  price: {
+    fontSize: text.twoXl,
+    fontFamily: fonts.displayBold,
+    color: colors.foreground,
+  },
   originalPrice: {
-    fontSize: 14,
-    color: colors.muted,
+    fontSize: text.sm,
+    fontFamily: fonts.sans,
+    color: colors.mutedForeground,
     textDecorationLine: "line-through",
   },
-  description: { fontSize: 13, color: colors.muted, lineHeight: 19 },
-  qtyRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
+  description: {
+    fontSize: text.sm,
+    fontFamily: fonts.sans,
+    color: colors.mutedForeground,
+    lineHeight: 21,
+  },
+  qtyRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing.md,
+    marginTop: spacing.md,
+  },
   qtyPicker: {
+    width: 120,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radii.lg,
     overflow: "hidden",
   },
-  qtyBtn: { padding: 12 },
+  qtyBtn: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   qtyText: {
-    minWidth: 32,
+    width: 40,
     textAlign: "center",
-    fontSize: 15,
-    fontWeight: "700",
+    fontSize: text.base,
+    fontFamily: fonts.sansBold,
     color: colors.foreground,
   },
   addBtn: {
@@ -236,15 +272,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: spacing.sm,
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
+    backgroundColor: colors.primary,
+    borderRadius: radii.xl,
     paddingVertical: 12,
   },
-  addBtnText: { fontSize: 14, fontWeight: "800", color: colors.foreground },
-  related: { marginTop: spacing.xl },
+  addBtnText: {
+    fontSize: text.sm,
+    fontFamily: fonts.sansSemibold,
+    color: colors.primaryForeground,
+  },
+  related: { marginTop: spacing.xl, paddingBottom: spacing.lg },
   relatedTitle: {
-    fontSize: 16,
-    fontWeight: "800",
+    fontSize: text.sm,
+    fontFamily: fonts.sansBold,
     color: colors.foreground,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.md,

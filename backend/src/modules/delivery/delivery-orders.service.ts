@@ -41,6 +41,9 @@ const HISTORY_STATUSES = [
   'CANCELLED',
 ] as const;
 
+/** Estados de la entrega en los que el chat por pedido está habilitado. */
+const CHAT_ACTIVE_STATUSES = ['PICKED_UP', 'IN_DELIVERY'] as const;
+
 /** Transiciones permitidas por estado (máquina de estados). */
 const ALLOWED: Record<string, string[]> = {
   ASSIGNED: ['accept', 'reject'],
@@ -342,7 +345,7 @@ export class DeliveryOrdersService {
     body: string,
   ) {
     // getOrder lanza 404 si el pedido no está asignado a este repartidor.
-    await this.getOrder(driverId, orderId);
+    const order = await this.getOrder(driverId, orderId);
 
     const text = (body ?? '').trim();
     if (!text) {
@@ -350,6 +353,17 @@ export class DeliveryOrdersService {
     }
     if (text.length > 2000) {
       throw new BadRequestException('El mensaje no puede superar 2000 caracteres.');
+    }
+    // El chat solo se escribe mientras la entrega está en camino; la lectura
+    // (historial) sigue disponible después de entregar.
+    if (
+      !CHAT_ACTIVE_STATUSES.includes(
+        order.status as (typeof CHAT_ACTIVE_STATUSES)[number],
+      )
+    ) {
+      throw new ConflictException(
+        'El chat está disponible solo mientras el pedido está en camino.',
+      );
     }
 
     const [row] = await this.db

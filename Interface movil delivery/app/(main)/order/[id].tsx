@@ -119,13 +119,16 @@ export default function OrderDetailScreen() {
         <View style={styles.rowBetween}>
           <Text style={styles.muted}>{order.customer.phone}</Text>
           <View style={styles.customerActions}>
-            <Button
-              label="Chat"
-              icon="chatbubble-outline"
-              variant="primary"
-              fullWidth={false}
-              onPress={() => router.push(`/chat/${order.id}`)}
-            />
+            {/* El chat solo se muestra mientras el pedido está en camino */}
+            {(order.status === "PICKED_UP" || order.status === "IN_DELIVERY") && (
+              <Button
+                label="Chat"
+                icon="chatbubble-outline"
+                variant="primary"
+                fullWidth={false}
+                onPress={() => router.push(`/chat/${order.id}`)}
+              />
+            )}
             <Button
               label="Llamar"
               icon="call-outline"

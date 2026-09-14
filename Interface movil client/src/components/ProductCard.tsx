@@ -1,7 +1,7 @@
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import type { Product } from "../api/types";
-import { colors, fmtCOP, radius, spacing } from "../theme";
+import { colors, fmtCOP, fonts, radii, spacing } from "../theme";
 import { useCartStore } from "../stores/cart";
 
 interface ProductCardProps {
@@ -30,7 +30,7 @@ export function ProductCard({ product, onPress }: ProductCardProps) {
           <Image source={{ uri: product.image }} style={styles.image} />
         ) : (
           <View style={[styles.image, styles.imagePlaceholder]}>
-            <Ionicons name="basket-outline" size={28} color={colors.muted} />
+            <Ionicons name="basket-outline" size={28} color={colors.mutedForeground} />
           </View>
         )}
         {discountPct > 0 && (
@@ -90,39 +90,41 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.md,
+    borderRadius: radii.xl,
     overflow: "hidden",
   },
   imageWrap: { position: "relative" },
-  image: { width: "100%", aspectRatio: 1, backgroundColor: colors.surface },
+  image: { width: "100%", aspectRatio: 1, backgroundColor: colors.muted },
   imagePlaceholder: { alignItems: "center", justifyContent: "center" },
   badge: {
     position: "absolute",
     top: spacing.sm,
     left: spacing.sm,
-    backgroundColor: colors.danger,
+    backgroundColor: colors.accent,
     borderRadius: 999,
     paddingHorizontal: 8,
     paddingVertical: 2,
   },
-  badgeText: { color: "#fff", fontSize: 11, fontWeight: "800" },
+  badgeText: { color: "#fff", fontSize: 12, fontFamily: fonts.sansBold },
   body: { padding: spacing.md, gap: 4 },
-  category: { fontSize: 11, color: colors.muted },
+  category: { fontSize: 12, color: colors.mutedForeground, fontFamily: fonts.sans },
   name: {
-    fontSize: 13,
-    fontWeight: "600",
+    fontSize: 14,
+    fontFamily: fonts.sansSemibold,
+    lineHeight: 20,
+    height: 40,
     color: colors.foreground,
-    minHeight: 34,
   },
   priceRow: { flexDirection: "row", alignItems: "baseline", gap: 6 },
   price: {
-    fontSize: 15,
-    fontWeight: "800",
+    fontSize: 16,
+    fontFamily: fonts.displayBold,
     color: colors.foreground,
   },
   originalPrice: {
-    fontSize: 11,
-    color: colors.muted,
+    fontSize: 12,
+    fontFamily: fonts.sans,
+    color: colors.mutedForeground,
     textDecorationLine: "line-through",
   },
   addBtn: {
@@ -131,11 +133,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 6,
-    backgroundColor: colors.accent,
-    borderRadius: radius.sm,
-    paddingVertical: 8,
+    backgroundColor: colors.primary,
+    borderRadius: radii.lg,
+    paddingVertical: 6,
   },
-  addBtnText: { fontSize: 13, fontWeight: "700", color: colors.foreground },
+  addBtnText: { fontSize: 14, fontFamily: fonts.sansSemibold, color: colors.foreground },
   qtyRow: {
     marginTop: spacing.sm,
     flexDirection: "row",
@@ -143,13 +145,20 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     borderWidth: 1,
     borderColor: colors.border,
-    borderRadius: radius.sm,
+    borderRadius: radii.lg,
     overflow: "hidden",
   },
   qtyBtn: {
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    backgroundColor: colors.surface,
+    flex: 1,
+    paddingVertical: 6,
+    alignItems: "center",
+    backgroundColor: colors.muted,
   },
-  qtyText: { fontSize: 14, fontWeight: "700", color: colors.foreground },
+  qtyText: {
+    fontSize: 14,
+    fontFamily: fonts.sansBold,
+    width: 32,
+    textAlign: "center",
+    color: colors.foreground,
+  },
 });

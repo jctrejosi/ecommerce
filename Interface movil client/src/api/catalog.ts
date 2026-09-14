@@ -106,4 +106,11 @@ export const bannersApi = {
   getHero(): Promise<HeroBanner[]> {
     return apiFetch<HeroBanner[]>("/banners?bannerType=hero");
   },
+
+  /** Banners por tipo de ubicación: hero, promo, sidebar, footer. */
+  getByType(bannerType: string): Promise<HeroBanner[]> {
+    return apiFetch<HeroBanner[]>(
+      `/banners?bannerType=${encodeURIComponent(bannerType)}`,
+    );
+  },
 };
