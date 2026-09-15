@@ -48,7 +48,9 @@ export class PaymentVerificationService {
             .update(orders)
             .set({ status: 'paid', updatedAt: new Date().toISOString() })
             .where(eq(orders.id, BigInt(orderId)));
-          this.ordersGateway.notifyOrderStatus(referenceCode, 'preparando');
+          this.ordersGateway.notifyOrderStatus(referenceCode, 'preparando', {
+            customerId,
+          });
           await this.drizzleService.db.insert(orderStatusHistory).values({
             orderId, status: 'paid', note: 'Pago confirmado por Wompi', createdBy: customerId ?? null,
           });
@@ -73,7 +75,10 @@ export class PaymentVerificationService {
             .update(orders)
             .set({ status: 'cancelled', updatedAt: new Date().toISOString() })
             .where(eq(orders.id, BigInt(orderId)));
-          this.ordersGateway.notifyOrderStatus(referenceCode, 'cancelado', statusMessage);
+          this.ordersGateway.notifyOrderStatus(referenceCode, 'cancelado', {
+            reason: statusMessage,
+            customerId,
+          });
           await this.drizzleService.db.insert(orderStatusHistory).values({
             orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? null,
           });

@@ -1,7 +1,7 @@
-import { MapPin, Pencil, Plus, Search } from 'lucide-react';
+import { MapPin, MessageCircle, Pencil, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { FleetDriver } from '../types';
-import { FILTER_OPTIONS, driverVisual } from '../lib/status';
+import { FILTER_OPTIONS, driverVisual, filterDrivers, isDriverOnline } from '../lib/status';
 import { vehicleLabel } from '../lib/format';
 import { DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
 import type { DriverFilter } from '../types';
@@ -11,6 +11,10 @@ interface Props {
   onSelect: (id: number | null) => void;
   onCreate: () => void;
   onEdit: (driver: FleetDriver, focusReset?: boolean) => void;
+  /** Abre el chat del panel con el repartidor. */
+  onChat: (driverId: number) => void;
+  /** Mensajes sin leer del repartidor (badge del botón de chat). */
+  unreadOf?: (driverId: number) => number;
 }
 
 export default function DriversPanel({
@@ -18,30 +22,24 @@ export default function DriversPanel({
   onSelect,
   onCreate,
   onEdit,
+  onChat,
+  unreadOf,
 }: Props) {
   const [filter, setFilter] = useState<DriverFilter>('all');
   const [search, setSearch] = useState('');
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return drivers.filter((d) => {
-      const matchesFilter =
-        filter === 'all'
-          ? true
-          : filter === 'available'
-            ? d.isActive && d.isAvailable && !d.activeAssignment
-            : filter === 'with-order'
-              ? d.isActive && Boolean(d.activeAssignment)
-              : filter === 'in-delivery'
-                ? d.isActive && d.activeAssignment?.status === 'IN_DELIVERY'
-                : !d.isActive;
-      if (!matchesFilter) return false;
-      if (!q) return true;
-      return [d.fullName, d.username, d.email, d.phone, d.vehiclePlate]
+    const byStatus = filterDrivers(drivers, filter);
+    if (!q) return byStatus;
+    return byStatus.filter((d) =>
+      [d.fullName, d.username, d.email, d.phone, d.vehiclePlate]
         .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q));
-    });
+        .some((v) => String(v).toLowerCase().includes(q)),
+    );
   }, [drivers, filter, search]);
+
+  const onlineCount = drivers.filter((d) => isDriverOnline(d)).length;
 
   return (
     <div className="flex h-full flex-col">
@@ -49,8 +47,7 @@ export default function DriversPanel({
         <div>
           <h1 className="text-lg font-bold text-slate-900">Repartidores</h1>
           <p className="text-xs text-slate-400">
-            {drivers.length} registrados ·{' '}
-            {drivers.filter((d) => d.isActive).length} activos
+            {drivers.length} registrados · {onlineCount} conectados
           </p>
         </div>
         <button
@@ -167,6 +164,26 @@ export default function DriversPanel({
                       >
                         <Pencil className="h-4 w-4" /> Editar
                       </button>
+                      {(() => {
+                        const unread = unreadOf?.(d.id) ?? 0;
+                        return (
+                          <button
+                            title="Chat con el repartidor"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onChat(d.id);
+                            }}
+                            className="relative inline-flex items-center gap-2 rounded-xl bg-white px-3.5 py-2 text-xs font-bold text-slate-700 ring-1 ring-slate-200 transition hover:bg-slate-50"
+                          >
+                            <MessageCircle className="h-4 w-4" /> Chat
+                            {unread > 0 && (
+                              <span className="absolute -right-1.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                                {unread > 99 ? '99+' : unread}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })()}
                     </div>
                   </td>
                 </tr>

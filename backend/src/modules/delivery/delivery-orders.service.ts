@@ -16,6 +16,7 @@ import {
 } from '../../../drizzle/schema';
 import { parsePoint } from './delivery.service';
 import { DeliveryGateway } from './delivery.gateway';
+import { OrdersGateway } from '../orders/orders.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { TransitionDto } from './dto/transition.dto';
 
@@ -206,6 +207,7 @@ export class DeliveryOrdersService {
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly gateway: DeliveryGateway,
+    private readonly ordersGateway: OrdersGateway,
     private readonly notificationsService: NotificationsService,
   ) {}
 
@@ -354,7 +356,9 @@ export class DeliveryOrdersService {
       throw new BadRequestException('Escribe un mensaje.');
     }
     if (text.length > 2000) {
-      throw new BadRequestException('El mensaje no puede superar 2000 caracteres.');
+      throw new BadRequestException(
+        'El mensaje no puede superar 2000 caracteres.',
+      );
     }
     // El chat solo se escribe mientras la entrega está en camino; la lectura
     // (historial) sigue disponible después de entregar.
@@ -410,7 +414,10 @@ export class DeliveryOrdersService {
     if (!shipment) return;
 
     const drivers = await this.db
-      .select({ id: deliveryDrivers.id, authUserId: deliveryDrivers.authUserId })
+      .select({
+        id: deliveryDrivers.id,
+        authUserId: deliveryDrivers.authUserId,
+      })
       .from(deliveryDrivers)
       .where(
         and(
@@ -587,7 +594,10 @@ export class DeliveryOrdersService {
           .from(deliveryAssignments)
           .where(
             and(
-              eq(deliveryAssignments.shipmentId, Number(assignment.shipment_id)),
+              eq(
+                deliveryAssignments.shipmentId,
+                Number(assignment.shipment_id),
+              ),
               ne(deliveryAssignments.id, BigInt(assignment.assignment_id)),
               eq(deliveryAssignments.status, 'ASSIGNED'),
             ),
@@ -658,16 +668,53 @@ export class DeliveryOrdersService {
         );
       for (const row of cancelledRows) {
         if (row.authUserId != null) {
-          this.gateway.emitToDriver(Number(row.authUserId), 'delivery:order-updated', {
-            orderId,
-          });
+          this.gateway.emitToDriver(
+            Number(row.authUserId),
+            'delivery:order-updated',
+            {
+              orderId,
+            },
+          );
         }
       }
     }
 
+    // El avance del reparto también viaja por el canal general de pedidos
+    // (`/orders`): así el cliente lo ve en vivo en su tarjeta/rastreo y los
+    // paneles administrativos (sala `staff`) se enteran al instante.
+    //
+    // Se decide por el estado RESULTANTE y no por la acción: "Tengo el pedido"
+    // (`pickup`) y el antiguo `start` llevan al mismo sitio (en camino).
+    if (NEXT_STATUS[action] === 'IN_DELIVERY') {
+      this.ordersGateway.notifyOrderStatus(
+        assignment.reference_code,
+        'en camino',
+        {
+          customerId:
+            assignment.customer_id != null
+              ? Number(assignment.customer_id)
+              : null,
+        },
+      );
+    } else if (NEXT_STATUS[action] === 'DELIVERED') {
+      this.ordersGateway.notifyOrderStatus(
+        assignment.reference_code,
+        'entregado',
+        {
+          customerId:
+            assignment.customer_id != null
+              ? Number(assignment.customer_id)
+              : null,
+        },
+      );
+    }
+
     // El cliente recibe la notificación (con botón para ver el rastreo) cuando
     // el repartidor sale con el pedido.
-    if (NEXT_STATUS[action] === 'IN_DELIVERY' && assignment.customer_id != null) {
+    if (
+      NEXT_STATUS[action] === 'IN_DELIVERY' &&
+      assignment.customer_id != null
+    ) {
       await this.notificationsService.create({
         type: 'ORDER',
         title: 'Tu pedido está en camino 🛵',
@@ -678,7 +725,7 @@ export class DeliveryOrdersService {
     }
 
     // Y otra cuando queda entregado: cierra el ciclo para el cliente.
-    if (action === 'deliver' && assignment.customer_id != null) {
+    if (NEXT_STATUS[action] === 'DELIVERED' && assignment.customer_id != null) {
       await this.notificationsService.create({
         type: 'ORDER',
         title: 'Tu pedido fue entregado 🎉',
@@ -694,7 +741,7 @@ export class DeliveryOrdersService {
   async setAvailability(driverId: number, isAvailable: boolean) {
     await this.db
       .update(deliveryDrivers)
-      .set({ isAvailable })
+      .set({ isAvailable, lastSeenAt: new Date().toISOString() })
       .where(eq(deliveryDrivers.id, BigInt(driverId)));
     this.gateway.emitFleetStatus({
       event: 'availability',

@@ -7,6 +7,8 @@ import type {
   TransitionKey,
 } from "./contract";
 import type {
+  AdminChatMessage,
+  AdminChatSummary,
   ChatMessage,
   DeliveryOrder,
   DriverUser,
@@ -108,6 +110,10 @@ export const realApi: DeliveryApi = {
     await http.post("/location", ping);
   },
 
+  async sendHeartbeat() {
+    await http.post("/heartbeat", {});
+  },
+
   async setPushToken(token) {
     await http.put("/profile/push-token", { token });
   },
@@ -136,6 +142,37 @@ export const realApi: DeliveryApi = {
       return unwrap<ChatMessage>(res.data);
     } catch (err) {
       throw new Error(apiErrorMessage(err, "No se pudo enviar el mensaje."));
+    }
+  },
+
+  async getAdminChatMessages() {
+    try {
+      const res = await http.get("/admin-chat/messages");
+      return unwrap<AdminChatMessage[]>(res.data);
+    } catch (err) {
+      throw new Error(
+        apiErrorMessage(err, "No se pudo cargar el chat con el panel."),
+      );
+    }
+  },
+
+  async sendAdminChatMessage(body) {
+    try {
+      const res = await http.post("/admin-chat/messages", { body });
+      return unwrap<AdminChatMessage>(res.data);
+    } catch (err) {
+      throw new Error(apiErrorMessage(err, "No se pudo enviar el mensaje."));
+    }
+  },
+
+  async getAdminChatSummary() {
+    try {
+      const res = await http.get("/admin-chat/summary");
+      return unwrap<AdminChatSummary>(res.data);
+    } catch (err) {
+      throw new Error(
+        apiErrorMessage(err, "No se pudo cargar el chat con el panel."),
+      );
     }
   },
 

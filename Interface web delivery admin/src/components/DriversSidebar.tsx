@@ -3,15 +3,16 @@ import {
   Eye,
   EyeOff,
   MapPinOff,
+  MessageCircle,
   Phone,
   Search,
   ShoppingBag,
   UserRound,
 } from 'lucide-react';
 import type { DriverFilter, FleetDriver } from '../types';
-import { FILTER_OPTIONS, driverVisual } from '../lib/status';
+import { FILTER_OPTIONS, driverVisual, isDriverOnline, lastSignalAt } from '../lib/status';
 import { DRIVER_COLORS, driverColor } from '../lib/driverColors';
-import { formatDateTime, isStale, timeAgo, vehicleLabel } from '../lib/format';
+import { formatDateTime, timeAgo, vehicleLabel } from '../lib/format';
 import { AvailabilitySwitch, DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
 
 interface Props {
@@ -26,24 +27,32 @@ interface Props {
   onToggleHidden: (id: number) => void;
   onToggleAvailable: (driver: FleetDriver, value: boolean) => void;
   onChangeColor: (driver: FleetDriver, color: string) => void;
+  /** Abre el chat del panel con el repartidor. */
+  onChat: (driverId: number) => void;
+  /** Mensajes sin leer del repartidor (badge del botón de chat). */
+  unreadOf?: (driverId: number) => number;
 }
 
 function DriverRow({
   driver,
   hidden,
   selected,
+  unread,
   onSelect,
   onToggleHidden,
   onToggleAvailable,
+  onChat,
 }: {
   driver: FleetDriver;
   hidden: boolean;
   selected: boolean;
+  unread: number;
   onSelect: () => void;
   onToggleHidden: () => void;
   onToggleAvailable: (value: boolean) => void;
+  onChat: () => void;
 }) {
-  const stale = isStale(driver.lastLocationAt);
+  const offline = driver.isActive && !isDriverOnline(driver);
   return (
     <div
       className={`group flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 transition-colors ${
@@ -69,7 +78,7 @@ function DriverRow({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-sm font-semibold text-slate-800">{driver.fullName}</p>
-          {stale && <MapPinOff className="h-3 w-3 shrink-0 text-rose-400" />}
+          {offline && <MapPinOff className="h-3 w-3 shrink-0 text-rose-400" />}
         </div>
         <p className="truncate text-[11px] text-slate-400">
           {vehicleLabel(driver)}
@@ -82,6 +91,22 @@ function DriverRow({
         <LastSeen driver={driver} />
       </div>
 
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onChat();
+        }}
+        title={unread > 0 ? `Chat · ${unread} sin leer` : 'Chat con el repartidor'}
+        className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+      >
+        <MessageCircle className="h-3.5 w-3.5" />
+        {unread > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-rose-500 px-0.5 text-[8px] font-bold text-white">
+            {unread > 9 ? '9+' : unread}
+          </span>
+        )}
+      </button>
+
       <AvailabilitySwitch
         driver={driver}
         onToggle={(_, v) => onToggleAvailable(v)}
@@ -92,14 +117,18 @@ function DriverRow({
 
 function DetailView({
   driver,
+  unread,
   onBack,
   onToggleAvailable,
   onChangeColor,
+  onChat,
 }: {
   driver: FleetDriver;
+  unread: number;
   onBack: () => void;
   onToggleAvailable: (value: boolean) => void;
   onChangeColor: (color: string) => void;
+  onChat: () => void;
 }) {
   const visual = driverVisual(driver);
   const a = driver.activeAssignment;
@@ -122,8 +151,20 @@ function DetailView({
               {driver.username ? `@${driver.username} · ` : ''}
               {vehicleLabel(driver)}
             </p>
-            <div className="mt-1.5">
+            <div className="mt-1.5 flex items-center gap-2">
               <StatusBadge driver={driver} />
+              <button
+                onClick={onChat}
+                title="Abrir chat con el repartidor"
+                className="relative inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-slate-800"
+              >
+                <MessageCircle className="h-3.5 w-3.5" /> Chat
+                {unread > 0 && (
+                  <span className="ml-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                    {unread > 99 ? '99+' : unread}
+                  </span>
+                )}
+              </button>
             </div>
           </div>
         </div>
@@ -140,9 +181,12 @@ function DetailView({
             </span>
           </div>
           <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-            <span className="text-xs text-slate-500">Última señal GPS</span>
-            <span className={`text-xs font-semibold ${isStale(driver.lastLocationAt) ? 'text-rose-500' : 'text-slate-700'}`}>
-              {driver.lastLocationAt ? timeAgo(driver.lastLocationAt) : 'Sin señal'}
+            <span className="text-xs text-slate-500">Última señal</span>
+            <span className={`text-xs font-semibold ${driver.isActive && !isDriverOnline(driver) ? 'text-rose-500' : 'text-slate-700'}`}>
+              {(() => {
+                const signal = lastSignalAt(driver);
+                return signal ? timeAgo(signal) : 'Sin señal';
+              })()}
             </span>
           </div>
           <div className="mt-2 flex items-center justify-between">
@@ -236,6 +280,8 @@ export default function DriversSidebar(props: Props) {
     onToggleHidden,
     onToggleAvailable,
     onChangeColor,
+    onChat,
+    unreadOf,
   } = props;
 
   const selected = drivers.find((d) => d.id === selectedId) ?? null;
@@ -281,9 +327,11 @@ export default function DriversSidebar(props: Props) {
       {selected ? (
         <DetailView
           driver={selected}
+          unread={unreadOf?.(selected.id) ?? 0}
           onBack={() => onSelect(null)}
           onToggleAvailable={(v) => onToggleAvailable(selected, v)}
           onChangeColor={(color) => onChangeColor(selected, color)}
+          onChat={() => onChat(selected.id)}
         />
       ) : (
         <div className="flex-1 overflow-y-auto">
@@ -298,9 +346,11 @@ export default function DriversSidebar(props: Props) {
               driver={d}
               hidden={hiddenIds.has(d.id)}
               selected={d.id === selectedId}
+              unread={unreadOf?.(d.id) ?? 0}
               onSelect={() => onSelect(d.id)}
               onToggleHidden={() => onToggleHidden(d.id)}
               onToggleAvailable={(v) => onToggleAvailable(d, v)}
+              onChat={() => onChat(d.id)}
             />
           ))}
           <p className="p-3 text-center text-[11px] text-slate-300">

@@ -13,6 +13,11 @@ interface ScreenProps {
    * Úsalo en pantallas cuyo contenido llega hasta abajo (chat, detalle…).
    */
   bottomInset?: boolean;
+  /**
+   * Acción a la derecha del título (p. ej. el botón de chat). Ocupa el mismo
+   * ancho que el logo para que el título siga centrado.
+   */
+  headerRight?: ReactNode;
 }
 
 /** Contenedor base de pantalla: SafeArea + título opcional + scroll opcional. */
@@ -22,6 +27,7 @@ export function Screen({
   scroll = true,
   padded = true,
   bottomInset = false,
+  headerRight,
 }: ScreenProps) {
   const content = (
     <View style={[styles.body, padded && styles.padded]}>{children}</View>
@@ -46,8 +52,12 @@ export function Screen({
           <Text style={styles.title} numberOfLines={1}>
             {title}
           </Text>
-          {/* Espaciador del mismo ancho que el logo para centrar el título */}
-          <View style={styles.logoSpacer} />
+          {headerRight ? (
+            <View style={styles.headerRight}>{headerRight}</View>
+          ) : (
+            /* Espaciador del mismo ancho que el logo para centrar el título */
+            <View style={styles.logoSpacer} />
+          )}
         </View>
       ) : null}
       {scroll ? (
@@ -74,6 +84,11 @@ const styles = StyleSheet.create({
   },
   logo: { height: 26, width: 80 },
   logoSpacer: { width: 80 },
+  headerRight: {
+    width: 80,
+    alignItems: "flex-end",
+    justifyContent: "center",
+  },
   title: {
     flex: 1,
     textAlign: "center",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { io } from "socket.io-client";
 import { X, Home, Navigation, PackageCheck, Loader2, MessageCircle } from "lucide-react";
 import {
   ordersService,
@@ -7,6 +8,10 @@ import {
 } from "../../services/orders.service";
 import { LiveOrderMap } from "./LiveOrderMap";
 import { OrderChatConversation } from "./OrderChatConversation";
+
+const SOCKET_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000");
 
 const STATUS_TEXT: Record<string, { label: string; tone: string; showMap: boolean }> = {
   ASSIGNED: { label: "Repartidor asignado", tone: "#F59E0B", showMap: false },
@@ -90,6 +95,32 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
       if (routeTimerRef.current != null) window.clearInterval(routeTimerRef.current);
     };
   }, [loadRoute]);
+
+  // En vivo: el backend avisa al instante cuando el pedido cambia de estado
+  // (picking → "en camino" → "entregado"), sin esperar al siguiente sondeo.
+  // El intervalo de 3 s se mantiene como respaldo si el socket no está.
+  useEffect(() => {
+    const socket = io(`${SOCKET_URL}/orders`, {
+      transports: ["websocket", "polling"],
+    });
+    const subscribe = () => socket.emit("subscribe:order", orderCode);
+    socket.on("connect", subscribe);
+
+    const onUpdate = () => {
+      void load();
+      void loadRoute();
+    };
+    socket.on("order:status", onUpdate);
+    socket.on("order:updated", onUpdate);
+
+    return () => {
+      socket.emit("unsubscribe:order", orderCode);
+      socket.off("connect", subscribe);
+      socket.off("order:status", onUpdate);
+      socket.off("order:updated", onUpdate);
+      socket.disconnect();
+    };
+  }, [orderCode, load, loadRoute]);
 
   const delivery = data?.deliveryStatus ? STATUS_TEXT[data.deliveryStatus] : null;
   const canShowMap =

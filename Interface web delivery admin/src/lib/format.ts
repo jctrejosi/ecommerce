@@ -13,8 +13,18 @@ export function timeAgo(iso: string | null | undefined): string {
   return `hace ${d} d`;
 }
 
-/** Última ubicación demasiado vieja ⇒ "sin señal". */
-export function isStale(iso: string | null | undefined, maxAgeMs = 5 * 60_000): boolean {
+/**
+ * Ventana de presencia: sin señal durante este tiempo, el repartidor se
+ * considera desconectado. El heartbeat de la app llega cada minuto, así que
+ * tolera varios latidos perdidos antes de marcarlo fuera de línea.
+ */
+export const PRESENCE_WINDOW_MS = 5 * 60_000;
+
+/** Última señal demasiado vieja ⇒ "sin señal". */
+export function isStale(
+  iso: string | null | undefined,
+  maxAgeMs = PRESENCE_WINDOW_MS,
+): boolean {
   if (!iso) return true;
   return Date.now() - new Date(iso).getTime() > maxAgeMs;
 }

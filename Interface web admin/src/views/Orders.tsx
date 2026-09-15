@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   LayoutGrid, List, Search, Download, Eye, Package,
   Clock, CheckCircle, Truck, XCircle, ChevronRight, MoreHorizontal,
@@ -6,6 +6,7 @@ import {
   ListFilter, Layers, PackageCheck, CheckCheck, UserRound,
 } from "lucide-react";
 import { ordersService, type Order, type OrderDetail, type OrderStatus } from "../services/orders.service";
+import { useOrderEvents } from "../hooks/useOrderEvents";
 
 const STATUS_CONFIG: Record<OrderStatus, { label: string; color: string; bg: string; border: string; colBg: string }> = {
   pendiente:  { label: "Pendiente",  color: "text-gray-600",   bg: "bg-gray-100",   border: "border-gray-200",  colBg: "bg-gray-50" },
@@ -232,14 +233,16 @@ function ConfirmStatusDialog({
 function OrderDetail({ order: initialOrder, onClose, onStatusChange }: { order: Order; onClose: () => void; onStatusChange: (o: Order, s: OrderStatus) => void }) {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
-  const cfg = STATUS_CONFIG[initialOrder.status];
+  const cfg = STATUS_CONFIG[order?.status ?? initialOrder.status];
 
   useEffect(() => {
     ordersService.getById(initialOrder.orderId.toString())
       .then(setOrder)
       .catch(() => setOrder({ ...initialOrder, items: [] }))
       .finally(() => setLoading(false));
-  }, [initialOrder.orderId]);
+    // `initialOrder.status` en las deps: si el estado cambia en vivo (el picker
+    // avanza el pedido), el detalle abierto se vuelve a cargar solo.
+  }, [initialOrder.orderId, initialOrder.status]);
 
   const timeline = order?.statusHistory?.map((h, i, arr) => ({
     status: h.status,
@@ -394,6 +397,37 @@ export default function Orders() {
       setLoading(false);
     }
   }, [search]);
+
+  // Refresco silencioso (sin parpadear el spinner) para las actualizaciones en vivo.
+  const refreshOrders = useCallback(async () => {
+    try {
+      const data = await ordersService.getAll({
+        search: search || undefined,
+        limit: 100,
+      });
+      setOrders(data);
+    } catch {
+      /* se reintenta con el siguiente evento */
+    }
+  }, [search]);
+
+  // Cambios de estado en vivo (picking, reparto, pagos, otros admins): se
+  // refresca la lista con un pequeño debounce para no disparar en ráfaga
+  // cuando el picker escanea varios productos seguidos.
+  const liveTimer = useRef<number | null>(null);
+  useOrderEvents(() => {
+    if (liveTimer.current) window.clearTimeout(liveTimer.current);
+    liveTimer.current = window.setTimeout(() => {
+      liveTimer.current = null;
+      void refreshOrders();
+    }, 900);
+  });
+
+  useEffect(() => {
+    return () => {
+      if (liveTimer.current) window.clearTimeout(liveTimer.current);
+    };
+  }, []);
 
   // Cambio de estado manual: primero se pide confirmación (acción administrativa)
   const requestStatusChange = (o: Order, toStatus: OrderStatus) => {

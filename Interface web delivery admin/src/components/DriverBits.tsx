@@ -1,7 +1,7 @@
 import { WifiOff } from 'lucide-react';
 import type { FleetDriver } from '../types';
-import { driverVisual } from '../lib/status';
-import { initials, isStale, timeAgo } from '../lib/format';
+import { driverVisual, isDriverOnline, lastSignalAt } from '../lib/status';
+import { initials, timeAgo } from '../lib/format';
 
 /** Avatar circular con iniciales y color según estado. */
 export function DriverAvatar({
@@ -12,7 +12,9 @@ export function DriverAvatar({
   size?: number;
 }) {
   const visual = driverVisual(driver);
-  const stale = isStale(driver.lastLocationAt);
+  // Solo se marca "sin señal" a repartidores activos: a uno desactivado ya se
+  // le nota por la opacidad y su propio estado.
+  const offline = driver.isActive && !isDriverOnline(driver);
   return (
     <div
       className="relative shrink-0"
@@ -29,7 +31,7 @@ export function DriverAvatar({
       >
         {initials(driver.fullName)}
       </div>
-      {stale && (
+      {offline && (
         <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white">
           <WifiOff className="h-3 w-3 text-slate-400" />
         </span>
@@ -54,15 +56,16 @@ export function StatusBadge({ driver }: { driver: FleetDriver }) {
   );
 }
 
-/** Hora de la última señal GPS. */
+/** Hora de la última señal de la app (heartbeat o GPS). */
 export function LastSeen({ driver }: { driver: FleetDriver }) {
-  const stale = isStale(driver.lastLocationAt);
+  const signal = lastSignalAt(driver);
+  const offline = driver.isActive && !isDriverOnline(driver);
   return (
     <span
-      className={`whitespace-nowrap text-xs ${stale ? 'font-semibold text-rose-500' : 'text-slate-400'}`}
-      title={driver.lastLocationAt ?? 'Sin señal'}
+      className={`whitespace-nowrap text-xs ${offline ? 'font-semibold text-rose-500' : 'text-slate-400'}`}
+      title={signal ? new Date(signal).toLocaleString('es-CO') : 'Sin señal'}
     >
-      {driver.lastLocationAt ? timeAgo(driver.lastLocationAt) : 'Sin señal'}
+      {signal ? timeAgo(signal) : 'Sin señal'}
     </span>
   );
 }

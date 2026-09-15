@@ -49,6 +49,8 @@ export interface FleetDriver {
   isActive: boolean;
   location: LatLng | null;
   lastLocationAt: string | null;
+  /** Última señal de la app (heartbeat o GPS), lo más reciente. */
+  lastSeenAt: string | null;
   createdAt: string;
   activeAssignment: ActiveAssignment | null;
 }
@@ -101,4 +103,32 @@ export type DriverFilter =
   | 'available'
   | 'with-order'
   | 'in-delivery'
+  | 'offline'
   | 'inactive';
+
+/** Lado que escribió un mensaje del chat repartidor ↔ admin. */
+export type ChatSide = 'driver' | 'admin';
+
+export interface DriverChatMessage {
+  id: number;
+  senderType: ChatSide;
+  senderUserId: number | null;
+  body: string;
+  createdAt: string | null;
+  readAt: string | null;
+}
+
+/** Renglón de la bandeja de chat: un hilo por repartidor. */
+export interface DriverConversation {
+  driverId: number;
+  fullName: string;
+  phone: string;
+  routeColor: string | null;
+  isActive: boolean;
+  unread: number;
+  lastMessage: {
+    body: string;
+    senderType: ChatSide;
+    createdAt: string | null;
+  } | null;
+}

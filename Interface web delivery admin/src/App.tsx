@@ -3,6 +3,7 @@ import {
   Loader2,
   LogOut,
   LocateFixed,
+  MessageCircle,
   Package,
   RefreshCw,
   Truck,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react';
 import type {
   AuthUser,
+  DriverConversation,
   DriverFilter,
   FleetDriver,
   FleetOrder,
@@ -19,11 +21,13 @@ import type {
 import { api, ApiError, getToken, setToken } from './services/api';
 import {
   connectFleetSocket,
+  connectOrdersSocket,
+  type FleetChatEvent,
   type FleetLocationEvent,
   type FleetStatusEvent,
 } from './services/socket';
-import { filterDrivers } from './lib/status';
-import { initials, isStale } from './lib/format';
+import { filterDrivers, isDriverOnline } from './lib/status';
+import { initials } from './lib/format';
 import LoginScreen from './components/LoginScreen';
 import logo from './assets/logo.png';
 import FleetMap, { type FleetMapHandle } from './components/FleetMap';
@@ -31,6 +35,7 @@ import DriversSidebar from './components/DriversSidebar';
 import DriversPanel from './components/DriversPanel';
 import OrdersPanel from './components/OrdersPanel';
 import DriverFormModal from './components/DriverFormModal';
+import DriverChatModal from './components/DriverChatModal';
 
 type Tab = 'map' | 'drivers' | 'orders';
 
@@ -61,6 +66,13 @@ export default function App() {
     | { mode: 'edit'; driver: FleetDriver; focusReset?: boolean }
     | null
   >(null);
+
+  // ── Chat repartidor ↔ admin ──
+  const [chats, setChats] = useState<DriverConversation[]>([]);
+  const [chatOpen, setChatOpen] = useState(false);
+  const [chatDriverId, setChatDriverId] = useState<number | null>(null);
+  // Se incrementa con cada mensaje recibido por socket: fuerza refrescar el hilo.
+  const [chatTick, setChatTick] = useState(0);
 
   const mapRef = useRef<FleetMapHandle | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,6 +123,29 @@ export default function App() {
     return () => clearInterval(interval);
   }, [user, refresh]);
 
+  // ── Bandeja de chat (no leídos por repartidor) ──
+  const refreshChats = useCallback(async () => {
+    try {
+      setChats(await api.chats());
+    } catch {
+      /* el chat no debe tumbar el panel: se reintenta en el siguiente ciclo */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    void refreshChats();
+    // Respaldo del socket (que avisa al instante de cada mensaje).
+    const interval = setInterval(() => void refreshChats(), 30_000);
+    return () => clearInterval(interval);
+  }, [user, refreshChats]);
+
+  /** Abre la bandeja (sin id) o el hilo de un repartidor concreto. */
+  const openChat = useCallback((driverId: number | null) => {
+    setChatDriverId(driverId);
+    setChatOpen(true);
+  }, []);
+
   // ── Socket en tiempo real ──
   const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) return;
@@ -142,12 +177,24 @@ export default function App() {
         );
       },
       onStatus: (_p: FleetStatusEvent) => scheduleRefresh(),
+      onChat: (_p: FleetChatEvent) => {
+        // Llega un mensaje (en cualquier sentido): refresca badges e hilo.
+        setChatTick((t) => t + 1);
+        void refreshChats();
+      },
+    });
+    // Y el canal general de pedidos: pagos, picking y cambios del propio panel
+    // no pasan por `/delivery`, así que sin esto la lista quedaría congelada.
+    const disconnectOrders = connectOrdersSocket({
+      onConnect: () => scheduleRefresh(),
+      onOrderUpdated: () => scheduleRefresh(),
     });
     return () => {
+      disconnectOrders();
       disconnect();
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
-  }, [user, scheduleRefresh]);
+  }, [user, scheduleRefresh, refreshChats]);
 
   // ── Acciones ──
   const handleLogin = useCallback((token: string, u: AuthUser) => {
@@ -216,12 +263,28 @@ export default function App() {
     return {
       total: drivers.length,
       active: active.length,
-      available: active.filter((d) => d.isAvailable && !d.activeAssignment).length,
+      available: active.filter((d) => isDriverOnline(d) && d.isAvailable && !d.activeAssignment)
+        .length,
       withOrder: active.filter((d) => d.activeAssignment).length,
       inDelivery: active.filter((d) => d.activeAssignment?.status === 'IN_DELIVERY').length,
-      stale: active.filter((d) => isStale(d.lastLocationAt)).length,
+      offline: active.filter((d) => !isDriverOnline(d)).length,
     };
   }, [drivers]);
+
+  /** Mensajes del chat sin leer (badge del header). */
+  const unreadTotal = useMemo(
+    () => chats.reduce((n, c) => n + c.unread, 0),
+    [chats],
+  );
+
+  const unreadByDriver = useMemo(
+    () => new Map(chats.map((c) => [c.driverId, c.unread])),
+    [chats],
+  );
+  const unreadOf = useCallback(
+    (driverId: number) => unreadByDriver.get(driverId) ?? 0,
+    [unreadByDriver],
+  );
 
   if (booting) {
     return (
@@ -279,6 +342,11 @@ export default function App() {
           <span className="hidden items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700 lg:flex">
             <Package className="h-3 w-3" /> {stats.withOrder} con pedido
           </span>
+          {stats.offline > 0 && (
+            <span className="hidden items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 lg:flex">
+              <WifiOff className="h-3 w-3" /> {stats.offline} desconectados
+            </span>
+          )}
           <span
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
               connected ? 'bg-slate-100 text-slate-600' : 'bg-rose-50 text-rose-600'
@@ -300,6 +368,19 @@ export default function App() {
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => openChat(null)}
+            title="Chat con repartidores"
+            className="relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            <MessageCircle className="h-4 w-4" />
+            {unreadTotal > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[9px] font-bold text-white">
+                {unreadTotal > 99 ? '99+' : unreadTotal}
+              </span>
+            )}
           </button>
 
           <div className="ml-1 flex items-center gap-2 border-l border-slate-200 pl-3">
@@ -397,6 +478,7 @@ export default function App() {
             }
             onToggleAvailable={toggleAvailable}
             onChangeColor={changeDriverColor}
+            onChat={openChat}
           />
         </main>
       )}
@@ -411,6 +493,8 @@ export default function App() {
             }}
             onCreate={() => setModal({ mode: 'create' })}
             onEdit={(driver, focusReset) => setModal({ mode: 'edit', driver, focusReset })}
+            onChat={openChat}
+            unreadOf={unreadOf}
           />
         </main>
       )}
@@ -448,6 +532,16 @@ export default function App() {
           driver={modal.mode === 'edit' ? modal.driver : null}
           onClose={() => setModal(null)}
           onSaved={handleSaved}
+        />
+      )}
+
+      {chatOpen && (
+        <DriverChatModal
+          chats={chats}
+          initialDriverId={chatDriverId}
+          liveTick={chatTick}
+          onClose={() => setChatOpen(false)}
+          onRefreshChats={() => void refreshChats()}
         />
       )}
     </div>

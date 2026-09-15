@@ -1,4 +1,6 @@
 import type {
+  AdminChatMessage,
+  AdminChatSummary,
   ChatMessage,
   DeliveryOrder,
   DriverUser,
@@ -74,10 +76,17 @@ export interface DeliveryApi {
 
   // tracking / perfil / notificaciones
   sendLocation(ping: LocationPing): Promise<void>;
+  /** Señal de presencia sin GPS (se envía cada minuto con sesión activa). */
+  sendHeartbeat(): Promise<void>;
   setPushToken(token: string): Promise<void>;
   setAvailability(available: boolean): Promise<DriverUser>;
 
   // chat por pedido (repartidor ↔ cliente)
   getChatMessages(orderId: number | string): Promise<ChatMessage[]>;
   sendChatMessage(orderId: number | string, body: string): Promise<ChatMessage>;
+
+  // chat con el panel (repartidor ↔ administrador)
+  getAdminChatMessages(): Promise<AdminChatMessage[]>;
+  sendAdminChatMessage(body: string): Promise<AdminChatMessage>;
+  getAdminChatSummary(): Promise<AdminChatSummary>;
 }

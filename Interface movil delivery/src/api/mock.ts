@@ -1,5 +1,7 @@
 import type { DeliveryApi, TransitionKey, TransitionPayload } from "./contract";
 import type {
+  AdminChatMessage,
+  AdminChatSummary,
   ChatMessage,
   DeliveryOrder,
   DriverUser,
@@ -149,6 +151,9 @@ function clone<T>(o: T): T {
 
 /** Chat por pedido en memoria (solo modo mock). */
 const chatStore = new Map<number, ChatMessage[]>();
+
+/** Hilo con el panel (solo modo mock). */
+const adminChatStore: AdminChatMessage[] = [];
 
 function chatFor(orderId: number): ChatMessage[] {
   let msgs = chatStore.get(orderId);
@@ -308,6 +313,10 @@ export const mockApi: DeliveryApi = {
     // El mock descarta los pings; la cola se vacía para no crecer.
   },
 
+  async sendHeartbeat() {
+    // El mock no tiene backend que registrar la presencia.
+  },
+
   async setPushToken(_token) {},
 
   async uploadProofImage(_uri, kind) {
@@ -335,5 +344,35 @@ export const mockApi: DeliveryApi = {
     };
     chatFor(Number(orderId)).push(msg);
     return clone(msg);
+  },
+
+  async getAdminChatMessages() {
+    await delay(200);
+    return clone(adminChatStore);
+  },
+
+  async sendAdminChatMessage(body) {
+    await delay(200);
+    const msg: AdminChatMessage = {
+      id: Date.now(),
+      senderType: "driver",
+      senderUserId: null,
+      body,
+      createdAt: new Date().toISOString(),
+      readAt: null,
+    };
+    adminChatStore.push(msg);
+    return clone(msg);
+  },
+
+  async getAdminChatSummary() {
+    await delay(150);
+    const last = adminChatStore[adminChatStore.length - 1] ?? null;
+    return clone({
+      unread: adminChatStore.filter(
+        (m) => m.senderType === "admin" && m.readAt == null,
+      ).length,
+      lastMessage: last,
+    });
   },
 };

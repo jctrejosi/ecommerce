@@ -13,7 +13,7 @@ import type { FleetDriver } from '../types';
 import { api } from '../services/api';
 import { decodePolyline } from '../lib/polyline';
 import { driverColor } from '../lib/driverColors';
-import { driverVisual } from '../lib/status';
+import { driverVisual, isDriverOnline } from '../lib/status';
 import {
   MAP_STYLE_OPTIONS,
   LAYER_STORAGE_KEY,
@@ -61,8 +61,10 @@ function pinHtml(driver: FleetDriver, selected: boolean): string {
   const size = selected ? 46 : 38;
   const sel = selected ? 'ml-pin--sel' : '';
   const color = driverColor(driver);
+  // Desactivados o sin señal se atenúan: su posición puede estar desactualizada.
+  const dim = !driver.isActive || !isDriverOnline(driver);
   return `
-    <div class="ml-pin ${sel}" style="width:${size}px;height:${size}px;--pin:${color};${driver.isActive ? '' : 'opacity:.55;'}">
+    <div class="ml-pin ${sel}" style="width:${size}px;height:${size}px;--pin:${color};${dim ? 'opacity:.55;' : ''}">
       <span class="ml-pin-inner" style="font-size:${selected ? 24 : 20}px">🛵</span>
       <span class="ml-tip">${tipHtml(driver)}</span>
     </div>`;
@@ -342,7 +344,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       paint: {
         'line-color': '#ffffff',
         'line-width': ['case', ['==', ['get', 'sel'], true], 11, 7],
-        'line-opacity': 0.95,
+        // Ruta de un repartidor sin señal: se atenúa junto con su trazo.
+        'line-opacity': ['case', ['==', ['get', 'dim'], true], 0.35, 0.95],
       },
     });
     map.addLayer({
@@ -353,7 +356,12 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       paint: {
         'line-color': ['get', 'color'],
         'line-width': ['case', ['==', ['get', 'sel'], true], 6, 4],
-        'line-opacity': ['case', ['==', ['get', 'sel'], true], 1, 0.9],
+        'line-opacity': [
+          'case',
+          ['==', ['get', 'sel'], true],
+          1,
+          ['case', ['==', ['get', 'dim'], true], 0.3, 0.9],
+        ],
       },
     });
     map.addLayer({
@@ -393,6 +401,7 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
           kind: 'route-driver',
           color: driverColor(d),
           sel: d.id === selectedIdNow,
+          dim: !isDriverOnline(d),
         },
         geometry: { type: 'LineString', coordinates: route.coords },
       });

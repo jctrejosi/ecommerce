@@ -2472,6 +2472,13 @@ export const deliveryDrivers = pgTable(
       withTimezone: true,
       mode: 'string',
     }),
+    // Última señal de la app (heartbeat o ping GPS). Distingue "conectado pero
+    // sin pedido" de "app cerrada": los pings GPS solo llegan durante una
+    // entrega activa, el heartbeat mientras hay sesión iniciada.
+    lastSeenAt: timestamp('last_seen_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -4056,6 +4063,49 @@ export const orderChatMessages = pgTable(
       columns: [table.senderGuestSessionId],
       foreignColumns: [guestSessions.id],
       name: 'order_chat_messages_sender_guest_session_id_fkey',
+    }).onDelete('set null'),
+  ],
+);
+
+export const driverChatSenderEnum = pgEnum('driver_chat_sender_enum', [
+  'driver',
+  'admin',
+]);
+
+/** Chat directo repartidor ↔ administrador (un hilo por repartidor). */
+export const driverChatMessages = pgTable(
+  'driver_chat_messages',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    driverId: bigint('driver_id', { mode: 'number' }).notNull(),
+    senderType: driverChatSenderEnum('sender_type').notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    senderUserId: bigint('sender_user_id', { mode: 'number' }),
+    body: text().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    readAt: timestamp('read_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_driver_chat_messages_driver').using(
+      'btree',
+      table.driverId.asc().nullsLast().op('int8_ops'),
+      table.id.asc().nullsLast().op('int8_ops'),
+    ),
+    index('idx_driver_chat_messages_unread')
+      .using('btree', table.driverId.asc().nullsLast().op('int8_ops'))
+      .where(sql`(read_at IS NULL)`),
+    foreignKey({
+      columns: [table.driverId],
+      foreignColumns: [deliveryDrivers.id],
+      name: 'driver_chat_messages_driver_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.senderUserId],
+      foreignColumns: [users.id],
+      name: 'driver_chat_messages_sender_user_id_fkey',
     }).onDelete('set null'),
   ],
 );

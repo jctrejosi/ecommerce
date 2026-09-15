@@ -10,6 +10,7 @@ import {
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useActiveOrders, useHistory } from "@/api/orders";
+import { useAdminChatSummary } from "@/api/admin-chat";
 import { OrderCard } from "@/ui/OrderCard";
 import { EmptyState } from "@/ui/EmptyState";
 import { ErrorBox } from "@/ui/ErrorBox";
@@ -68,6 +69,9 @@ export default function OrdersScreen() {
   const [tab, setTab] = useState<TabKey>("nuevos");
   const active = useActiveOrders();
   const history = useHistory();
+  // No leídos del chat con el panel (badge del header).
+  const chatSummary = useAdminChatSummary();
+  const chatUnread = chatSummary.data?.unread ?? 0;
 
   const groups = useMemo(() => {
     const actives = active.data ?? [];
@@ -110,7 +114,33 @@ export default function OrdersScreen() {
   const list = groups[tab];
 
   return (
-    <Screen title="Pedidos" padded={false} scroll={false} bottomInset>
+    <Screen
+      title="Pedidos"
+      padded={false}
+      scroll={false}
+      bottomInset
+      headerRight={
+        <Pressable
+          onPress={() => router.push("/admin-chat")}
+          hitSlop={8}
+          style={styles.chatBtn}
+          accessibilityLabel="Chat con administración"
+        >
+          <Ionicons
+            name="chatbubble-ellipses-outline"
+            size={24}
+            color={colors.text}
+          />
+          {chatUnread > 0 && (
+            <View style={styles.chatBadge}>
+              <Text style={styles.chatBadgeText}>
+                {chatUnread > 9 ? "9+" : chatUnread}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+      }
+    >
       {/* Pestañas del día */}
       <View style={styles.tabs}>
         {TABS.map((t) => {
@@ -173,6 +203,29 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
+  chatBtn: {
+    width: 40,
+    height: 40,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatBadge: {
+    position: "absolute",
+    top: 2,
+    right: 2,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  chatBadgeText: {
+    fontSize: 10,
+    fontWeight: "700",
+    color: "#FFFFFF",
+  },
   tabs: {
     flexDirection: "row",
     gap: spacing(2),

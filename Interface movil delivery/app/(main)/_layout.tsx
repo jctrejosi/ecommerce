@@ -41,6 +41,10 @@ export default function MainLayout() {
         name="chat/[id]"
         options={{ title: "Chat del pedido", headerBackTitle: "Pedido" }}
       />
+      <Stack.Screen
+        name="admin-chat"
+        options={{ title: "Chat con administración", headerBackTitle: "Atrás" }}
+      />
     </Stack>
   );
 }

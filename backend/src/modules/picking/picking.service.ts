@@ -79,7 +79,9 @@ export class PickingService {
     customerId: number | null;
   }) {
     if (!order.referenceCode) return;
-    this.ordersGateway.notifyOrderStatus(order.referenceCode, 'preparando');
+    this.ordersGateway.notifyOrderStatus(order.referenceCode, 'preparando', {
+      customerId: order.customerId,
+    });
 
     if (order.customerId == null) return;
     await this.notifications.create({
@@ -100,7 +102,9 @@ export class PickingService {
     customerId: number | null;
   }) {
     if (!order.referenceCode) return;
-    this.ordersGateway.notifyOrderStatus(order.referenceCode, 'listo');
+    this.ordersGateway.notifyOrderStatus(order.referenceCode, 'listo', {
+      customerId: order.customerId,
+    });
 
     if (order.customerId == null) return;
     await this.notifications.create({
@@ -431,17 +435,14 @@ export class PickingService {
 
     const newPicked = matched.pickedQty + 1;
 
-    // ¿Con este escaneo quedan todos los items alistados?
+    // ¿Con este escaneo quedan todos los items alistados? La app lo usa para
+    // llevar al picker a la verificación final, pero NO cambia el estado: el
+    // pedido pasa a "listo" solo al confirmar "entregado en caja" (complete).
     const allDone = items.every((i) =>
       i.id === matched.id ? newPicked >= i.quantity : i.pickedQty >= i.quantity,
     );
 
-    // Al terminar el último item el pedido queda "listo" (ready) para entrega.
-    const nextStatus = allDone
-      ? 'ready'
-      : isPickingTrigger(order.status)
-        ? 'preparing'
-        : order.status;
+    const nextStatus = isPickingTrigger(order.status) ? 'preparing' : order.status;
 
     await this.db.transaction(async (tx) => {
       await tx
@@ -465,9 +466,8 @@ export class PickingService {
     });
 
     // Refleja el cambio de estado en la app del cliente.
-    if (nextStatus !== order.status) {
-      if (nextStatus === 'preparing') await this.notifyPreparing(order);
-      else if (nextStatus === 'ready') await this.notifyReady(order);
+    if (nextStatus === 'preparing' && nextStatus !== order.status) {
+      await this.notifyPreparing(order);
     }
 
     // Evento en vivo para el admin (Métricas): progreso actualizado del pedido
@@ -501,12 +501,14 @@ export class PickingService {
   }
 
   /**
-   * Cerrar el alistamiento ("entregado en caja") y ofrecer el pedido a delivery.
+   * Cerrar el alistamiento ("entregado en caja" + confirmar) y ofrecer el
+   * pedido a delivery.
    *
-   * NO marca el pedido como "entregado": el pedido queda "listo" (ready) y son
-   * el repartidor (`shipped` = en camino) y la entrega final (`delivered`) los
-   * que avanzan el estado. Aqui solo se registra el cierre del alistamiento
-   * (`completed_at`) para las metricas de picking.
+   * Aquí es donde el pedido pasa a **"listo" (`ready`)**: el picker ya escaneó
+   * todos los items y confirmó la entrega en caja. No se marca como
+   * "entregado": eso lo hacen el repartidor (`shipped` = en camino) y la
+   * entrega final (`delivered`). También registra el cierre (`completed_at`)
+   * para las métricas de picking.
    */
   async complete(id: number) {
     const [order] = await this.db
@@ -545,8 +547,8 @@ export class PickingService {
       );
     }
 
-    // Normalmente ya quedó en "ready" al escanear el último item; si no (p. ej.
-    // items marcados desde otra via), se marca aqui.
+    // El pedido venía "preparando" (todos los items ya escaneados): al
+    // confirmar la entrega en caja pasa a "listo".
     const nextStatus = isPickedDone(order.status) ? order.status : 'ready';
     const now = new Date().toISOString();
 

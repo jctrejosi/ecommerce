@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Package,
   Heart,
@@ -49,6 +49,7 @@ import {
 import type { CartItem, Order, Product } from "../../types";
 import type { AppNotification } from "../../../hooks/useNotifications";
 import { ordersService, type OrderLiveTracking } from "../../../services/orders.service";
+import { useCustomerOrderEvents } from "../../../hooks/useCustomerOrderEvents";
 import { catalogService } from "../../../services/catalog.service";
 import {
   customerAuthService,
@@ -1008,7 +1009,7 @@ function PaymentMethodIcon({ method }: { method: string }) {
 export interface UserAdminViewProps {
   appOrders: Order[];
   cartItems: CartItem[];
-  customer: { firstName?: string; fullName?: string; email?: string } | null;
+  customer: { id?: number; firstName?: string; fullName?: string; email?: string } | null;
   onAdd: (p: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
   onProductClick: (p: Product) => void;
@@ -1113,12 +1114,34 @@ export function UserAdminView({
   const [apiOrders, setApiOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(true);
 
+  const refreshApiOrders = useCallback(
+    () =>
+      ordersService
+        .getOrders()
+        .then(setApiOrders)
+        .catch(() => {}),
+    [],
+  );
+
   useEffect(() => {
-    ordersService
-      .getOrders()
-      .then(setApiOrders)
-      .catch(() => {})
-      .finally(() => setOrdersLoading(false));
+    void refreshApiOrders().finally(() => setOrdersLoading(false));
+  }, [refreshApiOrders]);
+
+  // En vivo: los cambios de estado de mis pedidos (picking, reparto, pagos)
+  // refrescan la lista "Mis pedidos" sin recargar la página.
+  const ordersLiveTimer = useRef<number | null>(null);
+  useCustomerOrderEvents(customer?.id ?? null, () => {
+    if (ordersLiveTimer.current) window.clearTimeout(ordersLiveTimer.current);
+    ordersLiveTimer.current = window.setTimeout(() => {
+      ordersLiveTimer.current = null;
+      void refreshApiOrders();
+    }, 900);
+  });
+
+  useEffect(() => {
+    return () => {
+      if (ordersLiveTimer.current) window.clearTimeout(ordersLiveTimer.current);
+    };
   }, []);
 
   // Load favorites when section changes to favorites or customer changes

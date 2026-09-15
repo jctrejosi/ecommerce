@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, ShoppingCart, Users, Package, Truck,
   AlertTriangle, Zap, Eye, X, Loader2, ArrowUpRight, RefreshCw,
@@ -8,6 +8,7 @@ import {
   AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { useOrderEvents } from '../hooks/useOrderEvents';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
@@ -326,6 +327,37 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
         .finally(() => loadingSetter(false));
     });
   }, [fetchJSON]);
+
+  // ─── En vivo: cada cambio de estado de pedido refresca el dashboard ───
+  // El backend emite `order:updated` en cada transición (pago, picking, admin o
+  // repartidor). Se refresca lo que cambia con esas transiciones: los pedidos
+  // recientes y los KPIs.
+  const liveTimer = useRef<number | null>(null);
+  const refreshLive = useCallback(() => {
+    fetchJSON('/admin/dashboard/recent-orders?limit=10')
+      .then(setRecentOrders)
+      .catch(() => {});
+    fetchJSON('/admin/dashboard/stats')
+      .then(setStats)
+      .catch(() => {});
+  }, [fetchJSON]);
+
+  useOrderEvents(() => {
+    // Debounce: una ráfaga (el picker escaneando varios pedidos) no debe
+    // disparar una petición por evento.
+    if (liveTimer.current != null) return;
+    liveTimer.current = window.setTimeout(() => {
+      liveTimer.current = null;
+      refreshLive();
+    }, 1000);
+  });
+
+  useEffect(
+    () => () => {
+      if (liveTimer.current != null) window.clearTimeout(liveTimer.current);
+    },
+    [],
+  );
 
   // Today orders (modal)
   const loadTodayOrders = useCallback(async (status?: string) => {

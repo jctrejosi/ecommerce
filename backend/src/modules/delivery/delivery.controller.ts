@@ -34,6 +34,19 @@ export class DeliveryController {
     return result;
   }
 
+  /**
+   * Señal de presencia sin GPS: la app la envía cada minuto mientras hay sesión,
+   * incluso sin entregas, para que el panel distinga conectado de desconectado.
+   */
+  @Post('heartbeat')
+  async heartbeat(@CurrentUser('sub') userId: bigint) {
+    const driver = await this.delivery.getDriverByAuthUserId(Number(userId));
+    if (!driver) {
+      throw new UnauthorizedException('No hay repartidor asociado a esta cuenta.');
+    }
+    return this.delivery.touchLastSeen(Number(driver.id));
+  }
+
   @Get('orders/:id/route')
   async route(
     @CurrentUser('sub') userId: bigint,

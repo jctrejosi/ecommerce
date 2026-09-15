@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { and, eq, isNull, asc } from 'drizzle-orm';
+import { and, eq, isNull, desc } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { notifications } from '../../../drizzle/schema';
 import { NotificationsGateway } from './notifications.gateway';
@@ -27,7 +27,10 @@ export class NotificationsService {
       })
       .from(notifications)
       .where(eq(notifications.targetCustomerId, customerId))
-      .orderBy(asc(notifications.isRead), asc(notifications.createdAt));
+      // Más reciente primero (el cliente antepone las que llegan en vivo por
+      // WebSocket, así que el listado inicial debe usar el mismo orden). El id
+      // desempata cuando dos comparten marca de tiempo.
+      .orderBy(desc(notifications.createdAt), desc(notifications.id));
 
     return rows.map((row) => ({
       ...row,

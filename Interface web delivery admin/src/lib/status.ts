@@ -3,6 +3,7 @@ import type {
   DriverFilter,
   FleetDriver,
 } from '../types';
+import { isStale } from './format';
 
 export interface StatusMeta {
   label: string;
@@ -85,7 +86,26 @@ export interface DriverVisual {
   badge: string;
 }
 
-/** Estado visual de un repartidor según cuenta + pedido activo. */
+/**
+ * Última señal conocida del repartidor: el heartbeat de la app o el último ping
+ * GPS, el que sea más reciente. `null` si nunca dio señal.
+ */
+export function lastSignalAt(d: FleetDriver): string | null {
+  const seen = d.lastSeenAt ? new Date(d.lastSeenAt).getTime() : 0;
+  const loc = d.lastLocationAt ? new Date(d.lastLocationAt).getTime() : 0;
+  const latest = Math.max(seen, loc);
+  return latest > 0 ? new Date(latest).toISOString() : null;
+}
+
+/**
+ * ¿La app del repartidor sigue reportando? Requiere cuenta activa y una señal
+ * dentro de la ventana de presencia; sin señal se considera desconectado.
+ */
+export function isDriverOnline(d: FleetDriver): boolean {
+  return d.isActive && !isStale(lastSignalAt(d));
+}
+
+/** Estado visual de un repartidor según cuenta, señal y pedido activo. */
 export function driverVisual(d: FleetDriver): DriverVisual {
   if (!d.isActive) {
     return {
@@ -95,9 +115,24 @@ export function driverVisual(d: FleetDriver): DriverVisual {
       badge: 'bg-slate-100 text-slate-500',
     };
   }
+  const offline = !isDriverOnline(d);
   if (d.activeAssignment) {
+    // El pedido en curso manda, pero si la app dejó de dar señal se avisa.
     const meta = STATUS_META[d.activeAssignment.status];
-    return { color: meta.color, label: meta.label, action: meta.action, badge: meta.badge };
+    return {
+      color: meta.color,
+      label: meta.label,
+      action: offline ? `Sin señal · ${meta.action}` : meta.action,
+      badge: meta.badge,
+    };
+  }
+  if (offline) {
+    return {
+      color: '#94a3b8',
+      label: 'Desconectado',
+      action: 'Sin señal de la app · desconectado',
+      badge: 'bg-slate-100 text-slate-500',
+    };
   }
   if (d.isAvailable) {
     return {
@@ -121,11 +156,16 @@ export function filterDrivers(
 ): FleetDriver[] {
   switch (filter) {
     case 'available':
-      return drivers.filter((d) => d.isActive && d.isAvailable && !d.activeAssignment);
+      // Solo conectados: un repartidor sin señal no está disponible de verdad.
+      return drivers.filter(
+        (d) => isDriverOnline(d) && d.isAvailable && !d.activeAssignment,
+      );
     case 'with-order':
       return drivers.filter((d) => d.isActive && d.activeAssignment);
     case 'in-delivery':
       return drivers.filter((d) => d.isActive && d.activeAssignment?.status === 'IN_DELIVERY');
+    case 'offline':
+      return drivers.filter((d) => d.isActive && !isDriverOnline(d));
     case 'inactive':
       return drivers.filter((d) => !d.isActive);
     default:
@@ -138,5 +178,6 @@ export const FILTER_OPTIONS: { key: DriverFilter; label: string }[] = [
   { key: 'available', label: 'Disponibles' },
   { key: 'with-order', label: 'Con pedido' },
   { key: 'in-delivery', label: 'En entrega' },
+  { key: 'offline', label: 'Desconectados' },
   { key: 'inactive', label: 'Inactivos' },
 ];

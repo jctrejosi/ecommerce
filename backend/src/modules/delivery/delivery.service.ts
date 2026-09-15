@@ -78,7 +78,12 @@ export class DeliveryService {
 
     await this.db
       .update(deliveryDrivers)
-      .set({ currentLocation: point, lastLocationAt: recordedAt })
+      .set({
+        currentLocation: point,
+        lastLocationAt: recordedAt,
+        // Un ping GPS también prueba que la app está viva.
+        lastSeenAt: new Date().toISOString(),
+      })
       .where(eq(deliveryDrivers.id, BigInt(driverId)));
 
     await this.db.insert(deliveryDriverLocations).values({
@@ -90,6 +95,20 @@ export class DeliveryService {
     });
 
     return { ok: true, location: { lat: dto.lat, lng: dto.lng } };
+  }
+
+  /**
+   * Marca de presencia: la app del repartidor sigue abierta con sesión activa.
+   * La usa el heartbeat (sin GPS) para no dejar al repartidor "conectado" solo
+   * mientras tiene una entrega en curso.
+   */
+  async touchLastSeen(driverId: number) {
+    const at = new Date().toISOString();
+    await this.db
+      .update(deliveryDrivers)
+      .set({ lastSeenAt: at })
+      .where(eq(deliveryDrivers.id, BigInt(driverId)));
+    return { ok: true, lastSeenAt: at };
   }
 
   /**

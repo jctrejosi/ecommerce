@@ -1508,10 +1508,9 @@ export class OrdersService {
 
     // Emitir por WebSocket al cliente
     const displayStatus = this.mapOrderStatus(dbStatus);
-    this.ordersGateway.notifyOrderStatus(
-      existing.referenceCode,
-      displayStatus,
-    );
+    this.ordersGateway.notifyOrderStatus(existing.referenceCode, displayStatus, {
+      customerId: existing.customerId,
+    });
 
     // Notificar al cliente si el pago fue confirmado
     if (dbStatus === 'paid' && existing.customerId) {

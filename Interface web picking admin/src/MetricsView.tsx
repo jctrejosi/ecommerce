@@ -64,19 +64,29 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
     void load()
   }, [load])
 
-  // Eventos EN VIVO: cada acción del picker (claim / scan / entregado) refresca
-  // las métricas al instante, sin polling.
+  // Refresco con debounce: un solo escaneo puede generar varios eventos.
+  const reloadTimer = useRef<number | null>(null)
+  const scheduleReload = useCallback(() => {
+    if (reloadTimer.current) window.clearTimeout(reloadTimer.current)
+    reloadTimer.current = window.setTimeout(() => {
+      reloadTimer.current = null
+      void load()
+    }, 400)
+  }, [load])
+
+  // Eventos EN VIVO del picking: cada acción del picker (claim / scan / entregado
+  // en caja) refresca las métricas al instante, sin polling.
   useEffect(() => {
     const socket = io(`${API_BASE_URL}/picking-events`, {
       transports: ['websocket', 'polling'],
     })
     socketRef.current = socket
 
-    socket.on('picking:claim', () => void load())
-    socket.on('picking:scan', () => void load())
+    socket.on('picking:claim', scheduleReload)
+    socket.on('picking:scan', scheduleReload)
 
     socket.on('picking:delivered', (payload: { referenceCode?: string }) => {
-      void load()
+      scheduleReload()
       notify(`📦 Pedido ${payload?.referenceCode ?? ''} entregado en caja`)
     })
 
@@ -84,7 +94,32 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
       socket.disconnect()
       socketRef.current = null
     }
-  }, [load, notify])
+  }, [scheduleReload, notify])
+
+  // Cambios de estado por CUALQUIER vía (pago, admin, reparto: en camino /
+  // entregado): misma sala `staff` que usan los demás paneles. Refresca las
+  // métricas para que el estado de cada picker esté siempre al día.
+  useEffect(() => {
+    const socket = io(`${API_BASE_URL}/orders`, {
+      transports: ['websocket', 'polling'],
+    })
+    const subscribe = () => socket.emit('subscribe:staff')
+    socket.on('connect', subscribe)
+    socket.on('order:updated', scheduleReload)
+
+    return () => {
+      socket.emit('unsubscribe:staff')
+      socket.off('connect', subscribe)
+      socket.disconnect()
+    }
+  }, [scheduleReload])
+
+  // Limpieza del temporizador de refresco.
+  useEffect(() => {
+    return () => {
+      if (reloadTimer.current) window.clearTimeout(reloadTimer.current)
+    }
+  }, [])
 
   async function openHistory(p: PickerSummary) {
     setHistoryLoading(true)

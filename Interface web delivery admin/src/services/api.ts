@@ -1,5 +1,7 @@
 import type {
   AuthUser,
+  DriverChatMessage,
+  DriverConversation,
   FleetDriver,
   FleetOrder,
   LoginResponse,
@@ -130,6 +132,24 @@ export const api = {
     }),
 
   orders: () => fetchJson<FleetOrder[]>('/delivery/admin/orders'),
+
+  // ── Chat repartidor ↔ admin ─────────────────────────────────────────────────
+
+  /** Bandeja: un renglón por repartidor con no leídos y último mensaje. */
+  chats: () =>
+    fetchJson<DriverConversation[]>('/delivery/admin/chats', { cache: 'no-store' }),
+
+  /** Hilo con un repartidor. Al leerlo, el backend lo marca como leído. */
+  chatMessages: (driverId: number) =>
+    fetchJson<DriverChatMessage[]>(`/delivery/admin/drivers/${driverId}/messages`, {
+      cache: 'no-store',
+    }),
+
+  sendChatMessage: (driverId: number, body: string) =>
+    fetchJson<DriverChatMessage>(`/delivery/admin/drivers/${driverId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
 
   /**
    * Ruta por calles (OSRM) de un pedido. `from` (`lng,lat`) permite calcular

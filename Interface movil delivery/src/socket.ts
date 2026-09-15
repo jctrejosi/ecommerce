@@ -4,6 +4,7 @@ import { USE_MOCK } from "@/api/client";
 import { getServerUrl } from "@/api/server";
 import { queryClient } from "@/lib/queryClient";
 import { orderKeys } from "@/api/orders";
+import { adminChatKeys } from "@/api/admin-chat";
 
 let socket: Socket | null = null;
 
@@ -36,6 +37,12 @@ export function connectDeliverySocket(accessToken: string): void {
     void queryClient.invalidateQueries({ queryKey: orderKeys.detail(orderId) });
     void queryClient.invalidateQueries({ queryKey: orderKeys.active });
     void queryClient.invalidateQueries({ queryKey: orderKeys.history });
+  });
+
+  socket.on("delivery:admin-chat", () => {
+    // Mensaje del panel: refresca el hilo y el badge de no leídos.
+    void queryClient.invalidateQueries({ queryKey: adminChatKeys.messages });
+    void queryClient.invalidateQueries({ queryKey: adminChatKeys.summary });
   });
 
   socket.on("delivery:cancelled", ({ orderId }: { orderId: number | string }) => {

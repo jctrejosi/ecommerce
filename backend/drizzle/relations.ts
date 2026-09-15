@@ -68,6 +68,7 @@ import {
   productTaxClasses,
   promotionProducts,
   orderChatMessages,
+  driverChatMessages,
 } from './schema';
 
 export const userSessionsRelations = relations(userSessions, ({ one }) => ({
@@ -915,3 +916,17 @@ export const promotionProductsRelations = relations(
 export const savedFiltersRelations = relations(savedFilters, ({ many }) => ({
   banners: many(banners),
 }));
+
+export const driverChatMessagesRelations = relations(
+  driverChatMessages,
+  ({ one }) => ({
+    driver: one(deliveryDrivers, {
+      fields: [driverChatMessages.driverId],
+      references: [deliveryDrivers.id],
+    }),
+    senderUser: one(users, {
+      fields: [driverChatMessages.senderUserId],
+      references: [users.id],
+    }),
+  }),
+);

@@ -229,7 +229,7 @@ export default function App() {
         {/* Tabs fijos (no scrolleables) */}
         <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3 shrink-0">
           <div className="flex gap-2 flex-wrap">
-            {(['shelves', 'categories', 'map', 'products', 'metrics', 'users', 'schedule'] as const).map((t) => (
+            {(['shelves', 'categories', 'map', 'products', 'users', 'schedule', 'metrics'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -237,7 +237,7 @@ export default function App() {
                   tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
                 }`}
               >
-                {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'metrics' ? 'Informes' : t === 'users' ? 'Usuarios' : 'Horarios'}
+                {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'users' ? 'Usuarios' : t === 'schedule' ? 'Horarios' : 'Pickers'}
               </button>
             ))}
           </div>

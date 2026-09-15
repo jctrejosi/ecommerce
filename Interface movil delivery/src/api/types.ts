@@ -67,6 +67,22 @@ export interface ChatMessage {
   createdAt: string | null;
 }
 
+/** Mensaje del chat repartidor ↔ administrador (hilo con el panel). */
+export interface AdminChatMessage {
+  id: number;
+  senderType: "driver" | "admin";
+  senderUserId: number | null;
+  body: string;
+  createdAt: string | null;
+  readAt: string | null;
+}
+
+/** Resumen del hilo con el panel: sirve para el badge de no leídos. */
+export interface AdminChatSummary {
+  unread: number;
+  lastMessage: AdminChatMessage | null;
+}
+
 export interface OrderCustomer {
   name: string;
   phone: string;

@@ -85,4 +85,16 @@ export class DeliveryGateway implements OnGatewayConnection {
       at: new Date().toISOString(),
     });
   }
+
+  /**
+   * Mensaje del chat repartidor ↔ admin para el panel (sala `fleet`).
+   * Se emite en ambos sentidos: el admin ve llegar los del repartidor y también
+   * se sincronizan entre administradores con el panel abierto.
+   */
+  emitFleetChat(payload: Record<string, unknown>) {
+    this.server?.to('fleet').emit('delivery:admin-chat', {
+      ...payload,
+      at: new Date().toISOString(),
+    });
+  }
 }

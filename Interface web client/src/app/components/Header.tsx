@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { categoryIcon } from "../categoryIcons";
 import {
   Search,
   ShoppingCart,
@@ -328,7 +329,7 @@ export function Header({
         {categoryIds.map((id) => {
           const cat = categories.find((c) => c.id === id);
           if (!cat) return null;
-          const Icon = cat.icon;
+          const icon = categoryIcon(cat.slug, cat.name);
           const children = categoriesByParentId.get(id) ?? [];
           const hasChildren = children.length > 0;
           const isActive = activeId === id;
@@ -350,13 +351,13 @@ export function Header({
               }}
             >
               <div
-                className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-[10px] font-bold"
+                className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-[13px] leading-none"
                 style={{
                   background: cat.bg || "#F4F4F6",
                   color: cat.color || "#6B7280",
                 }}
               >
-                {Icon ? <Icon className="w-3 h-3" /> : cat.name.charAt(0)}
+                {icon}
               </div>
               <div className="flex-1 min-w-0 leading-tight">
                 <p className="text-xs font-medium text-foreground uppercase tracking-wide whitespace-normal">
@@ -547,7 +548,7 @@ export function Header({
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           {suggestedCategories.map((cat) => {
-                            const Icon = cat.icon;
+                            const icon = categoryIcon(cat.slug, cat.name);
                             return (
                               <button
                                 key={cat.id}
@@ -556,14 +557,9 @@ export function Header({
                                   setSearchQuery(cat.name);
                                 }}
                               >
-                                {Icon ? (
-                                  <Icon
-                                    className="w-3 h-3"
-                                    style={{
-                                      color: cat.color ?? "currentColor",
-                                    }}
-                                  />
-                                ) : null}
+                                <span className="text-[13px] leading-none">
+                                  {icon}
+                                </span>
                                 {cat.name}
                               </button>
                             );

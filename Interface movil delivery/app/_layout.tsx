@@ -11,6 +11,7 @@ import { configureNotifications, registerPushToken } from "@/notifications/push"
 import { connectDeliverySocket, disconnectDeliverySocket } from "@/socket";
 import { useActiveOrders } from "@/api/orders";
 import { startBackgroundTracking, stopBackgroundTracking } from "@/tracking/location";
+import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/tracking/presence";
 import { USE_MOCK } from "@/api";
 import { getServerUrl, resolveServer, watchNetworkPrefix } from "@/api/server";
 import { ServerSetup } from "@/ui/ServerSetup";
@@ -57,6 +58,18 @@ function RootShell() {
     });
     if (!USE_MOCK) void registerPushToken();
     return () => disconnectDeliverySocket();
+  }, [user]);
+
+  // Presencia: avisa cada minuto que la app sigue viva aunque no haya entrega
+  // activa, para que el panel de flota no lo muestre como "disponible" si lleva
+  // horas sin dar señal.
+  useEffect(() => {
+    if (!user) {
+      stopPresenceHeartbeat();
+      return;
+    }
+    startPresenceHeartbeat();
+    return () => stopPresenceHeartbeat();
   }, [user]);
 
   return <Stack screenOptions={{ headerShown: false }} />;

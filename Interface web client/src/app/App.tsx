@@ -8,6 +8,7 @@ import {
   type CustomerAddress,
 } from "../services/customer-auth.service";
 import { useOrderSocket } from "../hooks/useOrderSocket";
+import { useCustomerOrderEvents } from "../hooks/useCustomerOrderEvents";
 import { useNotifications } from "../hooks/useNotifications";
 import { useBackendStatus } from "../hooks/useBackendStatus";
 import { ChatbotWidget } from "../components/ChatbotWidget";
@@ -171,7 +172,9 @@ export default function App() {
         ),
       );
       if (watch.reason) setOrderDeclineReason(watch.reason);
-      if (watch.status === "preparando" || watch.status === "cancelado")
+      // La suscripción se mantiene hasta el estado final: así el cliente ve en
+      // vivo "listo" (picking), "en camino" y "entregado" (repartidor).
+      if (watch.status === "entregado" || watch.status === "cancelado")
         setPendingOrderId(null);
     }
   }, [watch.status, watch.reason, pendingOrderId]);
@@ -471,14 +474,38 @@ export default function App() {
   }, [cartHydrated, cartItems, customer]);
 
   // Load orders
-  useEffect(() => {
-    if (customer && !customerLoading) {
+  const refreshOrders = useCallback(
+    () =>
       ordersService
         .getOrders()
         .then(setOrders)
-        .catch(() => {});
+        .catch(() => {}),
+    [],
+  );
+
+  useEffect(() => {
+    if (customer && !customerLoading) {
+      void refreshOrders();
     }
-  }, [customer, customerLoading]);
+  }, [customer, customerLoading, refreshOrders]);
+
+  // En vivo: cualquier cambio de estado de MIS pedidos (picking, reparto o
+  // pagos) refresca la lista, con un pequeño debounce para no disparar en
+  // ráfaga cuando el picker escanea varios productos seguidos.
+  const ordersLiveTimer = useRef<number | null>(null);
+  useCustomerOrderEvents(customer?.id ?? null, () => {
+    if (ordersLiveTimer.current) window.clearTimeout(ordersLiveTimer.current);
+    ordersLiveTimer.current = window.setTimeout(() => {
+      ordersLiveTimer.current = null;
+      void refreshOrders();
+    }, 900);
+  });
+
+  useEffect(() => {
+    return () => {
+      if (ordersLiveTimer.current) window.clearTimeout(ordersLiveTimer.current);
+    };
+  }, []);
 
   const addToCart = (p: Product, q: number = 1) => {
     if (!p.id || Number(p.id) <= 0) return;

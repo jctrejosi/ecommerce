@@ -10,14 +10,17 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { SuperuserGuard } from './superuser.guard';
 import { DeliveryAdminService } from './delivery-admin.service';
+import { DriverChatService } from './driver-chat.service';
 import {
   CreateDriverDto,
   ResetPasswordDto,
   UpdateDriverDto,
 } from './dto/admin-driver.dto';
+import { SendMessageDto } from './dto/send-message.dto';
 
 /**
  * Endpoints administrativos del delivery (panel web delivery-admin).
@@ -26,7 +29,10 @@ import {
 @Controller('delivery/admin')
 @UseGuards(JwtAuthGuard, SuperuserGuard)
 export class DeliveryAdminController {
-  constructor(private readonly admin: DeliveryAdminService) {}
+  constructor(
+    private readonly admin: DeliveryAdminService,
+    private readonly chat: DriverChatService,
+  ) {}
 
   /** Flota completa con posición y pedido activo de cada repartidor. */
   @Get('drivers')
@@ -54,6 +60,31 @@ export class DeliveryAdminController {
   @Post('drivers/:id/reset-password')
   resetPassword(@Param('id') id: string, @Body() dto: ResetPasswordDto) {
     return this.admin.resetPassword(Number(id), dto.password);
+  }
+
+  // ─── Chat repartidor ↔ admin ────────────────────────────────────────────────
+
+  /** Bandeja: un renglón por repartidor con no leídos y último mensaje. */
+  @Get('chats')
+  listChats() {
+    return this.chat.listConversations();
+  }
+
+  /** Hilo de un repartidor. Al abrirlo se marca lo recibido como leído. */
+  @Get('drivers/:id/messages')
+  chatMessages(@Param('id') id: string) {
+    return this.chat.listMessages(Number(id), 'admin');
+  }
+
+  /** Envía un mensaje del administrador al repartidor. */
+  @Post('drivers/:id/messages')
+  @HttpCode(HttpStatus.CREATED)
+  sendChatMessage(
+    @CurrentUser('sub') userId: bigint,
+    @Param('id') id: string,
+    @Body() dto: SendMessageDto,
+  ) {
+    return this.chat.sendFromAdmin(Number(id), Number(userId), dto.body);
   }
 
   /** Pedidos activos de toda la flota. */

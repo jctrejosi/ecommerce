@@ -37,6 +37,7 @@ interface DriverRow {
   is_active: boolean;
   current_location: string | null;
   last_location_at: string | null;
+  last_seen_at: string | null;
   created_at: string;
   auth_user_id: string | null;
   username: string | null;
@@ -98,7 +99,7 @@ SELECT
   d.vehicle_type, d.vehicle_plate, d.vehicle_brand, d.vehicle_model, d.vehicle_color,
   d.route_color,
   d.is_available, d.is_active,
-  d.current_location, d.last_location_at, d.created_at,
+  d.current_location, d.last_location_at, d.last_seen_at, d.created_at,
   u.id AS auth_user_id, u.username, u.first_name, u.last_name,
   a.id AS assignment_id, a.status::text AS assignment_status,
   a.assigned_at, a.accepted_at, a.picked_up_at, a.in_delivery_at,
@@ -148,6 +149,9 @@ export class DeliveryAdminService {
       isActive: row.is_active,
       location: parsePoint(row.current_location),
       lastLocationAt: row.last_location_at,
+      // Última señal de la app: heartbeat o GPS, lo que sea más reciente (el
+      // panel decide conectado/desconectado con esta marca).
+      lastSeenAt: row.last_seen_at ?? row.last_location_at,
       createdAt: row.created_at,
       activeAssignment: row.assignment_id
         ? {

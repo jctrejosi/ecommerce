@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { NotificationsModule } from '../notifications/notifications.module';
+import { OrdersModule } from '../orders/orders.module';
 import { DeliveryAuthController } from './delivery-auth.controller';
 import { DeliveryAuthService } from './delivery-auth.service';
 import { DeliveryController } from './delivery.controller';
@@ -10,10 +11,11 @@ import { DeliveryOrdersController } from './delivery-orders.controller';
 import { DeliveryOrdersService } from './delivery-orders.service';
 import { DeliveryAdminController } from './delivery-admin.controller';
 import { DeliveryAdminService } from './delivery-admin.service';
+import { DriverChatService } from './driver-chat.service';
 import { SuperuserGuard } from './superuser.guard';
 
 @Module({
-  imports: [AuthModule, NotificationsModule],
+  imports: [AuthModule, NotificationsModule, OrdersModule],
   controllers: [
     DeliveryAuthController,
     DeliveryController,
@@ -25,6 +27,7 @@ import { SuperuserGuard } from './superuser.guard';
     DeliveryService,
     DeliveryOrdersService,
     DeliveryAdminService,
+    DriverChatService,
     DeliveryGateway,
     SuperuserGuard,
   ],

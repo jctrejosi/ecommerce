@@ -3,6 +3,7 @@ import { Search, X, ChevronRight } from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
 import { catalogService } from "../../../services/catalog.service";
 import { productTypeIcon } from "../../productTypeIcons";
+import { categoryIcon } from "../../categoryIcons";
 import { InfiniteScrollTrigger } from "./InfiniteScrollTrigger";
 import { ProductCard } from "./ProductCard";
 import { SkeletonCard } from "./SkeletonCard";
@@ -370,7 +371,7 @@ export function CatalogPage({
         <h3 className="font-bold text-sm text-foreground mb-3">Categorías</h3>
         <div className="space-y-0.5">
           {rootCategories.map((cat) => {
-            const Icon = cat.icon;
+            const icon = categoryIcon(cat.slug, cat.name);
             const childCategories = getChildCategories(cat.id);
             const checked = catalogCategory.includes(cat.id);
             const isOpen = openCat === cat.id;
@@ -412,15 +413,10 @@ export function CatalogPage({
                     )}
                   </div>
                   <div
-                    className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                    className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[12px] leading-none"
                     style={{ background: cat.bg ?? "#F3F4F6" }}
                   >
-                    {Icon ? (
-                      <Icon
-                        className="w-3 h-3"
-                        style={{ color: cat.color ?? "currentColor" }}
-                      />
-                    ) : null}
+                    {icon}
                   </div>
                   <span
                     className="text-sm flex-1 transition-colors leading-tight break-words"
