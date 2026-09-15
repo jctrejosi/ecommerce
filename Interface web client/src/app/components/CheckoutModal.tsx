@@ -79,6 +79,8 @@ interface CheckoutModalProps {
   };
   lastOrderId: string;
   onClose: () => void;
+  /** Abre la lista de pedidos del cliente (botón "Ver mis pedidos"). */
+  onViewOrders: () => void;
   onSetCheckoutStep: (step: number) => void;
   onSetCheckoutAddress: (
     updater: (
@@ -145,6 +147,7 @@ export function CheckoutModal({
   orderPending,
   orderDeclineReason,
   onClose,
+  onViewOrders,
   onSetCheckoutStep,
   onSetCheckoutAddress,
   onSetCheckoutShipping,
@@ -1160,7 +1163,7 @@ export function CheckoutModal({
               </div>
             </div>
             <button
-              onClick={onClose}
+              onClick={onViewOrders}
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all"
               style={{ background: "#1A1A2E", color: "#FFF200" }}
             >

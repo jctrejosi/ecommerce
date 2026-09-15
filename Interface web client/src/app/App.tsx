@@ -1049,6 +1049,13 @@ export default function App() {
         nequiPayment={nequiPayment}
         lastOrderId={lastOrderId}
         onClose={() => setCheckoutOpen(false)}
+        onViewOrders={() => {
+          // "Ver mis pedidos" desde la confirmación: cierra el checkout y abre la
+          // lista de pedidos (el pedido recién creado ya está en `orders`).
+          setCheckoutOpen(false);
+          setSelectedOrder(null);
+          setOrdersOpen(true);
+        }}
         onSetCheckoutStep={setCheckoutStep}
         onSetCheckoutAddress={setCheckoutAddress}
         onSetCheckoutShipping={setCheckoutShipping}

@@ -121,6 +121,7 @@ export function Header({
     [],
   );
   const searchRef = useRef<HTMLDivElement>(null);
+  const headerRef = useRef<HTMLElement>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   // Una vez abierto el menú por primera vez, el punto deja de titilar.
   const [mobileMenuSeen, setMobileMenuSeen] = useState(false);
@@ -143,6 +144,20 @@ export function Header({
     onScroll();
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  // El header no siempre mide 64px (en móvil lleva una fila extra de logos y su
+  // altura puede variar con el tamaño de fuente). Se publica como variable CSS
+  // para que los desplegables con `position: fixed` se anclen justo debajo.
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const update = () =>
+      el.style.setProperty("--header-h", `${el.offsetHeight}px`);
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   // Load default address when customer changes
@@ -361,8 +376,35 @@ export function Header({
   return (
     <>
       <header
+        ref={headerRef}
         className={`sticky top-0 z-50 bg-white border-b border-border transition-shadow ${isStuck ? "shadow-sm" : ""}`}
       >
+
+      {/* Logos (solo móvil): tira superior en una sola fila */}
+      <div className="md:hidden px-4 pt-2 pb-1 flex items-center justify-center gap-3">
+        <a
+          href="#"
+          className="flex items-center gap-3"
+          onClick={(e) => {
+            e.preventDefault();
+            onHome();
+          }}
+        >
+          <img
+            src={storeLogo}
+            alt="Mercaldas"
+            className="h-5 w-auto object-contain"
+          />
+          <span className="h-5 w-px bg-gray-300" aria-hidden="true" />
+          <Logo
+            dark={true}
+            logoSrc={generalLogo?.url}
+            hideTextOnMobile
+            imgClassName="h-5 w-auto object-contain"
+            boxClassName="w-5 h-5"
+          />
+        </a>
+      </div>
 
       {/* Main header row */}
       <div className="max-w-7xl mx-auto px-4 h-16 flex items-center gap-3">
@@ -398,20 +440,19 @@ export function Header({
 
         <a
           href="#"
-          className="flex-shrink-0 order-4 md:order-none flex flex-col md:flex-row items-center gap-1 md:gap-3"
+          className="hidden md:flex flex-shrink-0 items-center gap-3"
           onClick={(e) => {
             e.preventDefault();
             onHome();
           }}
         >
-          <img src={storeLogo} alt="Mercaldas" className="h-4 md:h-7 w-auto object-contain" />
-          <span className="hidden md:block h-6 w-px bg-gray-300" aria-hidden="true" />
+          <img src={storeLogo} alt="Mercaldas" className="h-7 w-auto object-contain" />
+          <span className="h-6 w-px bg-gray-300" aria-hidden="true" />
           <Logo
             dark={true}
             logoSrc={generalLogo?.url}
-            hideTextOnMobile
-            imgClassName="h-5 md:h-8 w-auto object-contain"
-            boxClassName="w-5 h-5 md:w-8 md:h-8"
+            imgClassName="h-8 w-auto object-contain"
+            boxClassName="w-8 h-8"
           />
         </a>
 
@@ -465,7 +506,7 @@ export function Header({
             {/* Dropdown */}
             {searchOpen && (
               <div
-                className="fixed inset-x-0 top-16 md:absolute md:top-full md:left-0 md:right-0 bg-white border border-border rounded-b-xl shadow-xl z-50 overflow-hidden"
+                className="fixed inset-x-0 top-[var(--header-h)] md:absolute md:top-full md:left-0 md:right-0 bg-white border border-border rounded-b-xl shadow-xl z-50 overflow-hidden"
                 style={{
                   borderTop: "none",
                   boxShadow: "0 8px 32px rgba(0,0,0,0.12)",
@@ -761,6 +802,24 @@ export function Header({
                 {cartCount}
               </span>
             )}
+          </button>
+          {/* Móvil: el inicio de sesión ocupa el lugar que tenían los logos */}
+          <button
+            onClick={() => {
+              if (customer) {
+                if (onAccount) {
+                  onAccount();
+                  return;
+                }
+                onOrdersOpen();
+                return;
+              }
+              onLoginModal("login");
+            }}
+            aria-label={customer ? "Mi cuenta" : "Iniciar sesión"}
+            className="md:hidden flex items-center justify-center p-2 rounded-lg hover:bg-muted transition-colors"
+          >
+            <User className="w-5 h-5" />
           </button>
         </div>
       </div>
