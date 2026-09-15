@@ -1,6 +1,6 @@
-# MercAldas Shopping Bot
+# Mercaldas Shopping Bot
 
-Chatbot de compras para el ecommerce MercAldas. Corre en **Python (FastAPI)**,
+Chatbot de compras para el ecommerce Mercaldas. Corre en **Python (FastAPI)**,
 usa la **API de DeepSeek con function calling** y **consulta/escribe directamente
 la base de datos** (misma BD del backend NestJS) para buscar productos y armar
 el carrito de compras del cliente.

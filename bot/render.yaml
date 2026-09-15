@@ -1,4 +1,4 @@
-# Render blueprint para el bot de compras MercAldas.
+# Render blueprint para el bot de compras Mercaldas.
 # Root dir: bot/
 services:
   - type: web

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * prod.js — despliegue de PRODUCCIÓN de MercAldas (bare-metal, sin contenedores
+ * prod.js — despliegue de PRODUCCIÓN de Mercaldas (bare-metal, sin contenedores
  * de aplicación; solo las bases de datos y OSRM corren en Docker).
  *
  * Es la contraparte de `dev.js` para producción:
@@ -561,7 +561,7 @@ function startService(svc) {
 // ── Salida ─────────────────────────────────────────────────
 
 function printUrls(services, showDb, showCampaigns, showOsrm) {
-  console.log("\n━━━━━━━━━━━━━ MercAldas (PRODUCCIÓN) — URLs ━━━━━━━━━━━━━");
+  console.log("\n━━━━━━━━━━━━━ Mercaldas (PRODUCCIÓN) — URLs ━━━━━━━━━━━━━");
   for (const svc of services) {
     if (!svc.url) continue;
     console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
@@ -658,7 +658,7 @@ function helpDeps(name) {
 
 function printHelp() {
   const out = [];
-  out.push("🚀 MercAldas launcher de PRODUCCIÓN — node prod.js (en la raíz)");
+  out.push("🚀 Mercaldas launcher de PRODUCCIÓN — node prod.js (en la raíz)");
   out.push("");
   out.push("USO");
   out.push("  node prod.js --build              → compila TODO y levanta (backend + 6 fronts + bot + IA + BDs + OSRM)");
@@ -932,7 +932,7 @@ async function main() {
   const services = SERVICES.filter((s) => svcNames.includes(s.name));
 
   console.log(
-    `🚀 MercAldas — PRODUCCIÓN · selección: ${selectionLabel(plan)}${BUILD ? " (con build)" : ""}  (logs → logs/*.prod.log)`,
+    `🚀 Mercaldas — PRODUCCIÓN · selección: ${selectionLabel(plan)}${BUILD ? " (con build)" : ""}  (logs → logs/*.prod.log)`,
   );
   console.log(
     `🌐 API pública (VITE_API_URL): ${apiBaseUrl()}` +

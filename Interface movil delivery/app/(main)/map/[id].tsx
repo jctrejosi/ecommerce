@@ -9,6 +9,7 @@ import { getCurrentPosition, startDeliveryTracking, stopDeliveryTracking } from 
 import { api } from "@/api";
 import { Button } from "@/ui/Button";
 import { ErrorBox } from "@/ui/ErrorBox";
+import { Screen } from "@/ui/Screen";
 import { colors, radius, spacing } from "@/theme";
 import type { LatLng, DeliveryStatus } from "@/api/types";
 
@@ -33,6 +34,8 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
 
   const [origin, setOrigin] = useState<LatLng | null>(null);
+  /** Ya se intentó obtener la posición (aunque fallara). */
+  const [posReady, setPosReady] = useState(false);
 
   // Fase: mientras no se ha llegado a la tienda la ruta apunta a la tienda;
   // al confirmar "TENGO EL PEDIDO" (PICKED_UP) la ruta apunta al cliente.
@@ -54,13 +57,19 @@ export default function MapScreen() {
   const refreshPosition = async () => {
     const pos = await getCurrentPosition();
     if (pos) setOrigin(pos);
+    setPosReady(true);
   };
 
-  // Posición inicial + refresco cada 15 s.
+  // Posición inicial + refresco cada 15 s. El "guard" evita quedarse en la
+  // pantalla de carga si el GPS o el permiso nunca responden.
   useEffect(() => {
     void refreshPosition();
     const t = setInterval(() => void refreshPosition(), 15_000);
-    return () => clearInterval(t);
+    const guard = setTimeout(() => setPosReady(true), 6000);
+    return () => {
+      clearInterval(t);
+      clearTimeout(guard);
+    };
   }, []);
 
   // Tracking GPS en foreground solo durante la entrega (PICKED_UP / IN_DELIVERY).
@@ -88,6 +97,23 @@ export default function MapScreen() {
       <View style={styles.padded}>
         <ErrorBox message={error instanceof Error ? error.message : "Pedido no encontrado."} />
       </View>
+    );
+  }
+
+  // Se espera a tener la posición y la ruta calculada antes de mostrar el mapa
+  // (los tiles los cubre el propio mapa hasta que termina de cargar).
+  const mapReady = posReady && !routePending;
+  if (!mapReady) {
+    return (
+      <Screen scroll={false}>
+        <View style={styles.loadingWrap}>
+          <ActivityIndicator size="large" color={colors.primary} />
+          <Text style={styles.loadingTitle}>Preparando el mapa…</Text>
+          <Text style={styles.loadingText}>
+            Ubicando tu posición y calculando la ruta.
+          </Text>
+        </View>
+      </Screen>
     );
   }
 
@@ -171,6 +197,21 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: colors.background },
   padded: { padding: spacing(4), flex: 1, backgroundColor: colors.background },
+  loadingWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing(2),
+    paddingHorizontal: spacing(8),
+    backgroundColor: colors.background,
+  },
+  loadingTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
+  loadingText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: "center",
+    lineHeight: 19,
+  },
   infoCard: {
     position: "absolute",
     top: spacing(3),

@@ -1,5 +1,5 @@
 # ============================================================
-# MercAldas — servidor Advantage Database Server (ADS) para Linux
+# Mercaldas — servidor Advantage Database Server (ADS) para Linux
 # ============================================================
 # ⚠️ REQUIERE el instalador oficial. Colócalo en:
 #       db/ads/installers/adslinux-11.10.0.24.tar.gz

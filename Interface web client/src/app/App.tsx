@@ -331,16 +331,16 @@ export default function App() {
           .then(setDealProducts)
           .catch(() => {});
         // Config de Ofertas del día (display rotativo + carousel administrados)
-        void fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/landing/daily-deals`)
+        void fetch(`${(import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"))}/landing/daily-deals`)
           .then((r) => (r.ok ? r.json() : null))
           .then(setDailyDeals)
           .catch(() => setDailyDeals(null));
-        void fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/landing/general`)
+        void fetch(`${(import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"))}/landing/general`)
           .then((r) => (r.ok ? r.json() : null))
           .then(setGeneralLogo)
           .catch(() => setGeneralLogo(null));
         // Marcas de la landing (configuradas en admin; fallback: destacadas)
-        void fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/landing/brands`)
+        void fetch(`${(import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"))}/landing/brands`)
           .then((r) => (r.ok ? r.json() : Promise.reject()))
           .then(setFeaturedBrands)
           .catch(() =>
@@ -756,7 +756,7 @@ export default function App() {
 
   useEffect(() => {
     // Cargar medios de pago habilitados primero
-    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/payments/methods`)
+    fetch(`${(import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"))}/payments/methods`)
       .then((r) => r.json())
       .then((d) => {
         const wompiOn = d?.wompi?.enabled ?? true;

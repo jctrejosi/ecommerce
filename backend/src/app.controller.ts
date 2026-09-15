@@ -13,6 +13,21 @@ import { AppService } from './app.service';
 export class AppController {
   constructor(private readonly appService: AppService) {}
 
+  @Get('discovery')
+  @ApiOperation({
+    summary: 'Descubrimiento en la red local',
+    description:
+      'Responde con la identidad del backend para que las apps móviles lo encuentren al escanear la LAN.',
+  })
+  discovery() {
+    return {
+      service: 'mercaldas-backend',
+      name: 'Mercaldas',
+      port: Number(process.env.PORT ?? 3000),
+      timestamp: new Date().toISOString(),
+    };
+  }
+
   @Get('api-status')
   @ApiOperation({
     summary: 'API Status',

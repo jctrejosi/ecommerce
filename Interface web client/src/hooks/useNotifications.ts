@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getAuthHeaders } from '../services/customer-auth.service';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const SOCKET_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : 'http://localhost:3000'));
 
 export interface AppNotification {
   id: number;
@@ -43,7 +43,7 @@ export function useNotifications(customerId: number | null) {
   // Load existing notifications
   const fetchNotifications = useCallback(async () => {
     try {
-      const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+      const API = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : 'http://localhost:3000'));
       const res = await fetch(`${API}/notifications`, {
         credentials: 'include',
         headers: getAuthHeaders(),
@@ -61,7 +61,7 @@ export function useNotifications(customerId: number | null) {
   }, [customerId, fetchNotifications]);
 
   const markAsRead = useCallback(async (id: number) => {
-    const API = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+    const API = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : 'http://localhost:3000'));
     await fetch(`${API}/notifications/${id}/read`, {
       method: 'POST',
       credentials: 'include',

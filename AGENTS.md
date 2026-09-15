@@ -1,4 +1,4 @@
-# Guía para agentes — MercAldas ecommerce
+# Guía para agentes — Mercaldas ecommerce
 
 Monorepo con varias interfaces, un backend NestJS, un bot de compras y un
 servicio de IA. Esta guía existe, sobre todo, para **evitar que el agente

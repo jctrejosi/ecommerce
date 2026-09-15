@@ -463,7 +463,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
           <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-[#F7F7F9]">
             {messages.length === 0 && (
               <div className="text-sm text-gray-600 leading-relaxed">
-                <p>¡Hola! 👋 Soy Daisy, tu asistente de compras de MercAldas.</p>
+                <p>¡Hola! 👋 Soy Daisy, tu asistente de compras de Mercaldas.</p>
                 <p className="mt-1">
                   Puedo armar tu carrito con los productos que me indiques:
                   búscalos, te confirmo precios y los agrego por ti.

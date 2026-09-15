@@ -59,7 +59,7 @@ export default function LoginScreen({ onLogin }: Props) {
                 className="mx-auto mb-5 h-16 w-auto object-contain"
               />
             )}
-            <h1 className="text-2xl font-bold text-white">MercAldas Delivery</h1>
+            <h1 className="text-2xl font-bold text-white">Mercaldas Delivery</h1>
             <p className="mt-1 text-sm text-slate-400">
               Panel administrativo de repartidores
             </p>
@@ -124,7 +124,7 @@ export default function LoginScreen({ onLogin }: Props) {
         </form>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Acceso restringido a administradores · MercAldas
+          Acceso restringido a administradores · Mercaldas
         </p>
         </div>
       </div>
@@ -133,7 +133,7 @@ export default function LoginScreen({ onLogin }: Props) {
       <div className="flex shrink-0 justify-center pt-6">
         <img
           src={logo}
-          alt="MercAldas"
+          alt="Mercaldas"
           className="h-9 w-auto object-contain opacity-90"
         />
       </div>

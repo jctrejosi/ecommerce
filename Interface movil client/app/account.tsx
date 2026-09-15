@@ -307,7 +307,7 @@ export default function AccountScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.profileName}>
-              {customer.fullName || "Cliente MercAldas"}
+              {customer.fullName || "Cliente Mercaldas"}
             </Text>
             <Text style={styles.profileEmail}>{customer.email}</Text>
           </View>

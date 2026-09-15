@@ -2,7 +2,7 @@ import { io, Socket } from 'socket.io-client';
 import { useEffect, useRef, useState } from 'react';
 import { ordersService } from '../services/orders.service';
 
-const SOCKET_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const SOCKET_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : 'http://localhost:3000'));
 
 export function useOrderSocket(orderId: string | null) {
   const [orderStatus, setOrderStatus] = useState<string | null>(null);

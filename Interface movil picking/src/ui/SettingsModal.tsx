@@ -10,11 +10,10 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
-import { getApiUrl, setApiUrl } from "@/api/apiConfig";
-import { findBackend, probeBackend } from "@/api/discovery";
+import { getApiUrl } from "@/api/apiConfig";
+import { probeBackend } from "@/api/discovery";
+import { useServerGate } from "@/api/serverGate";
 import { useAuthStore } from "@/auth/authStore";
-import { connectPickingSocket, disconnectPickingSocket } from "@/socket";
-import { queryClient } from "@/lib/queryClient";
 
 interface SettingsModalProps {
   visible: boolean;
@@ -32,6 +31,7 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
   const insets = useSafeAreaInsets();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const ensureServer = useServerGate((s) => s.ensureServer);
 
   const [url, setUrl] = useState(getApiUrl());
   const [searching, setSearching] = useState(false);
@@ -48,19 +48,15 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
     setSearching(true);
     setStatus(null);
     try {
-      const found = await findBackend();
-      if (found) {
-        await setApiUrl(found);
-        setUrl(found);
-        setStatus(`Servidor encontrado: ${found}`);
-        // Re-conecta eventos y refresca datos contra el nuevo servidor.
-        disconnectPickingSocket();
-        connectPickingSocket();
-        void queryClient.clear();
-        void queryClient.invalidateQueries();
-      } else {
-        setStatus("No se encontró ningún servidor en la red local.");
-      }
+      // Misma rutina que usa la app al arrancar y al cambiar de red.
+      await ensureServer(true);
+      const { status: serverStatus, url: found } = useServerGate.getState();
+      setUrl(found);
+      setStatus(
+        serverStatus === "ok"
+          ? `Servidor encontrado: ${found}`
+          : "No se encontró ningún servidor en la red local.",
+      );
     } finally {
       setSearching(false);
     }

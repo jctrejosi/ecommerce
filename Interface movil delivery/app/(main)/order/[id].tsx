@@ -4,6 +4,7 @@ import {
   Alert,
   Image,
   Modal,
+  Pressable,
   StyleSheet,
   Text,
   TextInput,
@@ -115,7 +116,9 @@ export default function OrderDetailScreen() {
       {/* Cliente */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Cliente</Text>
-        <Text style={styles.strong}>{order.customer.name}</Text>
+        <Text style={styles.strong} numberOfLines={2}>
+          {order.customer.name}
+        </Text>
         <Text style={styles.muted}>{order.customer.phone}</Text>
         <View style={styles.customerActions}>
           {/* El chat solo se muestra mientras el pedido está en camino */}
@@ -142,7 +145,18 @@ export default function OrderDetailScreen() {
 
       {/* Dirección */}
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Dirección de entrega</Text>
+        <View style={styles.cardTitleRow}>
+          <Text style={[styles.cardTitle, styles.cardTitleInRow]}>Dirección de entrega</Text>
+          <Pressable
+            onPress={() => router.push(`/map/${order.id}`)}
+            style={({ pressed }) => [styles.mapLink, pressed && styles.mapLinkPressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Ver la dirección en el mapa"
+          >
+            <Ionicons name="map-outline" size={15} color={colors.primary} />
+            <Text style={styles.mapLinkText}>Ver mapa</Text>
+          </Pressable>
+        </View>
         <Text style={styles.strong}>
           {order.address.line1}
           {order.address.line2 ? `\n${order.address.line2}` : ""}
@@ -311,7 +325,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: spacing(1),
   },
-  code: { fontSize: 22, fontWeight: "800", color: colors.text },
+  code: { fontSize: 22, fontWeight: "800", color: colors.text, flexShrink: 1 },
   assigned: { fontSize: 13, color: colors.textFaint, marginBottom: spacing(3) },
   card: {
     backgroundColor: colors.card,
@@ -329,7 +343,28 @@ const styles = StyleSheet.create({
     color: colors.textFaint,
     marginBottom: spacing(2),
   },
-  strong: { fontSize: 15, fontWeight: "700", color: colors.text },
+  cardTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: spacing(2),
+    marginBottom: spacing(2),
+  },
+  cardTitleInRow: { marginBottom: 0, flexShrink: 1 },
+  mapLink: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: spacing(2.5),
+    paddingVertical: spacing(1.5),
+    borderRadius: radius.md,
+    backgroundColor: colors.infoBg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  mapLinkPressed: { opacity: 0.7 },
+  mapLinkText: { fontSize: 12, fontWeight: "800", color: colors.primary },
+  strong: { fontSize: 15, fontWeight: "700", color: colors.text, flexShrink: 1 },
   muted: { fontSize: 13, color: colors.textMuted, marginTop: 2 },
   rowBetween: {
     flexDirection: "row",
@@ -339,11 +374,13 @@ const styles = StyleSheet.create({
   },
   customerActions: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "stretch",
     gap: spacing(2),
     marginTop: spacing(3),
   },
-  customerActionBtn: { flex: 1 },
+  /** Cada botón no baja de ~120dp: si no caben los dos, se apilan. */
+  customerActionBtn: { flexGrow: 1, flexBasis: 120, minWidth: 0 },
   notes: {
     backgroundColor: colors.warningBg,
     borderRadius: radius.md,

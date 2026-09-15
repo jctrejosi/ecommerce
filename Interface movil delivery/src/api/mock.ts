@@ -67,7 +67,7 @@ function mkOrder(
     payment: { method: "CASH", label: "Contraentrega" },
     pickup: {
       branch: {
-        name: "MercAldas Norte",
+        name: "Mercaldas Norte",
         address: "Calle 80 # 11-23",
         lat: BOGOTA.lat,
         lng: BOGOTA.lng,

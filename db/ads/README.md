@@ -1,4 +1,4 @@
-# MercAldas — ADS (Advantage Database Server) en Docker
+# Mercaldas — ADS (Advantage Database Server) en Docker
 
 Corre la base **Publidata** (`db/ADDT`) con el servidor ADS en un contenedor.
 

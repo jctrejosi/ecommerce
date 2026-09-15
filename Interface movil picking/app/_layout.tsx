@@ -1,42 +1,67 @@
-import { useEffect, useState } from "react";
-import { ActivityIndicator, AppState, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  AppState,
+  Image,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
+import * as Network from "expo-network";
+import { Ionicons } from "@expo/vector-icons";
 import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/auth/authStore";
-import { useGateStore } from "@/auth/gateStore";
-import { LoginModal } from "@/ui/LoginModal";
-import { bootApiUrl } from "@/api/discovery";
+import { useServerGate } from "@/api/serverGate";
 import { getApiUrl } from "@/api/apiConfig";
 import { connectPickingSocket, disconnectPickingSocket } from "@/socket";
-import { colors } from "@/theme";
+import { colors, radius, spacing } from "@/theme";
 
 export default function RootLayout() {
   const restore = useAuthStore((s) => s.restore);
-  const user = useAuthStore((s) => s.user);
-  const hydrated = useAuthStore((s) => s.hydrated);
-  const confirmed = useGateStore((s) => s.confirmed);
-  const confirm = useGateStore((s) => s.confirm);
-  const [booting, setBooting] = useState(true);
+  const status = useServerGate((s) => s.status);
+  const ensureServer = useServerGate((s) => s.ensureServer);
+  const [bootChecked, setBootChecked] = useState(false);
+  const restoredRef = useRef(false);
 
-  // 1) Descubre el backend en la red local (o usa la URL guardada si responde).
+  // 1) Al arrancar: busca el backend en la red local.
   useEffect(() => {
-    void bootApiUrl().finally(() => setBooting(false));
-  }, []);
+    void ensureServer(true).finally(() => setBootChecked(true));
+  }, [ensureServer]);
 
-  // 2) Con el servidor listo: restaura la sesión y conecta el socket de eventos.
+  // 2) Cada vez que la app vuelve a primer plano o cambia la conectividad
+  //    (otra red Wi-Fi, se cayó el Wi-Fi…) se revisa que el servidor siga ahí.
   useEffect(() => {
-    if (booting) return;
-    void restore();
+    const appSub = AppState.addEventListener("change", (state) => {
+      if (state === "active") void ensureServer();
+    });
+    const netSub = Network.addNetworkStateListener(() => {
+      void ensureServer();
+    });
+    return () => {
+      appSub.remove();
+      netSub.remove();
+    };
+  }, [ensureServer]);
+
+  // 3) Con servidor disponible: restaura la sesión (una vez) y conecta eventos.
+  useEffect(() => {
+    if (status !== "ok") return;
+    if (!restoredRef.current) {
+      restoredRef.current = true;
+      void restore();
+    }
     connectPickingSocket();
     return () => disconnectPickingSocket();
-  }, [booting, restore]);
+  }, [status, restore]);
 
-  // 3) Vencimiento de sesión: revisa cada 30 s y al volver a primer plano.
+  // 4) Vencimiento de sesión: cada 30 s y al volver a primer plano.
   useEffect(() => {
-    if (booting) return;
+    if (status !== "ok") return;
     const timer = setInterval(() => void useAuthStore.getState().checkExpiry(), 30_000);
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") void useAuthStore.getState().checkExpiry();
@@ -45,32 +70,29 @@ export default function RootLayout() {
       clearInterval(timer);
       sub.remove();
     };
-  }, [booting]);
+  }, [status]);
+
+  const retry = () => void ensureServer(true);
 
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        {booting ? (
-          <View style={styles.boot}>
-            <ActivityIndicator color={colors.accent} size="large" />
-            <Text style={styles.bootText}>Buscando servidor en la red local…</Text>
-            <Text style={styles.bootSub}>{getApiUrl()}</Text>
-          </View>
-        ) : (
-          <>
+        {status === "ok" || restoredRef.current ? (
+          <View style={styles.root}>
+            {/* La app sigue montada para no perder el trabajo en curso; solo se
+                avisa que el servidor no está disponible. */}
+            {status !== "ok" ? <ServerBanner status={status} onRetry={retry} /> : null}
             <Stack
               screenOptions={{
                 headerShown: false,
                 contentStyle: { backgroundColor: colors.background },
               }}
             />
-            {/* Login global: aparece sobre cualquier pantalla si no hay
-                sesión o si el token venció (401 → sesión cerrada). */}
-            <LoginModal
-              visible={hydrated && (!confirmed || !user)}
-              onClose={user ? confirm : undefined}
-            />
-          </>
+          </View>
+        ) : bootChecked ? (
+          <ServerMissing onRetry={retry} />
+        ) : (
+          <ServerSearching />
         )}
         <StatusBar style="light" />
       </QueryClientProvider>
@@ -78,14 +100,115 @@ export default function RootLayout() {
   );
 }
 
+/** Pantalla mientras se busca el servidor al arrancar. */
+function ServerSearching() {
+  return (
+    <View style={styles.splash}>
+      <Image
+        source={require("../assets/logo.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <ActivityIndicator color={colors.accent} size="large" />
+      <Text style={styles.splashTitle}>Buscando el servidor…</Text>
+      <Text style={styles.splashText}>
+        Localizando el backend en la red local. Mantén el Wi-Fi conectado.
+      </Text>
+      <Text style={styles.splashUrl}>{getApiUrl()}</Text>
+    </View>
+  );
+}
+
+/** El arranque no encontró el backend en la red local. */
+function ServerMissing({ onRetry }: { onRetry: () => void }) {
+  return (
+    <View style={styles.splash}>
+      <Ionicons name="cloud-offline-outline" size={44} color={colors.textHint} />
+      <Text style={styles.splashTitle}>No se encontró el servidor</Text>
+      <Text style={styles.splashText}>
+        No hay respuesta del backend en esta red. Verifica que el teléfono esté
+        en la misma Wi-Fi que el servidor y vuelve a intentarlo.
+      </Text>
+      <Pressable
+        onPress={onRetry}
+        style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.9 }]}
+      >
+        <Ionicons name="refresh-outline" size={18} color={colors.onAccent} />
+        <Text style={styles.retryText}>Volver a buscar</Text>
+      </Pressable>
+      <Text style={styles.splashUrl}>{getApiUrl()}</Text>
+    </View>
+  );
+}
+
+/** Aviso no intrusivo cuando el servidor se pierde con la app ya abierta. */
+function ServerBanner({ status, onRetry }: { status: "checking" | "missing"; onRetry: () => void }) {
+  return (
+    <View style={styles.banner}>
+      {status === "checking" ? (
+        <ActivityIndicator color={colors.warning} size="small" />
+      ) : (
+        <Ionicons name="cloud-offline-outline" size={16} color={colors.dangerText} />
+      )}
+      <Text style={styles.bannerText} numberOfLines={1}>
+        {status === "checking"
+          ? "Buscando el servidor en la red…"
+          : "Sin conexión con el servidor"}
+      </Text>
+      {status === "missing" ? (
+        <Pressable onPress={onRetry} hitSlop={8}>
+          <Text style={styles.bannerAction}>Reintentar</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  boot: {
+  root: { flex: 1, backgroundColor: colors.background },
+  splash: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: spacing(3),
+    paddingHorizontal: spacing(8),
     backgroundColor: colors.background,
   },
-  bootText: { color: colors.textMuted, fontSize: 14, fontWeight: "700" },
-  bootSub: { color: colors.textHint, fontSize: 11, fontWeight: "600" },
+  logo: { height: 40, width: 124, marginBottom: spacing(2) },
+  splashTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
+  splashText: {
+    color: colors.textMuted,
+    fontSize: 13,
+    lineHeight: 19,
+    textAlign: "center",
+  },
+  splashUrl: { color: colors.textHint, fontSize: 11, fontWeight: "600" },
+  retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2),
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    paddingHorizontal: spacing(5),
+    paddingVertical: spacing(3),
+    marginTop: spacing(2),
+  },
+  retryText: { color: colors.onAccent, fontSize: 14, fontWeight: "800" },
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2.5),
+    paddingHorizontal: spacing(4),
+    paddingVertical: spacing(2.5),
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: colors.border,
+  },
+  bannerText: { flex: 1, color: colors.textMuted, fontSize: 12, fontWeight: "700" },
+  bannerAction: {
+    color: colors.accent,
+    fontSize: 12,
+    fontWeight: "800",
+    textDecorationLine: "underline",
+  },
 });

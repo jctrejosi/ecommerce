@@ -13,7 +13,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"));
 
 const FALLBACK_BENEFITS = [
   { icon: "Truck", title: "Domicilio en 2 horas", desc: "Entregamos en toda el área metropolitana de Manizales con seguimiento en tiempo real." },

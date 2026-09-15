@@ -1,4 +1,4 @@
-# MercAldas IA Service — recomendación de contenido de campañas
+# Mercaldas IA Service — recomendación de contenido de campañas
 
 Servicio **Python (FastAPI)** que genera el contenido de las campañas de
 marketing con **DeepSeek function calling**. Lo consume el backend NestJS

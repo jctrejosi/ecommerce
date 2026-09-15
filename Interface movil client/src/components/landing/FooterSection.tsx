@@ -65,7 +65,7 @@ export function FooterSection() {
                 resizeMode="contain"
               />
             ) : (
-              <Text style={styles.brandText}>MercAldas</Text>
+              <Text style={styles.brandText}>Mercaldas</Text>
             )}
             {description ? (
               <Text style={styles.description}>{description}</Text>

@@ -203,7 +203,7 @@ CREATE TABLE delivery_proofs (
   "items": [ { "name": "Producto A", "quantity": 2, "image": "https://…/producto-a.jpg" }, … ],
   "totals": { "value": 45000, "currency": "COP", "shipping": 6000 },
   "payment": { "method": "CASH", "label": "Contraentrega" },
-  "pickup": { "branch": { "name": "MercAldas Norte", "address": "…", "lat": …, "lng": … } },
+  "pickup": { "branch": { "name": "Mercaldas Norte", "address": "…", "lat": …, "lng": … } },
   "timeline": [ { "event": "ASSIGNED", "at": "…" }, … ]
 }
 ```

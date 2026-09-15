@@ -53,6 +53,7 @@ export function Button({
         <View style={styles.row}>
           {icon && <Ionicons name={icon} size={18} color={v.fg} />}
           <Text
+            numberOfLines={1}
             style={[
               styles.label,
               { color: variant === "secondary" ? colors.text : v.fg },
@@ -76,6 +77,6 @@ const styles = StyleSheet.create({
   },
   fullWidth: { width: "100%" },
   outline: { borderWidth: 1, borderColor: colors.border },
-  row: { flexDirection: "row", alignItems: "center", gap: 8 },
-  label: { fontSize: 15, fontWeight: "700" },
+  row: { flexDirection: "row", alignItems: "center", gap: 8, flexShrink: 1 },
+  label: { fontSize: 15, fontWeight: "700", flexShrink: 1 },
 });

@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"));
 
 const CACHE_TTL_MS = 60_000; // 60s: los banners cambian poco
 const FETCH_TIMEOUT_MS = 8_000;

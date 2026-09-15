@@ -546,7 +546,7 @@ export default function App() {
               rel="noopener noreferrer"
               className="flex items-center hover:opacity-80 transition-opacity"
             >
-              <img src={footerLogo} alt="MercAldas" className="h-8 w-auto object-contain" />
+              <img src={footerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
             </a>
             <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
               © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados

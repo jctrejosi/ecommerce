@@ -1,4 +1,4 @@
-"""Recetas curadas de MercAldas.
+"""Recetas curadas de Mercaldas.
 
 Cuando el cliente pide una receta conocida, se usa ESTA lista (ingredientes y
 pasos canónicos) en lugar de lo que el modelo invente, para garantizar que

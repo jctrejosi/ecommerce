@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Pressable,
@@ -53,6 +53,12 @@ const NUEVOS_STATUSES = ["ASSIGNED", "ACCEPTED", "READY_FOR_PICKUP"] as const;
 const EN_CAMINO_STATUSES = ["PICKED_UP", "IN_DELIVERY"] as const;
 
 /**
+ * Solo se evalúa una vez por arranque de la app: si el repartidor ya traía un
+ * pedido en camino, se le deja directo en el detalle de ese pedido.
+ */
+let landingChecked = false;
+
+/**
  * Pantalla "Pedidos": vista del día con 3 pestañas — Nuevos (recién salidos
  * de picking), En camino y Entregados hoy. El historial completo del usuario
  * vive en la pestaña "Historial".
@@ -83,6 +89,17 @@ export default function OrdersScreen() {
   const isError = active.isError || history.isError;
   const error = active.error ?? history.error;
   const refreshing = active.isRefetching || history.isRefetching;
+
+  // Al abrir la app con un pedido en camino, se entra directo a ese pedido
+  // (solo la primera vez por arranque; luego se respeta la navegación).
+  useEffect(() => {
+    if (landingChecked || !active.data) return;
+    landingChecked = true;
+    const current = active.data.find((o) =>
+      (EN_CAMINO_STATUSES as readonly string[]).includes(o.status),
+    );
+    if (current) router.push(`/order/${current.id}`);
+  }, [active.data, router]);
 
   const refetch = () => {
     void active.refetch();

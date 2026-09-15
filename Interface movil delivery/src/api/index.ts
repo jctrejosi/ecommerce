@@ -7,4 +7,5 @@ export const api: DeliveryApi = USE_MOCK ? mockApi : realApi;
 
 export * from "./contract";
 export * from "./types";
-export { USE_MOCK, API_URL, apiErrorMessage } from "./client";
+export { USE_MOCK, apiErrorMessage } from "./client";
+export { getServerUrl, resolveServer } from "./server";

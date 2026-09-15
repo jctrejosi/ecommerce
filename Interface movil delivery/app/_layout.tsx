@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -11,6 +12,9 @@ import { connectDeliverySocket, disconnectDeliverySocket } from "@/socket";
 import { useActiveOrders } from "@/api/orders";
 import { startBackgroundTracking, stopBackgroundTracking } from "@/tracking/location";
 import { USE_MOCK } from "@/api";
+import { getServerUrl, resolveServer, watchNetworkPrefix } from "@/api/server";
+import { ServerSetup } from "@/ui/ServerSetup";
+import { colors, spacing } from "@/theme";
 
 function RootShell() {
   const restore = useAuthStore((s) => s.restore);
@@ -62,9 +66,96 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <RootShell />
+        <ServerGate />
         <StatusBar style="dark" />
       </QueryClientProvider>
     </SafeAreaProvider>
   );
 }
+
+/**
+ * Antes de montar la app se resuelve la URL del backend: guardada → pista del
+ * build → escaneo de la red local. Si no aparece, se muestra la pantalla de
+ * configuración de servidor.
+ */
+function ServerGate() {
+  const [state, setState] = useState<"searching" | "ready" | "missing">(
+    USE_MOCK ? "ready" : "searching",
+  );
+  const [tried, setTried] = useState<string[]>([]);
+
+  const search = useCallback(async () => {
+    const res = await resolveServer();
+    setTried(res.tried);
+    setState(res.url ? "ready" : "missing");
+  }, []);
+
+  useEffect(() => {
+    if (!USE_MOCK) void search();
+  }, [search]);
+
+  // Si cambia la red local (otro Wi-Fi, otra subred) se vuelve a buscar el
+  // servidor sin reiniciar la app. Si aparece en otra dirección, el cliente
+  // HTTP la toma en la siguiente petición y el socket se reconecta.
+  useEffect(() => {
+    if (USE_MOCK) return;
+    const unsubscribe = watchNetworkPrefix(() => {
+      void (async () => {
+        const previous = getServerUrl();
+        const res = await resolveServer();
+        if (!res.url) return; // sin servidor: la app sigue y muestra sus errores
+        setTried(res.tried);
+        setState("ready");
+        if (previous && res.url !== previous) {
+          disconnectDeliverySocket();
+          const tokens = await getTokens();
+          if (tokens?.accessToken) connectDeliverySocket(tokens.accessToken);
+        }
+      })();
+    });
+    return unsubscribe;
+  }, []);
+
+  if (state === "searching") return <SearchingServer />;
+  if (state === "missing") {
+    return <ServerSetup tried={tried} onResolved={() => setState("ready")} />;
+  }
+  return <RootShell />;
+}
+
+/** Pantalla mientras se busca el backend en la red local. */
+function SearchingServer() {
+  return (
+    <View style={styles.splash}>
+      <Image
+        source={require("../assets/logo.png")}
+        style={styles.logo}
+        resizeMode="contain"
+      />
+      <ActivityIndicator size="large" color={colors.primary} />
+      <Text style={styles.splashTitle}>Buscando el servidor…</Text>
+      <Text style={styles.splashText}>
+        Localizando el backend en la red local. Mantén el Wi-Fi conectado.
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  splash: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing(4),
+    paddingHorizontal: spacing(8),
+    backgroundColor: colors.background,
+  },
+  logo: { height: 34, width: 150 },
+  splashTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
+  splashText: {
+    fontSize: 13,
+    color: colors.textMuted,
+    textAlign: "center",
+    lineHeight: 19,
+  },
+});

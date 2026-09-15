@@ -1,1 +1,1 @@
-# Bot de compras MercAldas (FastAPI + DeepSeek)
+# Bot de compras Mercaldas (FastAPI + DeepSeek)

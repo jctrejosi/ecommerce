@@ -76,14 +76,6 @@ export interface PickingLocation {
   shelfColor: string;
 }
 
-export interface Picker {
-  id: number;
-  name: string;
-  email?: string | null;
-  username?: string | null;
-  phone?: string | null;
-}
-
 /** Respuesta de `POST /auth/login` (usuario administrador/picker). */
 export interface AuthMe {
   id: number;

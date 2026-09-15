@@ -429,7 +429,7 @@ export default function App() {
             rel="noopener noreferrer"
             className="flex items-center transition-opacity hover:opacity-80"
           >
-            <img src={logo} alt="MercAldas" className="h-8 w-auto object-contain" />
+            <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
           </a>
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
             © 2026 Desarrollado por{' '}

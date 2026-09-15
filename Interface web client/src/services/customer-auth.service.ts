@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"));
 const CUSTOMER_ACCESS_TOKEN_KEY = "customer_access_token_fallback";
 
 export function getCustomerAccessToken(): string | null {

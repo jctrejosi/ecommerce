@@ -158,7 +158,7 @@ export function Header({ onSearchSubmit }: HeaderProps) {
             resizeMode="contain"
           />
         ) : (
-          <Text style={styles.logoText}>MercAldas</Text>
+          <Text style={styles.logoText}>Mercaldas</Text>
         )}
       </View>
 

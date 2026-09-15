@@ -8,7 +8,6 @@ export const pickingKeys = {
   root: PICKING_ROOT,
   queue: () => ["picking", "queue"] as const,
   order: (id: number) => ["picking", "order", id] as const,
-  pickers: () => ["picking", "pickers"] as const,
   shelves: (branchId: number) => ["picking", "shelves", branchId] as const,
   locations: (branchId: number, variantIds: number[]) =>
     ["picking", "locations", branchId, variantIds.join(",")] as const,
@@ -28,14 +27,6 @@ export function useOrder(id: number | undefined) {
     queryKey: pickingKeys.order(id ?? 0),
     queryFn: () => pickingApi.detail(id!),
     enabled: id !== undefined && Number.isFinite(id),
-  });
-}
-
-export function usePickers() {
-  return useQuery({
-    queryKey: pickingKeys.pickers(),
-    queryFn: () => pickingApi.pickers(),
-    staleTime: 5 * 60_000,
   });
 }
 

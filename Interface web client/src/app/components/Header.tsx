@@ -29,7 +29,7 @@ import {
 } from "../../services/customer-auth.service";
 import type { AppNotification } from "../../hooks/useNotifications";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"));
 
 // Prefijos telefónicos conocidos (los más largos primero).
 const WHATSAPP_PREFIXES = [

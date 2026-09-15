@@ -1,4 +1,4 @@
-"""API del bot de compras MercAldas.
+"""API del bot de compras Mercaldas.
 
 Endpoints:
 - GET  /health         → estado del servicio + BD
@@ -22,7 +22,7 @@ log = logging.getLogger("bot.main")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    log.info("Iniciando bot de compras MercAldas…")
+    log.info("Iniciando bot de compras Mercaldas…")
     try:
         ok = await database.ping()
         log.info("Conexión a la BD: %s", "OK" if ok else "FALLÓ")
@@ -42,7 +42,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="MercAldas Shopping Bot API",
+    title="Mercaldas Shopping Bot API",
     description="Chatbot de compras con DeepSeek function calling. Arma el carrito consultando la BD.",
     version="0.1.0",
     lifespan=lifespan,

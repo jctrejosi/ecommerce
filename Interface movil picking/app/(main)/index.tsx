@@ -8,7 +8,6 @@ import { useMarkReviewed, useQueue } from "@/picking/queries";
 import { isItemDone, orderStatus, sortQueue } from "@/picking/status";
 import { clearSession, loadSession } from "@/picking/sessionStore";
 import { useAuthStore } from "@/auth/authStore";
-import { useGateStore } from "@/auth/gateStore";
 import { Header } from "@/ui/Header";
 import { Screen } from "@/ui/Screen";
 import { OrderCard } from "@/ui/OrderCard";
@@ -93,11 +92,9 @@ export default function OrderListScreen() {
     };
   }, [router]);
 
-  // Al abrir la app siempre se pide elegir usuario; si la sesión se vence en
-  // pleno uso (401/turno/inactividad), el login global del layout se encarga.
-  useEffect(() => {
-    useGateStore.getState().request();
-  }, []);
+  // Al abrir la app, si no hay sesión vigente el layout de (main) redirige a
+  // /login. Si la sesión se vence en pleno uso (401/turno/inactividad), el
+  // mismo guard expulsa al login.
 
   return (
     <View style={styles.root}>
@@ -206,7 +203,7 @@ export default function OrderListScreen() {
         onClose={() => setShowSettings(false)}
         onSwitchUser={() => {
           setShowSettings(false);
-          useGateStore.getState().request();
+          void logout();
         }}
       />
     </View>

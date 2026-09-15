@@ -1,23 +1,24 @@
 import axios from "axios";
 import type { AxiosError, InternalAxiosRequestConfig } from "axios";
 import { clearTokens, getTokens, setTokens } from "@/auth/storage";
+import { getServerUrl } from "@/api/server";
 
-export const API_URL = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
-export const USE_MOCK =
-  process.env.EXPO_PUBLIC_USE_MOCK === "true" || API_URL.length === 0;
+export const USE_MOCK = process.env.EXPO_PUBLIC_USE_MOCK === "true";
 
-export const http = createApiClient(`${API_URL}/delivery`);
+export const http = createApiClient(() => `${getServerUrl()}/delivery`);
 /** Cliente contra la raíz del backend (p. ej. POST /upload/image). */
-export const uploadHttp = createApiClient(`${API_URL}`);
+export const uploadHttp = createApiClient(() => getServerUrl());
 
-function createApiClient(baseURL: string) {
+function createApiClient(resolveBaseUrl: () => string) {
   const client = axios.create({
-    baseURL,
+    baseURL: resolveBaseUrl(),
     timeout: 20_000,
     headers: { "Content-Type": "application/json" },
   });
 
   client.interceptors.request.use(async (config) => {
+    // La base puede cambiar si la app redescubre el servidor en la red local.
+    config.baseURL = resolveBaseUrl();
     const tokens = await getTokens();
     if (tokens?.accessToken) {
       config.headers.Authorization = `Bearer ${tokens.accessToken}`;
@@ -62,7 +63,7 @@ async function doRefresh(): Promise<string | null> {
   if (!tokens?.refreshToken) return null;
   try {
     const res = await axios.post<{ data?: { accessToken: string }; accessToken?: string }>(
-      `${API_URL}/delivery/auth/refresh`,
+      `${getServerUrl()}/delivery/auth/refresh`,
       { refreshToken: tokens.refreshToken },
       { timeout: 10_000 },
     );

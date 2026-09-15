@@ -1,4 +1,4 @@
-"""IA Service — API de generación de contenido para campañas de MercAldas.
+"""IA Service — API de generación de contenido para campañas de Mercaldas.
 
 POST /generate  → recomienda el contenido (whatsapp / email / sms) usando
                   DeepSeek con function calling (ver app/tools.py).
@@ -16,7 +16,7 @@ from . import config, deepseek
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 
 app = FastAPI(
-    title="MercAldas IA Service",
+    title="Mercaldas IA Service",
     description="Recomendación de contenido de campañas con DeepSeek function calling.",
     version="0.1.0",
 )

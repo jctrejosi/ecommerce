@@ -1154,7 +1154,7 @@ export function UserAdminView({
   // (tarjeta o Nequi vía Wompi). Si ninguno está habilitado, la sección
   // "Métodos de Pago" se oculta del menú.
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/payments/methods`)
+    fetch(`${(import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"))}/payments/methods`)
       .then((r) => r.json())
       .then((d) => {
         const wompiOn = d?.wompi?.enabled ?? true;
@@ -2992,7 +2992,7 @@ export function UserAdminView({
     // Cargar la config de medios de pago del admin para saber
     // qué métodos están habilitados y pueden guardarse.
     useEffect(() => {
-      fetch(`${import.meta.env.VITE_API_URL || "http://localhost:3000"}/payments/methods`)
+      fetch(`${(import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"))}/payments/methods`)
         .then((r) => r.json())
         .then((d) => {
           const wompiOn = d?.wompi?.enabled ?? true;

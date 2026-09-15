@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * MercAldas — lanzador de servicios.
+ * Mercaldas — lanzador de servicios.
  *
  * Uso:
  *   node dev.js            # DEV: instala dependencias faltantes, levanta
@@ -73,6 +73,7 @@ const C = {
   db: "\x1b[36m",
   backend: "\x1b[31m",
   web: "\x1b[32m",
+  webclient: "\x1b[36m",
   admin: "\x1b[34m",
   analytics: "\x1b[96m",
   picking: "\x1b[95m",
@@ -102,6 +103,21 @@ const SERVICES = [
     dev: [PM, "run", "dev"],
     prod: ["npx", "vite", "preview"],
     deps: PNPM_DEPS,
+  },
+  {
+    // Sirve el build de `Interface web client/dist` y hace de mismo-origen del
+    // API; es lo que embebe el APK cliente (WebView) y lo que este descubre en
+    // la red local (`GET /discovery`).
+    name: "webclient",
+    dir: ".",
+    url: "http://localhost:4173",
+    dev: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
+    prod: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
+    deps: {
+      marker: ["scripts-agent", "serve-webclient.mjs"],
+      markerType: "file",
+      install: [],
+    },
   },
   {
     name: "admin",
@@ -167,6 +183,8 @@ const SERVICES = [
 const APP_ALIASES = {
   client: "web",
   web: "web",
+  webclient: "webclient",
+  "client-apk": "webclient",
   backend: "backend",
   admin: "admin",
   analytics: "analytics",
@@ -186,6 +204,7 @@ const APP_DEPENDS = {
   // de analytics; el backend de ecommerce usa únicamente la BD principal (:5432).
   backend: ["db"],
   web: ["backend"],
+  webclient: ["backend"], // sirve la web del APK y proxy del API
   admin: ["backend"],
   analytics: ["backend", "db-campaigns"], // panel analytics + su BD de campañas
   picking: ["backend"],
@@ -511,7 +530,7 @@ function startService(svc) {
 }
 
 function printUrls(services, showDb, showCampaigns, showOsrm) {
-  console.log("\n━━━━━━━━━━━━━ MercAldas — URLs ━━━━━━━━━━━━━");
+  console.log("\n━━━━━━━━━━━━━ Mercaldas — URLs ━━━━━━━━━━━━━");
   for (const svc of services) {
     if (!svc.url) continue;
     console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
@@ -653,6 +672,7 @@ function stopAll() {
 const APP_LABELS = {
   backend: "API backend (NestJS)",
   web: "Cliente web",
+  webclient: "Servidor del cliente para APK (WebView)",
   admin: "Panel admin web",
   analytics: "Panel analytics web",
   picking: "Picking web",
@@ -685,7 +705,7 @@ function helpDeps(name) {
 
 function printHelp() {
   const out = [];
-  out.push("🧪 MercAldas launcher — comandos implementados (node dev.js en la raíz)");
+  out.push("🧪 Mercaldas launcher — comandos implementados (node dev.js en la raíz)");
   out.push("");
   out.push("USO");
   out.push("  node dev.js                     → levanta TODO (BDs + backend + todos los web + bot + IA + OSRM + delivery)");
@@ -697,6 +717,7 @@ function printHelp() {
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
   const order = [
     "web",
+    "webclient",
     "admin",
     "analytics",
     "picking",
@@ -775,7 +796,7 @@ async function main() {
   const wantPickingMobile = plan !== null && plan.includes("picking-mobile");
 
   console.log(
-    `🧪 MercAldas — modo ${MODE.toUpperCase()} · selección: ${selectionLabel(plan)}  (logs → logs/*.log)`,
+    `🧪 Mercaldas — modo ${MODE.toUpperCase()} · selección: ${selectionLabel(plan)}  (logs → logs/*.log)`,
   );
   if (PM === "npm")
     console.warn(

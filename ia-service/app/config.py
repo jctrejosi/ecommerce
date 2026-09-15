@@ -1,4 +1,4 @@
-# IA Service — generación de contenido de campañas (MercAldas)
+# IA Service — generación de contenido de campañas (Mercaldas)
 
 """Configuración desde variables de entorno."""
 import os

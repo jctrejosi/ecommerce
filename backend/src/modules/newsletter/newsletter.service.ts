@@ -490,7 +490,7 @@ export class NewsletterService {
             <h1 style="font-size:22px; color:#1A1A2E; margin:0 0 16px; line-height:1.3;">${campaign.subject}</h1>
             ${campaign.content}
             <div style="margin-top:32px; padding-top:16px; border-top:1px solid #eee; font-size:12px; color:#888;">
-              <p>Estás recibiendo este correo porque te suscribiste al newsletter de MercAldas.</p>
+              <p>Estás recibiendo este correo porque te suscribiste al newsletter de Mercaldas.</p>
               <p><a href="${this.getFrontendUrl()}/?unsubscribe=${encodeURIComponent('')}" style="color:#888; text-decoration:underline;">Cancelar suscripción</a></p>
             </div>
           </div>

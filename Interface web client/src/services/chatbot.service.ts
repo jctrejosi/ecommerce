@@ -1,4 +1,4 @@
-const BOT_API_URL = import.meta.env.VITE_BOT_API_URL || "http://localhost:8000";
+const BOT_API_URL = (import.meta.env.VITE_BOT_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000"));
 
 export type BotProduct = {
   product_id: number;

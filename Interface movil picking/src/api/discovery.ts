@@ -1,7 +1,6 @@
 import * as Network from "expo-network";
-import { getApiUrl, loadApiUrl, setApiUrl } from "./apiConfig";
 
-/** Puerto y endpoint de salud del backend de MercAldas. */
+/** Puerto y endpoint de salud del backend de Mercaldas. */
 const PORT = "3000";
 const PROBE_PATH = "/api-status";
 
@@ -64,28 +63,16 @@ async function sweepSubnet(subnet: string, deviceIp: string): Promise<string | n
 }
 
 /**
- * Busca el backend automáticamente:
- *  1. Prueba la URL actual (guardada/default) — camino rápido.
- *  2. Si no responde, barre la subred local y toma la primera que responda.
+ * Busca el backend en la red local **actual**: calcula la subred a partir de la
+ * IP del dispositivo y la barre. Devuelve la URL del primero que responda.
+ *
+ * No prueba la URL guardada (de eso se encarga quien llama); esto es la
+ * búsqueda "desde cero", útil cuando cambió la red o la IP del servidor.
  */
-export async function findBackend(): Promise<string | null> {
-  const current = getApiUrl();
-  if (await probeBackend(current)) return current;
-
+export async function sweepLocalNetwork(): Promise<string | null> {
   const deviceIp = await Network.getIpAddressAsync().catch(() => null);
   const subnet = deviceIp ? subnetOf(deviceIp) : null;
   if (!subnet) return null;
 
   return sweepSubnet(subnet, deviceIp ?? "");
-}
-
-/**
- * Arranque: carga la URL guardada y, si es necesario, descubre el servidor en
- * la red local. Devuelve la URL final activa.
- */
-export async function bootApiUrl(): Promise<string> {
-  await loadApiUrl();
-  const found = await findBackend();
-  if (found) await setApiUrl(found);
-  return getApiUrl();
 }

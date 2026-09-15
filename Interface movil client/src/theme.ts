@@ -16,7 +16,7 @@ export const colors = {
   popover: "#FFFFFF",
   popoverForeground: "#1A1A2E",
 
-  /** Amarillo MercAldas (botones primarios, badges, dots activos). */
+  /** Amarillo Mercaldas (botones primarios, badges, dots activos). */
   primary: "#FFF200",
   primaryForeground: "#1A1A2E",
 

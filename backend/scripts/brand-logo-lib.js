@@ -60,7 +60,7 @@ async function downloadFirst(urls) {
       const res = await fetch(url, {
         redirect: 'follow',
         signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
-        headers: { 'User-Agent': 'Mozilla/5.0 (MercAldas-brand-logos/1.0)' },
+        headers: { 'User-Agent': 'Mozilla/5.0 (Mercaldas-brand-logos/1.0)' },
       });
       if (!res.ok) continue;
       const type = res.headers.get('content-type') || '';

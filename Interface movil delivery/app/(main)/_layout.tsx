@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore } from "@/auth/authStore";

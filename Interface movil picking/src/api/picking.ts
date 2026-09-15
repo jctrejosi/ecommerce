@@ -2,7 +2,6 @@ import { http, toApiError } from "./client";
 import type {
   AuthMe,
   LoginResponse,
-  Picker,
   PickingLocation,
   PickingOrder,
   PickingShelf,
@@ -68,8 +67,6 @@ export const pickingApi = {
       branchId,
       variantIds: variantIds.join(","),
     }),
-
-  pickers: () => get<Picker[]>("/picking-admin/pickers"),
 };
 
-export type { Picker, PickingLocation, PickingOrder, PickingShelf, ScanResult };
+export type { PickingLocation, PickingOrder, PickingShelf, ScanResult };

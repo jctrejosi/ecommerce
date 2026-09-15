@@ -1,4 +1,4 @@
-# Servicio único MercAldas: backend NestJS + bot FastAPI + proxy Caddy.
+# Servicio único Mercaldas: backend NestJS + bot FastAPI + proxy Caddy.
 # Dockerfile en la raíz del repo; el bot queda bajo el prefijo /bot.
 services:
   - type: web

@@ -14,7 +14,7 @@ from . import config, tools
 
 log = logging.getLogger("bot.deepseek")
 
-SYSTEM_PROMPT = """Eres "Daisy", la asistente de compras del supermercado en línea MercAldas.
+SYSTEM_PROMPT = """Eres "Daisy", la asistente de compras del supermercado en línea Mercaldas.
 
 TU ÚNICA FUNCIÓN: ayudar al cliente a ARMAR SU CARRITO DE COMPRAS con los productos que te indique, y responder consultas básicas del catálogo (precios, disponibilidad, categorías, marcas).
 
