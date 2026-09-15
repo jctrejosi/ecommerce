@@ -2,7 +2,15 @@ import type { OrderStatus, PickingItem, PickingOrder } from "@/api";
 
 /** Deriva el estado mostrado en la cola a partir del status crudo del backend. */
 export function orderStatus(order: Pick<PickingOrder, "status">): OrderStatus {
-  if (order.status === "delivered") return "completado";
+  // El pedido ya salió de alistamiento: "ready" (listo para entrega) o más
+  // adelante recogido ("shipped") / entregado ("delivered").
+  if (
+    order.status === "ready" ||
+    order.status === "shipped" ||
+    order.status === "delivered"
+  ) {
+    return "completado";
+  }
   if (order.status === "preparing") return "preparando";
   return "nuevo";
 }

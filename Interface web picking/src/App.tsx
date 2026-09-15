@@ -90,7 +90,11 @@ function apiItemToProduct(i: PickingItem): Product {
 
 function apiOrderToOrder(o: PickingOrder): Order {
   const status: OrderStatus =
-    o.status === "delivered" ? "completado" : o.status === "preparing" ? "preparando" : "nuevo";
+    o.status === "ready" || o.status === "shipped" || o.status === "delivered"
+      ? "completado"
+      : o.status === "preparing"
+        ? "preparando"
+        : "nuevo";
   const items = (o.items ?? []).map(apiItemToProduct);
   const minutes = o.createdAt
     ? Math.max(1, Math.floor((Date.now() - new Date(o.createdAt).getTime()) / 60000))

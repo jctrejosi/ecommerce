@@ -162,6 +162,7 @@ export function OrdersPanel({
                 const statusColor = {
                   pendiente: "#FF9500",
                   preparando: "#FF9500",
+                  listo: "#0D9488",
                   "en camino": "#007AFF",
                   entregado: "#34C759",
                   cancelado: "#EF4444",
@@ -169,6 +170,7 @@ export function OrdersPanel({
                 const statusLabel = {
                   pendiente: "Pendiente",
                   preparando: "Preparando",
+                  listo: "Listo",
                   "en camino": "En camino",
                   entregado: "Entregado",
                   cancelado: "Cancelado",
@@ -225,6 +227,7 @@ export function OrdersPanel({
               const statusColor = {
                 pendiente: "#FF9500",
                 preparando: "#FF9500",
+                listo: "#0D9488",
                 "en camino": "#007AFF",
                 entregado: "#34C759",
                 cancelado: "#EF4444",
@@ -232,6 +235,7 @@ export function OrdersPanel({
               const statusLabel = {
                 pendiente: "Pendiente",
                 preparando: "Preparando tu pedido",
+                listo: "Listo para entrega",
                 "en camino": "En camino",
                 entregado: "Entregado",
                 cancelado: "Cancelado",
@@ -239,13 +243,15 @@ export function OrdersPanel({
               const stepNum = {
                 pendiente: 0,
                 preparando: 1,
-                "en camino": 2,
-                entregado: 3,
+                listo: 2,
+                "en camino": 3,
+                entregado: 4,
                 cancelado: -1,
               }[selectedOrder.status];
               const trackSteps = [
                 "Confirmado",
                 "Preparando",
+                "Listo",
                 "En camino",
                 "Entregado",
               ];

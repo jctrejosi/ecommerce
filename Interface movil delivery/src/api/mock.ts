@@ -178,7 +178,7 @@ const TRANSITION_EVENTS: Record<TransitionKey, string> = {
   accept: "ACCEPTED",
   reject: "REJECTED",
   arrived: "ARRIVED",
-  pickup: "PICKED_UP",
+  pickup: "IN_DELIVERY",
   start: "IN_DELIVERY",
   deliver: "DELIVERED",
   fail: "FAILED_DELIVERY",
@@ -276,7 +276,8 @@ export const mockApi: DeliveryApi = {
       accept: "ACCEPTED",
       reject: "REJECTED",
       arrived: "READY_FOR_PICKUP",
-      pickup: "PICKED_UP",
+      // "Tengo el pedido" pasa directo a en camino.
+      pickup: "IN_DELIVERY",
       start: "IN_DELIVERY",
       deliver: "DELIVERED",
       fail: "FAILED_DELIVERY",

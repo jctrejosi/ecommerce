@@ -112,7 +112,7 @@ export class WebhookController {
           .update(orders)
           .set({ status: 'paid', updatedAt: new Date().toISOString() })
           .where(eq(orders.id, BigInt(orderId)));
-        this.ordersGateway.notifyOrderStatus(String(orderId), 'preparando');
+        this.ordersGateway.notifyOrderStatus(reference, 'preparando');
         await this.drizzleService.db.insert(orderStatusHistory).values({
           orderId, status: 'paid', note: 'Pago confirmado por Wompi (webhook)', createdBy: customerId ?? null,
         });
@@ -133,7 +133,7 @@ export class WebhookController {
           .update(orders)
           .set({ status: 'cancelled', updatedAt: new Date().toISOString() })
           .where(eq(orders.id, BigInt(orderId)));
-        this.ordersGateway.notifyOrderStatus(String(orderId), 'cancelado', statusMessage);
+        this.ordersGateway.notifyOrderStatus(reference, 'cancelado', statusMessage);
         await this.drizzleService.db.insert(orderStatusHistory).values({
           orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? null,
         });

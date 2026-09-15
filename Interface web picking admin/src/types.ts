@@ -123,7 +123,8 @@ export interface PickerHistoryOrder {
   status: string;
   pickedAt: string | null;
   completedAt: string | null;
-  deliveredAt: string;
+  /** Entrega real al cliente (la marca el repartidor); null si aún no se entregó. */
+  deliveredAt: string | null;
   itemsCount: number;
   totalPieces: number;
   scannedPieces: number;

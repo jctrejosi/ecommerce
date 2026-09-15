@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import { DrizzleService } from '../../database/drizzle.service';
@@ -15,8 +15,11 @@ import {
   users,
 } from '../../../drizzle/schema';
 
-/** Estados en los que un pedido cuenta como "en alistamiento". */
-const ACTIVE_STATUSES = ['paid', 'preparing'] as const;
+/**
+ * Estados en los que un pedido cuenta como "en alistamiento".
+ * `ready` sigue contando hasta que el picker cierre en caja (`completed_at`).
+ */
+const ACTIVE_STATUSES = ['paid', 'preparing', 'ready'] as const;
 
 @Injectable()
 export class PickersService {
@@ -268,6 +271,7 @@ export class PickersService {
         and(
           inArray(orders.pickerId, ids),
           inArray(orders.status, [...ACTIVE_STATUSES]),
+          isNull(orders.completedAt),
         ),
       )
       .orderBy(desc(orders.pickedAt), desc(orders.id));
@@ -279,37 +283,37 @@ export class PickersService {
       if (!currentByPicker.has(pid)) currentByPicker.set(pid, row);
     }
 
-    // Entregados hoy por picker
+    // Entregados hoy por picker: pedidos que el picker cerró en caja hoy.
     const todayRows = await this.db
       .select({
-        pickerId: orderStatusHistory.pickerId,
+        pickerId: orders.pickerId,
         n: sql<number>`COUNT(*)::int`,
       })
-      .from(orderStatusHistory)
+      .from(orders)
       .where(
         and(
-          inArray(orderStatusHistory.pickerId, ids),
-          eq(orderStatusHistory.status, 'delivered'),
-          sql`${orderStatusHistory.createdAt}::date = CURRENT_DATE`,
+          inArray(orders.pickerId, ids),
+          isNotNull(orders.completedAt),
+          sql`${orders.completedAt}::date = CURRENT_DATE`,
         ),
       )
-      .groupBy(orderStatusHistory.pickerId);
+      .groupBy(orders.pickerId);
     const todayByPicker = new Map(todayRows.map((r) => [Number(r.pickerId), r.n]));
 
-    // Total despachado por picker
+    // Total despachado por picker.
     const totalRows = await this.db
       .select({
-        pickerId: orderStatusHistory.pickerId,
+        pickerId: orders.pickerId,
         n: sql<number>`COUNT(*)::int`,
       })
-      .from(orderStatusHistory)
+      .from(orders)
       .where(
         and(
-          inArray(orderStatusHistory.pickerId, ids),
-          eq(orderStatusHistory.status, 'delivered'),
+          inArray(orders.pickerId, ids),
+          isNotNull(orders.completedAt),
         ),
       )
-      .groupBy(orderStatusHistory.pickerId);
+      .groupBy(orders.pickerId);
     const totalByPicker = new Map(totalRows.map((r) => [Number(r.pickerId), r.n]));
 
     return pickers.map((p) => {
@@ -336,7 +340,7 @@ export class PickersService {
     });
   }
 
-  /** Historial completo de pedidos despachados por un picker. */
+  /** Historial completo de pedidos alistados por un picker (cierre en caja). */
   async history(pickerId: number) {
     const [user] = await this.db
       .select({ id: users.id, firstName: users.firstName, lastName: users.lastName })
@@ -354,20 +358,15 @@ export class PickersService {
         status: orders.status,
         pickedAt: orders.pickedAt,
         completedAt: orders.completedAt,
-        deliveredAt: orderStatusHistory.createdAt,
       })
-      .from(orderStatusHistory)
-      .innerJoin(orders, eq(orders.id, orderStatusHistory.orderId))
-      .where(
-        and(
-          eq(orderStatusHistory.pickerId, pickerId),
-          eq(orderStatusHistory.status, 'delivered'),
-        ),
-      )
-      .orderBy(desc(orderStatusHistory.createdAt))
+      .from(orders)
+      .where(and(eq(orders.pickerId, pickerId), isNotNull(orders.completedAt)))
+      .orderBy(desc(orders.completedAt))
       .limit(300);
 
     const orderIds = rows.map((r) => Number(r.id));
+
+    // Agregado de items/piezas escaneadas por pedido.
     const aggByOrder = new Map<number, { items: number; pieces: number; scanned: number }>();
     if (orderIds.length > 0) {
       const agg = await this.db
@@ -389,19 +388,42 @@ export class PickersService {
       }
     }
 
+    // Entrega real al cliente (la marca el repartidor, sin picker asociado).
+    const deliveredByOrder = new Map<number, string>();
+    if (orderIds.length > 0) {
+      const deliveredRows = await this.db
+        .select({
+          orderId: orderStatusHistory.orderId,
+          at: orderStatusHistory.createdAt,
+        })
+        .from(orderStatusHistory)
+        .where(
+          and(
+            inArray(orderStatusHistory.orderId, orderIds),
+            eq(orderStatusHistory.status, 'delivered'),
+          ),
+        )
+        .orderBy(desc(orderStatusHistory.createdAt));
+      for (const d of deliveredRows) {
+        const oid = Number(d.orderId);
+        if (d.at && !deliveredByOrder.has(oid)) deliveredByOrder.set(oid, d.at);
+      }
+    }
+
     return {
       picker: { id: pickerId, name: this.nameOf(user) },
       orders: rows.map((r) => {
-        const agg = aggByOrder.get(Number(r.id)) ?? { items: 0, pieces: 0, scanned: 0 };
+        const oid = Number(r.id);
+        const agg = aggByOrder.get(oid) ?? { items: 0, pieces: 0, scanned: 0 };
         return {
-          id: Number(r.id),
+          id: oid,
           referenceCode: r.referenceCode,
           customerName: r.customerName ?? 'Cliente',
           grandTotal: Number(r.grandTotal),
           status: r.status,
           pickedAt: r.pickedAt,
-          completedAt: r.completedAt ?? r.deliveredAt,
-          deliveredAt: r.deliveredAt,
+          completedAt: r.completedAt,
+          deliveredAt: deliveredByOrder.get(oid) ?? null,
           itemsCount: agg.items,
           totalPieces: agg.pieces,
           scannedPieces: agg.scanned,

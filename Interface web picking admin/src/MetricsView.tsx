@@ -29,6 +29,8 @@ const fmtDuration = (ms: number) => {
 const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   paid: { label: 'En cola', cls: 'bg-amber-400/15 text-amber-400 border-amber-400/30' },
   preparing: { label: 'Alistando', cls: 'bg-sky-400/15 text-sky-400 border-sky-400/30' },
+  ready: { label: 'Listo', cls: 'bg-teal-400/15 text-teal-400 border-teal-400/30' },
+  shipped: { label: 'En camino', cls: 'bg-purple-400/15 text-purple-400 border-purple-400/30' },
   delivered: { label: 'Entregado', cls: 'bg-green-400/15 text-green-400 border-green-400/30' },
 }
 

@@ -577,7 +577,7 @@ const MOCK_ACCT_ORDERS = [
   },
 ];
 type AcctOrder = Omit<(typeof MOCK_ACCT_ORDERS)[number], "status"> & {
-  status: "pendiente" | "preparando" | "en camino" | "entregado" | "cancelado";
+  status: "pendiente" | "preparando" | "listo" | "en camino" | "entregado" | "cancelado";
 };
 
 const INIT_FAVORITES = MOCK_PRODUCTS.filter((p) =>
@@ -857,6 +857,7 @@ function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; bg: string; color: string }> = {
     pendiente: { label: "Pendiente de pago", bg: "#E2E8F0", color: "#475569" },
     preparando: { label: "Preparando", bg: "#FFF3CD", color: "#856404" },
+    listo: { label: "Listo", bg: "#CCFBF1", color: "#115E59" },
     "en camino": { label: "En camino", bg: "#CCE5FF", color: "#004085" },
     entregado: { label: "Entregado", bg: "#D4EDDA", color: "#155724" },
     cancelado: { label: "Cancelado", bg: "#F8D7DA", color: "#721C24" },
@@ -903,11 +904,19 @@ function buildTimeline(status: string): TimelineStep[] {
         step("Pago confirmado", "done"),
         step("Preparando pedido", "current"),
       ];
+    case "listo":
+      return [
+        step("Pedido recibido", "done"),
+        step("Pago confirmado", "done"),
+        step("Preparando pedido", "done"),
+        step("Listo para entrega", "current"),
+      ];
     case "en camino":
       return [
         step("Pedido recibido", "done"),
         step("Pago confirmado", "done"),
         step("Preparando pedido", "done"),
+        step("Listo para entrega", "done"),
         step("En camino", "current"),
       ];
     case "entregado":
@@ -915,6 +924,7 @@ function buildTimeline(status: string): TimelineStep[] {
         step("Pedido recibido", "done"),
         step("Pago confirmado", "done"),
         step("Preparando pedido", "done"),
+        step("Listo para entrega", "done"),
         step("En camino", "done"),
         step("Entregado", "done"),
       ];
@@ -1411,6 +1421,7 @@ export function UserAdminView({
     const filters = [
       { id: "todos", label: "Todos" },
       { id: "preparando", label: "Preparando" },
+      { id: "listo", label: "Listo" },
       { id: "en camino", label: "En camino" },
       { id: "entregado", label: "Entregado" },
       { id: "cancelado", label: "Cancelado" },

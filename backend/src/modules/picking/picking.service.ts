@@ -9,6 +9,7 @@ import { DrizzleService } from '../../database/drizzle.service';
 import { PickingGateway } from './picking.gateway';
 import { OrdersGateway } from '../orders/orders.gateway';
 import { DeliveryOrdersService } from '../delivery/delivery-orders.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   orderItems,
   orders,
@@ -28,14 +29,23 @@ const QUEUE_STATUSES = [
   'payment_pending',
   'paid',
   'preparing',
+  'ready',
+  'shipped',
   'delivered',
 ] as const;
 
 /** Estados que pasan a "preparing" al reclamar o escanear el pedido. */
 const PICKING_TRIGGER_STATUSES = ['created', 'payment_pending', 'paid'] as const;
 
+/** El pedido ya salió de alistamiento: no se vuelve a marcar como "listo". */
+const PICKED_DONE_STATUSES = ['ready', 'shipped', 'delivered'] as const;
+
 function isPickingTrigger(status: string): boolean {
   return (PICKING_TRIGGER_STATUSES as readonly string[]).includes(status);
+}
+
+function isPickedDone(status: string): boolean {
+  return (PICKED_DONE_STATUSES as readonly string[]).includes(status);
 }
 
 type QueueTab = 'nuevo' | 'preparando' | 'completado' | 'todos';
@@ -49,10 +59,57 @@ export class PickingService {
     private readonly gateway: PickingGateway,
     private readonly ordersGateway: OrdersGateway,
     private readonly deliveryOrders: DeliveryOrdersService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   private get db() {
     return this.drizzle.db;
+  }
+
+  /**
+   * Avisa al cliente que su pedido entró a alistamiento: estado en vivo por
+   * WebSocket + notificación persistida.
+   *
+   * El channel del WebSocket es `order:<referenceCode>` (es el identificador
+   * con el que se suscribe el cliente en `useOrderSocket`), y el estado que
+   * consume la UI ya viene normalizado (`preparando`, no `preparing`).
+   */
+  private async notifyPreparing(order: {
+    referenceCode: string | null;
+    customerId: number | null;
+  }) {
+    if (!order.referenceCode) return;
+    this.ordersGateway.notifyOrderStatus(order.referenceCode, 'preparando');
+
+    if (order.customerId == null) return;
+    await this.notifications.create({
+      type: 'ORDER',
+      title: 'Estamos preparando tu pedido 🛒',
+      message: `Tu pedido ${order.referenceCode} entró a alistamiento. Te avisaremos cuando salga a entrega.`,
+      targetCustomerId: Number(order.customerId),
+      linkUrl: '/account?tab=orders',
+    });
+  }
+
+  /**
+   * Avisa al cliente que su pedido quedó listo (todos los items alistados):
+   * estado en vivo por WebSocket + notificación persistida.
+   */
+  private async notifyReady(order: {
+    referenceCode: string | null;
+    customerId: number | null;
+  }) {
+    if (!order.referenceCode) return;
+    this.ordersGateway.notifyOrderStatus(order.referenceCode, 'listo');
+
+    if (order.customerId == null) return;
+    await this.notifications.create({
+      type: 'ORDER',
+      title: 'Tu pedido está listo 🎉',
+      message: `Terminamos de alistar tu pedido ${order.referenceCode}. En breve sale a entrega.`,
+      targetCustomerId: Number(order.customerId),
+      linkUrl: '/account?tab=orders',
+    });
   }
 
   /** Cola de picking (la "cola" vive en la BD: orders por estado + reviewedAt). */
@@ -71,7 +128,9 @@ export class PickingService {
     } else if (tab === 'preparando') {
       where = eq(orders.status, 'preparing');
     } else if (tab === 'completado') {
-      where = eq(orders.status, 'delivered');
+      // "Completado" = ya se alistaron todos los items (listo), sin importar si
+      // el repartidor ya lo recogió o entregó.
+      where = inArray(orders.status, ['ready', 'shipped', 'delivered']);
     } else {
       where = inArray(orders.status, QUEUE_STATUSES);
     }
@@ -262,7 +321,13 @@ export class PickingService {
   /** Asignar el picker (usuario) que alista el pedido. */
   async claim(id: number, pickerId: number) {
     const [order] = await this.db
-      .select({ id: orders.id, pickerId: orders.pickerId, status: orders.status })
+      .select({
+        id: orders.id,
+        pickerId: orders.pickerId,
+        status: orders.status,
+        referenceCode: orders.referenceCode,
+        customerId: orders.customerId,
+      })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
@@ -300,8 +365,8 @@ export class PickingService {
     });
 
     // Refleja el cambio de estado en la app del cliente.
-    if (nextStatus !== order.status) {
-      this.ordersGateway.notifyOrderStatus(String(id), nextStatus);
+    if (nextStatus === 'preparing' && nextStatus !== order.status) {
+      await this.notifyPreparing(order);
     }
 
     this.gateway.emit('picking:claim', {
@@ -315,7 +380,13 @@ export class PickingService {
   /** Escaneo de un código (barcode o PLU): alista 1 unidad del item que coincida. */
   async scan(id: number, code: string) {
     const [order] = await this.db
-      .select({ id: orders.id, status: orders.status, referenceCode: orders.referenceCode, pickerId: orders.pickerId })
+      .select({
+        id: orders.id,
+        status: orders.status,
+        referenceCode: orders.referenceCode,
+        pickerId: orders.pickerId,
+        customerId: orders.customerId,
+      })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
@@ -359,7 +430,18 @@ export class PickingService {
     }
 
     const newPicked = matched.pickedQty + 1;
-    const nextStatus = isPickingTrigger(order.status) ? 'preparing' : order.status;
+
+    // ¿Con este escaneo quedan todos los items alistados?
+    const allDone = items.every((i) =>
+      i.id === matched.id ? newPicked >= i.quantity : i.pickedQty >= i.quantity,
+    );
+
+    // Al terminar el último item el pedido queda "listo" (ready) para entrega.
+    const nextStatus = allDone
+      ? 'ready'
+      : isPickingTrigger(order.status)
+        ? 'preparing'
+        : order.status;
 
     await this.db.transaction(async (tx) => {
       await tx
@@ -384,12 +466,9 @@ export class PickingService {
 
     // Refleja el cambio de estado en la app del cliente.
     if (nextStatus !== order.status) {
-      this.ordersGateway.notifyOrderStatus(String(id), nextStatus);
+      if (nextStatus === 'preparing') await this.notifyPreparing(order);
+      else if (nextStatus === 'ready') await this.notifyReady(order);
     }
-
-    const allDone = items.every((i) =>
-      i.id === matched.id ? newPicked >= i.quantity : i.pickedQty >= i.quantity,
-    );
 
     // Evento en vivo para el admin (Métricas): progreso actualizado del pedido
     const [agg] = await this.db
@@ -421,10 +500,24 @@ export class PickingService {
     };
   }
 
-  /** Completar el alistamiento: "entregado en caja" → pedido entregado. */
+  /**
+   * Cerrar el alistamiento ("entregado en caja") y ofrecer el pedido a delivery.
+   *
+   * NO marca el pedido como "entregado": el pedido queda "listo" (ready) y son
+   * el repartidor (`shipped` = en camino) y la entrega final (`delivered`) los
+   * que avanzan el estado. Aqui solo se registra el cierre del alistamiento
+   * (`completed_at`) para las metricas de picking.
+   */
   async complete(id: number) {
     const [order] = await this.db
-      .select({ id: orders.id, status: orders.status, pickerId: orders.pickerId, referenceCode: orders.referenceCode })
+      .select({
+        id: orders.id,
+        status: orders.status,
+        pickerId: orders.pickerId,
+        referenceCode: orders.referenceCode,
+        customerId: orders.customerId,
+        completedAt: orders.completedAt,
+      })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
@@ -432,8 +525,8 @@ export class PickingService {
     if (!order) {
       throw new NotFoundException(`No existe el pedido ${id}`);
     }
-    if (order.status === 'delivered') {
-      return { ok: true, status: 'delivered', already: true };
+    if (order.completedAt != null) {
+      return { ok: true, status: order.status, already: true };
     }
 
     const pending = await this.db
@@ -452,25 +545,37 @@ export class PickingService {
       );
     }
 
+    // Normalmente ya quedó en "ready" al escanear el último item; si no (p. ej.
+    // items marcados desde otra via), se marca aqui.
+    const nextStatus = isPickedDone(order.status) ? order.status : 'ready';
+    const now = new Date().toISOString();
+
     await this.db.transaction(async (tx) => {
       await tx
         .update(orders)
-        .set({ status: 'delivered', completedAt: new Date().toISOString() })
+        .set({ status: nextStatus, completedAt: now })
         .where(eq(orders.id, BigInt(id)));
-      await tx.insert(orderStatusHistory).values({
-        orderId: id,
-        status: 'delivered',
-        oldStatus: order.status,
-        pickerId: order.pickerId ?? undefined,
-        createdAt: new Date().toISOString(),
-      });
+
+      if (nextStatus !== order.status) {
+        await tx.insert(orderStatusHistory).values({
+          orderId: id,
+          status: nextStatus,
+          oldStatus: order.status,
+          pickerId: order.pickerId ?? undefined,
+          createdAt: now,
+        });
+      }
     });
+
+    if (nextStatus === 'ready' && nextStatus !== order.status) {
+      await this.notifyReady(order);
+    }
 
     this.gateway.emit('picking:delivered', {
       orderId: id,
       referenceCode: order.referenceCode,
       pickerId: order.pickerId ?? undefined,
-      deliveredAt: new Date().toISOString(),
+      deliveredAt: now,
     });
 
     // El pedido sale de picking → se ofrece a TODOS los repartidores activos
@@ -480,6 +585,6 @@ export class PickingService {
       order.referenceCode,
     );
 
-    return { ok: true, status: 'delivered', already: false };
+    return { ok: true, status: nextStatus, already: false };
   }
 }

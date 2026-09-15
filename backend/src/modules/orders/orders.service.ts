@@ -1050,6 +1050,8 @@ export class OrdersService {
         return 'preparando';
       case 'preparing':
         return 'preparando';
+      case 'ready':
+        return 'listo';
       case 'shipped':
         return 'en camino';
       case 'delivered':
@@ -1522,6 +1524,22 @@ export class OrdersService {
       });
     }
 
+    // Y avisarle cuando queda entregado (solo en la transición real, para no
+    // repetir la notificación si vuelven a guardar el mismo estado).
+    if (
+      dbStatus === 'delivered' &&
+      existing.status !== 'delivered' &&
+      existing.customerId
+    ) {
+      await this.notificationsService.create({
+        type: 'ORDER',
+        title: 'Tu pedido fue entregado 🎉',
+        message: `Tu pedido ${existing.referenceCode} llegó a su destino. ¡Gracias por comprar en Mercaldas!`,
+        targetCustomerId: Number(existing.customerId),
+        linkUrl: `order-track:${existing.referenceCode}`,
+      });
+    }
+
     return {
       success: true,
       status: displayStatus,
@@ -1564,7 +1582,7 @@ export class OrdersService {
       case 'preparando':
         return 'preparing';
       case 'listo':
-        return 'shipped';
+        return 'ready';
       case 'en camino':
         return 'shipped';
       case 'entregado':

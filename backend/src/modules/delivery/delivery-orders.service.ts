@@ -57,7 +57,8 @@ const NEXT_STATUS: Record<string, string> = {
   accept: 'ACCEPTED',
   reject: 'REJECTED',
   arrived: 'READY_FOR_PICKUP',
-  pickup: 'PICKED_UP',
+  // "Tengo el pedido" deja el pedido en camino de inmediato (sin paso extra).
+  pickup: 'IN_DELIVERY',
   start: 'IN_DELIVERY',
   deliver: 'DELIVERED',
   fail: 'FAILED_DELIVERY',
@@ -185,7 +186,8 @@ function tsPatch(action: string, now: string): AssignmentUpdate {
     case 'arrived':
       return { readyForPickupAt: now };
     case 'pickup':
-      return { pickedUpAt: now };
+      // El pedido pasa directo a "en camino".
+      return { pickedUpAt: now, inDeliveryAt: now };
     case 'start':
       return { inDeliveryAt: now };
     case 'deliver':
@@ -625,7 +627,7 @@ export class DeliveryOrdersService {
           },
         ]);
       }
-      if (action === 'start') {
+      if (NEXT_STATUS[action] === 'IN_DELIVERY') {
         // El repartidor va en camino → el cliente ve el pedido como "En camino".
         await tx
           .update(orders)
@@ -665,11 +667,22 @@ export class DeliveryOrdersService {
 
     // El cliente recibe la notificación (con botón para ver el rastreo) cuando
     // el repartidor sale con el pedido.
-    if (action === 'start' && assignment.customer_id != null) {
+    if (NEXT_STATUS[action] === 'IN_DELIVERY' && assignment.customer_id != null) {
       await this.notificationsService.create({
         type: 'ORDER',
         title: 'Tu pedido está en camino 🛵',
         message: `El repartidor salió con tu pedido ${assignment.reference_code}. Síguelo en el mapa.`,
+        targetCustomerId: Number(assignment.customer_id),
+        linkUrl: `order-track:${assignment.reference_code}`,
+      });
+    }
+
+    // Y otra cuando queda entregado: cierra el ciclo para el cliente.
+    if (action === 'deliver' && assignment.customer_id != null) {
+      await this.notificationsService.create({
+        type: 'ORDER',
+        title: 'Tu pedido fue entregado 🎉',
+        message: `Tu pedido ${assignment.reference_code} llegó a su destino. ¡Gracias por comprar en Mercaldas!`,
         targetCustomerId: Number(assignment.customer_id),
         linkUrl: `order-track:${assignment.reference_code}`,
       });
