@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -58,7 +56,7 @@ export default function OrderChatScreen() {
   };
 
   return (
-    <Screen scroll={false} bottomInset>
+    <Screen scroll={false} bottomInset keyboardAware>
       {/* Título del chat: nombre del cliente + código del pedido */}
       <Stack.Screen
         options={{
@@ -68,11 +66,7 @@ export default function OrderChatScreen() {
           headerBackTitle: "Pedido",
         }}
       />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={90}
-      >
+      <View style={styles.flex}>
         {/* Encabezado del pedido */}
         {order ? (
           <View style={styles.orderBar}>
@@ -162,7 +156,7 @@ export default function OrderChatScreen() {
             <Ionicons name="send" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

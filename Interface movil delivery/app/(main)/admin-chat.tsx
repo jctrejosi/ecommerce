@@ -2,8 +2,6 @@ import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   StyleSheet,
   Text,
@@ -59,12 +57,8 @@ export default function AdminChatScreen() {
   };
 
   return (
-    <Screen scroll={false} bottomInset>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={90}
-      >
+    <Screen scroll={false} bottomInset keyboardAware>
+      <View style={styles.flex}>
         {/* Encabezado: con quién se habla */}
         <View style={styles.panelBar}>
           <View style={styles.avatar}>
@@ -152,7 +146,7 @@ export default function AdminChatScreen() {
             <Ionicons name="send" size={18} color="#FFFFFF" />
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      </View>
     </Screen>
   );
 }

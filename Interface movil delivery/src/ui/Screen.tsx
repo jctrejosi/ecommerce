@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { useKeyboardHeight } from "@/lib/keyboard";
 import { colors, spacing } from "@/theme";
 
 interface ScreenProps {
@@ -18,6 +19,12 @@ interface ScreenProps {
    * ancho que el logo para que el título siga centrado.
    */
   headerRight?: ReactNode;
+  /**
+   * Aparta el contenido cuando aparece el teclado. Necesario en Android con
+   * edge-to-edge, donde el sistema ya no redimensiona la ventana (`adjustResize`
+   * se ignora): sin esto, la barra de escribir de un chat queda tapada.
+   */
+  keyboardAware?: boolean;
 }
 
 /** Contenedor base de pantalla: SafeArea + título opcional + scroll opcional. */
@@ -28,16 +35,30 @@ export function Screen({
   padded = true,
   bottomInset = false,
   headerRight,
+  keyboardAware = false,
 }: ScreenProps) {
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardOpen = keyboardAware && keyboardHeight > 0;
+
   const content = (
-    <View style={[styles.body, padded && styles.padded]}>{children}</View>
+    <View
+      style={[
+        styles.body,
+        padded && styles.padded,
+        keyboardOpen && {
+          paddingBottom: (padded ? spacing(4) : 0) + keyboardHeight,
+        },
+      ]}
+    >
+      {children}
+    </View>
   );
 
   return (
     <SafeAreaView
       style={styles.safe}
       edges={
-        bottomInset
+        bottomInset && !keyboardOpen
           ? ["top", "left", "right", "bottom"]
           : ["top", "left", "right"]
       }
