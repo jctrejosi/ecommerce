@@ -60,7 +60,8 @@
           "cameraPermission": "La app usa la cámara para tomar la foto de la entrega.",
           "microphonePermission": false
         }
-      ]
+      ],
+      "expo-audio"
     ]
   }
 }

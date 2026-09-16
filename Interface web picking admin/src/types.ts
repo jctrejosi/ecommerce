@@ -168,3 +168,24 @@ export interface PickingOrderDetail {
   scannedPieces: number;
   items: PickingOrderDetailItem[];
 }
+
+// ── Chat administrador ↔ picker ──
+
+export interface PickerChatMessage {
+  id: number;
+  senderType: 'picker' | 'admin';
+  senderUserId: number | null;
+  body: string;
+  createdAt: string | null;
+  readAt: string | null;
+}
+
+/** Renglón de la bandeja: un picker con su último mensaje y no leídos. */
+export interface PickerChatConversation {
+  pickerId: number;
+  fullName: string;
+  email: string;
+  isActive: boolean;
+  unread: number;
+  lastMessage: { body: string; senderType: 'picker' | 'admin'; createdAt: string | null } | null;
+}

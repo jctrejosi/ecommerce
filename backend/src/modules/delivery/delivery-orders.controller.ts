@@ -1,14 +1,21 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Param,
   Post,
   Put,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { DeliveryAuthService } from './delivery-auth.service';
 import { DeliveryService } from './delivery.service';
 import { DeliveryOrdersService } from './delivery-orders.service';
@@ -26,6 +33,7 @@ export class DeliveryOrdersController {
     private readonly orders: DeliveryOrdersService,
     private readonly auth: DeliveryAuthService,
     private readonly chat: DriverChatService,
+    private readonly cloudinary: CloudinaryService,
   ) {}
 
   @Get('orders')
@@ -67,6 +75,18 @@ export class DeliveryOrdersController {
     );
   }
 
+  /** Acuse de lectura del repartidor: marca como vistos los mensajes del cliente. */
+  @Post('orders/:id/messages/read')
+  @HttpCode(HttpStatus.OK)
+  markMessagesRead(
+    @CurrentUser('sub') userId: bigint,
+    @Param('id') id: string,
+  ) {
+    return this.delivery.resolveDriver(Number(userId)).then((driver) =>
+      this.orders.markChatMessagesRead(Number(driver.id), Number(id)),
+    );
+  }
+
   @Post('orders/:id/:action')
   transition(
     @CurrentUser('sub') userId: bigint,
@@ -99,6 +119,37 @@ export class DeliveryOrdersController {
     return this.delivery.resolveDriver(Number(userId)).then((driver) =>
       this.orders.setPushToken(Number(driver.id), dto.token),
     );
+  }
+
+  /**
+   * Foto de perfil del repartidor: sube el archivo a Cloudinary y guarda la URL
+   * pública en su ficha (`delivery_drivers.avatar_url`). Devuelve el perfil
+   * actualizado para que la app lo refresque de inmediato.
+   */
+  @Post('profile/avatar')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @CurrentUser('sub') userId: bigint,
+    @UploadedFile() file: { buffer: Buffer; originalname?: string } | undefined,
+  ) {
+    if (!file?.buffer) throw new BadRequestException('Archivo requerido');
+
+    const driver = await this.delivery.resolveDriver(Number(userId));
+    const driverId = Number(driver.id);
+
+    const { url } = await this.cloudinary.uploadImage(
+      file,
+      `driver_${driverId}`,
+      {
+        folder: `delivery/drivers/${driverId}`,
+        // Avatar: cuadrado y ligero (lossless en una foto pesa demasiado).
+        resize: 512,
+        lossless: false,
+      },
+    );
+
+    await this.delivery.setAvatarUrl(driverId, url);
+    return this.auth.me(Number(userId));
   }
 
   // ─── Chat con el panel (repartidor ↔ admin) ─────────────────────────────────

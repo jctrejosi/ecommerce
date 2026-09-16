@@ -73,11 +73,15 @@ export const catalogService = {
     );
   },
 
-  async getProductTypes(): Promise<{ id: number; code: string; name: string; count: number }[]> {
+  async getProductTypes(): Promise<
+    { id: number; code: string; name: string; imagePath: string | null; count: number }[]
+  > {
     return fetchJson(`${API_BASE_URL}/catalog/product-types`);
   },
 
-  async getFeaturedProductTypes(): Promise<{ id: number; code: string; name: string; count: number }[]> {
+  async getFeaturedProductTypes(): Promise<
+    { id: number; code: string; name: string; imagePath: string | null; count: number }[]
+  > {
     return fetchJson(`${API_BASE_URL}/landing/product-types`);
   },
 

@@ -2,8 +2,6 @@ import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -16,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
 import { apiErrorMessage } from "@/api";
 import { useAuthStore } from "@/auth/authStore";
+import { useKeyboardHeight } from "@/lib/keyboard";
 import { ErrorBox } from "@/ui/ErrorBox";
 
 /**
@@ -27,6 +26,11 @@ import { ErrorBox } from "@/ui/ErrorBox";
 export default function LoginScreen() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
+
+  // Con edge-to-edge el teclado se superpone al contenido (Android ignora
+  // `adjustResize`), así que apartamos el formulario a mano.
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardOpen = keyboardHeight > 0;
 
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -52,73 +56,82 @@ export default function LoginScreen() {
   }, [identifier, login, password, router]);
 
   return (
-    <SafeAreaView style={styles.safe} edges={["top", "bottom", "left", "right"]}>
-      <KeyboardAvoidingView
+    <SafeAreaView
+      style={styles.safe}
+      // Con el teclado abierto el borde inferior seguro sobra: el propio
+      // teclado ya ocupa esa zona.
+      edges={keyboardOpen ? ["top", "left", "right"] : ["top", "bottom", "left", "right"]}
+    >
+      <ScrollView
         style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        contentContainerStyle={[
+          styles.scroll,
+          keyboardOpen && { paddingBottom: keyboardHeight + spacing(4) },
+        ]}
+        keyboardShouldPersistTaps="handled"
       >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-        >
+        {/* Mientras se escribe se oculta la marca: libera la altura que
+            necesita el formulario para quedar por encima del teclado en las
+            pantallas pequeñas del dispositivo de picking. */}
+        {keyboardOpen ? null : (
           <View style={styles.brand}>
             <Image
-              source={require("../assets/logo.png")}
+              source={require("../assets/picking.png")}
               style={styles.logo}
               resizeMode="contain"
             />
             <Text style={styles.appName}>Picking | DSI</Text>
             <Text style={styles.tagline}>Inicia sesión para comenzar</Text>
           </View>
+        )}
 
-          <View style={styles.card}>
-            {errorMsg ? <ErrorBox message={errorMsg} /> : null}
+        <View style={styles.card}>
+          {errorMsg ? <ErrorBox message={errorMsg} /> : null}
 
-            <Text style={styles.label}>Usuario o correo</Text>
-            <TextInput
-              value={identifier}
-              onChangeText={setIdentifier}
-              placeholder="usuario"
-              placeholderTextColor={colors.textHint}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username"
-              returnKeyType="next"
-              style={styles.input}
-            />
+          <Text style={styles.label}>Usuario o correo</Text>
+          <TextInput
+            value={identifier}
+            onChangeText={setIdentifier}
+            placeholder="usuario"
+            placeholderTextColor={colors.textHint}
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="username"
+            returnKeyType="next"
+            style={styles.input}
+          />
 
-            <Text style={styles.label}>Contraseña</Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              onSubmitEditing={() => void submit()}
-              placeholder="••••••••"
-              placeholderTextColor={colors.textHint}
-              secureTextEntry
-              autoComplete="current-password"
-              returnKeyType="go"
-              style={styles.input}
-            />
+          <Text style={styles.label}>Contraseña</Text>
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            onSubmitEditing={() => void submit()}
+            placeholder="••••••••"
+            placeholderTextColor={colors.textHint}
+            secureTextEntry
+            autoComplete="current-password"
+            returnKeyType="go"
+            style={styles.input}
+          />
 
-            <Pressable
-              onPress={() => void submit()}
-              disabled={busy || !identifier.trim() || password.length === 0}
-              style={({ pressed }) => [
-                styles.primary,
-                (busy || !identifier.trim() || password.length === 0) &&
-                  styles.primaryDisabled,
-                pressed && { opacity: 0.9 },
-              ]}
-            >
-              {busy ? (
-                <ActivityIndicator color={colors.onAccent} />
-              ) : (
-                <Text style={styles.primaryText}>Iniciar sesión</Text>
-              )}
-            </Pressable>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          <Pressable
+            onPress={() => void submit()}
+            disabled={busy || !identifier.trim() || password.length === 0}
+            style={({ pressed }) => [
+              styles.primary,
+              (busy || !identifier.trim() || password.length === 0) &&
+                styles.primaryDisabled,
+              pressed && { opacity: 0.9 },
+            ]}
+          >
+            {busy ? (
+              <ActivityIndicator color={colors.onAccent} />
+            ) : (
+              <Text style={styles.primaryText}>Iniciar sesión</Text>
+            )}
+          </Pressable>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -128,7 +141,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   scroll: { flexGrow: 1, justifyContent: "center", padding: spacing(5) },
   brand: { alignItems: "center", marginBottom: spacing(7) },
-  logo: { height: 42, width: 130 },
+  logo: { height: 72, width: 130 },
   appName: { color: colors.text, fontSize: 16, fontWeight: "800", marginTop: spacing(2) },
   tagline: { color: colors.textFaint, fontSize: 13, fontWeight: "600", marginTop: spacing(1) },
   card: {

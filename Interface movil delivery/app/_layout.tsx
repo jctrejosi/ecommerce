@@ -8,6 +8,8 @@ import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/auth/authStore";
 import { getTokens } from "@/auth/storage";
 import { configureNotifications, registerPushToken } from "@/notifications/push";
+import { configureMessageSound } from "@/notifications/sound";
+import { useIncomingMessageSound } from "@/notifications/useIncomingMessageSound";
 import { connectDeliverySocket, disconnectDeliverySocket } from "@/socket";
 import { useActiveOrders } from "@/api/orders";
 import { startBackgroundTracking, stopBackgroundTracking } from "@/tracking/location";
@@ -24,11 +26,14 @@ function RootShell() {
 
   // En entrega (recogido o en camino) el tracking en background debe seguir
   // aunque la app esté minimizada o cerrada (Waze abierto, pantalla apagada).
-  const delivering =
-    user != null &&
-    (orders ?? []).some(
-      (o) => o.status === "PICKED_UP" || o.status === "IN_DELIVERY",
-    );
+  const inProgressOrder = (orders ?? []).find(
+    (o) => o.status === "PICKED_UP" || o.status === "IN_DELIVERY",
+  );
+  const delivering = user != null && inProgressOrder != null;
+
+  // Tono de mensaje entrante del cliente en el pedido en curso (el del panel
+  // llega por socket, ver src/socket.ts). Suena aunque estés en otra pantalla.
+  useIncomingMessageSound(user ? inProgressOrder?.id : undefined);
 
   // Restaurar sesión al arrancar (SecureStore → /auth/me).
   useEffect(() => {
@@ -37,6 +42,7 @@ function RootShell() {
 
   useEffect(() => {
     void configureNotifications();
+    void configureMessageSound();
   }, []);
 
   useEffect(() => {
@@ -141,7 +147,7 @@ function SearchingServer() {
   return (
     <View style={styles.splash}>
       <Image
-        source={require("../assets/logo.png")}
+        source={require("../assets/delivery.png")}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -163,7 +169,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(8),
     backgroundColor: colors.background,
   },
-  logo: { height: 34, width: 150 },
+  logo: { height: 72, width: 72 },
   splashTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
   splashText: {
     fontSize: 13,

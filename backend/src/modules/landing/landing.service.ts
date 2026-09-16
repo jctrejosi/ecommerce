@@ -97,9 +97,11 @@ export class LandingService {
         id: productTypes.id,
         code: productTypes.code,
         name: productTypes.name,
+        imagePath: media.path,
         count: sql<number>`count(DISTINCT ${products.id})`,
       })
       .from(productTypes)
+      .leftJoin(media, eq(productTypes.imageMediaId, media.id))
       .leftJoin(
         productTypeAssignments,
         eq(productTypeAssignments.productTypeId, productTypes.id),
@@ -112,7 +114,7 @@ export class LandingService {
         ),
       )
       .where(eq(productTypes.isActive, true))
-      .groupBy(productTypes.id, productTypes.code, productTypes.name)
+      .groupBy(productTypes.id, productTypes.code, productTypes.name, media.path)
       .orderBy(asc(productTypes.name));
 
     const byCode = new Map(all.map((r) => [r.code, r]));
@@ -127,6 +129,7 @@ export class LandingService {
       id: Number(t.id),
       code: t.code,
       name: t.name,
+      imagePath: t.imagePath,
       count: Number(t.count ?? 0),
     }));
   }

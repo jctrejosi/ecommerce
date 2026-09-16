@@ -5,6 +5,7 @@ import { getServerUrl } from "@/api/server";
 import { queryClient } from "@/lib/queryClient";
 import { orderKeys } from "@/api/orders";
 import { adminChatKeys } from "@/api/admin-chat";
+import { playIncomingMessageSound } from "@/notifications/sound";
 
 let socket: Socket | null = null;
 
@@ -40,7 +41,8 @@ export function connectDeliverySocket(accessToken: string): void {
   });
 
   socket.on("delivery:admin-chat", () => {
-    // Mensaje del panel: refresca el hilo y el badge de no leídos.
+    // Mensaje del panel: suena el tono y se refresca el hilo y el badge.
+    playIncomingMessageSound();
     void queryClient.invalidateQueries({ queryKey: adminChatKeys.messages });
     void queryClient.invalidateQueries({ queryKey: adminChatKeys.summary });
   });

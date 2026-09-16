@@ -101,6 +101,15 @@ export class OrdersController {
     return this.ordersService.sendChatMessage(referenceCode, dto.body);
   }
 
+  /** Acuse de lectura del cliente: marca como vistos los mensajes del repartidor. */
+  @Public()
+  @Post('track/:referenceCode/messages/read')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Marcar como leídos los mensajes del repartidor' })
+  trackMarkChatRead(@Param('referenceCode') referenceCode: string) {
+    return this.ordersService.markChatMessagesRead(referenceCode);
+  }
+
   @Get()
   @ApiOperation({ summary: 'Obtener pedidos del cliente autenticado' })
   @ApiResponse({ status: 200, description: 'Listado de pedidos del cliente' })

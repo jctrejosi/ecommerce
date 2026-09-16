@@ -15,6 +15,7 @@ import {
   orders,
 } from '../../../drizzle/schema';
 import type { LocationDto } from './dto/location.dto';
+import { parsePointText } from '../../utils/geolocation';
 
 const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
 
@@ -23,14 +24,12 @@ export interface LatLng {
   lng: number;
 }
 
-/** `POINT(lon lat)` → { lng, lat }. Formato usado en la BD (text). */
+/**
+ * `POINT(lon lat)` → { lng, lat }. Formato usado en la BD (columnas text),
+ * admitiendo también el hexadecimal EWKB (ver `parsePointText`).
+ */
 export function parsePoint(value: string | null | undefined): LatLng | null {
-  if (!value) return null;
-  const m = value.match(
-    /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
-  );
-  if (!m) return null;
-  return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+  return parsePointText(value);
 }
 
 /** `lon,lat` (query param) → { lng, lat }. */
@@ -109,6 +108,18 @@ export class DeliveryService {
       .set({ lastSeenAt: at })
       .where(eq(deliveryDrivers.id, BigInt(driverId)));
     return { ok: true, lastSeenAt: at };
+  }
+
+  /**
+   * Guarda la URL pública de la foto de perfil del repartidor (la imagen vive
+   * en Cloudinary; aquí solo se persiste la URL).
+   */
+  async setAvatarUrl(driverId: number, avatarUrl: string) {
+    await this.db
+      .update(deliveryDrivers)
+      .set({ avatarUrl, updatedAt: new Date().toISOString() })
+      .where(eq(deliveryDrivers.id, BigInt(driverId)));
+    return { ok: true, avatarUrl };
   }
 
   /**

@@ -45,6 +45,8 @@ export interface FleetDriver {
   vehicleColor: string | null;
   /** Color (#RRGGBB) de la ruta del repartidor en el mapa de flota. */
   routeColor: string | null;
+  /** Foto de perfil (Cloudinary); null si no tiene. */
+  avatarUrl: string | null;
   isAvailable: boolean;
   isActive: boolean;
   location: LatLng | null;

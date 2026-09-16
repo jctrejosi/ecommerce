@@ -1,20 +1,63 @@
-import { Alert, Platform, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useAuthStore } from "@/auth/authStore";
 import { Button } from "@/ui/Button";
 import { InfoRow } from "@/ui/InfoRow";
 import { Screen } from "@/ui/Screen";
-import { USE_MOCK } from "@/api";
+import { api, USE_MOCK } from "@/api";
 import { getServerUrl, resolveServer } from "@/api/server";
 import { colors, radius, spacing } from "@/theme";
 
 export default function ProfileScreen() {
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
+  const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
   const [server, setServer] = useState(getServerUrl());
   const [searching, setSearching] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
+  /**
+   * Foto de perfil: se elige de la galería, el backend la publica en Cloudinary
+   * y guarda la URL en la ficha del repartidor.
+   */
+  const changeAvatar = async () => {
+    if (uploading) return;
+    const picked = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ["images"],
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (picked.canceled || !picked.assets?.[0]) return;
+
+    setUploading(true);
+    try {
+      const updated = await api.uploadAvatar(picked.assets[0].uri);
+      // El backend devuelve el perfil ya con la URL nueva.
+      if (user) setUser({ ...user, ...updated });
+      Alert.alert("Listo", "Tu foto de perfil se actualizó.");
+    } catch (err) {
+      Alert.alert(
+        "No se pudo subir la foto",
+        err instanceof Error ? err.message : "Inténtalo de nuevo.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const searchServer = async () => {
     setSearching(true);
@@ -50,11 +93,32 @@ export default function ProfileScreen() {
   return (
     <Screen title="Perfil">
       <View style={styles.card}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>
-            {(user?.fullName ?? "D").charAt(0).toUpperCase()}
-          </Text>
-        </View>
+        <Pressable
+          onPress={() => void changeAvatar()}
+          style={styles.avatarWrap}
+          accessibilityLabel="Cambiar foto de perfil"
+        >
+          {user?.avatarUrl ? (
+            <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+          ) : (
+            <View style={styles.avatar}>
+              <Text style={styles.avatarText}>
+                {(user?.fullName ?? "D").charAt(0).toUpperCase()}
+              </Text>
+            </View>
+          )}
+          <View style={styles.avatarBadge}>
+            <Ionicons name="camera" size={12} color="#FFFFFF" />
+          </View>
+          {uploading && (
+            <View style={styles.avatarLoading}>
+              <ActivityIndicator color="#FFFFFF" />
+            </View>
+          )}
+        </Pressable>
+        <Text style={styles.avatarHint}>
+          {uploading ? "Subiendo foto…" : "Toca la foto para cambiarla"}
+        </Text>
         <Text style={styles.name}>{user?.fullName ?? "Repartidor"}</Text>
         <Text style={styles.role}>Repartidor · {user?.username}</Text>
         {USE_MOCK ? <Text style={styles.mock}>Modo demo (mock)</Text> : null}
@@ -111,16 +175,52 @@ const styles = StyleSheet.create({
     padding: spacing(4),
     marginBottom: spacing(4),
   },
+  avatarWrap: { alignSelf: "center", width: 72, height: 72 },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     backgroundColor: colors.primary,
     alignItems: "center",
     justifyContent: "center",
-    alignSelf: "center",
   },
-  avatarText: { color: "#fff", fontSize: 24, fontWeight: "800" },
+  avatarImg: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: colors.border,
+  },
+  avatarBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: colors.primary,
+    borderWidth: 2,
+    borderColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarLoading: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 36,
+    backgroundColor: "rgba(15,23,42,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarHint: {
+    fontSize: 11,
+    color: colors.textFaint,
+    textAlign: "center",
+    marginTop: spacing(1.5),
+  },
+  avatarText: { color: "#fff", fontSize: 28, fontWeight: "800" },
   name: {
     fontSize: 18,
     fontWeight: "800",

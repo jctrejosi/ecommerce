@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { getApiUrl, loadApiUrl, setApiUrl } from "./apiConfig";
 import { probeBackend, sweepLocalNetwork } from "./discovery";
 import { connectPickingSocket, disconnectPickingSocket } from "@/socket";
+import { getTokens } from "@/auth/session";
 import { queryClient } from "@/lib/queryClient";
 
 /**
@@ -65,7 +66,10 @@ export const useServerGate = create<ServerGateState>((set) => ({
       // El socket y lo cacheado apuntan al servidor anterior.
       if (found !== previous) {
         disconnectPickingSocket();
-        connectPickingSocket();
+        // El socket necesita el token vigente: sin sesión no hay a qué conectarse.
+        void getTokens().then((tokens) => {
+          if (tokens?.accessToken) connectPickingSocket(tokens.accessToken);
+        });
         queryClient.clear();
         void queryClient.invalidateQueries();
       }

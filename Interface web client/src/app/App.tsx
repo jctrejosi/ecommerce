@@ -115,11 +115,35 @@ export default function App() {
       const a = localStorage.getItem("checkout_address");
       return a
         ? JSON.parse(a)
-        : { name: "", phone: "", email: "", address: "", city: "Manizales", notes: "" };
+        : {
+            name: "",
+            phone: "",
+            email: "",
+            address: "",
+            city: "Manizales",
+            notes: "",
+            lat: null,
+            lng: null,
+          };
     } catch {
-      return { name: "", phone: "", email: "", address: "", city: "Manizales", notes: "" };
+      return {
+        name: "",
+        phone: "",
+        email: "",
+        address: "",
+        city: "Manizales",
+        notes: "",
+        lat: null,
+        lng: null,
+      };
     }
   });
+  /**
+   * El cliente confirmó, en el mapa del checkout, que el marcador coincide con
+   * su dirección. Es por pedido: no se persiste, para que cada compra vuelva a
+   * validar el punto de entrega.
+   */
+  const [addressConfirmed, setAddressConfirmed] = useState(false);
   const [checkoutShipping, setCheckoutShipping] = useState<
     "standard" | "express"
   >(() => {
@@ -229,7 +253,7 @@ export default function App() {
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
   const [landingProductTypes, setLandingProductTypes] = useState<
-    { id: number; code: string; name: string; count: number }[]
+    { id: number; code: string; name: string; imagePath: string | null; count: number }[]
   >([]);
   const [featuredTabs, setFeaturedTabs] = useState<
     { id: number; name: string; slug: string; position: number }[]
@@ -712,6 +736,10 @@ export default function App() {
           address: checkoutAddress.address,
           city: checkoutAddress.city,
           notes: checkoutAddress.notes,
+          // Punto confirmado en el mapa: sin él el repartidor no tiene a dónde
+          // trazar la ruta (el backend lo guarda como POINT).
+          lat: checkoutAddress.lat ?? undefined,
+          lng: checkoutAddress.lng ?? undefined,
         },
         shippingType: checkoutShipping,
         paymentMethod: checkoutPayment,
@@ -1054,6 +1082,8 @@ export default function App() {
         cartItems={cartItems}
         cartTotal={cartTotal}
         checkoutAddress={checkoutAddress}
+        addressConfirmed={addressConfirmed}
+        onSetAddressConfirmed={setAddressConfirmed}
         savedAddresses={savedAddresses}
         customerName={customer?.fullName ?? ""}
         customerPhone={customer?.phone ?? ""}

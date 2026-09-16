@@ -7,6 +7,7 @@ interface ProductType {
   id: number;
   code: string;
   name: string;
+  imagePath: string | null;
   count: number;
 }
 
@@ -37,10 +38,18 @@ function ProductTypeButton({
       }`}
     >
       <div
-        className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl"
+        className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl overflow-hidden"
         style={{ background: "#F4F4F6", color: "#6B7280" }}
       >
-        {productTypeIcon(pt.code, index)}
+        {pt.imagePath ? (
+          <img
+            src={pt.imagePath}
+            alt=""
+            className="w-full h-full object-cover"
+          />
+        ) : (
+          productTypeIcon(pt.code, index)
+        )}
       </div>
       <span className="text-xs font-semibold text-center text-foreground leading-tight max-w-[90px]">
         {pt.name}

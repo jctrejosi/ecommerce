@@ -8,7 +8,7 @@ import {
   type BotQuickOption,
 } from "../services/chatbot.service";
 import logoBot from "../assets/logo-bot.png";
-import logo from "../assets/logo.png";
+import logo from "../assets/tienda.png";
 import type { CartItem } from "../app/types";
 
 type ChatMessage = {

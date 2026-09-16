@@ -5,6 +5,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { colors, radius, spacing } from "@/theme";
 import { QUEUE_FILTERS, pickingApi, type QueueFilter } from "@/api";
 import { useMarkReviewed, useQueue } from "@/picking/queries";
+import { usePickerChatSummary } from "@/api/picker-chat";
 import { isItemDone, orderStatus, sortQueue } from "@/picking/status";
 import { clearSession, loadSession } from "@/picking/sessionStore";
 import { useAuthStore } from "@/auth/authStore";
@@ -30,6 +31,9 @@ export default function OrderListScreen() {
 
   const { data: orders, isLoading, error, refetch, isRefetching } = useQueue();
   const markReviewed = useMarkReviewed();
+  // Badge del chat: no leídos que dejó administración (se refresca cada 15 s).
+  const { data: chatSummary } = usePickerChatSummary();
+  const unread = chatSummary?.unread ?? 0;
 
   const knownIds = useRef<Set<number>>(new Set());
   const firstLoad = useRef(true);
@@ -104,6 +108,21 @@ export default function OrderListScreen() {
         title="Picking | DSI"
         right={
           <View style={styles.headerRight}>
+            <Pressable
+              onPress={() => router.push("/(main)/chat")}
+              hitSlop={6}
+              accessibilityLabel="Chat con administración"
+              style={({ pressed }) => [styles.chatBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Ionicons name="chatbubble-ellipses-outline" size={19} color={colors.text} />
+              {unread > 0 ? (
+                <View style={styles.chatBadge}>
+                  <Text style={styles.chatBadgeText} allowFontScaling={false}>
+                    {unread > 9 ? "9+" : unread}
+                  </Text>
+                </View>
+              ) : null}
+            </Pressable>
             <Pressable
               onPress={() => setShowSettings(true)}
               style={({ pressed }) => [styles.pickerBtn, pressed && { opacity: 0.8 }]}
@@ -224,8 +243,36 @@ const styles = StyleSheet.create({
     paddingRight: spacing(3),
     paddingVertical: 4,
     maxWidth: 150,
+    // El header lleva 3 acciones: cede ancho antes que desbordar en pantallas
+    // pequeñas (el nombre del picker se recorta).
+    flexShrink: 1,
   },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: spacing(2), flexShrink: 1 },
+  chatBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: radius.pill,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chatBadge: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    minWidth: 16,
+    height: 16,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: colors.danger,
+    borderWidth: 1.5,
+    borderColor: colors.background,
+  },
+  chatBadgeText: { color: "#FFFFFF", fontSize: 9, fontWeight: "800" },
   logOutBtn: {
     width: 36,
     height: 36,

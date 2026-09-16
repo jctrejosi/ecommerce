@@ -2466,6 +2466,8 @@ export const deliveryDrivers = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     // Token push del dispositivo (FCM/expo) — se registra desde la app.
     pushToken: text('push_token'),
+    // Foto de perfil (URL pública de Cloudinary) — se sube desde la app.
+    avatarUrl: text('avatar_url'),
     // TODO: failed to parse database type 'text'
     currentLocation: text('current_location'),
     lastLocationAt: timestamp('last_location_at', {
@@ -4043,6 +4045,8 @@ export const orderChatMessages = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
+    // Se sella cuando la contraparte lee el mensaje (acuse de lectura).
+    readAt: timestamp('read_at', { withTimezone: true, mode: 'string' }),
   },
   (table) => [
     index('idx_order_chat_messages_order').using(
@@ -4106,6 +4110,54 @@ export const driverChatMessages = pgTable(
       columns: [table.senderUserId],
       foreignColumns: [users.id],
       name: 'driver_chat_messages_sender_user_id_fkey',
+    }).onDelete('set null'),
+  ],
+);
+
+export const pickerChatSenderEnum = pgEnum('picker_chat_sender_enum', [
+  'picker',
+  'admin',
+]);
+
+/**
+ * Chat directo picker ↔ administrador (un hilo por picker).
+ *
+ * `pickerId` apunta a `users` (el picker es un usuario marcado con `isPicker`),
+ * a diferencia de `driver_chat_messages`, que apunta a `delivery_drivers`.
+ */
+export const pickerChatMessages = pgTable(
+  'picker_chat_messages',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    pickerId: bigint('picker_id', { mode: 'number' }).notNull(),
+    senderType: pickerChatSenderEnum('sender_type').notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    senderUserId: bigint('sender_user_id', { mode: 'number' }),
+    body: text().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    readAt: timestamp('read_at', { withTimezone: true, mode: 'string' }),
+  },
+  (table) => [
+    index('idx_picker_chat_messages_picker').using(
+      'btree',
+      table.pickerId.asc().nullsLast().op('int8_ops'),
+      table.id.asc().nullsLast().op('int8_ops'),
+    ),
+    index('idx_picker_chat_messages_unread')
+      .using('btree', table.pickerId.asc().nullsLast().op('int8_ops'))
+      .where(sql`(read_at IS NULL)`),
+    foreignKey({
+      columns: [table.pickerId],
+      foreignColumns: [users.id],
+      name: 'picker_chat_messages_picker_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.senderUserId],
+      foreignColumns: [users.id],
+      name: 'picker_chat_messages_sender_user_id_fkey',
     }).onDelete('set null'),
   ],
 );

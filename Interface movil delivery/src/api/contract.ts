@@ -74,6 +74,9 @@ export interface DeliveryApi {
   // sube una foto de la prueba de entrega y devuelve la URL publicada
   uploadProofImage(uri: string, kind: ProofImageKind): Promise<string>;
 
+  // sube la foto de perfil (Cloudinary) y devuelve el perfil actualizado
+  uploadAvatar(uri: string): Promise<DriverUser>;
+
   // tracking / perfil / notificaciones
   sendLocation(ping: LocationPing): Promise<void>;
   /** Señal de presencia sin GPS (se envía cada minuto con sesión activa). */
@@ -84,6 +87,8 @@ export interface DeliveryApi {
   // chat por pedido (repartidor ↔ cliente)
   getChatMessages(orderId: number | string): Promise<ChatMessage[]>;
   sendChatMessage(orderId: number | string, body: string): Promise<ChatMessage>;
+  /** Acuse de lectura: marca como vistos los mensajes del cliente. */
+  markChatRead(orderId: number | string): Promise<{ updated: number }>;
 
   // chat con el panel (repartidor ↔ administrador)
   getAdminChatMessages(): Promise<AdminChatMessage[]>;

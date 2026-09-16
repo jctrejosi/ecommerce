@@ -30,7 +30,12 @@ const ROOT = join(
 const PORT = Number(process.argv[2] || 4173);
 const HOST = "0.0.0.0";
 
-const BACKEND = { host: "127.0.0.1", port: 3000 };
+const BACKEND = {
+  host: "127.0.0.1",
+  // Se puede apuntar a otra instancia del backend (p. ej. BACKEND_PORT=3001
+  // cuando el 3000 lo ocupa otro proyecto).
+  port: Number(process.env.BACKEND_PORT || 3000),
+};
 const BOT = { host: "127.0.0.1", port: 8000 };
 
 /** Identificador que devuelve `/discovery` (lo espera el APK cliente). */
@@ -50,6 +55,7 @@ const API_EXACT = new Set([
 const API_PREFIXES = [
   "/catalog/",
   "/landing/",
+  "/geocode/",
   "/popups/",
   "/featured/",
   "/orders/",

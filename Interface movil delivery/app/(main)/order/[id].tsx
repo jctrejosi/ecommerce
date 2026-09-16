@@ -105,13 +105,12 @@ export default function OrderDetailScreen() {
   const actions = actionsFor(order.status);
 
   return (
-    <Screen bottomInset>
-      {/* Cabecera */}
+    <Screen bottomInset title={`Pedido ${order.referenceCode}`} titleSize={17}>
+      {/* El código del pedido va en la cabecera; aquí solo el estado y la fecha */}
       <View style={styles.headerRow}>
-        <Text style={styles.code}>Pedido {order.referenceCode}</Text>
+        <Text style={styles.assigned}>Asignado: {formatDateTime(order.assignedAt)}</Text>
         <StatusBadge status={order.status} />
       </View>
-      <Text style={styles.assigned}>Asignado: {formatDateTime(order.assignedAt)}</Text>
 
       {/* Cliente */}
       <View style={styles.card}>
@@ -323,10 +322,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: spacing(1),
+    gap: spacing(2),
+    marginBottom: spacing(3),
   },
-  code: { fontSize: 22, fontWeight: "800", color: colors.text, flexShrink: 1 },
-  assigned: { fontSize: 13, color: colors.textFaint, marginBottom: spacing(3) },
+  assigned: { fontSize: 13, color: colors.textFaint, flexShrink: 1 },
   card: {
     backgroundColor: colors.card,
     borderRadius: radius.lg,

@@ -164,12 +164,14 @@ function chatFor(orderId: number): ChatMessage[] {
         senderType: "customer",
         body: "¡Hola! ¿Ya vienes en camino con mi pedido? 😊",
         createdAt: new Date(Date.now() - 10 * 60_000).toISOString(),
+        readAt: null,
       },
       {
         id: `seed-${orderId}-2`,
         senderType: "delivery",
         body: "¡Sí! Voy en camino, llego pronto 🛵",
         createdAt: new Date(Date.now() - 9 * 60_000).toISOString(),
+        readAt: null,
       },
     ];
     chatStore.set(orderId, msgs);
@@ -324,6 +326,14 @@ export const mockApi: DeliveryApi = {
     return `https://mock.media/delivery/${kind}-${Date.now()}.jpg`;
   },
 
+  async uploadAvatar(_uri) {
+    await delay(500);
+    return clone({
+      ...demoUser,
+      avatarUrl: `https://mock.media/avatar-${Date.now()}.webp`,
+    });
+  },
+
   async setAvailability(available) {
     await delay(300);
     return { ...clone(demoUser), isAvailable: available };
@@ -341,9 +351,23 @@ export const mockApi: DeliveryApi = {
       senderType: "delivery",
       body,
       createdAt: new Date().toISOString(),
+      readAt: null,
     };
     chatFor(Number(orderId)).push(msg);
     return clone(msg);
+  },
+
+  async markChatRead(orderId) {
+    await delay(120);
+    const now = new Date().toISOString();
+    let updated = 0;
+    for (const m of chatFor(Number(orderId))) {
+      if (m.senderType === "customer" && !m.readAt) {
+        m.readAt = now;
+        updated += 1;
+      }
+    }
+    return { updated };
   },
 
   async getAdminChatMessages() {

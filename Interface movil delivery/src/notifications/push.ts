@@ -36,10 +36,15 @@ export async function configureNotifications(): Promise<void> {
   });
 
   if (Platform.OS === "android") {
+    // El canal se recrea para que tome el tono propio: Android ignora los
+    // cambios de sonido en un canal que ya existe.
+    await Notifications.deleteNotificationChannelAsync("delivery").catch(() => {});
     await Notifications.setNotificationChannelAsync("delivery", {
-      name: "Pedidos de delivery",
+      name: "Pedidos y mensajes",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
+      // Tono "rockerito" (android/app/src/main/res/raw/rockerito.wav).
+      sound: "rockerito.wav",
     });
   }
 }

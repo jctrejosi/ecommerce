@@ -3,7 +3,7 @@ import type { FleetDriver } from '../types';
 import { driverVisual, isDriverOnline, lastSignalAt } from '../lib/status';
 import { initials, timeAgo } from '../lib/format';
 
-/** Avatar circular con iniciales y color según estado. */
+/** Avatar circular: foto de perfil si la tiene, si no iniciales con el color del estado. */
 export function DriverAvatar({
   driver,
   size = 36,
@@ -12,8 +12,6 @@ export function DriverAvatar({
   size?: number;
 }) {
   const visual = driverVisual(driver);
-  // Solo se marca "sin señal" a repartidores activos: a uno desactivado ya se
-  // le nota por la opacidad y su propio estado.
   const offline = driver.isActive && !isDriverOnline(driver);
   return (
     <div
@@ -21,16 +19,25 @@ export function DriverAvatar({
       style={{ width: size, height: size }}
       title={visual.action}
     >
-      <div
-        className="flex h-full w-full items-center justify-center rounded-full font-bold text-white"
-        style={{
-          background: visual.color,
-          fontSize: Math.max(10, size * 0.32),
-          opacity: driver.isActive ? 1 : 0.5,
-        }}
-      >
-        {initials(driver.fullName)}
-      </div>
+      {driver.avatarUrl ? (
+        <img
+          src={driver.avatarUrl}
+          alt={driver.fullName}
+          className="h-full w-full rounded-full object-cover"
+          style={{ opacity: driver.isActive ? 1 : 0.5 }}
+        />
+      ) : (
+        <div
+          className="flex h-full w-full items-center justify-center rounded-full font-bold text-white"
+          style={{
+            background: visual.color,
+            fontSize: Math.max(10, size * 0.32),
+            opacity: driver.isActive ? 1 : 0.5,
+          }}
+        >
+          {initials(driver.fullName)}
+        </div>
+      )}
       {offline && (
         <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white">
           <WifiOff className="h-3 w-3 text-slate-400" />

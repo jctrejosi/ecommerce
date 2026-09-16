@@ -55,7 +55,7 @@ export default function LoginScreen() {
         <View style={styles.wrap}>
           <View style={styles.header}>
             <Image
-              source={require("../assets/logo.png")}
+              source={require("../assets/delivery.png")}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -119,7 +119,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   wrap: { flex: 1, justifyContent: "center", padding: spacing(5) },
   header: { alignItems: "center", marginBottom: spacing(6) },
-  logo: { width: 180, height: 58, marginBottom: spacing(3) },
+  logo: { width: 72, height: 72, marginBottom: spacing(3) },
   subtitle: { fontSize: 14, color: colors.textMuted, marginTop: spacing(1) },
   card: {
     backgroundColor: colors.card,

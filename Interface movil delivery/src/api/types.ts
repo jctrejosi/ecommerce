@@ -27,6 +27,8 @@ export interface DriverUser {
   vehicleModel?: string | null;
   isAvailable?: boolean;
   isActive?: boolean;
+  /** URL pública de la foto de perfil (Cloudinary); null si no tiene. */
+  avatarUrl?: string | null;
   [key: string]: unknown;
 }
 
@@ -65,6 +67,8 @@ export interface ChatMessage {
   senderType: "customer" | "delivery";
   body: string;
   createdAt: string | null;
+  /** Cuándo lo leyó la contraparte (null = aún sin visto). */
+  readAt: string | null;
 }
 
 /** Mensaje del chat repartidor ↔ administrador (hilo con el panel). */

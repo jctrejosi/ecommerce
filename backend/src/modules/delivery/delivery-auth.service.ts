@@ -41,6 +41,8 @@ export class DeliveryAuthService {
       vehicleModel: driver.vehicleModel,
       isAvailable: driver.isAvailable,
       isActive: driver.isActive,
+      // URL pública en Cloudinary de la foto de perfil (null si no tiene).
+      avatarUrl: driver.avatarUrl ?? null,
     };
   }
 

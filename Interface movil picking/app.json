@@ -8,7 +8,7 @@
     "scheme": "pickingapp",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/logo.png",
+      "image": "./assets/picking.png",
       "resizeMode": "contain",
       "backgroundColor": "#0C0C0D"
     },

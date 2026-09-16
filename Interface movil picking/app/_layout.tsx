@@ -11,11 +11,12 @@ import {
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Network from "expo-network";
 import { Ionicons } from "@expo/vector-icons";
 import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/auth/authStore";
+import { getTokens } from "@/auth/session";
 import { useServerGate } from "@/api/serverGate";
 import { getApiUrl } from "@/api/apiConfig";
 import { connectPickingSocket, disconnectPickingSocket } from "@/socket";
@@ -23,6 +24,8 @@ import { colors, radius, spacing } from "@/theme";
 
 export default function RootLayout() {
   const restore = useAuthStore((s) => s.restore);
+  // El id (no el objeto) evita reconectar cuando solo se reafina el usuario.
+  const userId = useAuthStore((s) => s.user?.id ?? null);
   const status = useServerGate((s) => s.status);
   const ensureServer = useServerGate((s) => s.ensureServer);
   const [bootChecked, setBootChecked] = useState(false);
@@ -48,18 +51,33 @@ export default function RootLayout() {
     };
   }, [ensureServer]);
 
-  // 3) Con servidor disponible: restaura la sesión (una vez) y conecta eventos.
+  // 3) Con servidor disponible: restaura la sesión (una vez).
   useEffect(() => {
     if (status !== "ok") return;
     if (!restoredRef.current) {
       restoredRef.current = true;
       void restore();
     }
-    connectPickingSocket();
-    return () => disconnectPickingSocket();
   }, [status, restore]);
 
-  // 4) Vencimiento de sesión: cada 30 s y al volver a primer plano.
+  // 4) Eventos en vivo: el socket va autenticado con el token del picker, así
+  //    que se (re)conecta al entrar y se cierra al cerrar sesión.
+  useEffect(() => {
+    if (status !== "ok" || !userId) {
+      disconnectPickingSocket();
+      return;
+    }
+    let cancelled = false;
+    void getTokens().then((tokens) => {
+      if (!cancelled && tokens?.accessToken) connectPickingSocket(tokens.accessToken);
+    });
+    return () => {
+      cancelled = true;
+      disconnectPickingSocket();
+    };
+  }, [status, userId]);
+
+  // 5) Vencimiento de sesión: cada 30 s y al volver a primer plano.
   useEffect(() => {
     if (status !== "ok") return;
     const timer = setInterval(() => void useAuthStore.getState().checkExpiry(), 30_000);
@@ -105,7 +123,7 @@ function ServerSearching() {
   return (
     <View style={styles.splash}>
       <Image
-        source={require("../assets/logo.png")}
+        source={require("../assets/picking.png")}
         style={styles.logo}
         resizeMode="contain"
       />
@@ -143,8 +161,11 @@ function ServerMissing({ onRetry }: { onRetry: () => void }) {
 
 /** Aviso no intrusivo cuando el servidor se pierde con la app ya abierta. */
 function ServerBanner({ status, onRetry }: { status: "checking" | "missing"; onRetry: () => void }) {
+  // El banner va arriba del Stack, así que sin este inset el texto queda
+  // debajo de la barra de estado (edge-to-edge).
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.banner}>
+    <View style={[styles.banner, { paddingTop: insets.top + spacing(2.5) }]}>
       {status === "checking" ? (
         <ActivityIndicator color={colors.warning} size="small" />
       ) : (
@@ -174,7 +195,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing(8),
     backgroundColor: colors.background,
   },
-  logo: { height: 40, width: 124, marginBottom: spacing(2) },
+  logo: { height: 64, width: 124, marginBottom: spacing(2) },
   splashTitle: { color: colors.text, fontSize: 16, fontWeight: "800" },
   splashText: {
     color: colors.textMuted,

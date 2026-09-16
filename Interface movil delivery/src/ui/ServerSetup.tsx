@@ -58,7 +58,7 @@ export function ServerSetup({ tried, onResolved }: ServerSetupProps) {
     <Screen title="Conexión" scroll>
       <View style={styles.card}>
         <Image
-          source={require("../../assets/logo.png")}
+          source={require("../../assets/delivery.png")}
           style={styles.logo}
           resizeMode="contain"
         />
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
     gap: spacing(3),
   },
-  logo: { height: 28, width: 120, alignSelf: "center" },
+  logo: { height: 56, width: 56, alignSelf: "center" },
   iconWrap: {
     width: 52,
     height: 52,

@@ -29,7 +29,7 @@ interface LandingViewProps {
   } | null;
   cartItems: CartItem[];
   branches: Branch[];
-  productTypes: { id: number; code: string; name: string; count: number }[];
+  productTypes: { id: number; code: string; name: string; imagePath: string | null; count: number }[];
   featuredTabs?: FeaturedTab[];
   onTabChange: (tab: string) => void;
   onAdd: (product: Product, quantity?: number) => void;

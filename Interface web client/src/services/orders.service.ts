@@ -255,6 +255,17 @@ export const ordersService = {
     );
   },
 
+  /**
+   * Acuse de lectura: marca como vistos los mensajes del repartidor.
+   * Devuelve cuántos quedaron sellados.
+   */
+  async markChatRead(referenceCode: string): Promise<{ updated: number }> {
+    return fetchJson<{ updated: number }>(
+      `${API_BASE_URL}/orders/track/${encodeURIComponent(referenceCode.trim())}/messages/read`,
+      { method: "POST" },
+    );
+  },
+
   /** Envía un mensaje del cliente en el chat del pedido. */
   async sendChatMessage(
     referenceCode: string,
@@ -277,6 +288,8 @@ export type OrderChatMessage = {
   senderType: "customer" | "delivery";
   body: string;
   createdAt: string | null;
+  /** Cuándo lo leyó la contraparte (null = aún sin visto). */
+  readAt: string | null;
 };
 
 export type Point = { lat: number; lng: number };

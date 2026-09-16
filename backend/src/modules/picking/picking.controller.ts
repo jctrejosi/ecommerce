@@ -3,20 +3,30 @@ import {
   ConflictException,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   NotFoundException,
   Param,
   ParseIntPipe,
   Post,
   Query,
   Body,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { SendPickerMessageDto } from './dto/send-picker-message.dto';
+import { PickerChatService } from './picker-chat.service';
 import { PickingService } from './picking.service';
 
 @ApiTags('Picking')
 @Controller('picking')
 export class PickingController {
-  constructor(private readonly pickingService: PickingService) {}
+  constructor(
+    private readonly pickingService: PickingService,
+    private readonly chat: PickerChatService,
+  ) {}
 
   /** Cola de picking: pedidos que entran al alistamiento (o filtrados por estado). */
   @Get('orders')
@@ -90,5 +100,35 @@ export class PickingController {
       if (e instanceof NotFoundException || e instanceof ConflictException) throw e;
       throw new BadRequestException(e instanceof Error ? e.message : 'Error al completar');
     }
+  }
+
+  // ─── Chat con el panel (administración) ────────────────────────────────────
+
+  /** Hilo del picker autenticado. Al abrirlo marca como leído lo del panel. */
+  @Get('chat')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Mensajes del chat del picker con administración' })
+  async chatMessages(@CurrentUser('sub') userId: bigint) {
+    return this.chat.listMessages(Number(userId), 'picker');
+  }
+
+  /** No leídos + último mensaje (badge del header de la app). */
+  @Get('chat/summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Resumen del chat del picker (no leídos)' })
+  async chatSummary(@CurrentUser('sub') userId: bigint) {
+    return this.chat.summary(Number(userId), 'picker');
+  }
+
+  /** Envía un mensaje del picker al panel. */
+  @Post('chat')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Enviar mensaje del picker a administración' })
+  async sendChatMessage(
+    @CurrentUser('sub') userId: bigint,
+    @Body() dto: SendPickerMessageDto,
+  ) {
+    return this.chat.sendFromPicker(Number(userId), dto.body);
   }
 }

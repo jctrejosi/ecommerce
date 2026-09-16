@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { io, type Socket } from 'socket.io-client'
 import { api, ApiError, API_BASE_URL } from './services/api'
-import type { PickerHistory, PickerSummary, PickingOrderDetail } from './types'
+import type {
+  PickerChatConversation,
+  PickerChatMessage,
+  PickerHistory,
+  PickerSummary,
+  PickingOrderDetail,
+} from './types'
 
 const fmtTime = (s: string | null) => {
   if (!s) return '—'
@@ -42,6 +48,18 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
   const [order, setOrder] = useState<PickingOrderDetail | null>(null)
   const [orderLoading, setOrderLoading] = useState(false)
   const socketRef = useRef<Socket | null>(null)
+
+  // ── Chat administrador ↔ picker ──
+  // Bandeja: solo se usa para el badge de no leídos en cada tarjeta.
+  const [chats, setChats] = useState<PickerChatConversation[]>([])
+  const [chatPicker, setChatPicker] = useState<{ id: number; name: string } | null>(null)
+  const [messages, setMessages] = useState<PickerChatMessage[]>([])
+  const [messagesLoading, setMessagesLoading] = useState(false)
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
+  // Picker con el hilo abierto: el socket lo usa para no tocar un hilo ajeno.
+  const openChatRef = useRef<number | null>(null)
+  const messagesEndRef = useRef<HTMLDivElement | null>(null)
   // Reloj para el tiempo transcurrido del pedido en curso.
   const [now, setNow] = useState(() => Date.now())
 
@@ -64,6 +82,25 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
     void load()
   }, [load])
 
+  // Bandeja de chats. Si el endpoint falla, se ignora: no debe tumbar las métricas.
+  const loadChats = useCallback(async () => {
+    try {
+      setChats(await api.chatConversations())
+    } catch {
+      /* noop */
+    }
+  }, [])
+
+  useEffect(() => {
+    void loadChats()
+  }, [loadChats])
+
+  // Respaldo por polling; el evento `picking:chat` refresca al instante.
+  useEffect(() => {
+    const t = setInterval(() => void loadChats(), 5000)
+    return () => clearInterval(t)
+  }, [loadChats])
+
   // Refresco con debounce: un solo escaneo puede generar varios eventos.
   const reloadTimer = useRef<number | null>(null)
   const scheduleReload = useCallback(() => {
@@ -82,8 +119,30 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
     })
     socketRef.current = socket
 
+    // Sala del panel: sin ella no llegan los eventos de chat.
+    const subscribe = () => socket.emit('subscribe:staff')
+    socket.on('connect', subscribe)
+
     socket.on('picking:claim', scheduleReload)
     socket.on('picking:scan', scheduleReload)
+
+    // Chat: refresca el badge y, si el hilo está abierto, lo actualiza al vuelo.
+    socket.on('picking:chat', (payload: { pickerId?: number; message?: PickerChatMessage }) => {
+      const pickerId = payload?.pickerId
+      const message = payload?.message
+      if (message && pickerId && pickerId === openChatRef.current) {
+        if (message.senderType === 'picker') {
+          // Relanza el GET para que el backend marque como leído lo del picker.
+          void api
+            .chatMessages(pickerId)
+            .then(setMessages)
+            .catch(() => undefined)
+        } else {
+          setMessages((prev) => (prev.some((m) => m.id === message.id) ? prev : [...prev, message]))
+        }
+      }
+      void loadChats()
+    })
 
     socket.on('picking:delivered', (payload: { referenceCode?: string }) => {
       scheduleReload()
@@ -91,10 +150,12 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
     })
 
     return () => {
+      socket.emit('unsubscribe:staff')
+      socket.off('connect', subscribe)
       socket.disconnect()
       socketRef.current = null
     }
-  }, [scheduleReload, notify])
+  }, [scheduleReload, notify, loadChats])
 
   // Cambios de estado por CUALQUIER vía (pago, admin, reparto: en camino /
   // entregado): misma sala `staff` que usan los demás paneles. Refresca las
@@ -143,6 +204,53 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
     }
   }
 
+  function closeChat() {
+    openChatRef.current = null
+    setChatPicker(null)
+    setMessages([])
+    setDraft('')
+  }
+
+  async function openChat(pickerId: number, name: string) {
+    openChatRef.current = pickerId
+    setChatPicker({ id: pickerId, name })
+    setMessages([])
+    setMessagesLoading(true)
+    try {
+      setMessages(await api.chatMessages(pickerId))
+      // El GET marca como leído: el badge de la tarjeta debe bajar ya.
+      void loadChats()
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'Error cargando la conversación')
+    } finally {
+      setMessagesLoading(false)
+    }
+  }
+
+  async function sendMessage(e: FormEvent) {
+    e.preventDefault()
+    const body = draft.trim()
+    if (!body || !chatPicker || sending) return
+    setSending(true)
+    try {
+      const msg = await api.sendChatMessage(chatPicker.id, body)
+      setDraft('')
+      setMessages((prev) => (prev.some((m) => m.id === msg.id) ? prev : [...prev, msg]))
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'No se pudo enviar el mensaje')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  // Mantiene el hilo pegado al final al llegar mensajes nuevos.
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messages, messagesLoading])
+
+  const unreadOf = (pickerId: number) =>
+    chats.find((c) => c.pickerId === pickerId)?.unread ?? 0
+
   const connected = socketRef.current?.connected
 
   return (
@@ -188,6 +296,31 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
               >
                 {p.currentOrder ? 'Alistando' : 'Disponible'}
               </span>
+
+              {/* Chat admin ↔ picker, con badge de no leídos */}
+              <button
+                onClick={() => void openChat(p.id, p.name)}
+                title="Conversación con el picker"
+                className="relative shrink-0 w-9 h-9 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center transition-colors"
+              >
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                </svg>
+                {unreadOf(p.id) > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-[#0C0C0D] text-[10px] font-extrabold flex items-center justify-center">
+                    {unreadOf(p.id) > 9 ? '9+' : unreadOf(p.id)}
+                  </span>
+                )}
+              </button>
             </div>
 
             {/* Pedido actual */}
@@ -329,6 +462,92 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                 </table>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de chat con el picker */}
+      {chatPicker && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6"
+          onClick={closeChat}
+        >
+          <div
+            className="w-full sm:max-w-lg bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center gap-3 shrink-0">
+              <span className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold shrink-0">
+                {chatPicker.name[0]?.toUpperCase()}
+              </span>
+              <div className="min-w-0">
+                <h2 className="font-extrabold truncate">{chatPicker.name}</h2>
+                <p className="text-white/40 text-xs font-medium">Conversación del picker</p>
+              </div>
+              <button
+                onClick={closeChat}
+                className="ml-auto w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {messagesLoading ? (
+                <p className="text-white/40 text-sm text-center py-10">Cargando…</p>
+              ) : messages.length === 0 ? (
+                <p className="text-white/30 text-sm text-center py-10">
+                  Aún no hay mensajes con {chatPicker.name}.
+                </p>
+              ) : (
+                messages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={`flex ${m.senderType === 'admin' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-2xl px-3 py-2 ${
+                        m.senderType === 'admin'
+                          ? 'bg-amber-400 text-[#0C0C0D]'
+                          : 'bg-white/5 border border-white/10'
+                      }`}
+                    >
+                      <p className="text-sm font-medium whitespace-pre-wrap break-words">{m.body}</p>
+                      <p
+                        className={`text-[10px] font-bold mt-1 ${
+                          m.senderType === 'admin' ? 'text-[#0C0C0D]/60' : 'text-white/35'
+                        }`}
+                      >
+                        {fmtTime(m.createdAt)}
+                        {m.senderType === 'admin' && m.readAt ? ' · leído' : ''}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+
+            <form
+              onSubmit={sendMessage}
+              className="p-3 border-t border-white/8 flex items-center gap-2 shrink-0"
+            >
+              <input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder="Escribe un mensaje…"
+                className="flex-1 min-w-0 bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-amber-400/50"
+              />
+              <button
+                type="submit"
+                disabled={!draft.trim() || sending}
+                className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40 shrink-0"
+              >
+                {sending ? 'Enviando…' : 'Enviar'}
+              </button>
+            </form>
           </div>
         </div>
       )}

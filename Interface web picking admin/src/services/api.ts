@@ -4,6 +4,8 @@ import type {
   BulkAssignResult,
   Category,
   CategoryOrganization,
+  PickerChatConversation,
+  PickerChatMessage,
   PickerHistory,
   PickerSummary,
   PickingOrderDetail,
@@ -176,6 +178,19 @@ export const api = {
 
   pickerHistory: (id: number) =>
     fetchJson<PickerHistory>(`/picking-admin/pickers/${id}/history`),
+
+  // ─── Chat con pickers ──────────────────────────────────────────────────────
+  chatConversations: () => fetchJson<PickerChatConversation[]>('/picking-admin/chats'),
+
+  /** Devuelve el hilo completo; el backend marca como leídos los del picker. */
+  chatMessages: (pickerId: number) =>
+    fetchJson<PickerChatMessage[]>(`/picking-admin/pickers/${pickerId}/messages`),
+
+  sendChatMessage: (pickerId: number, body: string) =>
+    fetchJson<PickerChatMessage>(`/picking-admin/pickers/${pickerId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
 
   orderDetail: (id: number) => fetchJson<PickingOrderDetail>(`/picking/orders/${id}`),
 

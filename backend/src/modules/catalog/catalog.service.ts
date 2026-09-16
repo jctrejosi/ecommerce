@@ -1344,9 +1344,11 @@ export class CatalogService {
         code: productTypes.code,
         name: productTypes.name,
         description: productTypes.description,
+        imagePath: media.path,
         count: sql<number>`count(DISTINCT ${products.id})`,
       })
       .from(productTypes)
+      .leftJoin(media, eq(productTypes.imageMediaId, media.id))
       .innerJoin(
         productTypeAssignments,
         eq(productTypeAssignments.productTypeId, productTypes.id),
@@ -1367,6 +1369,7 @@ export class CatalogService {
         productTypes.code,
         productTypes.name,
         productTypes.description,
+        media.path,
       )
       .having(sql`count(DISTINCT ${products.id}) > 0`)
       .orderBy(asc(productTypes.name));
@@ -1376,6 +1379,7 @@ export class CatalogService {
       code: row.code,
       name: row.name,
       description: row.description,
+      imagePath: row.imagePath,
       count: Number(row.count),
     }));
   }

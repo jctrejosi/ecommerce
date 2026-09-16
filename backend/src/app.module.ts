@@ -16,6 +16,7 @@ import { BannersModule } from './modules/banners/banners.module';
 import { FiltersModule } from './modules/filters/filters.module';
 import { BranchesModule } from './modules/branches/branches.module';
 import { LandingModule } from './modules/landing/landing.module';
+import { GeocodingModule } from './modules/geocoding/geocoding.module';
 import { FeaturedProductsModule } from './modules/featured-products/featured-products.module';
 import { QrModule } from './modules/qr/qr.module';
 import { PopupsModule } from './modules/popups/popups.module';
@@ -72,6 +73,7 @@ import {
     FiltersModule,
     BranchesModule,
     LandingModule,
+    GeocodingModule,
     FeaturedProductsModule,
     QrModule,
     PopupsModule,

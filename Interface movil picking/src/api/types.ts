@@ -96,6 +96,22 @@ export interface LoginResponse {
   user: AuthMe;
 }
 
+/** Mensaje del hilo único de chat entre el picker y administración. */
+export interface PickerChatMessage {
+  id: number;
+  senderType: "picker" | "admin";
+  senderUserId: number | null;
+  body: string;
+  createdAt: string | null;
+  readAt: string | null;
+}
+
+/** No leídos del hilo + último mensaje (alimenta el badge del header). */
+export interface PickerChatSummary {
+  unread: number;
+  lastMessage: PickerChatMessage | null;
+}
+
 /** Status que acepta `GET /picking/orders?status=`. */
 export type QueueFilter = "nuevo" | "preparando" | "completado";
 

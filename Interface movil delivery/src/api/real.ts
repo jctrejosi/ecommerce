@@ -145,6 +145,15 @@ export const realApi: DeliveryApi = {
     }
   },
 
+  async markChatRead(orderId) {
+    try {
+      const res = await http.post(`/orders/${orderId}/messages/read`);
+      return unwrap<{ updated: number }>(res.data);
+    } catch (err) {
+      throw new Error(apiErrorMessage(err, "No se pudo marcar el chat como leído."));
+    }
+  },
+
   async getAdminChatMessages() {
     try {
       const res = await http.get("/admin-chat/messages");
@@ -176,7 +185,7 @@ export const realApi: DeliveryApi = {
     }
   },
 
-  async uploadProofImage(uri, kind: ProofImageKind) {
+  async uploadProofImage(uri, kind) {
     try {
       const form = new FormData();
       form.append("file", {
@@ -194,6 +203,31 @@ export const realApi: DeliveryApi = {
       return data.url;
     } catch (err) {
       throw new Error(apiErrorMessage(err, "No se pudo subir la foto."));
+    }
+  },
+
+  /**
+   * Foto de perfil: el archivo va al backend, que lo publica en Cloudinary y
+   * guarda la URL en la ficha del repartidor. Devuelve el perfil actualizado.
+   */
+  async uploadAvatar(uri) {
+    try {
+      const form = new FormData();
+      form.append("file", {
+        uri,
+        name: `avatar_${Date.now()}.jpg`,
+        type: "image/jpeg",
+      } as unknown as Blob);
+      const res = await http.post("/profile/avatar", form, {
+        // La subida incluye el procesado de la imagen en el backend.
+        timeout: 60_000,
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      return unwrap<DriverUser>(res.data);
+    } catch (err) {
+      throw new Error(
+        apiErrorMessage(err, "No se pudo subir la foto de perfil."),
+      );
     }
   },
 };

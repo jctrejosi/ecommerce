@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   deliveryAssignments,
@@ -18,6 +18,7 @@ import { parsePoint } from './delivery.service';
 import { DeliveryGateway } from './delivery.gateway';
 import { OrdersGateway } from '../orders/orders.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { toIsoTimestamp } from '../../utils/date-utils';
 import type { TransitionDto } from './dto/transition.dto';
 
 export interface TimelineEvent {
@@ -316,7 +317,10 @@ export class DeliveryOrdersService {
     return (await this.rowsToOrders(rows))[0];
   }
 
-  /** Mensajes del chat del pedido. Solo el repartidor asignado puede leerlos. */
+  /**
+   * Mensajes del chat del pedido. Solo el repartidor asignado puede leerlos.
+   * No marca nada como leído: de eso se encarga `markChatMessagesRead`.
+   */
   async getChatMessages(driverId: number, orderId: number) {
     // getOrder lanza 404 si el pedido no está asignado a este repartidor.
     await this.getOrder(driverId, orderId);
@@ -327,18 +331,45 @@ export class DeliveryOrdersService {
         senderType: orderChatMessages.senderType,
         body: orderChatMessages.body,
         createdAt: orderChatMessages.createdAt,
+        readAt: orderChatMessages.readAt,
       })
       .from(orderChatMessages)
       .where(eq(orderChatMessages.orderId, BigInt(orderId)))
-      .orderBy(asc(orderChatMessages.id))
+      // Los más recientes primero para que el límite recorte el historial
+      // viejo, no los mensajes nuevos; luego se invierte a orden cronológico.
+      .orderBy(desc(orderChatMessages.id))
       .limit(300);
 
-    return rows.map((r) => ({
+    return rows.reverse().map((r) => ({
       id: String(r.id),
       senderType: r.senderType,
       body: r.body,
-      createdAt: r.createdAt,
+      createdAt: toIsoTimestamp(r.createdAt),
+      readAt: toIsoTimestamp(r.readAt),
     }));
+  }
+
+  /**
+   * Acuse de lectura del repartidor: sella los mensajes que escribió el
+   * cliente y que aún no tenían visto. Así el cliente ve el doble check.
+   */
+  async markChatMessagesRead(driverId: number, orderId: number) {
+    // getOrder lanza 404 si el pedido no está asignado a este repartidor.
+    await this.getOrder(driverId, orderId);
+
+    const updated = await this.db
+      .update(orderChatMessages)
+      .set({ readAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(orderChatMessages.orderId, BigInt(orderId)),
+          eq(orderChatMessages.senderType, 'customer'),
+          isNull(orderChatMessages.readAt),
+        ),
+      )
+      .returning({ id: orderChatMessages.id });
+
+    return { updated: updated.length };
   }
 
   /** Envía un mensaje del repartidor en el chat del pedido asignado. */
@@ -386,7 +417,8 @@ export class DeliveryOrdersService {
       id: String(row.id),
       senderType: row.senderType,
       body: row.body,
-      createdAt: row.createdAt,
+      createdAt: toIsoTimestamp(row.createdAt),
+      readAt: toIsoTimestamp(row.readAt),
     };
   }
 

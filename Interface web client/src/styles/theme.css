@@ -248,6 +248,7 @@
   --animate-popup-in-left: popupInLeft 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-popup-in-right: popupInRight 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
   --animate-blink: blink 1s ease-in-out infinite;
+  --animate-chat-wiggle: chatWiggle 2.6s ease-in-out infinite;
 
   @keyframes blink {
     0%, 100% {
@@ -255,6 +256,24 @@
     }
     50% {
       opacity: 0.2;
+    }
+  }
+
+  /* Sacudida suave del ícono del chat cuando hay mensajes sin leer. */
+  @keyframes chatWiggle {
+    0%,
+    86%,
+    100% {
+      transform: rotate(0deg);
+    }
+    89% {
+      transform: rotate(-14deg);
+    }
+    93% {
+      transform: rotate(10deg);
+    }
+    97% {
+      transform: rotate(-5deg);
     }
   }
 
@@ -365,4 +384,40 @@
     linear-gradient(#000 0 0);
   mask-composite: exclude;
   animation: cartTrace 1.6s linear infinite;
+}
+
+/* ── Alerta animada alrededor del botón del chat cuando hay mensajes nuevos ── */
+@property --chat-alert-angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes chatAlert {
+  to {
+    --chat-alert-angle: 360deg;
+  }
+}
+
+.chat-alert {
+  position: absolute;
+  inset: -3px;
+  padding: 3px;
+  border-radius: 9999px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--chat-alert-angle),
+    transparent 0deg,
+    #ff4444 70deg,
+    transparent 140deg
+  );
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: chatAlert 1.6s linear infinite;
 }

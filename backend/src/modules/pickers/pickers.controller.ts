@@ -11,8 +11,11 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { SuperuserGuard } from '../delivery/superuser.guard';
+import { SendPickerMessageDto } from '../picking/dto/send-picker-message.dto';
+import { PickerChatService } from '../picking/picker-chat.service';
 import {
   CreatePickerDto,
   ResetPickerPasswordDto,
@@ -23,7 +26,10 @@ import { PickersService } from './pickers.service';
 @ApiTags('Picking Admin')
 @Controller('picking-admin')
 export class PickersController {
-  constructor(private readonly pickersService: PickersService) {}
+  constructor(
+    private readonly pickersService: PickersService,
+    private readonly chat: PickerChatService,
+  ) {}
 
   @Get('pickers')
   @ApiOperation({ summary: 'Usuarios disponibles para picking (selector de picker)' })
@@ -83,5 +89,36 @@ export class PickersController {
       throw new BadRequestException('id inválido');
     }
     return this.pickersService.history(id);
+  }
+
+  // ─── Chat con los pickers ──────────────────────────────────────────────────
+
+  /** Bandeja: un renglón por picker con no leídos y último mensaje. */
+  @Get('chats')
+  @UseGuards(JwtAuthGuard, SuperuserGuard)
+  @ApiOperation({ summary: 'Bandeja del chat con los pickers' })
+  listChats() {
+    return this.chat.listConversations();
+  }
+
+  /** Hilo de un picker. Al abrirlo se marca como leído lo que escribió él. */
+  @Get('pickers/:id/messages')
+  @UseGuards(JwtAuthGuard, SuperuserGuard)
+  @ApiOperation({ summary: 'Mensajes del chat con un picker' })
+  chatMessages(@Param('id', ParseIntPipe) id: number) {
+    return this.chat.listMessages(id, 'admin');
+  }
+
+  /** Envía un mensaje del administrador al picker. */
+  @Post('pickers/:id/messages')
+  @HttpCode(201)
+  @UseGuards(JwtAuthGuard, SuperuserGuard)
+  @ApiOperation({ summary: 'Enviar mensaje a un picker' })
+  sendChatMessage(
+    @CurrentUser('sub') userId: bigint,
+    @Param('id', ParseIntPipe) id: number,
+    @Body() dto: SendPickerMessageDto,
+  ) {
+    return this.chat.sendFromAdmin(id, Number(userId), dto.body);
   }
 }

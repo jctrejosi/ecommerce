@@ -43,6 +43,8 @@ import { WompiService } from '../payments/wompi.service';
 import { EpaycoService } from '../payments/epayco.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { OrdersGateway } from './orders.gateway';
+import { toIsoTimestamp } from '../../utils/date-utils';
+import { parsePointText } from '../../utils/geolocation';
 
 const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
 /** La vista pública del cliente puede refrescar seguido: cachear la ruta. */
@@ -313,6 +315,13 @@ export class OrdersService {
           : 'PENDING';
 
     const result = await this.drizzleService.transaction(async (tx) => {
+      // Punto del destino. Sin coordenadas no hay ruta que pintar en ningún
+      // mapa (seguimiento del cliente, mapa del repartidor y mapa de flota).
+      const addressPoint =
+        dto.address.lat != null && dto.address.lng != null
+          ? `POINT(${dto.address.lng} ${dto.address.lat})`
+          : null;
+
       // Dirección guardada solo para clientes registrados (customerAddresses
       // exige customerId). Los invitados guardan sus datos en orders + shipments.
       let customerAddressId: number | null = null;
@@ -326,6 +335,7 @@ export class OrdersService {
             country: 'Colombia',
             reference: dto.address.name,
             deliveryInstructions: dto.address.notes,
+            location: addressPoint,
           })
           .returning({ id: customerAddresses.id });
         customerAddressId = Number(insertedAddresses[0].id);
@@ -373,6 +383,7 @@ export class OrdersService {
         city: dto.address.city,
         recipientName: dto.address.name,
         recipientPhone: dto.address.phone,
+        location: addressPoint,
         status: 'PENDING',
       });
 
@@ -587,7 +598,11 @@ export class OrdersService {
     return row;
   }
 
-  /** Mensajes del chat del pedido (cliente ↔ repartidor), por código público. */
+  /**
+   * Mensajes del chat del pedido (cliente ↔ repartidor), por código público.
+   * No marca nada como leído: de eso se encarga `markChatMessagesRead`, para
+   * que el sondeo del badge de no leídos no borre el aviso sin abrir el chat.
+   */
   async getChatMessages(referenceCode: string) {
     const order = await this.resolveOrderByCode(referenceCode);
 
@@ -597,18 +612,44 @@ export class OrdersService {
         senderType: orderChatMessages.senderType,
         body: orderChatMessages.body,
         createdAt: orderChatMessages.createdAt,
+        readAt: orderChatMessages.readAt,
       })
       .from(orderChatMessages)
       .where(eq(orderChatMessages.orderId, order.id))
-      .orderBy(asc(orderChatMessages.id))
+      // Los más recientes primero para que el límite recorte el historial
+      // viejo, no los mensajes nuevos; luego se invierte a orden cronológico.
+      .orderBy(desc(orderChatMessages.id))
       .limit(300);
 
-    return rows.map((r) => ({
+    return rows.reverse().map((r) => ({
       id: String(r.id),
       senderType: r.senderType,
       body: r.body,
-      createdAt: r.createdAt,
+      createdAt: toIsoTimestamp(r.createdAt),
+      readAt: toIsoTimestamp(r.readAt),
     }));
+  }
+
+  /**
+   * Acuse de lectura del cliente: sella los mensajes que le escribió el
+   * repartidor y que aún no tenían visto. Así el repartidor ve el doble check.
+   */
+  async markChatMessagesRead(referenceCode: string) {
+    const order = await this.resolveOrderByCode(referenceCode);
+
+    const updated = await this.db
+      .update(orderChatMessages)
+      .set({ readAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(orderChatMessages.orderId, order.id),
+          eq(orderChatMessages.senderType, 'delivery'),
+          isNull(orderChatMessages.readAt),
+        ),
+      )
+      .returning({ id: orderChatMessages.id });
+
+    return { updated: updated.length };
   }
 
   /** Envía un mensaje del cliente en el chat del pedido (público por código). */
@@ -641,7 +682,8 @@ export class OrdersService {
       id: String(row.id),
       senderType: row.senderType,
       body: row.body,
-      createdAt: row.createdAt,
+      createdAt: toIsoTimestamp(row.createdAt),
+      readAt: toIsoTimestamp(row.readAt),
     };
   }
 
@@ -909,12 +951,7 @@ export class OrdersService {
 
   /** Parsea un punto postgis/EWKT ('POINT(lng lat)') si viene como texto. */
   private parseDbPoint(value: string | null | undefined): { lat: number; lng: number } | null {
-    if (!value) return null;
-    const m = value.match(
-      /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
-    );
-    if (!m) return null;
-    return { lng: parseFloat(m[1]), lat: parseFloat(m[2]) };
+    return parsePointText(value);
   }
 
   async getOrders(customerId: number) {

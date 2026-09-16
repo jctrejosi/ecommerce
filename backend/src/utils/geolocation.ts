@@ -75,3 +75,61 @@ export function getGpsPrecisionLabel(accuracy: number | null): {
 
   return { label: 'Baja', color: 'bg-red-100 text-red-700' };
 }
+
+export interface ParsedPoint {
+  lng: number;
+  lat: number;
+}
+
+/**
+ * Interpreta el punto que guardan las columnas `location` (son de tipo `text`).
+ *
+ * El formato normal es WKT, p. ej. `POINT(-75.5188 5.0329)`. Pero un `::geometry`
+ * suelto en SQL guarda la geometría como hexadecimal EWKB (`0101000000…`) y el
+ * valor se perdía en silencio: los mapas se quedaban sin destino y las rutas
+ * respondían "el pedido no tiene coordenadas". Aquí se aceptan ambos formatos.
+ */
+export function parsePointText(
+  value: string | null | undefined,
+): ParsedPoint | null {
+  if (!value) return null;
+  const text = String(value).trim();
+
+  const wkt = text.match(
+    /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
+  );
+  if (wkt) return { lng: parseFloat(wkt[1]), lat: parseFloat(wkt[2]) };
+
+  return parseEwkbPoint(text);
+}
+
+/**
+ * Punto a partir de EWKB hexadecimal (lo que Postgres devuelve/guarda al pasar
+ * por `geometry`). Estructura: 1 byte de orden de bytes, 4 de tipo y, si el tipo
+ * trae el flag 0x20000000, 4 más de SRID; después los dos doubles del punto.
+ */
+function parseEwkbPoint(text: string): ParsedPoint | null {
+  if (!/^(00|01)[0-9a-f]{38,}$/i.test(text)) return null;
+
+  const buffer = Buffer.from(text, 'hex');
+  if (buffer.length < 21) return null;
+
+  const littleEndian = buffer[0] === 1;
+  const type = littleEndian ? buffer.readUInt32LE(1) : buffer.readUInt32BE(1);
+  const baseType = type & 0xff;
+  if (baseType !== 1) return null; // solo puntos de 2 dimensiones
+  if ((type & 0x40000000) !== 0 || (type & 0x80000000) !== 0) return null; // Z/M
+
+  const offset = (type & 0x20000000) !== 0 ? 9 : 5;
+  if (buffer.length < offset + 16) return null;
+
+  const lng = littleEndian
+    ? buffer.readDoubleLE(offset)
+    : buffer.readDoubleBE(offset);
+  const lat = littleEndian
+    ? buffer.readDoubleLE(offset + 8)
+    : buffer.readDoubleBE(offset + 8);
+
+  if (!isValidCoordinates(lat, lng)) return null;
+  return { lng, lat };
+}

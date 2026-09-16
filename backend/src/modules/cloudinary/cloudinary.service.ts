@@ -31,7 +31,16 @@ export class CloudinaryService {
   async uploadImage(
     file: any,
     productCode: string,
-    options?: { trim?: boolean; removeBg?: boolean },
+    options?: {
+      trim?: boolean;
+      removeBg?: boolean;
+      /** Carpeta destino en Cloudinary (por defecto `products/<code>`). */
+      folder?: string;
+      /** Lado máximo en px (recorte cuadrado). Útil para avatares. */
+      resize?: number;
+      /** WebP sin pérdida (por defecto). En fotos conviene desactivarlo. */
+      lossless?: boolean;
+    },
   ): Promise<{ url: string; mediaType: string }> {
     try {
       if (!cloudinary.config().cloud_name) {
@@ -60,9 +69,16 @@ export class CloudinaryService {
         this.logger.log(`Imagen recortada: ${file.originalname}`);
       }
 
-      // 3. Convertir a WebP sin pérdida de calidad
+      // 3. Reducir si se pide (avatares: 512 px, cuadrado, recorte centrado)
+      if (options?.resize) {
+        buffer = await sharp(buffer)
+          .resize(options.resize, options.resize, { fit: 'cover' })
+          .toBuffer();
+      }
+
+      // 4. Convertir a WebP
       const webpBuffer = await sharp(buffer)
-        .webp({ lossless: true })
+        .webp({ lossless: options?.lossless ?? true })
         .toBuffer();
 
       this.logger.log(
@@ -72,7 +88,7 @@ export class CloudinaryService {
       const result = await new Promise<UploadApiResponse>((resolve, reject) => {
         const uploadStream = cloudinary.uploader.upload_stream(
           {
-            folder: `products/${productCode}`,
+            folder: options?.folder ?? `products/${productCode}`,
             public_id: `${productCode}_${Date.now()}`,
             use_filename: true,
             unique_filename: false,

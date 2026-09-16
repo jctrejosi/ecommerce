@@ -11,7 +11,8 @@ import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType 
 import MapView from './MapView'
 import MetricsView from './MetricsView'
 import footerLogo from './assets/logo.png'
-import headerLogo from './assets/logo.png'
+// El logo del header es el del picking; el del footer (copyright) sigue siendo logo.png.
+import headerLogo from './assets/picking.png'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 

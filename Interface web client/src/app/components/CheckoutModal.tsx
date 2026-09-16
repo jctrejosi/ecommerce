@@ -18,6 +18,7 @@ import {
 import { Logo } from "../Logo";
 import type { CartItem } from "../types";
 import type { WompiConfigResponse } from "../../services/orders.service";
+import { CheckoutAddressMap } from "./CheckoutAddressMap";
 
 type WompiConfig = WompiConfigResponse;
 
@@ -33,7 +34,13 @@ interface CheckoutModalProps {
     address: string;
     city: string;
     notes: string;
+    /** Punto confirmado en el mapa (null = todavía sin ubicar). */
+    lat?: number | null;
+    lng?: number | null;
   };
+  /** El cliente confirmó que el marcador coincide con su dirección. */
+  addressConfirmed: boolean;
+  onSetAddressConfirmed: (confirmed: boolean) => void;
   savedAddresses?: {
     id: number;
     alias: string | null;
@@ -123,6 +130,8 @@ export function CheckoutModal({
   cartItems,
   cartTotal,
   checkoutAddress,
+  addressConfirmed,
+  onSetAddressConfirmed,
   savedAddresses = [],
   customerName = "",
   customerPhone = "",
@@ -181,6 +190,9 @@ export function CheckoutModal({
     if (!addr) return;
     setSelectedAddressId(id);
     setUsingNewAddress(false);
+    // Cada dirección se ubica de nuevo en el mapa: la guardada no trae
+    // coordenadas y la confirmación es por pedido.
+    onSetAddressConfirmed(false);
     onSetCheckoutAddress((prev) => ({
       ...prev,
       name: prev.name || customerName,
@@ -190,12 +202,15 @@ export function CheckoutModal({
         .join(", "),
       city: addr.city,
       notes: prev.notes || addr.deliveryInstructions || "",
+      lat: null,
+      lng: null,
     }));
   };
 
   const switchToNewAddress = () => {
     setUsingNewAddress(true);
     setSelectedAddressId(null);
+    onSetAddressConfirmed(false);
   };
 
   const paymentLabel: Record<string, string> = {
@@ -580,15 +595,25 @@ export function CheckoutModal({
                       type={type}
                       placeholder={placeholder}
                       value={checkoutAddress[key]}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        // Cambiar la dirección o la ciudad invalida el punto
+                        // confirmado: hay que volver a ubicarlo en el mapa.
+                        if (key === "address" || key === "city") {
+                          onSetAddressConfirmed(false);
+                          onSetCheckoutAddress((prev) => ({
+                            ...prev,
+                            lat: null,
+                            lng: null,
+                          }));
+                        }
                         onSetCheckoutAddress((prev) => ({
                           ...prev,
                           [key]:
                             key === "phone"
                               ? normalizePhone(e.target.value)
                               : e.target.value,
-                        }))
-                      }
+                        }));
+                      }}
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                       onFocus={(e) => {
                         e.target.style.boxShadow = "0 0 0 2px #FFF200";
@@ -637,13 +662,48 @@ export function CheckoutModal({
                 )}
               </div>
             )}
+            {/* Mapa: ubicar el punto exacto y confirmar que coincide */}
+            <CheckoutAddressMap
+              coords={
+                checkoutAddress.lat != null && checkoutAddress.lng != null
+                  ? { lat: checkoutAddress.lat, lng: checkoutAddress.lng }
+                  : null
+              }
+              confirmed={addressConfirmed}
+              onCoordsChange={(c) => {
+                onSetCheckoutAddress((prev) => ({
+                  ...prev,
+                  lat: c?.lat ?? null,
+                  lng: c?.lng ?? null,
+                }));
+                // Mover el marcador invalida la confirmación anterior.
+                onSetAddressConfirmed(false);
+              }}
+              onPickAddress={({ address, city }) =>
+                onSetCheckoutAddress((prev) => ({
+                  ...prev,
+                  address,
+                  city: city || prev.city,
+                }))
+              }
+              onConfirmedChange={onSetAddressConfirmed}
+            />
+
+            {!addressConfirmed && (
+              <p className="text-xs text-muted-foreground text-center">
+                Ubica tu dirección en el mapa y confírmala para poder continuar.
+              </p>
+            )}
             <button
               onClick={() => onSetCheckoutStep(3)}
               disabled={
                 !checkoutAddress.name ||
                 !isValidPhone(checkoutAddress.phone) ||
                 !isValidEmail(checkoutAddress.email || "") ||
-                !checkoutAddress.address
+                !checkoutAddress.address ||
+                checkoutAddress.lat == null ||
+                checkoutAddress.lng == null ||
+                !addressConfirmed
               }
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-40"
               style={{ background: "#1A1A2E", color: "#FFF200" }}

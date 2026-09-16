@@ -29,10 +29,9 @@ export default function MainLayout() {
   return (
     <Stack>
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-      <Stack.Screen
-        name="order/[id]"
-        options={{ title: "Detalle del pedido", headerBackTitle: "Pedidos" }}
-      />
+      {/* El detalle pinta su propia cabecera (logo + "Pedido <código>") dentro
+          del contenido, igual que las pestañas, en lugar de la barra nativa. */}
+      <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
       <Stack.Screen
         name="map/[id]"
         options={{ title: "Mapa de entrega", headerBackTitle: "Pedido" }}

@@ -63,6 +63,25 @@ body {
   line-height: 1;
 }
 
+/* Sucursal (punto de recogida): mismo marcador que la app móvil. */
+.ml-branch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid #d97706;
+  box-shadow: 0 0 0 2px #1a1a2e, 0 3px 10px rgba(15, 23, 42, 0.4);
+  z-index: 900;
+}
+
+.ml-branch-inner {
+  font-size: 20px;
+  line-height: 1;
+}
+
 .ml-pin-inner {
   line-height: 1;
   pointer-events: none;

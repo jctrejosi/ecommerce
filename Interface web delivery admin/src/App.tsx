@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Bell,
+  BellOff,
+  BellRing,
   Loader2,
   LogOut,
   LocateFixed,
@@ -28,8 +31,17 @@ import {
 } from './services/socket';
 import { filterDrivers, isDriverOnline } from './lib/status';
 import { initials } from './lib/format';
+import {
+  notificationPermission,
+  notificationsSupported,
+  notify,
+  requestNotificationPermission,
+  type NotificationPermissionState,
+} from './services/browserNotifications';
 import LoginScreen from './components/LoginScreen';
-import logo from './assets/logo.png';
+import footerLogo from './assets/logo.png';
+// El logo del header es el del delivery; el del footer (copyright) sigue siendo logo.png.
+import headerLogo from './assets/delivery.png';
 import FleetMap, { type FleetMapHandle } from './components/FleetMap';
 import DriversSidebar from './components/DriversSidebar';
 import DriversPanel from './components/DriversPanel';
@@ -44,6 +56,15 @@ const TABS: { key: Tab; label: string; icon: typeof Truck }[] = [
   { key: 'drivers', label: 'Repartidores', icon: Users },
   { key: 'orders', label: 'Pedidos', icon: Package },
 ];
+
+/** Explicación (título del botón) según el estado de las notificaciones. */
+const NOTIF_HINTS: Record<NotificationPermissionState, string> = {
+  granted: 'Notificaciones del navegador activadas · clic para probar',
+  default: 'Activar notificaciones del navegador',
+  denied: 'Notificaciones bloqueadas: actívalas en los permisos del sitio',
+  insecure: 'Las notificaciones necesitan https:// o localhost',
+  unsupported: 'Este navegador no soporta notificaciones',
+};
 
 export default function App() {
   const [booting, setBooting] = useState(() => Boolean(getToken()));
@@ -74,8 +95,18 @@ export default function App() {
   // Se incrementa con cada mensaje recibido por socket: fuerza refrescar el hilo.
   const [chatTick, setChatTick] = useState(0);
 
+  // ── Notificaciones del navegador (avisos del sistema con el panel abierto) ──
+  const [notifPermission, setNotifPermission] = useState<NotificationPermissionState>(
+    () => notificationPermission(),
+  );
+
   const mapRef = useRef<FleetMapHandle | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * El socket se conecta una sola vez (no debe reconectarse con cada refresco de
+   * flota), así que el nombre del repartidor que avisa se lee de este ref.
+   */
+  const driversRef = useRef<FleetDriver[]>([]);
 
   // ── Boot: validar sesión guardada ──
   useEffect(() => {
@@ -146,7 +177,33 @@ export default function App() {
     setChatOpen(true);
   }, []);
 
+  /**
+   * Botón del header: pide permiso en el primer clic y, con las notificaciones
+   * ya activas, manda una de prueba para poder comprobarlas.
+   */
+  const handleNotificationsClick = useCallback(async () => {
+    if (!notificationsSupported()) {
+      setNotifPermission(notificationPermission());
+      return;
+    }
+    if (notificationPermission() === 'granted') {
+      notify({
+        title: 'Delivery Admin',
+        body: 'Así te avisaremos cuando un repartidor te escriba.',
+      });
+      return;
+    }
+    setNotifPermission(await requestNotificationPermission());
+  }, []);
+
   // ── Socket en tiempo real ──
+  // La notificación del navegador necesita el nombre del repartidor: el socket
+  // no puede depender de `drivers` (se reconectaría en cada refresco de flota),
+  // así que la lista se lee de este ref.
+  useEffect(() => {
+    driversRef.current = drivers;
+  }, [drivers]);
+
   const scheduleRefresh = useCallback(() => {
     if (refreshTimer.current) return;
     refreshTimer.current = setTimeout(() => {
@@ -177,10 +234,21 @@ export default function App() {
         );
       },
       onStatus: (_p: FleetStatusEvent) => scheduleRefresh(),
-      onChat: (_p: FleetChatEvent) => {
+      onChat: (p: FleetChatEvent) => {
         // Llega un mensaje (en cualquier sentido): refresca badges e hilo.
         setChatTick((t) => t + 1);
         void refreshChats();
+        // Solo avisan los del repartidor: los del admin los escribió él mismo.
+        if (p.message?.senderType === 'driver') {
+          const nombre =
+            driversRef.current.find((d) => d.id === p.driverId)?.fullName ?? 'Repartidor';
+          notify({
+            title: `Mensaje de ${nombre}`,
+            body: p.message.body,
+            tag: `delivery-chat-${p.driverId}`,
+            onClick: () => openChat(p.driverId),
+          });
+        }
       },
     });
     // Y el canal general de pedidos: pagos, picking y cambios del propio panel
@@ -194,7 +262,7 @@ export default function App() {
       disconnect();
       if (refreshTimer.current) clearTimeout(refreshTimer.current);
     };
-  }, [user, scheduleRefresh, refreshChats]);
+  }, [user, scheduleRefresh, refreshChats, openChat]);
 
   // ── Acciones ──
   const handleLogin = useCallback((token: string, u: AuthUser) => {
@@ -304,7 +372,7 @@ export default function App() {
       <header className="z-10 flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4">
         <div className="flex items-center gap-2.5">
           <img
-            src={logo}
+            src={headerLogo}
             alt="Mercaldas"
             className="h-9 w-auto shrink-0 object-contain"
           />
@@ -368,6 +436,25 @@ export default function App() {
             className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button
+            onClick={() => void handleNotificationsClick()}
+            title={NOTIF_HINTS[notifPermission]}
+            className="relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            {notifPermission === 'granted' ? (
+              <BellRing className="h-4 w-4 text-emerald-600" />
+            ) : notifPermission === 'default' || notifPermission === 'denied' ? (
+              <Bell className="h-4 w-4" />
+            ) : (
+              <BellOff className="h-4 w-4" />
+            )}
+            {notifPermission === 'default' && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-amber-400 text-[8px] font-bold text-white">
+                !
+              </span>
+            )}
           </button>
 
           <button
@@ -513,7 +600,7 @@ export default function App() {
             rel="noopener noreferrer"
             className="flex items-center transition-opacity hover:opacity-80"
           >
-            <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+            <img src={footerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
           </a>
           <p className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
             © 2026 Desarrollado por{' '}

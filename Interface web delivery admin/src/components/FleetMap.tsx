@@ -78,6 +78,14 @@ function destPinHtml(): string {
     </div>`;
 }
 
+/** Marcador de la sucursal (punto de recogida), igual que en la app móvil. */
+function branchPinHtml(): string {
+  return `
+    <div class="ml-branch" title="Sucursal de recogida">
+      <span class="ml-branch-inner">🏪</span>
+    </div>`;
+}
+
 function defaultStyleOption(): MapStyleOption {
   const saved = localStorage.getItem(LAYER_STORAGE_KEY);
   const found = MAP_STYLE_OPTIONS.find((o) => o.id === saved);
@@ -241,6 +249,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   const markersRef = useRef<Map<number, Marker>>(new Map());
   /** Marcadores de destinos (casitas), independientes de los repartidores. */
   const destMarkersRef = useRef<Marker[]>([]);
+  /** Marcador de la sucursal del repartidor seleccionado (punto de recogida). */
+  const branchMarkerRef = useRef<Marker | null>(null);
   const [styleOption, setStyleOption] = useState<MapStyleOption>(defaultStyleOption);
   const [styleReady, setStyleReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
@@ -364,18 +374,6 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         ],
       },
     });
-    map.addLayer({
-      id: 'ov-stop-branch',
-      type: 'circle',
-      source: overlaySourceId,
-      filter: ['==', ['get', 'kind'], 'branch'],
-      paint: {
-        'circle-radius': 8,
-        'circle-color': '#fef3c7',
-        'circle-stroke-color': '#d97706',
-        'circle-stroke-width': 2.5,
-      },
-    });
   }
 
   /** Recalcula el GeoJSON de overlays con los datos actuales. */
@@ -408,27 +406,15 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     }
 
     const sel = dAll.find((d) => d.id === selectedIdNow);
-    if (sel?.activeAssignment) {
-      const a = sel.activeAssignment;
-      // Ruta completa tienda → domicilio del seleccionado (también real).
-      if (full) {
-        features.push({
-          type: 'Feature',
-          properties: { kind: 'route-full' },
-          geometry: { type: 'LineString', coordinates: full.coords },
-        });
-      }
-      if (a.branchLocation) {
-        features.push({
-          type: 'Feature',
-          properties: { kind: 'branch' },
-          geometry: {
-            type: 'Point',
-            coordinates: [a.branchLocation.lng, a.branchLocation.lat],
-          },
-        });
-      }
+    // Ruta completa tienda → domicilio del seleccionado (también real).
+    if (sel?.activeAssignment && full) {
+      features.push({
+        type: 'Feature',
+        properties: { kind: 'route-full' },
+        geometry: { type: 'LineString', coordinates: full.coords },
+      });
     }
+    // La sucursal no es geometría: es un marcador (ver syncMarkers).
 
     (map.getSource(overlaySourceId) as maplibregl.GeoJSONSource).setData({
       type: 'FeatureCollection',
@@ -444,6 +430,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     markersRef.current.clear();
     for (const marker of destMarkersRef.current) marker.remove();
     destMarkersRef.current = [];
+    branchMarkerRef.current?.remove();
+    branchMarkerRef.current = null;
     const selectedNow = selectedIdRef.current;
 
     for (const d of driversRef.current) {
@@ -479,6 +467,21 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         .setLngLat([dest.lng, dest.lat])
         .addTo(map);
       destMarkersRef.current.push(marker);
+    }
+
+    // Sucursal del repartidor seleccionado: dónde recoge el pedido.
+    const sel = driversRef.current.find((d) => d.id === selectedNow);
+    const branch = sel?.activeAssignment?.branchLocation;
+    if (sel && branch && !hiddenIdsRef.current.has(sel.id)) {
+      const holder = document.createElement('div');
+      holder.innerHTML = branchPinHtml();
+      const branchEl = holder.firstElementChild as HTMLElement;
+      branchMarkerRef.current = new maplibregl.Marker({
+        element: branchEl,
+        anchor: 'center',
+      })
+        .setLngLat([branch.lng, branch.lat])
+        .addTo(map);
     }
   }
 
@@ -799,20 +802,67 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drivers, hiddenIds, selectedId, styleReady]);
 
-  // ── Centrar al seleccionar ──
+  // ── Encuadre al seleccionar ──
+  /**
+   * Clave del encuadre de la selección: repartidor + coordenadas del destino.
+   * NO incluye la posición del repartidor a propósito: cambia en cada ping GPS y
+   * reencuadrar el mapa a cada rato pelearía con el usuario.
+   */
+  const selFitKey = `${selectedId ?? ''}|${
+    selectedDriver?.activeAssignment?.destination
+      ? `${selectedDriver.activeAssignment.destination.lat.toFixed(5)},${selectedDriver.activeAssignment.destination.lng.toFixed(5)}`
+      : ''
+  }`;
+  const fittedSelectionRef = useRef<string | null>(null);
+
+  /**
+   * Al seleccionar un repartidor se encuadran él **y** la casa del cliente.
+   * Centrar solo en el repartidor dejaba el destino fuera de pantalla (aquí a
+   * 3,8 km), y parecía que la dirección de entrega no existía.
+   */
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || selectedId == null) return;
+    if (!map) return;
+    if (selectedId == null) {
+      // Al deseleccionar se olvida el encuadre para que volver a pulsar el
+      // mismo repartidor lo centre otra vez.
+      fittedSelectionRef.current = null;
+      return;
+    }
+    if (fittedSelectionRef.current === selFitKey) return;
+
     const d = drivers.find((x) => x.id === selectedId);
-    if (d?.location) {
-      map.flyTo({
-        center: [d.location.lng, d.location.lat],
+    if (!d) return;
+
+    const pts: [number, number][] = [];
+    if (d.location) pts.push([d.location.lng, d.location.lat]);
+    const dest = d.activeAssignment?.destination;
+    if (dest) pts.push([dest.lng, dest.lat]);
+    // Sin GPS ni destino no hay nada que encuadrar (p. ej. repartidor de baja).
+    if (!pts.length) return;
+
+    fittedSelectionRef.current = selFitKey;
+
+    if (pts.length === 1) {
+      map.easeTo({
+        center: pts[0],
         zoom: Math.max(map.getZoom(), 15),
         duration: 700,
       });
+      return;
     }
+
+    const lngs = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      { padding: 90, maxZoom: 15, duration: 700 },
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedId]);
+  }, [selFitKey]);
 
   // ── Cerrar el selector al hacer click fuera ──
   useEffect(() => {

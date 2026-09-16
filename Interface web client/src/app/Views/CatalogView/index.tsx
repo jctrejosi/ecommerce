@@ -66,7 +66,7 @@ export function CatalogPage({
   const [searchInput, setSearchInput] = useState(catalogSearch);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [productTypes, setProductTypes] = useState<
-    { id: number; code: string; name: string; count: number }[]
+    { id: number; code: string; name: string; imagePath: string | null; count: number }[]
   >([]);
   const [brandSearch, setBrandSearch] = useState("");
 
@@ -339,7 +339,7 @@ export function CatalogPage({
               )}
             </div>
             <span
-              className="text-xs flex-1 transition-colors leading-tight break-words"
+              className="text-xs flex-1 min-w-0 transition-colors leading-tight break-words"
               style={{
                 color: nodeChecked ? "#1A1A2E" : "#6B7280",
                 fontWeight: nodeChecked ? 600 : 400,
@@ -419,7 +419,7 @@ export function CatalogPage({
                     {icon}
                   </div>
                   <span
-                    className="text-sm flex-1 transition-colors leading-tight break-words"
+                    className="text-sm flex-1 min-w-0 transition-colors leading-tight break-words"
                     style={{
                       color: checked ? "#1A1A2E" : "#6B7280",
                       fontWeight: checked ? 600 : 400,
@@ -448,8 +448,12 @@ export function CatalogPage({
                 </label>
 
                 {isOpen && childCategories.length > 0 && flyoutAnchor && (
+                  // z-40: es contenido de página, así que queda por debajo del
+                  // header pegajoso (z-50) y de las capas flotantes (carrito,
+                  // modales). El panel se dibuja justo debajo del header, nunca
+                  // lo tapa. Con z-[60] se montaba encima del carrito.
                   <div
-                    className="fixed z-[60] w-64 max-h-[70vh] overflow-y-auto bg-white border border-border rounded-xl shadow-2xl p-2"
+                    className="fixed z-40 w-64 max-h-[70vh] overflow-y-auto overflow-x-hidden bg-white border border-border rounded-xl shadow-2xl p-2"
                     style={{
                       top: Math.min(flyoutAnchor.top, window.innerHeight - 80),
                       left: flyoutToRight
@@ -500,7 +504,7 @@ export function CatalogPage({
                 )}
               </div>
               <span
-                className="text-sm cursor-pointer"
+                className="text-sm flex-1 min-w-0 cursor-pointer break-words"
                 style={{
                   color: catalogPriceRange === r.id ? "#1A1A2E" : "#6B7280",
                   fontWeight: catalogPriceRange === r.id ? 600 : 400,
@@ -567,7 +571,7 @@ export function CatalogPage({
                       )}
                     </div>
                     <span
-                      className="text-sm flex-1 transition-colors"
+                      className="text-sm flex-1 min-w-0 transition-colors break-words"
                       style={{
                         color: checked ? "#1A1A2E" : "#6B7280",
                         fontWeight: checked ? 600 : 400,
@@ -623,11 +627,19 @@ export function CatalogPage({
                       </svg>
                     )}
                   </div>
-                  <span className="text-sm leading-none">
-                    {productTypeIcon(pt.code)}
-                  </span>
+                  {pt.imagePath ? (
+                    <img
+                      src={pt.imagePath}
+                      alt=""
+                      className="w-5 h-5 rounded object-cover flex-shrink-0"
+                    />
+                  ) : (
+                    <span className="text-sm leading-none">
+                      {productTypeIcon(pt.code)}
+                    </span>
+                  )}
                   <span
-                    className="text-sm flex-1 transition-colors"
+                    className="text-sm flex-1 min-w-0 transition-colors break-words"
                     style={{
                       color: checked ? "#1A1A2E" : "#6B7280",
                       fontWeight: checked ? 600 : 400,
@@ -638,7 +650,7 @@ export function CatalogPage({
                   >
                     {pt.name}
                   </span>
-                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-muted text-muted-foreground flex-shrink-0">
                     {pt.count}
                   </span>
                 </label>
@@ -693,7 +705,7 @@ export function CatalogPage({
       <div className="max-w-7xl mx-auto px-4 py-5 flex gap-5 h-full">
         {/* Desktop sidebar */}
         <aside
-          className="hidden md:flex flex-col w-56 flex-shrink-0 bg-white rounded-xl border border-border overflow-y-auto"
+          className="hidden md:flex flex-col w-56 flex-shrink-0 bg-white rounded-xl border border-border overflow-y-auto overflow-x-hidden"
           style={{ height: "calc(100vh - 148px)" }}
         >
           {/* Search inside sidebar */}
@@ -973,7 +985,7 @@ export function CatalogPage({
                 <X className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden p-4">
               <SidebarContent flyoutToRight={false} />
             </div>
             <div className="border-t border-border p-4">

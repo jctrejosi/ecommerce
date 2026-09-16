@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -10,7 +10,12 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Stack, useLocalSearchParams } from "expo-router";
-import { useChatMessages, useOrder, useSendChatMessage } from "@/api/orders";
+import {
+  useChatMessages,
+  useMarkChatRead,
+  useOrder,
+  useSendChatMessage,
+} from "@/api/orders";
 import type { ChatMessage } from "@/api/types";
 import { ErrorBox } from "@/ui/ErrorBox";
 import { Button } from "@/ui/Button";
@@ -39,8 +44,21 @@ export default function OrderChatScreen() {
   const { data: order } = useOrder(id);
   const messages = useChatMessages(id);
   const send = useSendChatMessage(id);
+  const markRead = useMarkChatRead(id);
 
   const [draft, setDraft] = useState("");
+
+  // Acuse de lectura: al ver la conversación, el cliente recibe el visto de lo
+  // que escribió. Se dispara una sola vez por tanda de mensajes pendientes.
+  const markReadRef = useRef(markRead.mutate);
+  useEffect(() => {
+    markReadRef.current = markRead.mutate;
+  });
+  useEffect(() => {
+    const list = messages.data;
+    if (!list?.some((m) => m.senderType === "customer" && !m.readAt)) return;
+    markReadRef.current();
+  }, [messages.data]);
 
   // FlatList invertida: el dato más nuevo primero se dibuja abajo.
   const listData = useMemo(
@@ -170,9 +188,21 @@ function Bubble({ msg }: { msg: ChatMessage }) {
         <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>
           {msg.body}
         </Text>
-        <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
-          {fmtTime(msg.createdAt)}
-        </Text>
+        <View style={styles.metaRow}>
+          <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
+            {fmtTime(msg.createdAt)}
+          </Text>
+          {mine ? (
+            <Ionicons
+              name={msg.readAt ? "checkmark-done" : "checkmark"}
+              size={13}
+              color={msg.readAt ? "#FFFFFF" : "rgba(255,255,255,0.6)"}
+              accessibilityLabel={
+                msg.readAt ? "Leído por el cliente" : "Enviado"
+              }
+            />
+          ) : null}
+        </View>
       </View>
     </View>
   );
@@ -250,11 +280,16 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: 14, lineHeight: 19, color: colors.text },
   bubbleTextMine: { color: "#FFFFFF" },
+  metaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(1),
+    marginTop: spacing(1),
+    alignSelf: "flex-end",
+  },
   bubbleTime: {
     fontSize: 10,
     color: colors.textFaint,
-    marginTop: spacing(1),
-    alignSelf: "flex-end",
   },
   bubbleTimeMine: { color: "rgba(255,255,255,0.75)" },
   empty: {

@@ -120,3 +120,20 @@ export function useSendChatMessage(orderId: number | string) {
     },
   });
 }
+
+/**
+ * Acuse de lectura del repartidor: marca como vistos los mensajes del cliente.
+ * Al terminar refresca el chat para que `readAt` quede reflejado y no se repita.
+ */
+export function useMarkChatRead(orderId: number | string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => api.markChatRead(orderId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: orderKeys.chat(orderId),
+      });
+    },
+  });
+}

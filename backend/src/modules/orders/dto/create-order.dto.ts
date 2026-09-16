@@ -7,6 +7,7 @@ import {
   IsOptional,
   IsString,
   Matches,
+  Max,
   Min,
   ValidateNested,
 } from 'class-validator';
@@ -42,6 +43,27 @@ export class CreateOrderAddressDto {
   @IsString()
   @IsNotEmpty()
   city!: string;
+
+  /**
+   * Coordenadas del destino (opcionales).
+   *
+   * Sin ellas el mapa no puede trazar la ruta: el repartidor ve la dirección
+   * como texto, pero ni el seguimiento del cliente ni el mapa de flota tienen
+   * un punto al que apuntar.
+   */
+  @IsOptional()
+  @Transform(({ value }) => (value == null ? undefined : Number(value)))
+  @IsNumber()
+  @Min(-90)
+  @Max(90)
+  lat?: number;
+
+  @IsOptional()
+  @Transform(({ value }) => (value == null ? undefined : Number(value)))
+  @IsNumber()
+  @Min(-180)
+  @Max(180)
+  lng?: number;
 
   @IsEmail({}, { message: 'El email no es válido' })
   email!: string;

@@ -2,6 +2,8 @@ import { http, toApiError } from "./client";
 import type {
   AuthMe,
   LoginResponse,
+  PickerChatMessage,
+  PickerChatSummary,
   PickingLocation,
   PickingOrder,
   PickingShelf,
@@ -67,6 +69,14 @@ export const pickingApi = {
       branchId,
       variantIds: variantIds.join(","),
     }),
+
+  /** Hilo con administración. El GET marca como leído lo que envió el admin. */
+  chatMessages: () => get<PickerChatMessage[]>("/picking/chat"),
+
+  chatSummary: () => get<PickerChatSummary>("/picking/chat/summary"),
+
+  sendChatMessage: (body: string) =>
+    post<PickerChatMessage>("/picking/chat", { body }),
 };
 
 export type { PickingLocation, PickingOrder, PickingShelf, ScanResult };

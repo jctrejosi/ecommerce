@@ -155,6 +155,21 @@ export function parseDateSafe(
 }
 
 /**
+ * Normaliza una marca de tiempo al formato ISO 8601.
+ *
+ * Postgres entrega sus `timestamptz` como texto ("2026-09-16 20:12:57.406364+00")
+ * porque las columnas están declaradas con `mode: 'string'`. Ese formato no es
+ * ISO 8601 y los motores JS estrictos (Hermes, el de React Native) devuelven
+ * `Invalid Date` al intentar parsearlo, así que se convierte antes de responder.
+ */
+export function toIsoTimestamp(
+  value: string | Date | null | undefined,
+): string | null {
+  const date = parseDateSafe(value);
+  return date ? date.toISOString() : null;
+}
+
+/**
  * Obtiene la diferencia en días entre dos fechas
  */
 export function daysBetween(date1: Date, date2: Date): number {

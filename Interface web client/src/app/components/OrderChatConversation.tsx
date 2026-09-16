@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Loader2, Send, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, Send, X } from "lucide-react";
 import {
   ordersService,
   type OrderChatMessage,
@@ -70,6 +70,31 @@ export function OrderChatConversation({
       if (timerRef.current != null) window.clearInterval(timerRef.current);
     };
   }, [load]);
+
+  // Acuse de lectura: al ver la conversación, el repartidor recibe el visto de
+  // lo que escribió. Se sella una sola vez por mensaje pendiente.
+  useEffect(() => {
+    const pending = messages.some((m) => m.senderType === "delivery" && !m.readAt);
+    if (!pending) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const now = new Date().toISOString();
+        await ordersService.markChatRead(orderCode);
+        if (cancelled) return;
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.senderType === "delivery" && !m.readAt ? { ...m, readAt: now } : m,
+          ),
+        );
+      } catch {
+        // Si falla, el siguiente sondeo lo vuelve a intentar.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [messages, orderCode]);
 
   // Auto-scroll al final cuando llegan mensajes nuevos.
   useEffect(() => {
@@ -173,11 +198,25 @@ export function OrderChatConversation({
                     {m.body}
                   </p>
                   <p
-                    className={`text-[9px] mt-1 ${
-                      mine ? "text-[#1A1A2E]/50" : "text-muted-foreground/70"
+                    className={`text-[9px] mt-1 flex items-center gap-1 ${
+                      mine
+                        ? "text-[#1A1A2E]/50 justify-end"
+                        : "text-muted-foreground/70"
                     }`}
                   >
-                    {fmtTime(m.createdAt)}
+                    <span>{fmtTime(m.createdAt)}</span>
+                    {mine &&
+                      (m.readAt ? (
+                        <CheckCheck
+                          className="w-3.5 h-3.5 text-[#1A1A2E]"
+                          aria-label="Leído por tu repartidor"
+                        />
+                      ) : (
+                        <Check
+                          className="w-3.5 h-3.5"
+                          aria-label="Enviado"
+                        />
+                      ))}
                   </p>
                 </div>
               </div>

@@ -29,7 +29,7 @@ export function Header({ title, subtitle, onBack, right, logo = false }: HeaderP
         ) : logo ? (
           <View style={styles.logoBlock}>
             <Image
-              source={require("../../assets/logo.png")}
+              source={require("../../assets/picking.png")}
               style={styles.logo}
               resizeMode="contain"
             />
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   left: { flexDirection: "row", alignItems: "center", gap: spacing(3), flexShrink: 1 },
   titles: { flexShrink: 1 },
   right: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
-  logo: { height: 30, width: 92 },
+  logo: { height: 44, width: 92 },
   logoBlock: { alignItems: "center", width: 92 },
   logoTitle: {
     width: 92,

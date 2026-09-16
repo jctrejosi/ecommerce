@@ -109,6 +109,14 @@ async function main() {
   const adminGotDriverMsg = adminEvents.some((e) => String(e.message?.body).includes('repartidor -> admin'));
   const driverGotAdminMsg = driverEvents.some((e) => String(e.message?.body).includes('admin -> repartidor'));
 
+  // Datos que usa la notificación del navegador en el panel: driverId + lado.
+  const eventoPanel = adminEvents.find((e) =>
+    String(e.message?.body).includes('repartidor -> admin'),
+  );
+  console.log(
+    `[3b] evento del panel: driverId=${eventoPanel?.driverId} senderType=${eventoPanel?.message?.senderType}`,
+  );
+
   console.log(`[3] socket admin  → ${adminEvents.length} evento(s); recibió el del repartidor: ${adminGotDriverMsg}`);
   console.log(`[4] socket driver → ${driverEvents.length} evento(s); recibió el del admin: ${driverGotAdminMsg}`);
   console.log(`[5] filas persistidas en BD: ${persisted.rows[0].n}`);

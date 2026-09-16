@@ -6,6 +6,11 @@ import { colors, spacing } from "@/theme";
 
 interface ScreenProps {
   title?: string;
+  /**
+   * Tamaño del título de la cabecera (por defecto 20). Útil cuando el título es
+   * largo, como el código de un pedido.
+   */
+  titleSize?: number;
   children: ReactNode;
   scroll?: boolean;
   padded?: boolean;
@@ -30,6 +35,7 @@ interface ScreenProps {
 /** Contenedor base de pantalla: SafeArea + título opcional + scroll opcional. */
 export function Screen({
   title,
+  titleSize = 20,
   children,
   scroll = true,
   padded = true,
@@ -66,11 +72,11 @@ export function Screen({
       {title ? (
         <View style={styles.headerBar}>
           <Image
-            source={require("../../assets/logo.png")}
+            source={require("../../assets/delivery.png")}
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.title} numberOfLines={1}>
+          <Text style={[styles.title, { fontSize: titleSize }]} numberOfLines={1}>
             {title}
           </Text>
           {headerRight ? (
@@ -103,10 +109,10 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(3),
     backgroundColor: colors.background,
   },
-  logo: { height: 26, width: 80 },
-  logoSpacer: { width: 80 },
+  logo: { height: 40, width: 40 },
+  logoSpacer: { width: 40 },
   headerRight: {
-    width: 80,
+    width: 40,
     alignItems: "flex-end",
     justifyContent: "center",
   },
@@ -114,7 +120,6 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
     textTransform: "uppercase",
-    fontSize: 20,
     fontWeight: "800",
     letterSpacing: 0.5,
     color: colors.text,
