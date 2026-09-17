@@ -21,6 +21,7 @@ import { useServerGate } from "@/api/serverGate";
 import { getApiUrl } from "@/api/apiConfig";
 import { connectPickingSocket, disconnectPickingSocket, connectOrderEvents, disconnectOrderEvents } from "@/socket";
 import { configureNewOrderSound } from "@/notifications/sound";
+import { configureNotifications, setPendingBadge } from "@/notifications/push";
 import { colors, radius, spacing } from "@/theme";
 
 export default function RootLayout() {
@@ -37,9 +38,11 @@ export default function RootLayout() {
     void ensureServer(true).finally(() => setBootChecked(true));
   }, [ensureServer]);
 
-  // 1.b) Modo de audio del aviso de pedido nuevo (una sola vez).
+  // 1.b) Modo de audio del aviso de pedido nuevo y canal del contador del
+  //      ícono (una sola vez cada uno).
   useEffect(() => {
     void configureNewOrderSound();
+    void configureNotifications();
   }, []);
 
   // 2) Cada vez que la app vuelve a primer plano o cambia la conectividad
@@ -73,6 +76,8 @@ export default function RootLayout() {
     if (status !== "ok" || !userId) {
       disconnectPickingSocket();
       disconnectOrderEvents();
+      // Sin sesión no hay pendientes que anunciar.
+      void setPendingBadge(0);
       return;
     }
     let cancelled = false;

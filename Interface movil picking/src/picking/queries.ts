@@ -7,6 +7,7 @@ export const PICKING_ROOT = ["picking"] as const;
 export const pickingKeys = {
   root: PICKING_ROOT,
   queue: () => ["picking", "queue"] as const,
+  unreviewed: () => ["picking", "unreviewed"] as const,
   order: (id: number) => ["picking", "order", id] as const,
   shelves: (branchId: number) => ["picking", "shelves", branchId] as const,
   locations: (branchId: number, variantIds: number[]) =>
@@ -18,6 +19,18 @@ export function useQueue() {
   return useQuery({
     queryKey: pickingKeys.queue(),
     queryFn: () => pickingApi.queue(),
+    refetchInterval: 20_000,
+  });
+}
+
+/**
+ * Pedidos pendientes de revisar (los que siguen en la cola de trabajo). Es una
+ * de las dos fuentes del contador del ícono de la app.
+ */
+export function useUnreviewedCount() {
+  return useQuery({
+    queryKey: pickingKeys.unreviewed(),
+    queryFn: () => pickingApi.unreviewedCount(),
     refetchInterval: 20_000,
   });
 }

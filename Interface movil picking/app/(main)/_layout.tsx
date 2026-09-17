@@ -2,6 +2,7 @@ import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore } from "@/auth/authStore";
 import { useNewOrderAlerts } from "@/notifications/newOrderAlerts";
+import { useAppBadge } from "@/notifications/badge";
 import { colors } from "@/theme";
 
 /**
@@ -29,11 +30,13 @@ export default function MainLayout() {
 }
 
 /**
- * Área ya autenticada. El aviso de pedido nuevo (sonido + vibración) se monta
- * aquí para que suene en cualquier pantalla del picker, no solo en la lista.
+ * Área ya autenticada. El aviso de pedido nuevo (sonido + vibración) y el
+ * contador de pendientes del ícono se montan aquí, así funcionan en cualquier
+ * pantalla del picker y no solo en la lista.
  */
 function AuthedArea() {
   useNewOrderAlerts();
+  useAppBadge();
 
   return (
     <Stack

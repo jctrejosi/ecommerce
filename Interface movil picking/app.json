@@ -30,6 +30,7 @@
       "usesCleartextTraffic": true,
       "permissions": [
         "android.permission.CAMERA",
+        "android.permission.POST_NOTIFICATIONS",
         "android.permission.VIBRATE"
       ]
     },
@@ -43,7 +44,15 @@
         {
           "cameraPermission": "La app usa la cámara para escanear los códigos de barras de los productos durante el alistamiento."
         }
-      ]
+      ],
+      [
+        "expo-notifications",
+        {
+          "color": "#F59E0B",
+          "defaultChannel": "picking-pending"
+        }
+      ],
+      "expo-audio"
     ]
   }
 }

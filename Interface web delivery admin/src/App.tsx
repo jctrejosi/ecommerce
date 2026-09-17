@@ -518,32 +518,6 @@ export default function App() {
             >
               <LocateFixed className="h-4.5 w-4.5" />
             </button>
-
-            {/* Leyenda (junto al control de zoom) */}
-            <div className="pointer-events-none absolute left-12 top-4 z-500 rounded-xl bg-white/95 p-3 shadow-lg ring-1 ring-slate-200 backdrop-blur">
-              <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                Estado de los repartidores
-              </p>
-              <div className="space-y-1.5">
-                {[
-                  { color: '#34d399', label: 'Disponible · sin pedido' },
-                  { color: '#0ea5e9', label: 'Pedido asignado (por aceptar)' },
-                  { color: '#f59e0b', label: 'Aceptado · va a la tienda' },
-                  { color: '#f97316', label: 'Recogiendo en tienda' },
-                  { color: '#8b5cf6', label: 'Pedido recogido' },
-                  { color: '#16a34a', label: 'En entrega al cliente' },
-                  { color: '#94a3b8', label: 'No disponible / desactivado' },
-                ].map((row, i, arr) => (
-                  <div key={row.label} className="flex items-center gap-2">
-                    <span
-                      className="h-2.5 w-2.5 rounded-full ring-2 ring-white"
-                      style={{ background: row.color, opacity: i === arr.length - 1 ? 0.5 : 1 }}
-                    />
-                    <span className="text-[11px] text-slate-600">{row.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
 
           <DriversSidebar

@@ -354,8 +354,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       paint: {
         'line-color': '#ffffff',
         'line-width': ['case', ['==', ['get', 'sel'], true], 11, 7],
-        // Ruta de un repartidor sin señal: se atenúa junto con su trazo.
-        'line-opacity': ['case', ['==', ['get', 'dim'], true], 0.35, 0.95],
+        // Solo las rutas NO seleccionadas se atenúan.
+        'line-opacity': ['case', ['==', ['get', 'dim'], true], 0.35, 1],
       },
     });
     map.addLayer({
@@ -366,12 +366,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       paint: {
         'line-color': ['get', 'color'],
         'line-width': ['case', ['==', ['get', 'sel'], true], 6, 4],
-        'line-opacity': [
-          'case',
-          ['==', ['get', 'sel'], true],
-          1,
-          ['case', ['==', ['get', 'dim'], true], 0.3, 0.9],
-        ],
+        // Sin selección, todas las rutas van a color pleno; al elegir un
+        // repartidor las demás bajan para que la suya resalte.
+        'line-opacity': ['case', ['==', ['get', 'dim'], true], 0.3, 1],
       },
     });
   }
@@ -399,7 +396,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
           kind: 'route-driver',
           color: driverColor(d),
           sel: d.id === selectedIdNow,
-          dim: !isDriverOnline(d),
+          // Solo se atenúa cuando hay OTRO repartidor seleccionado: por defecto
+          // todas las rutas se ven a color pleno.
+          dim: selectedIdNow != null && d.id !== selectedIdNow,
         },
         geometry: { type: 'LineString', coordinates: route.coords },
       });
