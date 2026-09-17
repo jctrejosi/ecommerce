@@ -4,10 +4,13 @@
  *
  * Uso:
  *   node dev.js            # DEV: instala dependencias faltantes, levanta
- *                          #   PostgreSQL + los servicios en segundo plano,
- *                          #   espera a que el backend esté listo, imprime las
- *                          #   URLs y termina (la terminal queda libre).
+ *                          #   PostgreSQL + los servicios (y las apps Expo) en
+ *                          #   segundo plano, espera a que el backend esté listo,
+ *                          #   imprime las URLs y termina (la terminal queda
+ *                          #   libre: se puede cerrar sin matar Metro).
  *   node dev.js <flags>    # Solo los aplicativos pedidos (p. ej. --delivery-admin).
+ *   node dev.js --fg       # Las apps Expo (delivery/picking) se quedan en
+ *                          #   primer plano mostrando el QR (bloquea la terminal).
  *   node dev.js --prod     # PRODUCCIÓN ("en vivo"): comandos de producción.
  *                          #   Requiere builds previos (backend: npm run build,
  *                          #   webs: npm run build). Los logs quedan en logs/*.log.
@@ -22,6 +25,7 @@
 const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
 const net = require("node:net");
+const os = require("node:os");
 const path = require("node:path");
 
 const ROOT = __dirname;
@@ -38,6 +42,9 @@ const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
 const STOP = ARGS.includes("--stop");
 const HELP = ARGS.includes("--help");
+// Las apps móviles (Expo) corren desacopladas por defecto: así la terminal queda
+// libre y se puede cerrar sin matar Metro. Con --fg se muestra el QR aquí mismo.
+const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
 
 // Dependencias por servicio: `marker` es lo que se comprueba para saber si ya
 // están instaladas; `install` son los comandos que las instalan si faltan.
@@ -113,6 +120,9 @@ const SERVICES = [
     url: "http://localhost:4173",
     dev: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
     prod: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
+    // Escucha en 0.0.0.0 y resuelve el API en su propio origen, así que se
+    // puede abrir tal cual desde el celular (es la URL que usa el APK).
+    lan: true,
     deps: {
       marker: ["scripts-agent", "serve-webclient.mjs"],
       markerType: "file",
@@ -149,6 +159,10 @@ const SERVICES = [
     url: "http://localhost:8446",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local
+    // (`CORS_ALLOW_LAN`), así que se puede abrir desde el celular con la IP del
+    // equipo. El cliente resuelve el API contra el host que sirvió la página.
+    lan: true,
     deps: PNPM_DEPS,
   },
   {
@@ -157,6 +171,11 @@ const SERVICES = [
     url: "http://localhost:8447",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local
+    // (`CORS_ALLOW_LAN`), así que el panel se puede abrir desde el celular con
+    // la IP del equipo (la que imprime `dev.js`). El cliente resuelve el API
+    // contra el host que sirvió la página.
+    lan: true,
     deps: PNPM_DEPS,
   },
   {
@@ -217,7 +236,15 @@ const APP_DEPENDS = {
   osrm: [],
 };
 
-const NO_SELECTOR_FLAGS = new Set(["--prod", "--live", "--stop", "--help", "--all"]);
+const NO_SELECTOR_FLAGS = new Set([
+  "--prod",
+  "--live",
+  "--stop",
+  "--help",
+  "--all",
+  "--fg",
+  "--foreground",
+]);
 
 /** null ⇒ levantar todo (comportamiento por defecto). */
 function resolveSelection() {
@@ -502,7 +529,12 @@ function resolveCmd(svc) {
 
 function startService(svc) {
   const color = C[svc.name] || "";
-  console.log(`${color}[${svc.name}]${C.reset} ▶ ${svc.url || svc.dir}  (log: logs/${svc.name}.log)`);
+  const lanUrl = svc.lan ? toLanUrl(svc.url, lanIp()) : null;
+  console.log(
+    `${color}[${svc.name}]${C.reset} ▶ ${svc.url}` +
+      (lanUrl ? `  (red local: ${lanUrl})` : "") +
+      `  (log: logs/${svc.name}.log)`,
+  );
 
   const cmd = resolveCmd(svc);
   if (!cmd) return null;
@@ -529,18 +561,67 @@ function startService(svc) {
   return child.pid;
 }
 
+/**
+ * IPv4 de la red local, para abrir los servicios desde el celular.
+ * Se puede forzar con `LAN_IP=192.168.x.x`.
+ */
+function lanIp() {
+  if (process.env.LAN_IP) return process.env.LAN_IP;
+  // Se descartan las interfaces virtuales (docker, puentes, VPNs): no son
+  // alcanzables desde el celular aunque tengan IPv4.
+  const virtual = /^(docker|br-|veth|virbr|vmnet|tun|tap|utun|wg)/i;
+  const found = [];
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) {
+    if (virtual.test(name)) continue;
+    for (const a of addrs ?? []) {
+      if (a.family !== "IPv4" || a.internal) continue;
+      found.push(a.address);
+    }
+  }
+  // Prefiere el rango típico de casa/oficina: 192.168 → 10 → 172.16-31.
+  const rank = (ip) =>
+    ip.startsWith("192.168.")
+      ? 0
+      : ip.startsWith("10.")
+        ? 1
+        : /^172\.(1[6-9]|2\d|3[01])\./.test(ip)
+          ? 2
+          : 3;
+  return found.sort((a, b) => rank(a) - rank(b))[0] ?? null;
+}
+
+/** Reemplaza el host localhost de una URL por la IP de la red local. */
+function toLanUrl(url, ip) {
+  return ip ? url.replace("//localhost", `//${ip}`) : null;
+}
+
 function printUrls(services, showDb, showCampaigns, showOsrm) {
+  const ip = lanIp();
   console.log("\n━━━━━━━━━━━━━ Mercaldas — URLs ━━━━━━━━━━━━━");
   for (const svc of services) {
     if (!svc.url) continue;
-    console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
+    // Los servicios marcados `lan` escuchan en 0.0.0.0 y resuelven el API en su
+    // propio origen: se pueden abrir desde el celular sin tocar nada más.
+    const lanUrl = svc.lan ? toLanUrl(svc.url, ip) : null;
+    console.log(
+      `  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}` +
+        (lanUrl ? `   ·  red local: ${lanUrl}` : ""),
+    );
   }
   if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
   if (showCampaigns) console.log("  DB-CAMPAIGNS   → PostgreSQL localhost:5436 (docker, analytics)");
   if (showOsrm) console.log("  OSRM           → Rutas http://localhost:5000 (docker, Manizales)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   const started = services.map((s) => s.name).join(", ");
-  console.log(`Logs: logs/*.log  (${started || "sin servicios"}). El DELIVERY imprime en esta terminal.`);
+  console.log(`Logs: logs/*.log  (${started || "sin servicios"}).`);
+
+  // Atajo para el celular: es la misma URL que descubre el APK por `/discovery`.
+  const lanSvc = services.find((s) => s.lan && s.url);
+  const lanUrl = lanSvc ? toLanUrl(lanSvc.url, ip) : null;
+  if (lanUrl) {
+    console.log(`\n📱 Celular (misma Wi-Fi): abre ${lanUrl}`);
+    console.log("   El APK cliente lo descubre solo; si cambias de red, vuelve a arrancar.");
+  }
 }
 
 // ── Apps móviles (Expo Go) ────────────────────────────────────
@@ -561,12 +642,12 @@ function ensureExpoDeps(dir, color, label) {
 }
 
 /**
- * Arranca una app Expo en FOREGROUND (interactivo): así el QR de Expo Go
+ * Arranca una app Expo en FOREGROUND (interactivo, `--fg`): así el QR de Expo Go
  * aparece en esta terminal. Ctrl+C detiene solo esa app; el resto de servicios
  * sigue en background. Solo aplica en modo dev.
  */
-function startExpoApp({ dir, port, color, label, title, hints = [], extraArgs = [] }) {
-  if (!ensureExpoDeps(dir, color, label)) return;
+function startExpoAppForeground({ dir, port, color, label, title, hints = [], extraArgs = [] }) {
+  if (!ensureExpoDeps(dir, color, label)) return null;
 
   console.log("");
   console.log(
@@ -590,10 +671,87 @@ function startExpoApp({ dir, port, color, label, title, hints = [], extraArgs = 
       `${color}[${label}]${C.reset} ⚠️  expo terminó con código ${r.status ?? "?"} — ¿puerto ${port} ocupado? (node dev.js --stop para liberar)`,
     );
   }
+  return null; // bloqueó hasta Ctrl+C: no hay pid que registrar
 }
 
-function startDeliveryExpo() {
-  startExpoApp({
+/**
+ * Arranca una app Expo DESACOPLADA (segundo plano): la salida va a
+ * logs/<label>.log, Metro sobrevive al cierre de la terminal y el proceso queda
+ * registrado en logs/.pids.json para que `node dev.js --stop` lo detenga.
+ *
+ * Sin TTY, Expo no dibuja el QR y (SDK 57) solo imprime la URL del dev server
+ * fijada a localhost; la URL para Expo Go se compone aquí con la IP de LAN — es
+ * la que el celular usa como Host y de la que Metro deriva el manifest.
+ */
+async function startExpoAppBackground({ dir, port, color, label, title, hints = [], extraArgs = [] }) {
+  if (!ensureExpoDeps(dir, color, label)) return null;
+
+  console.log("");
+  console.log(`${color}📱 ${title}${C.reset} — Expo Go (celular en la MISMA red Wi-Fi).`);
+  for (const hint of hints) {
+    console.log(`${color}[${label}]${C.reset}   ${hint}`);
+  }
+
+  killPort(port);
+  sleepSync(800); // tiempo para que el SO libere el socket
+
+  const { fd } = openLog(label);
+  const child = spawn(PM, ["exec", "expo", "start", "--lan", ...extraArgs], {
+    cwd: dir,
+    stdio: ["ignore", fd, fd],
+    detached: true, // su propio grupo: sobrevive al cierre de la terminal
+    env: { ...process.env, EXPO_NO_TELEMETRY: "1" },
+    shell: process.platform === "win32",
+  });
+  child.on("error", (err) => {
+    console.error(`${color}[${label}]${C.reset} ✘ no se pudo arrancar: ${err.message}`);
+  });
+  child.unref();
+  fs.closeSync(fd);
+
+  const ip = lanIp();
+  const url = `exp://${ip ?? "localhost"}:${port}`;
+  console.log(
+    `${color}[${label}]${C.reset} ⏳ esperando a Metro (${url})... pueden ser ~1 min en frío.`,
+  );
+  const up = await waitForPort(port, 90000);
+  if (up) {
+    console.log(
+      `${color}[${label}]${C.reset} ✅ Metro listo → pega ${url} en Expo Go → \"Enter URL manually\"`,
+    );
+  } else {
+    console.warn(
+      `${color}[${label}]${C.reset} ⚠️  Metro no respondió en :${port} — revisa logs/${label}.log`,
+    );
+  }
+  if (!ip)
+    console.warn(
+      `${color}[${label}]${C.reset} ⚠️  No detecté IP de LAN; fuerza LAN_IP=192.168.x.x y vuelve a arrancar.`,
+    );
+  console.log(`${color}[${label}]${C.reset}   log: logs/${label}.log  (tail -f logs/${label}.log)`);
+  return child.pid;
+}
+
+/** Devuelve el pid si la app quedó desacoplada; null si corrió en primer plano. */
+async function startExpo(name, opts) {
+  return FG ? startExpoAppForeground(opts) : startExpoAppBackground(opts);
+}
+
+/** Registra un pid suelto (apps Expo) en logs/.pids.json para poder pararlo. */
+function registerPid(name, pid) {
+  let pids = {};
+  try {
+    pids = JSON.parse(fs.readFileSync(PIDS_FILE, "utf8"));
+  } catch {
+    /* sin archivo de pids */
+  }
+  pids[name] = pid;
+  fs.mkdirSync(LOGS_DIR, { recursive: true });
+  fs.writeFileSync(PIDS_FILE, JSON.stringify(pids, null, 2));
+}
+
+async function startDeliveryExpo() {
+  return startExpo("delivery", {
     dir: DELIVERY_DIR,
     port: DELIVERY_PORT,
     color: C.delivery,
@@ -603,8 +761,8 @@ function startDeliveryExpo() {
   });
 }
 
-function startPickingMobileExpo() {
-  startExpoApp({
+async function startPickingMobileExpo() {
+  return startExpo("picking-mobile", {
     dir: PICKING_MOBILE_DIR,
     port: PICKING_MOBILE_PORT,
     color: C["picking-mobile"],
@@ -652,8 +810,8 @@ function stopAll() {
   for (const svc of SERVICES) {
     if (svc.url) killPort(new URL(svc.url).port);
   }
-  killPort(DELIVERY_PORT); // expo/delivery (no queda registrado en pids)
-  killPort(PICKING_MOBILE_PORT); // expo/picking móvil (no queda registrado en pids)
+  killPort(DELIVERY_PORT); // red de seguridad si el pid de expo no quedó registrado
+  killPort(PICKING_MOBILE_PORT); // red de seguridad si el pid de expo no quedó registrado
 
   // OSRM corre como contenedor (no como proceso node): se detiene aparte.
   spawnSync("docker", ["compose", "stop"], { cwd: OSRM_DIR, stdio: "ignore" });
@@ -711,6 +869,7 @@ function printHelp() {
   out.push("  node dev.js                     → levanta TODO (BDs + backend + todos los web + bot + IA + OSRM + delivery)");
   out.push("  node dev.js <flags>             → solo los aplicativos pedidos (+ sus dependencias)");
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
+  out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
   out.push("  node dev.js --help              → esta ayuda");
   out.push("");
@@ -746,9 +905,16 @@ function printHelp() {
   }
   out.push("");
   out.push("MÓVIL Y RUTAS");
-  out.push("  --delivery   App móvil delivery (Expo, QR en :8081)  — levanta backend + OSRM + PostgreSQL");
-  out.push("  --picking-mobile  App móvil picking (Expo, QR en :8082) — levanta backend + PostgreSQL");
+  out.push("  --delivery   App móvil delivery (Expo, :8081)  — levanta backend + OSRM + PostgreSQL");
+  out.push("  --picking-mobile  App móvil picking (Expo, :8082) — levanta backend + PostgreSQL");
   out.push("  --osrm       Motor de rutas OSRM (:5000) — Manizales (sin apps)");
+  out.push("");
+  out.push("APPS EXPO (Metro)");
+  out.push("  Por defecto corren DESACOPLADAS: la terminal queda libre (se puede cerrar) y el");
+  out.push("  proceso se detiene con --stop. Como no hay TTY, Expo no dibuja el QR: dev.js");
+  out.push("  imprime la URL exp://<ip>:<puerto> para pegarla en Expo Go → \"Enter URL manually\".");
+  out.push("  Con --fg el QR y los atajos (r, a, j) aparecen en esta terminal, a cambio de");
+  out.push("  quedarse ocupada hasta Ctrl+C. Por app: pnpm exec expo start --lan (en su carpeta).");
   out.push("");
   out.push("BASES DE DATOS");
   out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
@@ -760,12 +926,13 @@ function printHelp() {
   out.push("EJEMPLOS");
   out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + BD");
   out.push("  node dev.js --analytics         → analytics + backend + BDs (incluye db-campaigns :5436)");
-  out.push("  node dev.js --delivery          → API real (backend + OSRM + BD) y QR del delivery app");
-  out.push("  node dev.js --picking-mobile    → QR de la picking app + backend + BD");
+  out.push("  node dev.js --delivery          → API real (backend + OSRM + BD) y la app delivery (Metro en background)");
+  out.push("  node dev.js --picking-mobile    → app picking (Metro en background) + backend + BD");
   out.push("  node dev.js --admin --picking   → combina aplicativos");
   out.push("  node dev.js --prod --delivery-admin");
   out.push("");
   out.push("Notas: --client es alias de --web · logs en logs/<servicio>.log · PIDs en logs/.pids.json");
+  out.push("       URL de red local (celular): se detecta sola; fuerza con LAN_IP=192.168.x.x");
   console.log(out.join("\n"));
 }
 
@@ -880,19 +1047,23 @@ async function main() {
       console.log(
         "\n✅ Servicios levantados (background). Ahora el delivery app:",
       );
-      startDeliveryExpo(); // bloquea mostrando el QR hasta Ctrl+C
-      console.log(
-        "\n⏹ Delivery detenido. El resto de servicios sigue corriendo.",
-      );
+      const pid = await startDeliveryExpo();
+      if (pid) registerPid("delivery-expo", pid);
+      else
+        console.log(
+          "\n⏹ Delivery detenido. El resto de servicios sigue corriendo.",
+        );
     }
     if (wantPickingMobile) {
       console.log(
         "\n✅ Servicios levantados (background). Ahora la picking app:",
       );
-      startPickingMobileExpo(); // bloquea mostrando el QR hasta Ctrl+C
-      console.log(
-        "\n⏹ Picking app detenida. El resto de servicios sigue corriendo.",
-      );
+      const pid = await startPickingMobileExpo();
+      if (pid) registerPid("picking-mobile-expo", pid);
+      else
+        console.log(
+          "\n⏹ Picking app detenida. El resto de servicios sigue corriendo.",
+        );
     }
     if (!wantDelivery && !wantPickingMobile) {
       console.log(
@@ -914,9 +1085,14 @@ async function main() {
   console.log("");
   console.log("Comandos útiles:");
   console.log(`  node dev.js --stop                  → detener los servicios levantados`);
+  console.log(`  node dev.js --fg                    → apps Expo con el QR en la terminal (bloquea)`);
   console.log(`  node dev.js --prod                  → levantar en modo producción`);
   console.log(`  node dev.js --help                  → mostrar ayuda`);
   console.log(`  cd db/docker && docker compose stop → detener PostgreSQL (docker)`);
+  if (!FG && (wantDelivery || wantPickingMobile))
+    console.log(
+      "\n💡 Metro corre desacoplado: puedes cerrar esta terminal. Para detenerlo todo: node dev.js --stop",
+    );
   process.exit(0); // cierra el script; los servicios siguen en segundo plano
 }
 

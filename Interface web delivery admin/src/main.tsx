@@ -3,8 +3,9 @@ import { createRoot } from 'react-dom/client';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import './index.css';
 import App from './App';
+import { API_BASE_URL } from './services/api';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_URL = API_BASE_URL;
 
 // Título de la pestaña: "<nombre de tienda> delivery admin | DSI".
 function setAppTitle(appLabel: string) {

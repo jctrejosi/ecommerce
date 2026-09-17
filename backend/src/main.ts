@@ -12,6 +12,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import cookieParser from 'cookie-parser';
 import { CorsConfig, HelmetConfig } from './config';
 import { StatusGateway } from './modules/status/status.gateway';
+import { isLanOrigin } from './utils/origins';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -21,7 +22,18 @@ async function bootstrap() {
   const corsOptions = configService.get<CorsConfig>('cors');
 
   app.enableCors({
-    origin: corsOptions?.origin,
+    // Con `allowLan` el origen se resuelve por petición (para poder aceptar la
+    // IP del equipo en la red local); sin él se usa la lista configurada.
+    origin: corsOptions?.allowLan
+      ? (origin, cb) => {
+          if (!origin) return cb(null, true);
+          const configured = corsOptions?.origin;
+          const listed = Array.isArray(configured)
+            ? configured.includes(origin)
+            : configured === true || configured === origin;
+          return cb(null, listed || isLanOrigin(origin));
+        }
+      : corsOptions?.origin,
     credentials: corsOptions?.credentials ?? true,
     methods: corsOptions?.methods ?? [
       'GET',

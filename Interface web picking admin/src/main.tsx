@@ -1,13 +1,14 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { API_BASE_URL } from './services/api'
 import './index.css'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
-
 // Título de la pestaña: "<nombre de tienda> picking admin | DSI".
+// Usa la misma base del API que el resto del panel, así funciona igual en
+// localhost o abierto desde el celular con la IP del equipo.
 function setAppTitle(appLabel: string) {
-  fetch(`${API_URL}/admin/settings/public-info`)
+  fetch(`${API_BASE_URL}/admin/settings/public-info`)
     .then((r) => (r.ok ? r.json() : {}))
     .then((d: { tradeName?: string }) => {
       const storeName = (d?.tradeName || 'Mercaldas').trim()

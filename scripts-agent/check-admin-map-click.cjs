@@ -9,6 +9,10 @@
  * Uso: node scripts-agent/check-admin-map-click.cjs [puerto]
  */
 const { spawn } = require('node:child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const CAPTURA = path.join(__dirname, '.scratch', 'panel-map.png');
 
 const PORT = process.argv[2] || '8447';
 const URL = `http://localhost:${PORT}/`;
@@ -161,16 +165,32 @@ async function main() {
 
     const pin = await evaluar(dentro('.ml-pin'));
     const casa = await evaluar(dentro('.ml-dest'));
-    console.log(`[6] pin del repartidor: ${pin ? JSON.stringify(pin) : 'no está en el DOM'}`);
+    const sucursal = await evaluar(dentro('.ml-branch'));
+    const iconoSucursal = await evaluar(`(() => {
+      const el = document.querySelector('.ml-branch-inner');
+      return el ? el.textContent : null;
+    })()`);
+    console.log(`[6] pin del repartidor : ${pin ? JSON.stringify(pin) : 'no está en el DOM'}`);
     console.log(`[7] casa del cliente   : ${casa ? JSON.stringify(casa) : 'NO SE DIBUJÓ'}`);
+    console.log(
+      `[8] sucursal de recogida: ${sucursal ? JSON.stringify(sucursal) : 'NO SE DIBUJÓ'}` +
+        ` · icono: ${iconoSucursal ?? '—'}`,
+    );
 
-    const ok = Boolean(pin?.visible) && Boolean(casa?.visible);
-    console.log(`\nRESULTADO: ${ok ? 'OK (repartidor y cliente visibles)' : 'FALLO'}`);
+    const ok = Boolean(pin?.visible) && Boolean(casa?.visible) && Boolean(sucursal?.visible);
+    console.log(`\nRESULTADO: ${ok ? 'OK (repartidor, cliente y sucursal visibles)' : 'FALLO'}`);
     console.log(`errores de consola: ${errores.length}`);
     for (const e of errores.slice(0, 6)) console.log(`  · ${e.slice(0, 160)}`);
 
+    const shot = await enviar('Page.captureScreenshot', { format: 'png' });
+    if (shot?.data) {
+      fs.mkdirSync(path.dirname(CAPTURA), { recursive: true });
+      fs.writeFileSync(CAPTURA, Buffer.from(shot.data, 'base64'));
+      console.log(`captura: ${path.relative(path.join(__dirname, '..'), CAPTURA)}`);
+    }
+
     ws.close();
-    process.exit(ok ? 0 : 1);
+    process.exitCode = ok ? 0 : 1;
   } finally {
     chrome.kill('SIGKILL');
   }

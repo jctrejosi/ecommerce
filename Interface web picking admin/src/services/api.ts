@@ -15,7 +15,33 @@ import type {
   ShelfType,
 } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+/**
+ * Base del API.
+ *
+ * El panel se abre tanto en `localhost` como desde el celular con la IP del
+ * equipo en la red local (la que imprime `dev.js`). Si la URL configurada
+ * apunta a localhost y la página NO se sirvió desde localhost, se resuelve
+ * contra el host que sirvió la página: si no, el navegador del celular
+ * buscaría el backend en el propio celular.
+ */
+function resolveApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_URL ?? '';
+  const configuredIsLocal = /(^|\/\/)(localhost|127\.0\.0\.1)(:|\/|$)/.test(configured);
+  const pageIsLocal = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
+
+  if (configured && (!configuredIsLocal || pageIsLocal)) return configured;
+
+  const port = (() => {
+    try {
+      return new URL(configured).port || '3000';
+    } catch {
+      return '3000';
+    }
+  })();
+  return `${window.location.protocol}//${window.location.hostname}:${port}`;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 /** Handler que se dispara cuando una petición responde 401 (sesión vencida). */
 let onUnauthorized: (() => void) | null = null;

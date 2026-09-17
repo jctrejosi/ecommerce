@@ -10,6 +10,12 @@ export interface JwtConfig {
 
 export interface CorsConfig {
   origin: string[] | boolean | string;
+  /**
+   * Acepta además cualquier origen de la red local (localhost o IP privada).
+   * Necesario para abrir los paneles desde otro equipo (p. ej. el celular) con
+   * la IP del servidor, que cambia según la red.
+   */
+  allowLan?: boolean;
   credentials: boolean;
   methods: string[];
   allowedHeaders: string[];

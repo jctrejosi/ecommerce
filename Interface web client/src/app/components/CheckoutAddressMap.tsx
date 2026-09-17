@@ -26,6 +26,12 @@ interface CheckoutAddressMapProps {
   onConfirmedChange: (confirmed: boolean) => void;
   /** Cambia esto para que el mapa se recree (p. ej. al reabrir el checkout). */
   resetKey?: string | number;
+  /**
+   * Petición del padre para ubicar sola una dirección (p. ej. la dirección
+   * guardada que el cliente eligió). Cambiar `token` fuerza una nueva
+   * ubicación aunque la dirección sea la misma.
+   */
+  locateRequest?: { address: string; token: number } | null;
 }
 
 /**
@@ -45,6 +51,7 @@ export function CheckoutAddressMap({
   onPickAddress,
   onConfirmedChange,
   resetKey,
+  locateRequest,
 }: CheckoutAddressMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -60,6 +67,9 @@ export function CheckoutAddressMap({
 
   const [resolving, setResolving] = useState(false);
   const [suggestion, setSuggestion] = useState<GeocodePlace | null>(null);
+
+  const [autoLocating, setAutoLocating] = useState(false);
+  const [autoLocateError, setAutoLocateError] = useState<string | null>(null);
 
   // Evita la geocodificación inversa justo después de elegir un resultado de la
   // búsqueda: esa dirección ya viene resuelta.
@@ -203,6 +213,50 @@ export function CheckoutAddressMap({
     };
   }, [coords]);
 
+  // Ubicación automática pedida por el padre (p. ej. la dirección guardada que
+  // el cliente eligió): se resuelve, se deja el marcador puesto y el cliente
+  // solo tiene que confirmar que es la correcta. No se reescribe el texto del
+  // formulario para no perder los detalles que ya escribió el cliente.
+  useEffect(() => {
+    const address = locateRequest?.address?.trim();
+    if (!address || address.length < 4) return;
+    let cancelled = false;
+    setAutoLocating(true);
+    setAutoLocateError(null);
+    void geocodingService
+      .search(address)
+      .then((places) => {
+        if (cancelled) return;
+        const place = places[0];
+        if (!place) {
+          setAutoLocateError(
+            "No pudimos ubicar esa dirección. Búscala o toca el mapa.",
+          );
+          return;
+        }
+        // La dirección ya viene resuelta: no hay que hacer geocodificación
+        // inversa ni mostrar la sugerencia "el marcador está en…".
+        skipReverseRef.current = true;
+        appliedAddressRef.current = place.address;
+        setSuggestion(null);
+        setResults([]);
+        onCoordsChangeRef.current({ lat: place.lat, lng: place.lng });
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAutoLocateError(
+            "No pudimos ubicar esa dirección. Búscala o toca el mapa.",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAutoLocating(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [locateRequest]);
+
   const runSearch = () => {
     const q = query.trim();
     if (q.length < 4 || searching) return;
@@ -280,6 +334,13 @@ export function CheckoutAddressMap({
         que el marcador quedó en el lugar correcto.
       </p>
 
+      {autoLocating && (
+        <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+          <Loader2 className="w-3 h-3 animate-spin" /> Ubicando tu dirección en
+          el mapa…
+        </p>
+      )}
+
       {/* Buscador */}
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -318,8 +379,10 @@ export function CheckoutAddressMap({
         </button>
       </div>
 
-      {searchError && (
-        <p className="text-xs text-red-500">{searchError}</p>
+      {(searchError || autoLocateError) && (
+        <p className="text-xs text-red-500">
+          {searchError || autoLocateError}
+        </p>
       )}
 
       {results.length > 0 && (

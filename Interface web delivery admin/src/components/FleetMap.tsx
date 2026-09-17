@@ -816,9 +816,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   const fittedSelectionRef = useRef<string | null>(null);
 
   /**
-   * Al seleccionar un repartidor se encuadran él **y** la casa del cliente.
-   * Centrar solo en el repartidor dejaba el destino fuera de pantalla (aquí a
-   * 3,8 km), y parecía que la dirección de entrega no existía.
+   * Al seleccionar un repartidor se encuadran él, la casa del cliente y la
+   * sucursal de recogida. Centrar solo en el repartidor dejaba el destino fuera
+   * de pantalla (aquí a 3,8 km), y parecía que la dirección no existía.
    */
   useEffect(() => {
     const map = mapRef.current;
@@ -838,6 +838,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     if (d.location) pts.push([d.location.lng, d.location.lat]);
     const dest = d.activeAssignment?.destination;
     if (dest) pts.push([dest.lng, dest.lat]);
+    // La sucursal también: es el inicio de la ruta completa que se dibuja.
+    const branch = d.activeAssignment?.branchLocation;
+    if (branch) pts.push([branch.lng, branch.lat]);
     // Sin GPS ni destino no hay nada que encuadrar (p. ej. repartidor de baja).
     if (!pts.length) return;
 

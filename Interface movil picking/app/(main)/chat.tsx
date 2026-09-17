@@ -19,22 +19,11 @@ import {
   useSendPickerChatMessage,
 } from "@/api/picker-chat";
 import type { PickerChatMessage } from "@/api";
+import { formatTime } from "@/lib/format";
 import { useKeyboardHeight } from "@/lib/keyboard";
 import { Header } from "@/ui/Header";
 import { ErrorBox } from "@/ui/ErrorBox";
 import { colors, radius, spacing } from "@/theme";
-
-const fmtTime = (iso: string | null | undefined) => {
-  if (!iso) return "";
-  try {
-    return new Date(iso).toLocaleTimeString("es-CO", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
-};
 
 /**
  * Chat del picker con administración.
@@ -180,7 +169,7 @@ function Bubble({ msg }: { msg: PickerChatMessage }) {
         {!mine ? <Text style={styles.bubbleAuthor}>Administración</Text> : null}
         <Text style={[styles.bubbleText, mine && styles.bubbleTextMine]}>{msg.body}</Text>
         <Text style={[styles.bubbleTime, mine && styles.bubbleTimeMine]}>
-          {fmtTime(msg.createdAt)}
+          {formatTime(msg.createdAt)}
         </Text>
       </View>
     </View>

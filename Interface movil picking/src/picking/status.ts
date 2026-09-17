@@ -1,4 +1,5 @@
 import type { OrderStatus, PickingItem, PickingOrder } from "@/api";
+import { parseDate } from "@/lib/format";
 
 /** Deriva el estado mostrado en la cola a partir del status crudo del backend. */
 export function orderStatus(order: Pick<PickingOrder, "status">): OrderStatus {
@@ -27,6 +28,6 @@ export function scannedCount(items: PickingItem[]): number {
 export function sortQueue(orders: PickingOrder[]): PickingOrder[] {
   return [...orders].sort((a, b) => {
     if (a.reviewed !== b.reviewed) return a.reviewed ? 1 : -1;
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    return (parseDate(a.createdAt)?.getTime() ?? 0) - (parseDate(b.createdAt)?.getTime() ?? 0);
   });
 }

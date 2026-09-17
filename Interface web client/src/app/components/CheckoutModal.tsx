@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   ArrowLeft,
   X,
@@ -173,6 +173,14 @@ export function CheckoutModal({
   const [copied, setCopied] = useState(false);
   const [selectedAddressId, setSelectedAddressId] = useState<number | null>(null);
   const [usingNewAddress, setUsingNewAddress] = useState(false);
+  // Petición al mapa para ubicar sola la dirección elegida (ver
+  // CheckoutAddressMap). El token fuerza una nueva ubicación al re-elegir la
+  // misma dirección.
+  const [locateRequest, setLocateRequest] = useState<{
+    address: string;
+    token: number;
+  } | null>(null);
+  const locateTokenRef = useRef(0);
   const totalConEnvio = cartTotal + (checkoutShipping === "express" ? 9900 : 4900);
 
   // Normaliza el teléfono a dígitos (móvil colombiano 3xx xxx xxxx)
@@ -190,8 +198,8 @@ export function CheckoutModal({
     if (!addr) return;
     setSelectedAddressId(id);
     setUsingNewAddress(false);
-    // Cada dirección se ubica de nuevo en el mapa: la guardada no trae
-    // coordenadas y la confirmación es por pedido.
+    // La dirección guardada se ubica sola en el mapa: el cliente solo confirma
+    // que el marcador corresponde a su dirección.
     onSetAddressConfirmed(false);
     onSetCheckoutAddress((prev) => ({
       ...prev,
@@ -205,11 +213,19 @@ export function CheckoutModal({
       lat: null,
       lng: null,
     }));
+    locateTokenRef.current += 1;
+    setLocateRequest({
+      address: [addr.addressLine1, addr.addressLine2, addr.city]
+        .filter(Boolean)
+        .join(", "),
+      token: locateTokenRef.current,
+    });
   };
 
   const switchToNewAddress = () => {
     setUsingNewAddress(true);
     setSelectedAddressId(null);
+    setLocateRequest(null);
     onSetAddressConfirmed(false);
   };
 
@@ -687,6 +703,7 @@ export function CheckoutModal({
                 }))
               }
               onConfirmedChange={onSetAddressConfirmed}
+              locateRequest={locateRequest}
             />
 
             {!addressConfirmed && (
