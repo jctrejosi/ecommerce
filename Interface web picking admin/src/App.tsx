@@ -10,6 +10,7 @@ import type {
 import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
+import OrdersView from './OrdersView'
 import footerLogo from './assets/logo.png'
 // El logo del header es el del picking; el del footer (copyright) sigue siendo logo.png.
 import headerLogo from './assets/picking.png'
@@ -40,7 +41,7 @@ const emptyShelf = () => ({
 export default function App() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState<number | null>(null)
-  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'metrics' | 'users' | 'schedule' | 'categories'>('shelves')
+  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'orders' | 'metrics' | 'users' | 'schedule' | 'categories'>('shelves')
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<ProductWithLocation[]>([])
@@ -230,7 +231,7 @@ export default function App() {
         {/* Tabs fijos (no scrolleables) */}
         <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3 shrink-0">
           <div className="flex gap-2 flex-wrap">
-            {(['shelves', 'categories', 'map', 'products', 'users', 'schedule', 'metrics'] as const).map((t) => (
+            {(['shelves', 'categories', 'map', 'products', 'orders', 'users', 'schedule', 'metrics'] as const).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -238,7 +239,7 @@ export default function App() {
                   tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
                 }`}
               >
-                {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'users' ? 'Usuarios' : t === 'schedule' ? 'Horarios' : 'Pickers'}
+                {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'orders' ? 'Pedidos' : t === 'users' ? 'Usuarios' : t === 'schedule' ? 'Horarios' : 'Pickers'}
               </button>
             ))}
           </div>
@@ -289,6 +290,8 @@ export default function App() {
           ) : (
             <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
           )
+        ) : tab === 'orders' ? (
+          <OrdersView branchId={branchId} branchName={branch?.name ?? ''} notify={notify} />
         ) : tab === 'metrics' ? (
           <MetricsView notify={notify} />
         ) : tab === 'users' ? (

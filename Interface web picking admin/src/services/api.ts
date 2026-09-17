@@ -8,6 +8,7 @@ import type {
   PickerChatMessage,
   PickerHistory,
   PickerSummary,
+  PickingAdminOrdersResponse,
   PickingOrderDetail,
   ProductWithLocation,
   Shelf,
@@ -23,22 +24,44 @@ import type {
  * apunta a localhost y la página NO se sirvió desde localhost, se resuelve
  * contra el host que sirvió la página: si no, el navegador del celular
  * buscaría el backend en el propio celular.
+ *
+ * Ojo: `localhost` y `127.0.0.1` son sitios distintos para el navegador. Si la
+ * página se sirvió desde uno y el API está configurado en el otro, la cookie de
+ * sesión (de primera parte en el host del API) no se envía y todo lo
+ * autenticado responde 401. Por eso también se alinea ese caso.
  */
+const LOOPBACK = /^(localhost|127\.0\.0\.1)$/;
+
+function portOf(url: string, fallback: string): string {
+  try {
+    return new URL(url).port || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 function resolveApiBaseUrl(): string {
   const configured = import.meta.env.VITE_API_URL ?? '';
-  const configuredIsLocal = /(^|\/\/)(localhost|127\.0\.0\.1)(:|\/|$)/.test(configured);
-  const pageIsLocal = /^(localhost|127\.0\.0\.1)$/.test(window.location.hostname);
-
-  if (configured && (!configuredIsLocal || pageIsLocal)) return configured;
-
-  const port = (() => {
+  const pageHost = window.location.hostname;
+  const configuredHost = (() => {
     try {
-      return new URL(configured).port || '3000';
+      return new URL(configured).hostname;
     } catch {
-      return '3000';
+      return '';
     }
   })();
-  return `${window.location.protocol}//${window.location.hostname}:${port}`;
+  const configuredIsLoopback = LOOPBACK.test(configuredHost);
+  const pageIsLoopback = LOOPBACK.test(pageHost);
+
+  // API sin configurar, o apuntando a loopback mientras la página se sirvió
+  // desde otro host (celular en la red local): se usa el host de la página.
+  if (!configured || (configuredIsLoopback && !pageIsLoopback)) {
+    return `${window.location.protocol}//${pageHost}:${portOf(configured, '3000')}`;
+  }
+  if (configuredIsLoopback && pageIsLoopback && configuredHost !== pageHost) {
+    return `${window.location.protocol}//${pageHost}:${portOf(configured, '3000')}`;
+  }
+  return configured;
 }
 
 const API_BASE_URL = resolveApiBaseUrl();
@@ -201,6 +224,23 @@ export const api = {
     }),
 
   metrics: () => fetchJson<PickerSummary[]>('/picking-admin/metrics'),
+
+  /** Pedidos del panel (tab Pedidos), filtrables por sucursal y estado. */
+  orders: (params: {
+    branchId?: number;
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const qs = new URLSearchParams();
+    if (params.branchId) qs.set('branchId', String(params.branchId));
+    if (params.status) qs.set('status', params.status);
+    if (params.search?.trim()) qs.set('search', params.search.trim());
+    if (params.limit) qs.set('limit', String(params.limit));
+    if (params.offset) qs.set('offset', String(params.offset));
+    return fetchJson<PickingAdminOrdersResponse>(`/picking-admin/orders?${qs}`);
+  },
 
   pickerHistory: (id: number) =>
     fetchJson<PickerHistory>(`/picking-admin/pickers/${id}/history`),

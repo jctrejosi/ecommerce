@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import * as maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { Check, Loader2, LocateFixed, MapPin, Search } from "lucide-react";
+import { Check, Loader2, LocateFixed, MapPin } from "lucide-react";
 import { resolveMapStyle } from "../lib/trackingMapStyle";
 import {
   geocodingService,
@@ -13,12 +13,22 @@ const DEFAULT_CENTER = { lat: 5.067, lng: -75.517 };
 
 export type AddressCoords = { lat: number; lng: number };
 
+/** Resultado de ubicar una dirección en el mapa. */
+export type LocateResult = {
+  /** Dirección que se pidió ubicar. */
+  address: string;
+  /** Se pudo ubicar (entonces `resolved` trae lo que resolvió el geocoder). */
+  ok: boolean;
+  /** Dirección corta que devolvió el geocoder. */
+  resolved?: string;
+};
+
 interface CheckoutAddressMapProps {
   /** Punto elegido (null = todavía sin ubicar). */
   coords: AddressCoords | null;
   /** La dirección ya fue confirmada contra el marcador. */
   confirmed: boolean;
-  /** Cambia el punto (arrastrar, tocar el mapa, buscar o GPS). */
+  /** Cambia el punto (arrastrar, tocar el mapa o GPS). */
   onCoordsChange: (coords: AddressCoords | null) => void;
   /** Aplica la dirección resuelta al formulario. */
   onPickAddress: (place: { address: string; city: string | null }) => void;
@@ -27,22 +37,28 @@ interface CheckoutAddressMapProps {
   /** Cambia esto para que el mapa se recree (p. ej. al reabrir el checkout). */
   resetKey?: string | number;
   /**
-   * Petición del padre para ubicar sola una dirección (p. ej. la dirección
-   * guardada que el cliente eligió). Cambiar `token` fuerza una nueva
-   * ubicación aunque la dirección sea la misma.
+   * Petición del padre para ubicar una dirección: la que el cliente escribió en
+   * el formulario o la que eligió de sus direcciones guardadas. Cambiar `token`
+   * fuerza una nueva ubicación aunque la dirección sea la misma.
    */
   locateRequest?: { address: string; token: number } | null;
+  /**
+   * Resultado de ubicar una dirección, para validarla en el formulario: si el
+   * geocoder no la encontró hay que avisarle al cliente junto al campo.
+   */
+  onLocateResult?: (result: LocateResult) => void;
 }
 
 /**
- * Mapa del paso "Dirección de entrega": permite situar el punto exacto de
- * entrega y exige confirmar que la dirección escrita coincide con el marcador
- * antes de poder continuar al pago.
+ * Mapa del paso "Dirección de entrega": sitúa el punto exacto de entrega y
+ * exige confirmar que la dirección escrita coincide con el marcador antes de
+ * poder continuar al pago.
  *
- * El punto se puede fijar de tres formas: buscando la dirección por texto,
- * tocando/arrastrando el mapa, o con la ubicación actual del dispositivo. Al
- * moverlo se resuelve la dirección de ese punto (geocodificación inversa) y se
- * ofrece aplicarla al formulario.
+ * El marcador lo coloca la dirección que llega del formulario
+ * (`locateRequest`). Después el cliente puede ajustarlo arrastrándolo, tocando
+ * el mapa o usando la ubicación del dispositivo; al moverlo se resuelve la
+ * dirección de ese punto (geocodificación inversa) y se ofrece aplicarla al
+ * formulario.
  */
 export function CheckoutAddressMap({
   coords,
@@ -52,6 +68,7 @@ export function CheckoutAddressMap({
   onConfirmedChange,
   resetKey,
   locateRequest,
+  onLocateResult,
 }: CheckoutAddressMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -60,19 +77,18 @@ export function CheckoutAddressMap({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
-  const [query, setQuery] = useState("");
-  const [searching, setSearching] = useState(false);
-  const [results, setResults] = useState<GeocodePlace[]>([]);
-  const [searchError, setSearchError] = useState<string | null>(null);
+  // Ubicación de la dirección que llega del formulario (propia o guardada).
+  const [locating, setLocating] = useState(false);
+  // GPS del dispositivo en curso.
+  const [gpsBusy, setGpsBusy] = useState(false);
+  // Último error al resolver una dirección.
+  const [locateError, setLocateError] = useState<string | null>(null);
 
   const [resolving, setResolving] = useState(false);
   const [suggestion, setSuggestion] = useState<GeocodePlace | null>(null);
 
-  const [autoLocating, setAutoLocating] = useState(false);
-  const [autoLocateError, setAutoLocateError] = useState<string | null>(null);
-
-  // Evita la geocodificación inversa justo después de elegir un resultado de la
-  // búsqueda: esa dirección ya viene resuelta.
+  // Evita la geocodificación inversa justo después de ubicar una dirección ya
+  // resuelta (la del formulario): volvería a sugerir exactamente lo mismo.
   const skipReverseRef = useRef(false);
   // Última dirección que el formulario conoce, para no repetir el aviso.
   const appliedAddressRef = useRef<string | null>(null);
@@ -81,6 +97,12 @@ export function CheckoutAddressMap({
   const onCoordsChangeRef = useRef(onCoordsChange);
   useEffect(() => {
     onCoordsChangeRef.current = onCoordsChange;
+  });
+  // Igual con el aviso del resultado: el efecto de ubicación no debe volver a
+  // correr porque el padre pase una función nueva en cada render.
+  const onLocateResultRef = useRef(onLocateResult);
+  useEffect(() => {
+    onLocateResultRef.current = onLocateResult;
   });
 
   const placeMarker = useCallback((map: maplibregl.Map, at: AddressCoords) => {
@@ -213,25 +235,26 @@ export function CheckoutAddressMap({
     };
   }, [coords]);
 
-  // Ubicación automática pedida por el padre (p. ej. la dirección guardada que
-  // el cliente eligió): se resuelve, se deja el marcador puesto y el cliente
-  // solo tiene que confirmar que es la correcta. No se reescribe el texto del
-  // formulario para no perder los detalles que ya escribió el cliente.
+  // Ubicación de la dirección que manda el formulario (la escrita por el cliente
+  // o la que eligió de sus direcciones guardadas): se resuelve, se deja el
+  // marcador puesto y el cliente solo confirma que es la correcta. No se
+  // reescribe el texto del formulario para no perder detalles ya escritos.
   useEffect(() => {
     const address = locateRequest?.address?.trim();
     if (!address || address.length < 4) return;
     let cancelled = false;
-    setAutoLocating(true);
-    setAutoLocateError(null);
+    setLocating(true);
+    setLocateError(null);
     void geocodingService
       .search(address)
       .then((places) => {
         if (cancelled) return;
         const place = places[0];
         if (!place) {
-          setAutoLocateError(
-            "No pudimos ubicar esa dirección. Búscala o toca el mapa.",
+          setLocateError(
+            "No pudimos ubicar esa dirección. Toca el mapa para marcar el punto.",
           );
+          onLocateResultRef.current?.({ address, ok: false });
           return;
         }
         // La dirección ya viene resuelta: no hay que hacer geocodificación
@@ -239,67 +262,40 @@ export function CheckoutAddressMap({
         skipReverseRef.current = true;
         appliedAddressRef.current = place.address;
         setSuggestion(null);
-        setResults([]);
         onCoordsChangeRef.current({ lat: place.lat, lng: place.lng });
+        onLocateResultRef.current?.({
+          address,
+          ok: true,
+          resolved: place.address,
+        });
       })
       .catch(() => {
         if (!cancelled) {
-          setAutoLocateError(
-            "No pudimos ubicar esa dirección. Búscala o toca el mapa.",
+          setLocateError(
+            "No pudimos ubicar esa dirección. Toca el mapa para marcar el punto.",
           );
+          onLocateResultRef.current?.({ address, ok: false });
         }
       })
       .finally(() => {
-        if (!cancelled) setAutoLocating(false);
+        if (!cancelled) setLocating(false);
       });
     return () => {
       cancelled = true;
     };
   }, [locateRequest]);
 
-  const runSearch = () => {
-    const q = query.trim();
-    if (q.length < 4 || searching) return;
-    setSearching(true);
-    setSearchError(null);
-    void geocodingService
-      .search(q)
-      .then((places) => {
-        setResults(places);
-        if (places.length === 0) {
-          setSearchError("No encontramos esa dirección. Prueba con más detalle.");
-        }
-      })
-      .catch((e) =>
-        setSearchError(
-          e instanceof Error ? e.message : "No se pudo buscar la dirección",
-        ),
-      )
-      .finally(() => setSearching(false));
-  };
-
-  const pickPlace = (place: GeocodePlace) => {
-    skipReverseRef.current = true;
-    appliedAddressRef.current = place.address;
-    onCoordsChange({ lat: place.lat, lng: place.lng });
-    onPickAddress({ address: place.address, city: place.city });
-    // La búsqueda ya está resuelta: el usuario aún debe confirmar en el mapa.
-    onConfirmedChange(false);
-    setResults([]);
-    setSuggestion(null);
-  };
-
   const useMyLocation = () => {
     if (!navigator.geolocation) {
-      setSearchError("Tu dispositivo no permite obtener la ubicación.");
+      setLocateError("Tu dispositivo no permite obtener la ubicación.");
       return;
     }
-    setSearching(true);
-    setSearchError(null);
+    setGpsBusy(true);
+    setLocateError(null);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setSearching(false);
-        setResults([]);
+        setGpsBusy(false);
+        skipReverseRef.current = false;
         onCoordsChange({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -307,9 +303,9 @@ export function CheckoutAddressMap({
         onConfirmedChange(false);
       },
       () => {
-        setSearching(false);
-        setSearchError(
-          "No pudimos obtener tu ubicación. Búscala por dirección o toca el mapa.",
+        setGpsBusy(false);
+        setLocateError(
+          "No pudimos obtener tu ubicación. Toca el mapa para marcar el punto.",
         );
       },
       { enableHighAccuracy: true, timeout: 10000 },
@@ -327,83 +323,21 @@ export function CheckoutAddressMap({
     <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
       <div className="flex items-center gap-2">
         <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
-        <p className="text-sm font-bold">Ubica tu dirección en el mapa</p>
+        <p className="text-sm font-bold">Tu dirección en el mapa</p>
       </div>
       <p className="text-xs text-muted-foreground">
-        Busca tu dirección, toca el mapa o usa tu ubicación, y luego confirma
-        que el marcador quedó en el lugar correcto.
+        Ubicamos la dirección que escribiste. Si el punto no queda exacto,
+        toca el mapa o arrastra el marcador para ajustarlo.
       </p>
 
-      {autoLocating && (
+      {locating && (
         <p className="text-xs text-muted-foreground flex items-center gap-1.5">
           <Loader2 className="w-3 h-3 animate-spin" /> Ubicando tu dirección en
           el mapa…
         </p>
       )}
 
-      {/* Buscador */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                runSearch();
-              }
-            }}
-            placeholder="Cra 23 #45-67, Manizales"
-            className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
-          />
-        </div>
-        <button
-          type="button"
-          onClick={runSearch}
-          disabled={query.trim().length < 4 || searching}
-          className="px-4 rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors"
-          style={{ background: "#1A1A2E", color: "#FFF200" }}
-        >
-          {searching ? <Loader2 className="w-4 h-4 animate-spin" /> : "Buscar"}
-        </button>
-        <button
-          type="button"
-          onClick={useMyLocation}
-          disabled={searching}
-          title="Usar mi ubicación actual"
-          className="px-3 rounded-xl border border-border text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-        >
-          <LocateFixed className="w-4 h-4" />
-        </button>
-      </div>
-
-      {(searchError || autoLocateError) && (
-        <p className="text-xs text-red-500">
-          {searchError || autoLocateError}
-        </p>
-      )}
-
-      {results.length > 0 && (
-        <div className="rounded-xl border border-border divide-y divide-border overflow-hidden">
-          {results.map((r) => (
-            <button
-              key={`${r.lat},${r.lng},${r.label}`}
-              type="button"
-              onClick={() => pickPlace(r)}
-              className="w-full text-left px-3 py-2.5 text-xs hover:bg-muted/60 transition-colors"
-            >
-              <span className="block font-semibold text-foreground">
-                {r.address}
-              </span>
-              <span className="block text-muted-foreground mt-0.5 truncate">
-                {r.label}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+      {locateError && <p className="text-xs text-red-500">{locateError}</p>}
 
       {/* Mapa */}
       <div className="relative rounded-xl overflow-hidden border border-border">
@@ -428,10 +362,24 @@ export function CheckoutAddressMap({
               Aún no has ubicado el punto de entrega
             </p>
             <p className="text-[11px] text-muted-foreground">
-              Busca la dirección, toca el mapa o usa tu ubicación.
+              Escribe la dirección o toca el mapa para marcar el punto.
             </p>
           </div>
         )}
+        {/* Ubicación actual del dispositivo */}
+        <button
+          type="button"
+          onClick={useMyLocation}
+          disabled={gpsBusy || !ready}
+          title="Usar mi ubicación actual"
+          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/95 border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+        >
+          {gpsBusy ? (
+            <Loader2 className="w-4 h-4 animate-spin" />
+          ) : (
+            <LocateFixed className="w-4 h-4" />
+          )}
+        </button>
       </div>
       <p className="text-[10px] text-muted-foreground text-right">
         Mapas © OpenStreetMap
@@ -462,44 +410,30 @@ export function CheckoutAddressMap({
       )}
 
       {/* Confirmación obligatoria */}
-      <label
-        className={`flex items-start gap-2.5 p-3 rounded-xl border transition-colors ${
+      <button
+        type="button"
+        onClick={() => onConfirmedChange(!confirmed)}
+        disabled={!coords}
+        className={`w-full flex items-center justify-center gap-2 px-4 py-3.5 rounded-xl border text-sm font-bold transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
           confirmed
-            ? "border-green-500 bg-green-50"
-            : coords
-              ? "border-border bg-muted/30 cursor-pointer"
-              : "border-dashed border-border opacity-60"
+            ? "border-green-500 bg-green-50 text-green-700"
+            : "border-transparent"
         }`}
+        style={
+          confirmed ? undefined : { background: "#1A1A2E", color: "#FFF200" }
+        }
       >
-        <input
-          type="checkbox"
-          checked={confirmed}
-          disabled={!coords}
-          onChange={(e) => onConfirmedChange(e.target.checked)}
-          className="mt-0.5 w-4 h-4 shrink-0 accent-[#1A1A2E]"
-        />
-        <span className="text-xs leading-snug">
-          {confirmed ? (
-            <span className="font-semibold text-foreground flex items-center gap-1.5">
-              <Check className="w-3.5 h-3.5 text-green-600" />
-              Confirmado: el marcador corresponde a la dirección de entrega
-            </span>
-          ) : coords ? (
-            <>
-              <span className="font-semibold text-foreground">
-                Confirmo que el marcador del mapa corresponde a mi dirección
-              </span>
-              <span className="block text-muted-foreground mt-0.5">
-                Revísalo antes de continuar con el pago.
-              </span>
-            </>
-          ) : (
-            <span className="text-muted-foreground">
-              Primero ubica tu dirección en el mapa
-            </span>
-          )}
-        </span>
-      </label>
+        {confirmed ? (
+          <>
+            <Check className="w-4 h-4 shrink-0" />
+            Dirección confirmada en el mapa
+          </>
+        ) : coords ? (
+          "Confirmar que la dirección es correcta en el mapa"
+        ) : (
+          "Primero ubica tu dirección en el mapa"
+        )}
+      </button>
     </div>
   );
 }

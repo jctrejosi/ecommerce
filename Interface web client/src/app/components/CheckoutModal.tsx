@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ArrowLeft,
   X,
@@ -14,11 +14,12 @@ import {
   CreditCard,
   Copy,
   Check,
+  Loader2,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CartItem } from "../types";
 import type { WompiConfigResponse } from "../../services/orders.service";
-import { CheckoutAddressMap } from "./CheckoutAddressMap";
+import { CheckoutAddressMap, type LocateResult } from "./CheckoutAddressMap";
 
 type WompiConfig = WompiConfigResponse;
 
@@ -181,6 +182,63 @@ export function CheckoutModal({
     token: number;
   } | null>(null);
   const locateTokenRef = useRef(0);
+  // Última dirección que ya se ubicó en el mapa (evita repetir la petición).
+  const lastLocatedAddressRef = useRef<string | null>(null);
+  /**
+   * Validación de la dirección escrita: `checking` mientras el mapa la resuelve,
+   * `ok` con la dirección corta que devolvió el geocoder, `error` si no la
+   * encontró (ahí el cliente debe corregirla o marcar el punto a mano).
+   */
+  const [addressCheck, setAddressCheck] = useState<{
+    status: "idle" | "checking" | "ok" | "error";
+    resolved?: string;
+  }>({ status: "idle" });
+
+  /** Pide al mapa ubicar esa dirección y dejar el marcador puesto. */
+  const requestLocate = useCallback((address: string) => {
+    const value = address.trim();
+    if (value.length < 6 || value === lastLocatedAddressRef.current) return;
+    lastLocatedAddressRef.current = value;
+    locateTokenRef.current += 1;
+    setAddressCheck({ status: "checking" });
+    setLocateRequest({ address: value, token: locateTokenRef.current });
+  }, []);
+
+  /** El mapa resolvió (o no) la dirección: se avisa junto al campo. */
+  const handleLocateResult = (result: LocateResult) => {
+    setAddressCheck(
+      result.ok
+        ? { status: "ok", resolved: result.resolved }
+        : { status: "error" },
+    );
+  };
+
+  /** Ubica en el mapa la dirección escrita en el formulario. */
+  const locateTypedAddress = () => {
+    requestLocate(
+      [checkoutAddress.address, checkoutAddress.city].filter(Boolean).join(", "),
+    );
+  };
+
+  // Ubica la dirección mientras el cliente la escribe, con una pausa: así el
+  // marcador aparece solo al dejar de teclear y no se consulta el geocoder en
+  // cada letra (el proveedor limita a 1 petición por segundo).
+  useEffect(() => {
+    if (!usingNewAddress && savedAddresses.length > 0) return;
+    const address = [checkoutAddress.address, checkoutAddress.city]
+      .filter(Boolean)
+      .join(", ")
+      .trim();
+    if (address.length < 8) return;
+    const timer = setTimeout(() => requestLocate(address), 900);
+    return () => clearTimeout(timer);
+  }, [
+    checkoutAddress.address,
+    checkoutAddress.city,
+    usingNewAddress,
+    savedAddresses.length,
+    requestLocate,
+  ]);
   const totalConEnvio = cartTotal + (checkoutShipping === "express" ? 9900 : 4900);
 
   // Normaliza el teléfono a dígitos (móvil colombiano 3xx xxx xxxx)
@@ -213,19 +271,18 @@ export function CheckoutModal({
       lat: null,
       lng: null,
     }));
-    locateTokenRef.current += 1;
-    setLocateRequest({
-      address: [addr.addressLine1, addr.addressLine2, addr.city]
+    requestLocate(
+      [addr.addressLine1, addr.addressLine2, addr.city]
         .filter(Boolean)
         .join(", "),
-      token: locateTokenRef.current,
-    });
+    );
   };
 
   const switchToNewAddress = () => {
     setUsingNewAddress(true);
     setSelectedAddressId(null);
     setLocateRequest(null);
+    setAddressCheck({ status: "idle" });
     onSetAddressConfirmed(false);
   };
 
@@ -616,6 +673,7 @@ export function CheckoutModal({
                         // confirmado: hay que volver a ubicarlo en el mapa.
                         if (key === "address" || key === "city") {
                           onSetAddressConfirmed(false);
+                          setAddressCheck({ status: "idle" });
                           onSetCheckoutAddress((prev) => ({
                             ...prev,
                             lat: null,
@@ -630,6 +688,16 @@ export function CheckoutModal({
                               : e.target.value,
                         }));
                       }}
+                      onKeyDown={(e) => {
+                        // Enter ubica la dirección sin salir del formulario.
+                        if (
+                          (key === "address" || key === "city") &&
+                          e.key === "Enter"
+                        ) {
+                          e.preventDefault();
+                          e.currentTarget.blur();
+                        }
+                      }}
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                       onFocus={(e) => {
                         e.target.style.boxShadow = "0 0 0 2px #FFF200";
@@ -638,8 +706,35 @@ export function CheckoutModal({
                       onBlur={(e) => {
                         e.target.style.boxShadow = "none";
                         e.target.style.borderColor = "";
+                        // Al salir del campo, el mapa ubica lo que escribió
+                        // (la ciudad afina el resultado del geocoder).
+                        if (key === "address" || key === "city") {
+                          locateTypedAddress();
+                        }
                       }}
                     />
+                    {key === "address" && addressCheck.status === "checking" && (
+                      <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1.5">
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        Ubicando la dirección en el mapa…
+                      </p>
+                    )}
+                    {key === "address" && addressCheck.status === "error" && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        No pudimos ubicar esa dirección en el mapa. Revisa el
+                        texto (calle, número y ciudad) o toca el mapa para marcar
+                        el punto.
+                      </p>
+                    )}
+                    {key === "address" && addressCheck.status === "ok" && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Ubicada en el mapa:{" "}
+                        <span className="font-semibold text-foreground">
+                          {addressCheck.resolved}
+                        </span>
+                        . Revisa que el marcador quede en tu dirección.
+                      </p>
+                    )}
                     {key === "phone" &&
                       checkoutAddress.phone &&
                       !isValidPhone(checkoutAddress.phone) && (
@@ -703,6 +798,7 @@ export function CheckoutModal({
                 }))
               }
               onConfirmedChange={onSetAddressConfirmed}
+              onLocateResult={handleLocateResult}
               locateRequest={locateRequest}
             />
 

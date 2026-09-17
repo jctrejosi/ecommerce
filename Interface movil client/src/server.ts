@@ -12,6 +12,13 @@ import { WEB_CLIENT_URL } from "./webview";
  *   3. prueba la URL por defecto de `src/webview.ts` como pista,
  *   4. escanea la subred local (misma /24 que el celular) buscando `GET /discovery`.
  *
+ * En los tres primeros casos, y también al encontrar el servidor por escaneo, se
+ * prefiere el alias de dominio de la IP (ver `toPublicAlias`): Google exige un
+ * hostname —no una IP— como origen del login, así que el WebView debe cargar
+ * `http://192-168-0-132.sslip.io:4173` y no `http://192.168.0.132:4173`. Si el
+ * alias no responde (sin DNS público), se usa la IP y la app funciona igual
+ * salvo el login con Google.
+ *
  * La URL que responde se guarda para los siguientes arranques.
  */
 
@@ -25,6 +32,13 @@ const STORAGE_KEY = "mercaldas_web_url";
 const BUILD_HINT = (process.env.EXPO_PUBLIC_WEB_URL ?? "").replace(/\/+$/, "");
 /** Cadencia del polling de red (expo-network no expone listener). */
 const NETWORK_POLL_MS = 5000;
+/**
+ * Dominio comodín usado para darle un hostname a la IP local: cualquier nombre
+ * con la IP embebida resuelve a esa IP (`192-168-0-132.sslip.io` →
+ * `192.168.0.132`). Si algún día hay un dominio propio, basta apuntar un `A` a
+ * la IP y cambiar esta constante.
+ */
+const ALIAS_DOMAIN = "sslip.io";
 
 let currentUrl = "";
 
@@ -50,6 +64,28 @@ function normalizeUrl(url: string): string {
 
 export function setServerUrl(url: string): void {
   currentUrl = normalizeUrl(url);
+}
+
+/**
+ * Alias de dominio de una URL con IP literal (null si no es una IP).
+ *
+ * Google Identity Services rechaza orígenes que sean IPs, así que para el login
+ * con Google el WebView tiene que cargar un hostname. `sslip.io` es un DNS
+ * comodín público que resuelve cualquier IP embebida en el nombre.
+ */
+export function toPublicAlias(url: string): string | null {
+  const base = normalizeUrl(url);
+  const match =
+    /^http:\/\/(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}):(\d+)$/.exec(base);
+  if (!match) return null;
+  const [, a, b, c, d, port] = match;
+  return `http://${a}-${b}-${c}-${d}.${ALIAS_DOMAIN}:${port}`;
+}
+
+/** Candidatos a probar para una URL: primero su alias, luego la original. */
+function withAliasFirst(url: string): string[] {
+  const alias = toPublicAlias(url);
+  return alias ? [alias, url] : [url];
 }
 
 async function readStoredUrl(): Promise<string | null> {
@@ -130,7 +166,12 @@ export async function scanSubnet(prefix: string): Promise<string | null> {
       }),
     );
     const hit = results.find((r): r is string => r !== null);
-    if (hit) return hit;
+    if (hit) {
+      // Prefiere el hostname (lo exige Google para el login) si resuelve.
+      const alias = toPublicAlias(hit);
+      if (alias && (await pingServer(alias, TIMEOUT_MS))) return alias;
+      return hit;
+    }
   }
   return null;
 }
@@ -151,8 +192,8 @@ export async function resolveServer(): Promise<ResolveResult> {
   const candidates: string[] = [];
 
   const stored = await readStoredUrl();
-  if (stored) candidates.push(stored);
-  if (BUILD_HINT) candidates.push(BUILD_HINT);
+  if (stored) candidates.push(...withAliasFirst(stored));
+  if (BUILD_HINT) candidates.push(...withAliasFirst(BUILD_HINT));
   candidates.push(WEB_CLIENT_URL);
 
   for (const candidate of candidates) {

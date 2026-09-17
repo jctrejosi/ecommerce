@@ -11,6 +11,9 @@ import { Logger } from '@nestjs/common';
 /** Sala de los paneles administrativos (web admin, picking admin, delivery admin). */
 export const STAFF_ROOM = 'staff';
 
+/** Sala de los pickers móviles (app de picking): avisos de pedidos que entran. */
+export const PICKERS_ROOM = 'pickers';
+
 /** Sala del cliente dueño (todos sus pedidos). */
 export function customerRoom(customerId: number): string {
   return `customer:${customerId}`;
@@ -65,7 +68,21 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
   @SubscribeMessage('unsubscribe:staff')
   handleUnsubscribeStaff(client: Socket) {
     void client.leave(STAFF_ROOM);
-    this.logger.log(`Client ${client.id} unsubscribed from ${STAFF_ROOM}`);
+  }
+
+  /**
+   * La app móvil de picking se une a la sala `pickers`: con ella se entera del
+   * pedido nuevo apenas se crea, sin esperar su sondeo periódico.
+   */
+  @SubscribeMessage('subscribe:pickers')
+  handleSubscribePickers(client: Socket) {
+    void client.join(PICKERS_ROOM);
+    this.logger.log(`Client ${client.id} subscribed to ${PICKERS_ROOM}`);
+  }
+
+  @SubscribeMessage('unsubscribe:pickers')
+  handleUnsubscribePickers(client: Socket) {
+    void client.leave(PICKERS_ROOM);
   }
 
   /**
@@ -93,7 +110,9 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
    *  - al cliente dueño en la sala del pedido (`order:<referenceCode>`), que ya
    *    consume `order:status` con el estado normalizado en español,
    *  - al cliente dueño en su sala (`customer:<id>`), para refrescar su lista,
-   *  - a los paneles administrativos (sala `staff`).
+   *  - a los paneles administrativos (sala `staff`),
+   *  - a los pickers móviles (sala `pickers`), que al oír un pedido nuevo
+   *    refrescan su cola y avisan con sonido.
    *
    * Todos los que llaman a este método (pago, picking, admin, delivery) avisan
    * así a todos los públicos sin duplicar lógica.
@@ -125,6 +144,7 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(customerRoom(Number(customerId))).emit('order:updated', updated);
     }
     this.server.to(STAFF_ROOM).emit('order:updated', updated);
+    this.server.to(PICKERS_ROOM).emit('order:updated', updated);
 
     this.logger.log(
       `Status update sent to ${room}${customerId != null ? ` + ${customerRoom(Number(customerId))}` : ''} + ${STAFF_ROOM}: ${status}${reason ? ` (${reason})` : ''}`,

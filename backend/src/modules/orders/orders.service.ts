@@ -459,6 +459,14 @@ export class OrdersService {
       );
     }
 
+    // El pedido acaba de entrar a la cola de alistamiento: se avisa por WebSocket
+    // a los paneles y a los pickers móviles, que si no esperarían a su sondeo.
+    this.ordersGateway.notifyOrderStatus(
+      result.referenceCode,
+      this.mapOrderStatus(orderStatus),
+      { customerId },
+    );
+
     // Notificar al cliente registrado (los invitados ven el código en pantalla)
     if (customerId != null) {
       await this.notificationsService.create({

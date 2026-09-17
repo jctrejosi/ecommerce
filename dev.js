@@ -595,6 +595,18 @@ function toLanUrl(url, ip) {
   return ip ? url.replace("//localhost", `//${ip}`) : null;
 }
 
+/**
+ * Dominio comodín que le da un hostname a la IP local. Google exige un origen
+ * con dominio (rechaza IPs) para el login, así que el cliente se abre también
+ * en `192-168-0-132.sslip.io`, que resuelve a la misma IP.
+ */
+const LAN_ALIAS_DOMAIN = "sslip.io";
+
+/** Alias con dominio de una IPv4: 192.168.0.132 → 192-168-0-132.sslip.io */
+function asLanHostname(ip) {
+  return ip ? `${ip.replace(/\./g, "-")}.${LAN_ALIAS_DOMAIN}` : null;
+}
+
 function printUrls(services, showDb, showCampaigns, showOsrm) {
   const ip = lanIp();
   console.log("\n━━━━━━━━━━━━━ Mercaldas — URLs ━━━━━━━━━━━━━");
@@ -603,9 +615,14 @@ function printUrls(services, showDb, showCampaigns, showOsrm) {
     // Los servicios marcados `lan` escuchan en 0.0.0.0 y resuelven el API en su
     // propio origen: se pueden abrir desde el celular sin tocar nada más.
     const lanUrl = svc.lan ? toLanUrl(svc.url, ip) : null;
+    // Además de la IP se muestra el hostname (lo exige Google para el login).
+    const host = svc.lan ? asLanHostname(ip) : null;
     console.log(
       `  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}` +
-        (lanUrl ? `   ·  red local: ${lanUrl}` : ""),
+        (lanUrl ? `   ·  red local: ${lanUrl}` : "") +
+        (lanUrl && host
+          ? `   ·  host: http://${host}:${new URL(svc.url).port}`
+          : ""),
     );
   }
   if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
@@ -620,6 +637,13 @@ function printUrls(services, showDb, showCampaigns, showOsrm) {
   const lanUrl = lanSvc ? toLanUrl(lanSvc.url, ip) : null;
   if (lanUrl) {
     console.log(`\n📱 Celular (misma Wi-Fi): abre ${lanUrl}`);
+    // El login con Google necesita hostname (no IP): este es el mismo servidor
+    // visto con dominio, y el que va en los orígenes autorizados de Google.
+    const host = asLanHostname(ip);
+    if (host) {
+      const port = new URL(lanSvc.url).port;
+      console.log(`   Host para el login con Google: http://${host}:${port}`);
+    }
     console.log("   El APK cliente lo descubre solo; si cambias de red, vuelve a arrancar.");
   }
 }

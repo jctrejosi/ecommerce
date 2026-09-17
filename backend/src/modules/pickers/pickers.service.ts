@@ -4,7 +4,19 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNotNull, isNull, ne, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  like,
+  ne,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import { DrizzleService } from '../../database/drizzle.service';
@@ -338,6 +350,127 @@ export class PickersService {
         dispatchedTotal: totalByPicker.get(p.id) ?? 0,
       };
     });
+  }
+
+  /**
+   * Pedidos para el tab "Pedidos" del panel, filtrables por sucursal.
+   *
+   * `branchId` es opcional: sin él se listan los de todas las sucursales (el
+   * panel siempre manda la seleccionada). Los agregados de items van como
+   * subconsultas para poder paginar sin una consulta por pedido.
+   */
+  async orderList(params: {
+    branchId?: number;
+    status?: string;
+    search?: string;
+    limit?: number;
+    offset?: number;
+  }) {
+    const limit = Math.min(Math.max(params.limit ?? 100, 1), 300);
+    const offset = Math.max(params.offset ?? 0, 0);
+
+    // Filtros de "universo" (sucursal + búsqueda): los usan la lista y los conteos.
+    const base: SQL[] = [];
+    if (params.branchId !== undefined) {
+      base.push(eq(orders.branchId, params.branchId));
+    }
+    const search = params.search?.trim();
+    if (search) {
+      const pattern = `%${search}%`;
+      const searchCond = or(
+        like(orders.referenceCode, pattern),
+        like(orders.customerName, pattern),
+        like(orders.customerPhone, pattern),
+      );
+      if (searchCond) base.push(searchCond);
+    }
+
+    // Estado: solo se acepta si está en el enum (evita romper la consulta).
+    const statusParam = params.status?.trim();
+    const statusCond =
+      statusParam &&
+      (orders.status.enumValues as readonly string[]).includes(statusParam)
+        ? eq(
+            orders.status,
+            statusParam as (typeof orders.status.enumValues)[number],
+          )
+        : undefined;
+
+    const where = statusCond
+      ? and(...base, statusCond)
+      : base.length > 0
+        ? and(...base)
+        : undefined;
+
+    const rows = await this.db
+      .select({
+        id: orders.id,
+        referenceCode: orders.referenceCode,
+        customerName: orders.customerName,
+        customerPhone: orders.customerPhone,
+        status: orders.status,
+        grandTotal: orders.grandTotal,
+        createdAt: orders.createdAt,
+        pickerId: orders.pickerId,
+        pickerName: sql<string | null>`NULLIF(TRIM(CONCAT(${users.firstName}, ' ', ${users.lastName})), '')`,
+        pickedAt: orders.pickedAt,
+        completedAt: orders.completedAt,
+        deliveredAt: sql<string | null>`(SELECT MAX(osh.created_at) FROM order_status_history osh WHERE osh.order_id = ${orders.id} AND osh.status = 'delivered')`,
+        itemsCount: sql<number>`(SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = ${orders.id})`,
+        totalPieces: sql<number>`(SELECT COALESCE(SUM(oi.quantity),0)::int FROM order_items oi WHERE oi.order_id = ${orders.id})`,
+        scannedPieces: sql<number>`(SELECT COALESCE(SUM(oi.picked_qty),0)::int FROM order_items oi WHERE oi.order_id = ${orders.id})`,
+        remainingItems: sql<number>`(SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = ${orders.id} AND oi.picked_qty < oi.quantity)`,
+      })
+      .from(orders)
+      .leftJoin(users, eq(users.id, orders.pickerId))
+      .where(where)
+      .orderBy(desc(orders.createdAt), desc(orders.id))
+      .limit(limit)
+      .offset(offset);
+
+    // Conteos por estado del universo actual (sin el filtro de estado): alimentan
+    // los chips de filtro y el total paginado.
+    const countRows = await this.db
+      .select({ status: orders.status, n: sql<number>`COUNT(*)::int` })
+      .from(orders)
+      .where(base.length > 0 ? and(...base) : undefined)
+      .groupBy(orders.status);
+    const countByStatus = new Map(countRows.map((r) => [r.status, r.n]));
+    const counts = Object.fromEntries(
+      orders.status.enumValues.map((s) => [s, countByStatus.get(s) ?? 0]),
+    ) as Record<(typeof orders.status.enumValues)[number], number>;
+    const total = statusCond
+      ? (countByStatus.get(
+          statusParam as (typeof orders.status.enumValues)[number],
+        ) ?? 0)
+      : Object.values(counts).reduce((acc, n) => acc + n, 0);
+
+    return {
+      branchId: params.branchId ?? null,
+      total,
+      counts,
+      limit,
+      offset,
+      orders: rows.map((r) => ({
+        id: Number(r.id),
+        referenceCode: r.referenceCode,
+        customerName: r.customerName ?? 'Cliente',
+        customerPhone: r.customerPhone,
+        status: r.status,
+        grandTotal: Number(r.grandTotal),
+        createdAt: r.createdAt,
+        pickerId: r.pickerId === null ? null : Number(r.pickerId),
+        pickerName: r.pickerName,
+        pickedAt: r.pickedAt,
+        completedAt: r.completedAt,
+        deliveredAt: r.deliveredAt,
+        itemsCount: r.itemsCount,
+        totalPieces: r.totalPieces,
+        scannedPieces: r.scannedPieces,
+        remainingPieces: Math.max(0, r.totalPieces - r.scannedPieces),
+        remainingItems: r.remainingItems,
+      })),
+    };
   }
 
   /** Historial completo de pedidos alistados por un picker (cierre en caja). */

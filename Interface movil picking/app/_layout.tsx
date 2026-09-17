@@ -19,7 +19,8 @@ import { useAuthStore } from "@/auth/authStore";
 import { getTokens } from "@/auth/session";
 import { useServerGate } from "@/api/serverGate";
 import { getApiUrl } from "@/api/apiConfig";
-import { connectPickingSocket, disconnectPickingSocket } from "@/socket";
+import { connectPickingSocket, disconnectPickingSocket, connectOrderEvents, disconnectOrderEvents } from "@/socket";
+import { configureNewOrderSound } from "@/notifications/sound";
 import { colors, radius, spacing } from "@/theme";
 
 export default function RootLayout() {
@@ -35,6 +36,11 @@ export default function RootLayout() {
   useEffect(() => {
     void ensureServer(true).finally(() => setBootChecked(true));
   }, [ensureServer]);
+
+  // 1.b) Modo de audio del aviso de pedido nuevo (una sola vez).
+  useEffect(() => {
+    void configureNewOrderSound();
+  }, []);
 
   // 2) Cada vez que la app vuelve a primer plano o cambia la conectividad
   //    (otra red Wi-Fi, se cayó el Wi-Fi…) se revisa que el servidor siga ahí.
@@ -61,19 +67,23 @@ export default function RootLayout() {
   }, [status, restore]);
 
   // 4) Eventos en vivo: el socket va autenticado con el token del picker, así
-  //    que se (re)conecta al entrar y se cierra al cerrar sesión.
+  //    que se (re)conecta al entrar y se cierra al cerrar sesión. El segundo
+  //    socket (namespace `/orders`) trae los pedidos recién creados.
   useEffect(() => {
     if (status !== "ok" || !userId) {
       disconnectPickingSocket();
+      disconnectOrderEvents();
       return;
     }
     let cancelled = false;
     void getTokens().then((tokens) => {
       if (!cancelled && tokens?.accessToken) connectPickingSocket(tokens.accessToken);
     });
+    connectOrderEvents();
     return () => {
       cancelled = true;
       disconnectPickingSocket();
+      disconnectOrderEvents();
     };
   }, [status, userId]);
 

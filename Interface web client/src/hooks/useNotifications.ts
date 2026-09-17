@@ -1,6 +1,11 @@
 import { io, Socket } from 'socket.io-client';
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { getAuthHeaders } from '../services/customer-auth.service';
+import { playAlertSound, unlockAlertSound } from '../app/lib/alertSound';
+import {
+  requestNotificationPermission,
+  showBrowserNotification,
+} from '../app/lib/browserNotifications';
 
 const SOCKET_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : 'http://localhost:3000'));
 
@@ -33,11 +38,29 @@ export function useNotifications(customerId: number | null) {
     socket.on('notification:new', (notification: AppNotification) => {
       setNotifications(prev => [notification, ...prev]);
       setUnreadCount(prev => prev + 1);
+      // Aviso inmediato: alerta sonora y, si el navegador ya dio permiso,
+      // también la notificación del sistema.
+      playAlertSound();
+      showBrowserNotification(notification.title, notification.message);
     });
 
     return () => {
       socket.disconnect();
     };
+  }, [customerId]);
+
+  // El navegador exige un gesto del usuario antes de dejar sonar audio y antes
+  // de poder pedir el permiso de notificaciones: se aprovecha la primera
+  // interacción (solo para clientes con sesión, que son los que las reciben).
+  useEffect(() => {
+    if (!customerId) return;
+    const onFirstInteraction = () => {
+      unlockAlertSound();
+      requestNotificationPermission();
+    };
+    window.addEventListener("pointerdown", onFirstInteraction, { once: true });
+    return () =>
+      window.removeEventListener("pointerdown", onFirstInteraction);
   }, [customerId]);
 
   // Load existing notifications

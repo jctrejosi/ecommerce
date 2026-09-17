@@ -169,6 +169,42 @@ export interface PickingOrderDetail {
   items: PickingOrderDetailItem[];
 }
 
+// ── Pedidos del panel (tab "Pedidos") ──
+
+/** Pedido con su avance de alistamiento, para la vista administrativa. */
+export interface PickingAdminOrder {
+  id: number;
+  referenceCode: string;
+  customerName: string;
+  customerPhone: string | null;
+  status: string;
+  grandTotal: number;
+  createdAt: string;
+  pickerId: number | null;
+  pickerName: string | null;
+  pickedAt: string | null;
+  completedAt: string | null;
+  /** Entrega real al cliente (la marca el repartidor); null si aún no se entregó. */
+  deliveredAt: string | null;
+  itemsCount: number;
+  totalPieces: number;
+  scannedPieces: number;
+  remainingPieces: number;
+  remainingItems: number;
+}
+
+export interface PickingAdminOrdersResponse {
+  /** Sucursal filtrada; null cuando se listan todas. */
+  branchId: number | null;
+  /** Total de pedidos que cumplen el filtro de estado actual. */
+  total: number;
+  /** Conteo por estado del universo actual (sucursal + búsqueda). */
+  counts: Record<string, number>;
+  limit: number;
+  offset: number;
+  orders: PickingAdminOrder[];
+}
+
 // ── Chat administrador ↔ picker ──
 
 export interface PickerChatMessage {

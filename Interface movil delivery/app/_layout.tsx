@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Image, StyleSheet, Text, View } from "react-native";
-import { Stack } from "expo-router";
+import { ActivityIndicator, AppState, Image, StyleSheet, Text, View } from "react-native";
+import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/auth/authStore";
 import { getTokens } from "@/auth/storage";
-import { configureNotifications, registerPushToken } from "@/notifications/push";
+import { configureNotifications, registerPushToken, setNotificationTapHandler } from "@/notifications/push";
 import { configureMessageSound } from "@/notifications/sound";
 import { useIncomingMessageSound } from "@/notifications/useIncomingMessageSound";
+import {
+  acknowledgeNewOrderAlerts,
+  useNewOrderAlert,
+} from "@/notifications/newOrderAlert";
 import { connectDeliverySocket, disconnectDeliverySocket } from "@/socket";
 import { useActiveOrders } from "@/api/orders";
 import { startBackgroundTracking, stopBackgroundTracking } from "@/tracking/location";
@@ -31,9 +35,37 @@ function RootShell() {
   );
   const delivering = user != null && inProgressOrder != null;
 
-  // Tono de mensaje entrante del cliente en el pedido en curso (el del panel
+  // Tonos de mensaje entrante del cliente en el pedido en curso (el del panel
   // llega por socket, ver src/socket.ts). Suena aunque estés en otra pantalla.
   useIncomingMessageSound(user ? inProgressOrder?.id : undefined);
+
+  // Red de seguridad del sondeo: avisa de un pedido nuevo aunque el socket no
+  // haya entregado el evento `delivery:assigned`.
+  useNewOrderAlert(orders);
+
+  // Al volver la app a primer plano se entiende que el aviso ya se vio: se
+  // quitan las notificaciones de la bandeja y el punto rojo del icono.
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") void acknowledgeNewOrderAlerts();
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Tocar la notificación de pedido nuevo abre ese pedido.
+  useEffect(() => {
+    let unsubscribe = () => {};
+    void setNotificationTapHandler((orderId) => {
+      try {
+        router.push(`/order/${orderId}`);
+      } catch {
+        /* el navegador aún no está listo (app recién lanzada) */
+      }
+    }).then((fn) => {
+      unsubscribe = fn;
+    });
+    return () => unsubscribe();
+  }, []);
 
   // Restaurar sesión al arrancar (SecureStore → /auth/me).
   useEffect(() => {

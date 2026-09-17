@@ -6,6 +6,7 @@ import { queryClient } from "@/lib/queryClient";
 import { orderKeys } from "@/api/orders";
 import { adminChatKeys } from "@/api/admin-chat";
 import { playIncomingMessageSound } from "@/notifications/sound";
+import { alertNewOrder } from "@/notifications/newOrderAlert";
 
 let socket: Socket | null = null;
 
@@ -30,7 +31,9 @@ export function connectDeliverySocket(accessToken: string): void {
     void queryClient.invalidateQueries({ queryKey: orderKeys.active });
   });
 
-  socket.on("delivery:assigned", () => {
+  socket.on("delivery:assigned", ({ orderId, referenceCode }: { orderId: number | string; referenceCode?: string }) => {
+    // Pedido nuevo: suena, vibra y deja el aviso en la bandeja (punto rojo).
+    void alertNewOrder({ id: orderId, referenceCode: referenceCode ?? String(orderId) });
     void queryClient.invalidateQueries({ queryKey: orderKeys.active });
   });
 

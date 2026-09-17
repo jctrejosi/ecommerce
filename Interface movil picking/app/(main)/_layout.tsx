@@ -1,6 +1,7 @@
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore } from "@/auth/authStore";
+import { useNewOrderAlerts } from "@/notifications/newOrderAlerts";
 import { colors } from "@/theme";
 
 /**
@@ -23,6 +24,16 @@ export default function MainLayout() {
   if (!user) {
     return <Redirect href="/login" />;
   }
+
+  return <AuthedArea />;
+}
+
+/**
+ * Área ya autenticada. El aviso de pedido nuevo (sonido + vibración) se monta
+ * aquí para que suene en cualquier pantalla del picker, no solo en la lista.
+ */
+function AuthedArea() {
+  useNewOrderAlerts();
 
   return (
     <Stack

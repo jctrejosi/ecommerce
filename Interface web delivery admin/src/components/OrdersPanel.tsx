@@ -17,6 +17,25 @@ const ORDER_FILTERS: { key: AssignmentStatus | 'all'; label: string }[] = [
   { key: 'IN_DELIVERY', label: 'En entrega' },
 ];
 
+/**
+ * Pasos del repartidor, en orden. Se muestran solo los que ya ocurrieron, con
+ * la hora en que ocurrieron, para poder ver cuándo hizo cada cosa.
+ */
+type TimelineKey =
+  | 'assignedAt'
+  | 'acceptedAt'
+  | 'readyForPickupAt'
+  | 'pickedUpAt'
+  | 'inDeliveryAt';
+
+const TIMELINE: { label: string; key: TimelineKey }[] = [
+  { label: 'Asignado', key: 'assignedAt' },
+  { label: 'Aceptado', key: 'acceptedAt' },
+  { label: 'Recogiendo', key: 'readyForPickupAt' },
+  { label: 'Recogido', key: 'pickedUpAt' },
+  { label: 'En camino', key: 'inDeliveryAt' },
+];
+
 export default function OrdersPanel({ orders, onLocate }: Props) {
   const [filter, setFilter] = useState<AssignmentStatus | 'all'>('all');
   const [search, setSearch] = useState('');
@@ -72,7 +91,7 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
         <table className="w-full">
           <thead>
             <tr className="sticky top-0 border-b border-slate-100 bg-slate-50 text-left">
-              {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Asignado', 'Total', ''].map(
+              {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Tiempos', 'Total', ''].map(
                 (h) => (
                   <th
                     key={h}
@@ -132,8 +151,21 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
                       {o.payment.label}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-xs text-slate-500">
-                    {formatDateTime(o.assignedAt)}
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-0.5">
+                      {TIMELINE.map((step) => {
+                        const at = o[step.key];
+                        if (!at) return null;
+                        return (
+                          <div key={step.key} className="flex items-baseline gap-2 whitespace-nowrap">
+                            <span className="w-[84px] shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                              {step.label}
+                            </span>
+                            <span className="text-xs text-slate-600">{formatDateTime(at)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-xs font-bold text-slate-800">
                     {formatMoney(o.totals.value, o.totals.currency)}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -6,6 +6,7 @@ import { colors, radius, spacing } from "@/theme";
 import { QUEUE_FILTERS, pickingApi, type QueueFilter } from "@/api";
 import { useMarkReviewed, useQueue } from "@/picking/queries";
 import { usePickerChatSummary } from "@/api/picker-chat";
+import { useNewOrderAlertStore } from "@/notifications/newOrderAlerts";
 import { isItemDone, orderStatus, sortQueue } from "@/picking/status";
 import { clearSession, loadSession } from "@/picking/sessionStore";
 import { useAuthStore } from "@/auth/authStore";
@@ -19,6 +20,9 @@ import { Toast } from "@/ui/Toast";
 
 // Restaurar la sesión solo una vez por arranque del proceso (no al volver a la lista).
 let restoredOnce = false;
+
+/** Ventana en la que un aviso de pedido nuevo alcanza a mostrarse como toast. */
+const ALERT_TOAST_MS = 30_000;
 
 export default function OrderListScreen() {
   const router = useRouter();
@@ -35,9 +39,6 @@ export default function OrderListScreen() {
   const { data: chatSummary } = usePickerChatSummary();
   const unread = chatSummary?.unread ?? 0;
 
-  const knownIds = useRef<Set<number>>(new Set());
-  const firstLoad = useRef(true);
-
   const filtered = useMemo(
     () =>
       sortQueue(
@@ -51,17 +52,15 @@ export default function OrderListScreen() {
     [orders, filter, user?.id],
   );
 
-  // Aviso de pedido nuevo (no revisado y con id desconocido).
+  // Aviso de pedido nuevo: lo detecta el hook global de la app (allí suenan el
+  // tono y la vibración, esté donde esté el picker) y aquí solo se muestra el
+  // toast, y únicamente si el aviso acaba de llegar.
+  const newOrderAlert = useNewOrderAlertStore((s) => s.alert);
   useEffect(() => {
-    if (!orders) return;
-    const fresh = orders.filter((o) => !o.reviewed && !knownIds.current.has(o.id));
-    orders.forEach((o) => knownIds.current.add(o.id));
-    if (firstLoad.current) {
-      firstLoad.current = false;
-      return;
-    }
-    if (fresh.length > 0) setToast(`Nuevo pedido ${fresh[0].referenceCode} · Recibido ahora`);
-  }, [orders]);
+    if (!newOrderAlert) return;
+    if (Date.now() - newOrderAlert.at > ALERT_TOAST_MS) return;
+    setToast(`Nuevo pedido ${newOrderAlert.order.referenceCode} · Recibido ahora`);
+  }, [newOrderAlert]);
 
   // Restaurar la sesión de trabajo (pedido + producto) si la app se reinició.
   useEffect(() => {

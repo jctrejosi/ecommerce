@@ -10,6 +10,15 @@ import { api, USE_MOCK } from "@/api";
 const IS_EXPO_GO = Constants.executionEnvironment === "storeClient";
 const IS_WEB = Platform.OS === "web";
 
+/**
+ * Canal Android de los avisos que publica la propia app (pedido nuevo).
+ *
+ * Es **silencioso** a propósito: el tono y la vibración los dispara la app a
+ * mano (ver `newOrderAlert.ts`), porque el sonido de un canal lo ignora el modo
+ * silencio del teléfono. Así no se duplican (canal + app) y suena siempre.
+ */
+const ORDER_CHANNEL = "delivery-orders";
+
 type NotificationsModule = typeof import("expo-notifications");
 
 async function loadNotifications(): Promise<NotificationsModule | null> {
@@ -29,9 +38,11 @@ export async function configureNotifications(): Promise<void> {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
       shouldShowBanner: true,
-      shouldShowList: false,
+      // En la lista (bandeja) es lo que hace que el lanzador pinte el punto rojo
+      // en el icono de la app.
+      shouldShowList: true,
       shouldPlaySound: true,
-      shouldSetBadge: false,
+      shouldSetBadge: true,
     }),
   });
 
@@ -46,7 +57,123 @@ export async function configureNotifications(): Promise<void> {
       // Tono "rockerito" (android/app/src/main/res/raw/rockerito.wav).
       sound: "rockerito.wav",
     });
+
+    // El canal de los avisos propios se crea UNA vez: recrearlo en cada arranque
+    // borraría las notificaciones ya publicadas (y con ellas el punto rojo).
+    const ordersChannel = await Notifications.getNotificationChannelAsync(
+      ORDER_CHANNEL,
+    ).catch(() => null);
+    if (!ordersChannel) {
+      await Notifications.setNotificationChannelAsync(ORDER_CHANNEL, {
+        name: "Pedidos nuevos",
+        importance: Notifications.AndroidImportance.HIGH,
+        sound: null,
+        vibrationPattern: null,
+        enableVibrate: false,
+        showBadge: true,
+      });
+    }
   }
+}
+
+/**
+ * Permiso de notificaciones (Android 13+ lo exige). Devuelve si quedó concedido.
+ */
+export async function ensureNotificationPermission(): Promise<boolean> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return false;
+  try {
+    const current = await Notifications.getPermissionsAsync();
+    if (current.granted) return true;
+    const next = await Notifications.requestPermissionsAsync();
+    return next.granted;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Publica el aviso de "pedido nuevo" en la bandeja del sistema.
+ *
+ * Va por el canal silencioso: el objetivo es que quede una notificación viva
+ * (punto rojo en el icono de la app) y que al tocarla se abra el pedido.
+ */
+export async function publishNewOrderNotification(order: {
+  id: number | string;
+  referenceCode: string;
+}): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+  if (!(await ensureNotificationPermission())) return;
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: "Nuevo pedido asignado",
+        body: `${order.referenceCode} · ábrelo para aceptarlo`,
+        data: { orderId: String(order.id) },
+        sound: false,
+      },
+      // `null` = inmediata.
+      trigger: null,
+    });
+  } catch (err) {
+    console.warn("⚠️ no se pudo publicar el aviso de pedido nuevo:", err);
+  }
+}
+
+/** Contador del icono (los lanzadores que lo soportan muestran el número). */
+export async function setAppBadge(count: number): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+  try {
+    await Notifications.setBadgeCountAsync(count);
+  } catch {
+    /* el lanzador puede no soportarlo */
+  }
+}
+
+/** Quita el contador y las notificaciones de la bandeja (y con ellas el punto). */
+export async function clearAppAlerts(): Promise<void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return;
+  try {
+    await Notifications.setBadgeCountAsync(0);
+    await Notifications.dismissAllNotificationsAsync();
+  } catch {
+    /* sin notificaciones no hay nada que limpiar */
+  }
+}
+
+/**
+ * Al tocar una notificación se abre el pedido al que se refiere.
+ *
+ * Cubre los dos caminos: la app ya abierta (listener) y la app lanzada por el
+ * toque (respuesta pendiente), que es el caso normal desde el icono.
+ */
+export async function setNotificationTapHandler(
+  onOrder: (orderId: string) => void,
+): Promise<() => void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return () => {};
+
+  const open = (response: { notification: { request: { content: { data?: unknown } } } } | null) => {
+    const data = response?.notification.request.content.data as
+      | { orderId?: unknown }
+      | undefined;
+    if (typeof data?.orderId === "string" && data.orderId) onOrder(data.orderId);
+  };
+
+  const subscription = Notifications.addNotificationResponseReceivedListener(open);
+
+  // App lanzada (o traída al frente) por el toque de la notificación.
+  try {
+    open(await Notifications.getLastNotificationResponseAsync());
+  } catch {
+    /* sin respuesta pendiente */
+  }
+
+  return () => subscription.remove();
 }
 
 /**
