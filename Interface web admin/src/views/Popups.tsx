@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect } from "react";
 import {
   Plus, Edit, Trash2, X, Loader2, Filter, Image, Type,
@@ -40,7 +41,7 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 async function createMediaFromUrl(url: string, mediaType?: string): Promise<number> {
-  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE_URL = resolveApiBaseUrl();
   const res = await fetch(`${API_BASE_URL}/admin/popups/upload-url`, {
     method: "POST", credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -87,7 +88,7 @@ function PopupEditor({
     fd.append("file", file);
     fd.append("code", `popup_${Date.now()}`);
     const res = await fetch(
-      `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+      `${resolveApiBaseUrl()}/upload/image`,
       { method: "POST", body: fd },
     );
     if (!res.ok) throw new Error("Error al subir imagen");

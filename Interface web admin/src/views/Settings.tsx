@@ -1,7 +1,8 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect, useRef } from "react";
 import { Save, Globe, CreditCard, Loader2, CheckCircle, Upload, QrCode, AlertTriangle } from "lucide-react";
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE = resolveApiBaseUrl();
 
 const TABS = [
   { id: "general", label: "General", icon: Globe },

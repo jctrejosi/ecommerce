@@ -36,6 +36,9 @@ export const pickingApi = {
   /** Perfil del usuario autenticado (valida el token guardado). */
   me: () => get<AuthMe>("/auth/me"),
 
+  /** Logo y título de la tienda que se configuran en el admin (público). */
+  storeInfo: () => get<{ url?: string; title?: string }>("/landing/general"),
+
   queue: (status?: string) =>
     get<PickingOrder[]>(`/picking/orders${status ? `?status=${status}` : ""}`),
 

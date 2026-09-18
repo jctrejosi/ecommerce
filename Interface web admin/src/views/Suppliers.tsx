@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   Plus,
@@ -199,7 +200,7 @@ export default function Suppliers() {
     if (!editing) return;
     try {
       await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/admin/catalog/products/${productId}/suppliers`,
+        `${resolveApiBaseUrl()}/admin/catalog/products/${productId}/suppliers`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -217,7 +218,7 @@ export default function Suppliers() {
     if (!editing) return;
     try {
       await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/admin/catalog/suppliers/${editing.id}/products/${productId}`,
+        `${resolveApiBaseUrl()}/admin/catalog/suppliers/${editing.id}/products/${productId}`,
         { method: "DELETE" },
       );
       setSupplierProducts((prev) => prev.filter((p) => p.id !== productId));
@@ -367,7 +368,7 @@ export default function Suppliers() {
     if (!assignProductId || !assignSupplierId) return;
     try {
       await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/admin/catalog/products/${assignProductId}/suppliers`,
+        `${resolveApiBaseUrl()}/admin/catalog/products/${assignProductId}/suppliers`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -927,7 +928,7 @@ export default function Suppliers() {
                         onClick={() => {
                           if (!editing) return;
                           fetch(
-                            `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/admin/catalog/products/${p.id}/suppliers/${editing.id}`,
+                            `${resolveApiBaseUrl()}/admin/catalog/products/${p.id}/suppliers/${editing.id}`,
                             { method: "DELETE" },
                           ).then(() => {
                             setSupplierProducts((prev) =>

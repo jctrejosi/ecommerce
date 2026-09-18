@@ -23,6 +23,18 @@ export function getApiUrl(): string {
   return current;
 }
 
+/**
+ * Resuelve la URL de un recurso que entrega el backend (por ejemplo el logo de
+ * la tienda): Cloudinary ya manda URLs absolutas, y si algún día llega una
+ * relativa se completa contra el backend activo.
+ */
+export function resolveAssetUrl(url: string | null | undefined): string | null {
+  const value = url?.trim();
+  if (!value) return null;
+  if (/^https?:\/\//i.test(value)) return value;
+  return `${current}${value.startsWith("/") ? "" : "/"}${value}`;
+}
+
 /** Carga la URL guardada (o deja la default) al arrancar. */
 export async function loadApiUrl(): Promise<string> {
   if (hydrated) return current;

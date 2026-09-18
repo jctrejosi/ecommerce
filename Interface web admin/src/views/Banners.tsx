@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect, useCallback, useRef, type ElementType, type ReactNode } from "react";
 import {
   Plus, Edit, SquarePen, Trash2, X, Loader2, Filter, GripVertical,
@@ -456,7 +457,7 @@ function SlideEditor({
     fd.append("file", file);
     fd.append("code", `hero_${Date.now()}`);
     const res = await fetch(
-      `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+      `${resolveApiBaseUrl()}/upload/image`,
       { method: "POST", body: fd },
     );
     if (!res.ok) throw new Error("Error al subir imagen");
@@ -627,7 +628,7 @@ function SlideEditor({
 
 // ── Helper ──
 async function createMediaFromUrl(url: string, mediaType?: string): Promise<number> {
-  const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE_URL = resolveApiBaseUrl();
   const res = await fetch(`${API_BASE_URL}/admin/banners/upload-url`, {
     method: "POST", credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -834,7 +835,7 @@ function PromoSlideEditor({
     fd.append("file", file);
     fd.append("code", `promo_${Date.now()}`);
     const res = await fetch(
-      `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+      `${resolveApiBaseUrl()}/upload/image`,
       { method: "POST", body: fd },
     );
     if (!res.ok) throw new Error("Error al subir imagen");
@@ -1868,7 +1869,7 @@ function DailyDealsManager({ onSaved }: { onSaved?: () => void }) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const categories = useAdminCategories();
 
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE = resolveApiBaseUrl();
 
   const load = useCallback(async () => {
     try {
@@ -2407,7 +2408,7 @@ function BrandsLandingManager({
   const [filterActive, setFilterActive] = useState(true);
   const [filterInactive, setFilterInactive] = useState(true);
   const [batchBusy, setBatchBusy] = useState(false);
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE = resolveApiBaseUrl();
 
   const toggleSelected = (id: number) => {
     setItems((prev) => prev.map((b) => (b.id === id ? { ...b, selected: !b.selected } : b)));
@@ -2700,7 +2701,7 @@ function BranchesLandingManager() {
   const [error, setError] = useState("");
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingPreview, setPendingPreview] = useState("");
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE = resolveApiBaseUrl();
 
   const load = useCallback(async () => {
     try {
@@ -2997,7 +2998,7 @@ function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE = resolveApiBaseUrl();
 
   const load = useCallback(async () => {
     try {
@@ -3155,7 +3156,7 @@ function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
   // Category search + filter
   const [catSearch, setCatSearch] = useState("");
   const [catFilter, setCatFilter] = useState<"all" | "active" | "inactive">("all");
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE = resolveApiBaseUrl();
 
   const load = useCallback(async () => {
     try {
@@ -3418,7 +3419,7 @@ function ProductTypeEditor({
   const [filterInactive, setFilterInactive] = useState(true);
   const [batchBusy, setBatchBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+  const API_BASE = resolveApiBaseUrl();
 
   const toggleSelected = (code: string) => {
     setItems((prev) => prev.map((t) => (t.code === code ? { ...t, selected: !t.selected } : t)));
@@ -3480,7 +3481,7 @@ function ProductTypeEditor({
     setSaving(true);
     try {
       const codes = items.filter((t) => t.selected).map((t) => t.code);
-      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+      const API_BASE = resolveApiBaseUrl();
       await fetch(`${API_BASE}/admin/landing/product-types`, {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -3981,7 +3982,7 @@ function useHomeData() {
       setBenefits(b);
       setFilters(f);
 
-      const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+      const API_BASE = resolveApiBaseUrl();
       const res = await fetch(`${API_BASE}/admin/landing/product-types`, { credentials: "include" });
       if (res.ok) setLandingTypes(await res.json());
       const brandRes = await fetch(`${API_BASE}/admin/landing/brands`, { credentials: "include" });

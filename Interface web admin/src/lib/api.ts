@@ -1,4 +1,51 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+/**
+ * URL base del API del panel.
+ *
+ * El `.env` apunta a `http://localhost:3000`, que solo sirve cuando la página se
+ * abre en la misma máquina. Para que el panel funcione también abierto desde el
+ * celular con la IP del equipo, cuando el API apunta a loopback (o no está
+ * configurado) se usa el host que sirvió la página con el puerto del API: el
+ * `localhost` del celular no es la máquina donde corre el backend.
+ *
+ * Es el mismo criterio que usan los paneles de picking y delivery.
+ */
+const LOOPBACK = /^(localhost|127\.0\.0\.1)$/;
+const DEFAULT_API = "http://localhost:3000";
+
+function hostnameOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+function portOf(url: string, fallback: string): string {
+  try {
+    return new URL(url).port || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function resolveApiBaseUrl(): string {
+  const configured = import.meta.env.VITE_API_URL ?? "";
+  // Sin `window` (SSR/pruebas) no hay host de página que usar.
+  if (typeof window === "undefined") return configured || DEFAULT_API;
+
+  const pageHost = window.location.hostname;
+  const configuredHost = hostnameOf(configured);
+  const pageIsLoopback = LOOPBACK.test(pageHost);
+  const configuredIsLoopback = !configuredHost || LOOPBACK.test(configuredHost);
+
+  if (!pageIsLoopback && configuredIsLoopback) {
+    return `${window.location.protocol}//${pageHost}:${portOf(configured, "3000")}`;
+  }
+
+  return configured || DEFAULT_API;
+}
+
+const API_BASE_URL = resolveApiBaseUrl();
 
 export class ApiError extends Error {
   status: number;

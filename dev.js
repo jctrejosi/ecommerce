@@ -135,6 +135,11 @@ const SERVICES = [
     url: "http://localhost:8443",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local, así
+    // que el panel se puede abrir desde el celular con la IP del equipo. El
+    // cliente resuelve el API contra el host que sirvió la página
+    // (`resolveApiBaseUrl` en `Interface web admin/src/lib/api.ts`).
+    lan: true,
     deps: PNPM_DEPS,
   },
   {

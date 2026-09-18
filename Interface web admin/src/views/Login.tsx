@@ -1,10 +1,12 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useEffect, useState } from "react";
 import { AlertCircle, Eye, EyeOff, Loader2, Lock, User as UserIcon } from "lucide-react";
 import { authService, type UserProfile } from "../services/auth.service";
 import AppFooter from "../components/AppFooter";
 import logo from "../assets/logo.png";
+import tienda from "../assets/tienda.png";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE_URL = resolveApiBaseUrl();
 
 export default function Login({ onSuccess }: { onSuccess: (user: UserProfile) => void }) {
   const [identifier, setIdentifier] = useState("");
@@ -130,6 +132,13 @@ export default function Login({ onSuccess }: { onSuccess: (user: UserProfile) =>
               {loading && <Loader2 size={15} className="animate-spin" />}
               {loading ? "Ingresando..." : "Ingresar"}
             </button>
+
+            {/* Logo de la tienda virtual, debajo de los campos */}
+            <img
+              src={tienda}
+              alt="Tienda virtual"
+              className="h-20 w-auto mx-auto object-contain"
+            />
           </form>
 
           <p className="mt-6 text-center text-xs text-gray-400">

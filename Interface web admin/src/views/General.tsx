@@ -1,7 +1,8 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect } from "react";
 import { Loader2, Save } from "lucide-react";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE_URL = resolveApiBaseUrl();
 
 export default function General() {
   const [logoUrl, setLogoUrl] = useState("");

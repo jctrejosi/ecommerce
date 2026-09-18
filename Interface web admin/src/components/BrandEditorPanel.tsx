@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useCallback, useEffect, useState, type ChangeEvent } from "react";
 import { Plus, Search, Trash2, Upload, Crop, Eraser, X } from "lucide-react";
 import { catalogService } from "../services/catalog.service";
@@ -26,7 +27,7 @@ type BrandProduct = {
   brandName: string | null;
 };
 
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE = resolveApiBaseUrl();
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CO", {

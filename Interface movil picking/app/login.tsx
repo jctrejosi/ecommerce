@@ -10,9 +10,11 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
-import { apiErrorMessage } from "@/api";
+import { apiErrorMessage, pickingApi } from "@/api";
+import { resolveAssetUrl } from "@/api/apiConfig";
 import { useAuthStore } from "@/auth/authStore";
 import { useKeyboardHeight } from "@/lib/keyboard";
 import { ErrorBox } from "@/ui/ErrorBox";
@@ -26,6 +28,16 @@ import { ErrorBox } from "@/ui/ErrorBox";
 export default function LoginScreen() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
+
+  // Logo de la tienda configurado en el admin (endpoint público). Si el backend
+  // aún no responde, la pantalla se ve igual: simplemente no hay logo arriba.
+  const storeInfo = useQuery({
+    queryKey: ["store", "general"],
+    queryFn: () => pickingApi.storeInfo(),
+    staleTime: 5 * 60_000,
+    retry: 1,
+  });
+  const storeLogo = resolveAssetUrl(storeInfo.data?.url);
 
   // Con edge-to-edge el teclado se superpone al contenido (Android ignora
   // `adjustResize`), así que apartamos el formulario a mano.
@@ -66,20 +78,23 @@ export default function LoginScreen() {
         style={styles.flex}
         contentContainerStyle={[
           styles.scroll,
+          keyboardOpen && styles.scrollKeyboard,
           keyboardOpen && { paddingBottom: keyboardHeight + spacing(4) },
         ]}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Mientras se escribe se oculta la marca: libera la altura que
+        {/* Mientras se escribe se ocultan las marcas: libera la altura que
             necesita el formulario para quedar por encima del teclado en las
             pantallas pequeñas del dispositivo de picking. */}
         {keyboardOpen ? null : (
-          <View style={styles.brand}>
-            <Image
-              source={require("../assets/picking.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
+          <View style={styles.topBrand}>
+            {storeLogo ? (
+              <Image
+                source={{ uri: storeLogo }}
+                style={styles.storeLogo}
+                resizeMode="contain"
+              />
+            ) : null}
             <Text style={styles.appName}>Picking | DSI</Text>
             <Text style={styles.tagline}>Inicia sesión para comenzar</Text>
           </View>
@@ -131,6 +146,17 @@ export default function LoginScreen() {
             )}
           </Pressable>
         </View>
+
+        {/* Marca de la app, al pie de la pantalla. */}
+        {keyboardOpen ? null : (
+          <View style={styles.bottomBrand}>
+            <Image
+              source={require("../assets/picking.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+          </View>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -139,9 +165,15 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
-  scroll: { flexGrow: 1, justifyContent: "center", padding: spacing(5) },
-  brand: { alignItems: "center", marginBottom: spacing(7) },
-  logo: { height: 72, width: 130 },
+  // space-between: logo de la tienda arriba, formulario en el centro y la marca
+  // de la app al pie.
+  scroll: { flexGrow: 1, justifyContent: "space-between", padding: spacing(5) },
+  // Con el teclado abierto solo queda el formulario: se centra en lo visible.
+  scrollKeyboard: { justifyContent: "center" },
+  topBrand: { alignItems: "center" },
+  storeLogo: { height: 52, width: 200, marginBottom: spacing(4) },
+  bottomBrand: { alignItems: "center" },
+  logo: { height: 64, width: 116 },
   appName: { color: colors.text, fontSize: 16, fontWeight: "800", marginTop: spacing(2) },
   tagline: { color: colors.textFaint, fontSize: 13, fontWeight: "600", marginTop: spacing(1) },
   card: {

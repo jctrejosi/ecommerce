@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search,
@@ -382,7 +383,7 @@ export default function Products() {
               <button
                 onClick={() => {
                   const API =
-                    import.meta.env.VITE_API_URL || "http://localhost:3000";
+                    resolveApiBaseUrl();
                   window.open(`${API}/catalog/products/export`, "_blank");
                 }}
                 className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
@@ -409,7 +410,7 @@ export default function Products() {
                   formData.append("file", file);
                   try {
                     const API =
-                      import.meta.env.VITE_API_URL || "http://localhost:3000";
+                      resolveApiBaseUrl();
                     const res = await fetch(`${API}/catalog/products/import`, {
                       method: "POST",
                       body: formData,
@@ -1027,7 +1028,7 @@ function ProductDrawer({
     }
     setSaving(true);
     try {
-      const API = import.meta.env.VITE_API_URL || "http://localhost:3000";
+      const API = resolveApiBaseUrl();
       const isEdit = mode === "edit" && product?.id;
       const url = isEdit
         ? `${API}/catalog/products/${product.id}/update`
@@ -1442,8 +1443,7 @@ function ProductDrawer({
                               reader.readAsDataURL(file);
                               try {
                                 const API =
-                                  import.meta.env.VITE_API_URL ||
-                                  "http://localhost:3000";
+                                  resolveApiBaseUrl();
                                 const fd = new FormData();
                                 fd.append("file", file);
                                 fd.append(

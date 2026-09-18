@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus,
@@ -11,7 +12,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+const API_BASE_URL = resolveApiBaseUrl();
 
 // Íconos (emojis) relacionados con el código del tipo de producto
 const TYPE_ICONS: Record<string, string> = {

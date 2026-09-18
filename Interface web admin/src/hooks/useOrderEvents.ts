@@ -1,7 +1,8 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useEffect, useRef } from 'react'
 import { io } from 'socket.io-client'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
+const API_URL = resolveApiBaseUrl()
 
 export interface OrderEventPayload {
   referenceCode: string

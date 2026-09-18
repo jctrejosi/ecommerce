@@ -1,3 +1,4 @@
+import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronRight,
@@ -364,7 +365,7 @@ export default function Categories() {
       formData.append("file", pendingFile);
       formData.append("code", `category_${code || name.replace(/\s+/g, "_")}`);
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:3000"}/upload/image`,
+        `${resolveApiBaseUrl()}/upload/image`,
         { method: "POST", body: formData },
       );
       const data = await res.json();

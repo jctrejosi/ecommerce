@@ -34,7 +34,7 @@ export function showBrowserNotification(title: string, body: string): void {
   try {
     const notification = new Notification(title, {
       body,
-      icon: "/favicon.svg",
+      icon: "/favicon.png",
     });
     notification.onclick = () => {
       window.focus();

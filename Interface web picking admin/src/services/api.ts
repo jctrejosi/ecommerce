@@ -74,6 +74,18 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 
 export { API_BASE_URL };
 
+/**
+ * El logo de la tienda lo entrega el backend como URL absoluta (Cloudinary);
+ * si algún día llegara relativa, se completa contra el backend activo.
+ */
+export function resolveAssetUrl(url?: string | null): string | null {
+  const value = url?.trim();
+  if (!value) return null;
+  return /^https?:\/\//i.test(value)
+    ? value
+    : `${API_BASE_URL}${value.startsWith('/') ? '' : '/'}${value}`;
+}
+
 export class ApiError extends Error {
   status: number;
   payload: any;
@@ -160,6 +172,9 @@ export interface ShelfPayload {
 }
 
 export const api = {
+  /** Logo y título de la tienda configurados en el admin general (público). */
+  storeInfo: () => fetchJson<{ url?: string; title?: string }>('/landing/general'),
+
   branches: () => fetchJson<Branch[]>('/picking-admin/branches'),
 
   categories: () => fetchJson<Category[]>('/picking-admin/categories'),
