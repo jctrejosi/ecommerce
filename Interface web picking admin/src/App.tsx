@@ -1,5 +1,5 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { FormEvent } from 'react'
+import type { FormEvent, KeyboardEvent } from 'react'
 import { api, ApiError, resolveAssetUrl, setUnauthorizedHandler } from './services/api'
 import type { AuthUser, PickUser } from './services/api'
 import type {
@@ -334,20 +334,29 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="shrink-0" style={{ background: '#111827' }}>
-        <div className="flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center">
-          <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
-            <img src={footerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
-          </a>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
-            © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
-          </p>
-          <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-            Manizales, Caldas, Colombia
-          </p>
-        </div>
-      </footer>
+      <CopyrightFooter />
     </div>
+  )
+}
+
+// ─── Footer de copyright ──────────────────────────────────────────────────────
+
+/** Pie de copyright, compartido por el panel y la pantalla de login. */
+function CopyrightFooter() {
+  return (
+    <footer className="shrink-0" style={{ background: '#111827' }}>
+      <div className="flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center">
+        <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
+          <img src={footerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+        </a>
+        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+          © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
+        </p>
+        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+          Manizales, Caldas, Colombia
+        </p>
+      </div>
+    </footer>
   )
 }
 
@@ -1048,6 +1057,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
   const [error, setError] = useState<string | null>(null)
   // Logo de la tienda configurado en el admin general (endpoint público).
   const [storeLogo, setStoreLogo] = useState<string | null>(null)
+  const passwordRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -1062,8 +1072,9 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
     }
   }, [])
 
-  const submit = async (e: FormEvent) => {
-    e.preventDefault()
+  const doLogin = async () => {
+    // Mismo criterio que el botón: sin los dos campos no hay nada que enviar.
+    if (busy || !identifier.trim() || !password) return
     setBusy(true)
     setError(null)
     try {
@@ -1085,73 +1096,96 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
     }
   }
 
+  /**
+   * Enter encadena el formulario: en el usuario pasa a la contraseña y en la
+   * contraseña envía. Sin esto, Enter sobre el usuario dispara el submit del
+   * formulario y, con la contraseña vacía, no pasaba nada.
+   */
+  const onEnter = (action: 'next' | 'submit') => (e: KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== 'Enter') return
+    e.preventDefault()
+    if (action === 'next') passwordRef.current?.focus()
+    else void doLogin()
+  }
+
   return (
-    <div className="flex h-full items-center justify-center bg-[#0C0C0D] px-5">
-      <div className="w-full max-w-sm flex flex-col items-center gap-6">
-        {/* Logo de la tienda (el que se configura en el admin general). */}
-        {storeLogo && (
-          <img
-            src={storeLogo}
-            alt="Tienda"
-            className="h-12 w-auto max-w-[220px] object-contain"
-          />
-        )}
-
-        <form
-          onSubmit={submit}
-          className="w-full bg-[#141416] border border-white/10 rounded-2xl p-6 flex flex-col gap-4"
-        >
-          <div className="text-center mb-1">
-            <h1 className="text-2xl font-extrabold tracking-tight text-white">
-              Picking <span className="text-amber-400">Admin</span>
-            </h1>
-            <p className="text-white/40 text-xs font-medium mt-1">
-              Inicia sesión con tu usuario administrador
-            </p>
-          </div>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">Usuario o email</span>
-            <input
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              autoFocus
-              autoCapitalize="none"
-              autoCorrect="off"
-              className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
-              placeholder="admin"
+    <div className="flex h-full flex-col bg-[#0C0C0D]">
+      {/* En pantallas bajas el contenido scrollea y el pie queda visible. */}
+      <div className="flex-1 flex items-center justify-center overflow-y-auto px-5">
+        <div className="w-full max-w-sm flex flex-col items-center gap-6">
+          {/* Logo de la tienda (el que se configura en el admin general). */}
+          {storeLogo && (
+            <img
+              src={storeLogo}
+              alt="Tienda"
+              className="h-12 w-auto max-w-[220px] object-contain"
             />
-          </label>
-
-          <label className="flex flex-col gap-1.5">
-            <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">Contraseña</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
-              placeholder="••••••••"
-            />
-          </label>
-
-          {error && (
-            <p className="text-red-400 text-xs font-semibold bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
-              {error}
-            </p>
           )}
 
-          <button
-            type="submit"
-            disabled={busy || !identifier || !password}
-            className="mt-1 bg-amber-400 text-[#0C0C0D] font-bold text-sm rounded-xl px-4 py-2.5 disabled:opacity-40 transition-all"
+          <form
+            onSubmit={(e: FormEvent) => {
+              e.preventDefault()
+              void doLogin()
+            }}
+            className="w-full bg-[#141416] border border-white/10 rounded-2xl p-6 flex flex-col gap-4"
           >
-            {busy ? 'Ingresando…' : 'Ingresar'}
-          </button>
-        </form>
+            <div className="text-center mb-1">
+              <h1 className="text-2xl font-extrabold tracking-tight text-white">
+                Picking <span className="text-amber-400">Admin</span>
+              </h1>
+              <p className="text-white/40 text-xs font-medium mt-1">
+                Inicia sesión con tu usuario administrador
+              </p>
+            </div>
 
-        {/* Marca de la app, al pie. */}
-        <img src={headerLogo} alt="Picking" className="h-14 w-auto object-contain opacity-90" />
+            <label className="flex flex-col gap-1.5">
+              <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">Usuario o email</span>
+              <input
+                value={identifier}
+                onChange={(e) => setIdentifier(e.target.value)}
+                onKeyDown={onEnter('next')}
+                autoFocus
+                autoCapitalize="none"
+                autoCorrect="off"
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+                placeholder="admin"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">Contraseña</span>
+              <input
+                ref={passwordRef}
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onKeyDown={onEnter('submit')}
+                className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
+                placeholder="••••••••"
+              />
+            </label>
+
+            {error && (
+              <p className="text-red-400 text-xs font-semibold bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2">
+                {error}
+              </p>
+            )}
+
+            <button
+              type="submit"
+              disabled={busy || !identifier || !password}
+              className="mt-1 bg-amber-400 text-[#0C0C0D] font-bold text-sm rounded-xl px-4 py-2.5 disabled:opacity-40 transition-all"
+            >
+              {busy ? 'Ingresando…' : 'Ingresar'}
+            </button>
+          </form>
+
+          {/* Marca de la app, al pie del contenido. */}
+          <img src={headerLogo} alt="Picking" className="h-14 w-auto object-contain opacity-90" />
+        </div>
       </div>
+
+      <CopyrightFooter />
     </div>
   )
 }

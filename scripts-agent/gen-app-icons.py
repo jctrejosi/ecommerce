@@ -13,6 +13,9 @@ ROOT = Path("Interface movil client/android/app/src/main/res")
 LOGO = Image.open("/tmp/logo_store.png").convert("RGBA")
 
 WHITE = (255, 255, 255, 255)
+# Fondo transparente para los favicons: el logo ya trae alfa y aplanarlo sobre
+# blanco deja un marco visible en la pestaña.
+TRANSPARENT = (255, 255, 255, 0)
 
 # Legacy icons (square canvas + round canvas): logo a 78% del ancho.
 # El logo de la tienda (configurado en el admin) es un logotipo ancho (~3.3:1),
@@ -25,8 +28,8 @@ LEGACY_RATIO = 0.88
 # logotipo ancho no debe pasar de ese ancho.
 FOREGROUND_RATIO = 0.58
 
-def compose(size: int, logo_ratio: float) -> Image.Image:
-    canvas = Image.new("RGBA", (size, size), WHITE)
+def compose(size: int, logo_ratio: float, background=WHITE) -> Image.Image:
+    canvas = Image.new("RGBA", (size, size), background)
     w = int(size * logo_ratio)
     h = int(w * LOGO.height / LOGO.width)
     logo = LOGO.resize((w, h), Image.LANCZOS)
@@ -71,7 +74,7 @@ canvas.save(asset_fg, "PNG")
 WEB = Path("Interface web client/public")
 WEB.mkdir(parents=True, exist_ok=True)
 for name, size in {"favicon.png": 192, "apple-touch-icon.png": 180}.items():
-    compose(size, LEGACY_RATIO).convert("RGB").save(WEB / name, "PNG")
+    compose(size, LEGACY_RATIO, TRANSPARENT).save(WEB / name, "PNG")
     made.append(f"public/{name}")
 
 print(f"OK {len(made)} iconos generados:")

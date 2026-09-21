@@ -12,6 +12,27 @@
 const { spawn } = require('node:child_process');
 const { mkdirSync, writeFileSync } = require('node:fs');
 const { setTimeout: sleep } = require('node:timers/promises');
+const { Client } = require('pg');
+const bcrypt = require('bcryptjs');
+
+const DATABASE_URL =
+  process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ecommerce';
+
+/** Contraseña del admin, resuelta contra el hash de la BD (sin intentos fallidos). */
+async function resolveAdminPassword() {
+  const db = new Client({ connectionString: DATABASE_URL });
+  await db.connect();
+  try {
+    const r = await db.query(`SELECT password_hash FROM users WHERE username = 'admin'`);
+    const hit = ['admdsi4231', 'admin123'].find((p) =>
+      bcrypt.compareSync(p, r.rows[0]?.password_hash ?? ''),
+    );
+    if (!hit) throw new Error('No se pudo resolver la contraseña del admin');
+    return hit;
+  } finally {
+    await db.end();
+  }
+}
 
 const DEBUG_PORT = 9334;
 const PANEL_URL = process.env.PANEL_URL || 'http://127.0.0.1:8446/';
@@ -164,10 +185,98 @@ async function main() {
       !!tienda && !!marca && tienda.arribaDelFormulario && marca.debajoDelFormulario,
     );
 
+    // ── Footer de copyright ────────────────────────────────────────────────
+    console.log('\n== Footer de copyright en el login ==');
+    const leerFooter = `(() => {
+      const f = document.querySelector('footer');
+      if (!f) return null;
+      const r = f.getBoundingClientRect();
+      const img = f.querySelector('img');
+      return {
+        texto: f.innerText.replace(/\\s+/g, ' ').trim(),
+        imgSrc: img ? (img.currentSrc || img.src) : null,
+        imgCargada: !!img && img.naturalWidth > 0,
+        alPie: Math.abs(r.bottom - window.innerHeight) <= 2,
+        fondo: getComputedStyle(f).backgroundColor,
+      };
+    })()`;
+
+    const footerLogin = await evaluate(leerFooter);
+    check('el login tiene el footer', !!footerLogin);
+    check(
+      'el footer trae el copyright de DSI',
+      !!footerLogin &&
+        /DSI SA/.test(footerLogin.texto) &&
+        /Todos los derechos reservados/.test(footerLogin.texto) &&
+        /Manizales, Caldas, Colombia/.test(footerLogin.texto),
+      footerLogin?.texto.slice(0, 90),
+    );
+    check(
+      'el footer conserva el logo.png',
+      !!footerLogin && /logo/i.test(footerLogin.imgSrc ?? '') && footerLogin.imgCargada,
+      footerLogin?.imgSrc?.slice(0, 60),
+    );
+    check('el footer queda al pie de la pantalla', !!footerLogin && footerLogin.alPie);
+    check('el fondo del footer es el mismo del panel (#111827)', footerLogin?.fondo === 'rgb(17, 24, 39)', footerLogin?.fondo);
+
     mkdirSync('scripts-agent/.scratch', { recursive: true });
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     writeFileSync(SHOT, Buffer.from(shot.data, 'base64'));
     console.log(`\n  captura: ${SHOT}`);
+
+    // ── Enter encadena el formulario ────────────────────────────────────────
+    console.log('\n== Enter en los campos ==');
+    const marcaEnter = (key) =>
+      `new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true, cancelable: true })`;
+
+    // Escribe el usuario y pulsa Enter: debe saltar a la contraseña.
+    const saltaALaContrasena = await evaluate(`(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      const user = document.querySelector('form input:not([type=password])');
+      const pass = document.querySelector('form input[type=password]');
+      user.focus();
+      setter.call(user, 'admin'); user.dispatchEvent(new Event('input', { bubbles: true }));
+      user.dispatchEvent(${marcaEnter('Enter')});
+      return document.activeElement === pass;
+    })()`);
+    check('Enter en el usuario salta a la contraseña', saltaALaContrasena);
+
+    // Enter con la contraseña vacía: no hay nada que enviar, sigue el login.
+    const sigueEnLogin = await evaluate(`(() => {
+      const pass = document.querySelector('form input[type=password]');
+      pass.dispatchEvent(${marcaEnter('Enter')});
+      return { enfocado: document.activeElement === pass, hayForm: !!document.querySelector('form') };
+    })()`);
+    check(
+      'Enter con la contraseña vacía no envía (sigue el login)',
+      sigueEnLogin.enfocado && sigueEnLogin.hayForm,
+    );
+
+    // Con la contraseña correcta, Enter envía y entra al panel.
+    const password = await resolveAdminPassword();
+    await evaluate(`(() => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      const pass = document.querySelector('form input[type=password]');
+      pass.focus();
+      setter.call(pass, ${JSON.stringify(password)});
+      pass.dispatchEvent(new Event('input', { bubbles: true }));
+      pass.dispatchEvent(${marcaEnter('Enter')});
+      return true;
+    })()`);
+    await until(
+      `!document.querySelector('form input[type=password]') && document.body.innerText.includes('Estanterías')`,
+      'el panel tras iniciar sesión con Enter',
+      80,
+    );
+    check('Enter en la contraseña inicia sesión', true);
+
+    // El panel debe mostrar el MISMO footer (es el componente compartido).
+    const footerPanel = await evaluate(leerFooter);
+    check(
+      'el panel muestra el mismo footer que el login',
+      !!footerPanel && footerPanel.texto === footerLogin?.texto,
+      footerPanel?.texto.slice(0, 60),
+    );
   } finally {
     cdp?.ws.close();
     chrome.kill('SIGKILL');

@@ -2,7 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react';
 import { Eye, EyeOff, Loader2, Lock, User } from 'lucide-react';
 import { api, ApiError, API_BASE_URL } from '../services/api';
 import type { AuthUser } from '../types';
-import logo from '../assets/logo.png';
+import AppFooter from './AppFooter';
 
 interface Props {
   onLogin: (token: string, user: AuthUser) => void;
@@ -48,15 +48,15 @@ export default function LoginScreen({ onLogin }: Props) {
   }
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-950 px-4 py-8">
-      <div className="flex flex-1 items-center justify-center">
+    <div className="flex min-h-full flex-col bg-slate-950">
+      <div className="flex flex-1 items-center justify-center px-4 py-8">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
             {storeLogo && (
               <img
                 src={storeLogo}
                 alt="Tienda"
-                className="mx-auto mb-5 h-16 w-auto object-contain"
+                className="mx-auto mb-5 h-10 w-auto object-contain"
               />
             )}
             <h1 className="text-2xl font-bold text-white">Mercaldas Delivery</h1>
@@ -129,14 +129,8 @@ export default function LoginScreen({ onLogin }: Props) {
         </div>
       </div>
 
-      {/* Logo compartido (logo.png), sin fondo, al pie */}
-      <div className="flex shrink-0 justify-center pt-6">
-        <img
-          src={logo}
-          alt="Mercaldas"
-          className="h-9 w-auto object-contain opacity-90"
-        />
-      </div>
+      {/* Logo (logo.png) y copyright, al pie */}
+      <AppFooter />
     </div>
   );
 }
