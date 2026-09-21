@@ -1,12 +1,24 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Put } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  HttpStatus,
+  BadRequestException,
+  Put,
+} from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { Public } from '../../common/decorators/public.decorator';
 import { DrizzleService } from '../../database/drizzle.service';
+import { WompiService } from '../payments/wompi.service';
 import { store, settings } from '../../../drizzle/schema';
 
 @Controller('admin/settings')
 export class SettingsController {
-  constructor(private readonly drizzle: DrizzleService) {}
+  constructor(
+    private readonly drizzle: DrizzleService,
+    private readonly wompiService: WompiService,
+  ) {}
 
   private get db() {
     return this.drizzle.db;
@@ -67,8 +79,13 @@ export class SettingsController {
   @Put('payment-methods')
   @HttpCode(HttpStatus.OK)
   async updatePaymentMethods(@Body() body: any) {
-    const row = await this.db.select().from(settings).where(eq(settings.key, 'payment_methods')).limit(1);
-    if (row.length) {
+    const [current] = await this.db.select().from(settings).where(eq(settings.key, 'payment_methods')).limit(1);
+
+    // Valida ANTES de guardar: si un método pasa a habilitado y no está
+    // configurado correctamente, se rechaza y no se persiste el cambio.
+    await this.validatePaymentMethods(body, (current?.value as any) ?? null);
+
+    if (current) {
       await this.db.update(settings).set({ value: body }).where(eq(settings.key, 'payment_methods'));
     } else {
       await this.db.insert(settings).values({
@@ -81,6 +98,43 @@ export class SettingsController {
       } as any);
     }
     return this.getPaymentMethods();
+  }
+
+  /**
+   * Comprueba un medio de pago antes de guardarlo.
+   *
+   * Solo se valida cuando el método pasa de deshabilitado a habilitado (o se
+   * guarda por primera vez), para no bloquear toggles no relacionados ni la
+   * edición de campos mientras el método ya está activo. Si la validación
+   * falla, lanza BadRequestException y el guardado no se realiza.
+   */
+  private async validatePaymentMethods(next: any, prev: any): Promise<void> {
+    const wasEnabled = (key: 'efectivo' | 'wompi' | 'breb'): boolean =>
+      prev ? (prev?.[key]?.enabled ?? true) : true;
+
+    // Wompi: requiere las credenciales configuradas y que Wompi las acepte.
+    if (next?.wompi?.enabled === true && !wasEnabled('wompi')) {
+      await this.wompiService.validateConfiguration();
+
+      const methods = next.wompi?.methods ?? {};
+      if (!methods.card && !methods.pse && !methods.nequi) {
+        throw new BadRequestException(
+          'Wompi requiere al menos un método habilitado (tarjeta, PSE o Nequi).',
+        );
+      }
+    }
+
+    // Bre-B: requiere una llave válida.
+    if (next?.breb?.enabled === true && !wasEnabled('breb')) {
+      const key = String(next?.breb?.key ?? '').trim();
+      if (key.length < 3 || /\s/.test(key)) {
+        throw new BadRequestException(
+          'Bre-B requiere una llave válida (sin espacios), p. ej. @davi3148853458.',
+        );
+      }
+    }
+
+    // Efectivo contra entrega: no tiene configuración externa que validar.
   }
 
   @Get('payment-methods')

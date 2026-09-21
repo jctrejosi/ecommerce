@@ -3,6 +3,12 @@ import { X } from "lucide-react";
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"));
 
+// Popups ya mostrados en esta sesión (mismo arranque de la app). Vive a nivel de
+// módulo para sobrevivir al montaje/desmontaje de `PopupDisplay` al navegar
+// fuera de Inicio: el popup debe salir una sola vez por sesión, no cada vez que
+// se vuelve a Inicio.
+const sessionShownPopupIds = new Set<number>();
+
 interface PopupData {
   id: number;
   title: string;
@@ -39,7 +45,9 @@ interface PopupDisplayProps {
 export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
   const [activePopups, setActivePopups] = useState<PopupData[]>([]);
   const [visibleIds, setVisibleIds] = useState<Set<number>>(new Set());
-  const [dismissedIds, setDismissedIds] = useState<Set<number>>(new Set());
+  const [dismissedIds, setDismissedIds] = useState<Set<number>>(
+    () => new Set(sessionShownPopupIds),
+  );
   const [closingIds, setClosingIds] = useState<Set<number>>(new Set());
   const timersRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
 
@@ -65,6 +73,9 @@ export function PopupDisplay({ onApplyFilter }: PopupDisplayProps) {
 
       // Delay before showing
       const showTimer = setTimeout(() => {
+        // Se recuerda a nivel de sesión: una vez mostrado, no vuelve a salir
+        // aunque el componente se remonte al regresar a Inicio.
+        sessionShownPopupIds.add(p.id);
         // Mark as visible
         setVisibleIds((prev) => new Set(prev).add(p.id));
 

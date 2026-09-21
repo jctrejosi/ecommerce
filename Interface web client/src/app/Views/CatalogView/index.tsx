@@ -33,6 +33,35 @@ const SORT_OPTIONS = [
 const EMPTY_PRODUCTS: Product[] = [];
 const EMPTY_CATEGORIES: CatalogCategory[] = [];
 
+/**
+ * Expande una selección de categorías a sí misma + todos sus descendientes.
+ * El padre no tiene productos propios, así que sin esto el filtro por una
+ * categoría superior no devuelve nada.
+ */
+function expandCategoryIds(
+  categories: CatalogCategory[],
+  ids: number[],
+): number[] {
+  if (ids.length === 0) return ids;
+  const childrenByParent = new Map<number, number[]>();
+  for (const category of categories) {
+    const parentId = category.parentId ?? null;
+    if (parentId === null) continue;
+    const children = childrenByParent.get(parentId) ?? [];
+    children.push(category.id);
+    childrenByParent.set(parentId, children);
+  }
+  const expanded = new Set<number>();
+  const stack = [...ids];
+  while (stack.length > 0) {
+    const current = stack.pop()!;
+    if (expanded.has(current)) continue;
+    expanded.add(current);
+    for (const child of childrenByParent.get(current) ?? []) stack.push(child);
+  }
+  return Array.from(expanded);
+}
+
 export function CatalogPage({
   cartItems,
   onAdd,
@@ -149,13 +178,19 @@ export function CatalogPage({
   }, []);
   const PAGE_SIZE = 20;
 
+  // El filtro por categoría debe incluir subcategorías: se expande el árbol
+  // antes de consultar (las categorías ya vienen con su jerarquía).
+  const queryCategoryIds = catalogCategories?.length
+    ? expandCategoryIds(catalogCategories, catalogCategory)
+    : catalogCategory;
+
   const {
     categories,
     products,
     loading: catalogLoading,
   } = useCatalog(
     {
-      categoryIds: catalogSearch ? [] : catalogCategory,
+      categoryIds: catalogSearch ? [] : queryCategoryIds,
       productIds: catalogSearch ? undefined : catalogProductIds,
       onSale: catalogSearch ? false : catalogOnSale,
       priceRange: catalogSearch ? "all" : catalogPriceRange,

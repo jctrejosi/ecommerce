@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import {
   Package,
   Heart,
@@ -486,6 +486,27 @@ interface AcctNotif {
   body: string;
   time: string;
   read: boolean;
+}
+
+/** Convierte una notificación del backend (`AppNotification`) al modelo de la sección. */
+function toAcctNotif(n: AppNotification): AcctNotif {
+  return {
+    id: String(n.id),
+    type: (n.type === "ORDER" || n.type === "PAYMENT"
+      ? "order"
+      : n.type === "PROMOTION"
+        ? "promo"
+        : "reco") as AcctNotif["type"],
+    title: n.title,
+    body: n.message,
+    time: new Date(n.createdAt).toLocaleDateString("es-CO", {
+      day: "2-digit",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+    read: n.isRead,
+  };
 }
 
 interface _ProductReview {
@@ -1090,24 +1111,23 @@ export function UserAdminView({
     boolean | null
   >(null);
   const [coupons, setCoupons] = useState<Coupon[]>(INIT_COUPONS);
-  const [notifs, setNotifs] = useState<AcctNotif[]>(() =>
-    notifications.map((n) => ({
-      id: String(n.id),
-      type: (n.type === "ORDER" || n.type === "PAYMENT"
-        ? "order"
-        : n.type === "PROMOTION"
-          ? "promo"
-          : "reco") as AcctNotif["type"],
-      title: n.title,
-      body: n.message,
-      time: new Date(n.createdAt).toLocaleDateString("es-CO", {
-        day: "2-digit",
-        month: "short",
-        hour: "2-digit",
-        minute: "2-digit",
-      }),
-      read: n.isRead,
-    })),
+  // Las notificaciones se derivan del hook (`notifications`), no se copian a un
+  // estado con inicialización única: si llegaban después de montar la vista (el
+  // fetch inicial o el socket), la sección quedaba vacía. Solo se guarda lo local
+  // que el backend aún no refleja: ids marcados como leídos o eliminados.
+  const [deletedNotifIds, setDeletedNotifIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [readNotifIds, setReadNotifIds] = useState<Set<string>>(() => new Set());
+  const notifs: AcctNotif[] = useMemo(
+    () =>
+      notifications
+        .filter((n) => !deletedNotifIds.has(String(n.id)))
+        .map((n) => {
+          const mapped = toAcctNotif(n);
+          return readNotifIds.has(mapped.id) ? { ...mapped, read: true } : mapped;
+        }),
+    [notifications, deletedNotifIds, readNotifIds],
   );
   const [reviews, setReviews] = useState<ProductReview[]>(INIT_REVIEWS);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -3720,7 +3740,9 @@ export function UserAdminView({
             {unread.length > 0 && (
               <button
                 onClick={() =>
-                  setNotifs((prev) => prev.map((n) => ({ ...n, read: true })))
+                  setReadNotifIds(
+                    new Set(notifications.map((n) => String(n.id))),
+                  )
                 }
                 className="text-xs font-semibold text-muted-foreground underline hover:text-foreground transition-colors"
               >
@@ -3830,11 +3852,7 @@ export function UserAdminView({
                     {!n.read && (
                       <button
                         onClick={() => {
-                          setNotifs((prev) =>
-                            prev.map((x) =>
-                              x.id === n.id ? { ...x, read: true } : x,
-                            ),
-                          );
+                          setReadNotifIds((prev) => new Set(prev).add(n.id));
                           onMarkNotifRead?.(Number(n.id));
                         }}
                         className="w-7 h-7 rounded-lg flex items-center justify-center border border-border hover:bg-muted transition-colors"
@@ -3844,7 +3862,7 @@ export function UserAdminView({
                     )}
                     <button
                       onClick={() =>
-                        setNotifs((prev) => prev.filter((x) => x.id !== n.id))
+                        setDeletedNotifIds((prev) => new Set(prev).add(n.id))
                       }
                       className="w-7 h-7 rounded-lg flex items-center justify-center border border-border hover:bg-muted transition-colors"
                     >

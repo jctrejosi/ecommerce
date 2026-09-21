@@ -104,14 +104,6 @@ const SERVICES = [
     deps: NPM_DEPS,
   },
   {
-    name: "web",
-    dir: "Interface web client",
-    url: "http://localhost:5173",
-    dev: [PM, "run", "dev"],
-    prod: ["npx", "vite", "preview"],
-    deps: PNPM_DEPS,
-  },
-  {
     // Sirve el build de `Interface web client/dist` y hace de mismo-origen del
     // API; es lo que embebe el APK cliente (WebView) y lo que este descubre en
     // la red local (`GET /discovery`).
@@ -205,8 +197,7 @@ const SERVICES = [
 // Cada app declara sus dependencias; al pedirla se levanta también lo mínimo
 // para que funcione (p. ej. --analytics ⇒ backend + PostgreSQL de campañas).
 const APP_ALIASES = {
-  client: "web",
-  web: "web",
+  client: "webclient",
   webclient: "webclient",
   "client-apk": "webclient",
   backend: "backend",
@@ -227,8 +218,7 @@ const APP_DEPENDS = {
   // db-campaigns (PostgreSQL de analytics, :5436) solo lo necesita el panel
   // de analytics; el backend de ecommerce usa únicamente la BD principal (:5432).
   backend: ["db"],
-  web: ["backend"],
-  webclient: ["backend"], // sirve la web del APK y proxy del API
+  webclient: ["backend"], // sirve la web del cliente (APK/WebView) y proxy del API
   admin: ["backend"],
   analytics: ["backend", "db-campaigns"], // panel analytics + su BD de campañas
   picking: ["backend"],
@@ -858,8 +848,7 @@ function stopAll() {
 // ── Ayuda (--help) ─────────────────────────────────────────
 const APP_LABELS = {
   backend: "API backend (NestJS)",
-  web: "Cliente web",
-  webclient: "Servidor del cliente para APK (WebView)",
+  webclient: "Cliente web (servidor del cliente / APK WebView)",
   admin: "Panel admin web",
   analytics: "Panel analytics web",
   picking: "Picking web",
@@ -875,7 +864,7 @@ function selectorFlags(name) {
   for (const [alias, n] of Object.entries(APP_ALIASES)) {
     if (n === name) flags.push("--" + alias);
   }
-  // El flag canónico (igual al nombre) primero: --web antes que --client.
+  // El flag canónico (igual al nombre) primero: --webclient antes que --client.
   return flags.sort((a, b) => Number(b === "--" + name) - Number(a === "--" + name));
 }
 
@@ -904,7 +893,6 @@ function printHelp() {
   out.push("");
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
   const order = [
-    "web",
     "webclient",
     "admin",
     "analytics",

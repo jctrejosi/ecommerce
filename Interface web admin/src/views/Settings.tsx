@@ -73,6 +73,8 @@ export default function SettingsView() {
   const [saved, setSaved] = useState(false);
   const [payMethods, setPayMethods] = useState<any>(null);
   const [payLoading, setPayLoading] = useState(false);
+  const [payError, setPayError] = useState("");
+  const payMethodsRef = useRef<any>(null);
   const [qrUploading, setQrUploading] = useState(false);
   const [qrGenerating, setQrGenerating] = useState(false);
   // null = sin verificar, true = disponible, false = caído
@@ -142,6 +144,43 @@ export default function SettingsView() {
     }
   }, [tab]);
 
+  // Mantiene una referencia al valor actual para los handlers que guardan
+  // sobre el último estado (p. ej. los inputs de Bre-B que guardan al tipear).
+  useEffect(() => {
+    payMethodsRef.current = payMethods;
+  }, [payMethods]);
+
+  /**
+   * Guarda los medios de pago con actualización optimista y revierte si el
+   * backend rechaza el cambio (la validación automática responde 400).
+   */
+  const persistPaymentMethods = async (updated: any, prev: any) => {
+    setPayMethods(updated);
+    payMethodsRef.current = updated;
+    setPayError("");
+    try {
+      const res = await fetch(`${API_BASE}/admin/settings/payment-methods`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        const msg = Array.isArray(data?.message)
+          ? data.message.join(" ")
+          : data?.message || "No se pudo guardar el medio de pago.";
+        setPayError(msg);
+        setPayMethods(prev);
+        payMethodsRef.current = prev;
+      }
+    } catch {
+      setPayError("No se pudo contactar el servidor. Revisa tu conexión.");
+      setPayMethods(prev);
+      payMethodsRef.current = prev;
+    }
+  };
+
   // Consulta al backend si el servicio QR Analyzer está disponible
   const checkQrService = () => {
     fetch(`${API_BASE}/admin/qr/status`, { credentials: "include" })
@@ -151,27 +190,27 @@ export default function SettingsView() {
   };
 
   const toggleWompi = () => {
-    if (!payMethods) return;
-    const updated = { ...payMethods, wompi: { ...payMethods.wompi, enabled: !payMethods.wompi?.enabled } };
-    setPayMethods(updated);
-    fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+    const prev = payMethodsRef.current;
+    if (!prev) return;
+    const updated = { ...prev, wompi: { ...prev.wompi, enabled: !prev.wompi?.enabled } };
+    void persistPaymentMethods(updated, prev);
   };
 
   const toggleWompiMethod = (method: string) => {
-    if (!payMethods) return;
+    const prev = payMethodsRef.current;
+    if (!prev) return;
     const updated = {
-      ...payMethods,
-      wompi: { ...payMethods.wompi, methods: { ...payMethods.wompi?.methods, [method]: !payMethods.wompi?.methods?.[method] } },
+      ...prev,
+      wompi: { ...prev.wompi, methods: { ...prev.wompi?.methods, [method]: !prev.wompi?.methods?.[method] } },
     };
-    setPayMethods(updated);
-    fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+    void persistPaymentMethods(updated, prev);
   };
 
   const toggleBreb = () => {
-    if (!payMethods) return;
-    const updated = { ...payMethods, breb: { ...payMethods.breb, enabled: !payMethods.breb?.enabled } };
-    setPayMethods(updated);
-    fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+    const prev = payMethodsRef.current;
+    if (!prev) return;
+    const updated = { ...prev, breb: { ...prev.breb, enabled: !prev.breb?.enabled } };
+    void persistPaymentMethods(updated, prev);
   };
 
   const updateBrebField = (field: string, value: string) => {
@@ -182,20 +221,10 @@ export default function SettingsView() {
   // Evita el bug de llamadas consecutivas con el estado obsoleto, donde
   // la última PUT borraba qrImageUrl/qrImageMime y el cuadro quedaba en blanco.
   const saveBrebFields = (fields: Record<string, unknown>) => {
-    setPayMethods((prev: any) => {
-      if (!prev) return prev;
-      const updated = {
-        ...prev,
-        breb: { ...prev.breb, ...fields },
-      };
-      fetch(`${API_BASE}/admin/settings/payment-methods`, {
-        method: "PUT",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(updated),
-      });
-      return updated;
-    });
+    const prev = payMethodsRef.current;
+    if (!prev) return;
+    const updated = { ...prev, breb: { ...prev.breb, ...fields } };
+    void persistPaymentMethods(updated, prev);
   };
 
   const handleQrFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -283,10 +312,10 @@ export default function SettingsView() {
   };
 
   const toggleEfectivo = () => {
-    if (!payMethods) return;
-    const updated = { ...payMethods, efectivo: { ...payMethods.efectivo, enabled: !payMethods.efectivo?.enabled } };
-    setPayMethods(updated);
-    fetch(`${API_BASE}/admin/settings/payment-methods`, { method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updated) });
+    const prev = payMethodsRef.current;
+    if (!prev) return;
+    const updated = { ...prev, efectivo: { ...prev.efectivo, enabled: !prev.efectivo?.enabled } };
+    void persistPaymentMethods(updated, prev);
   };
 
   return (
@@ -376,6 +405,24 @@ export default function SettingsView() {
             {tab === "payments" && (
               <div>
                 <h2 className="font-bold text-gray-900 mb-5">Medios de Pago</h2>
+                {payError && (
+                  <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                    <AlertTriangle size={16} className="text-red-500 mt-0.5 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold text-red-800">
+                        No se pudo guardar el medio de pago
+                      </p>
+                      <p className="text-xs text-red-700 mt-0.5">{payError}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setPayError("")}
+                      className="text-xs font-semibold text-red-700 hover:text-red-900"
+                    >
+                      Cerrar
+                    </button>
+                  </div>
+                )}
                 {qrServiceAvailable === false && (
                   <div className="mb-4 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                     <AlertTriangle size={16} className="text-amber-500 mt-0.5 shrink-0" />

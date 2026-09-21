@@ -30,6 +30,43 @@ export class WompiService {
     };
   }
 
+  /**
+   * Valida que las credenciales de Wompi estén completas y que Wompi las acepte.
+   * Se usa al habilitar el método de pago en el admin, antes de guardarlo.
+   */
+  async validateConfiguration() {
+    const { publicKey, privateKey, integrityKey } = this.config;
+
+    if (!publicKey) {
+      throw new BadRequestException(
+        'Wompi no está configurado: falta la public key (WOMPI_PUBLIC_KEY).',
+      );
+    }
+    if (!privateKey) {
+      throw new BadRequestException(
+        'Wompi no está configurado: falta la private key (WOMPI_PRIVATE_KEY).',
+      );
+    }
+    if (!integrityKey) {
+      throw new BadRequestException(
+        'Wompi no está configurado: falta la integrity key (WOMPI_INTEGRITY_KEY).',
+      );
+    }
+
+    const data = await this.getAcceptanceData().catch((err) => {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException(
+        `No se pudo validar Wompi: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    });
+
+    if (!data.acceptanceToken) {
+      throw new BadRequestException(
+        'Wompi rechazó la public key o no devolvió el token de aceptación.',
+      );
+    }
+  }
+
   async getAcceptanceData() {
     if (!this.config.publicKey) {
       throw new BadRequestException('Wompi public key no configurada');

@@ -17,7 +17,7 @@ import {
   newsletterSubscribers,
   settings,
 } from '../../../drizzle/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc, sql, isNull } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
@@ -823,8 +823,23 @@ export class CustomerAuthService {
       isDefault?: boolean;
     },
   ) {
-    // If setting as default, unset any existing default
-    if (dto.isDefault) {
+    // La primera dirección de un cliente queda como predeterminada sin que tenga
+    // que marcarla: así siempre hay una predeterminada cuando solo existe una
+    // (p. ej. la que se guarda en la primera compra).
+    const [existingRow] = await this.db
+      .select({ count: sql<number>`count(*)` })
+      .from(customerAddresses)
+      .where(
+        and(
+          eq(customerAddresses.customerId, customerId),
+          isNull(customerAddresses.deletedAt),
+        ),
+      );
+    const isFirstAddress = Number(existingRow?.count ?? 0) === 0;
+    const makeDefault = isFirstAddress || dto.isDefault === true;
+
+    // Si esta será la predeterminada, se quita el flag a las demás.
+    if (makeDefault) {
       await this.db
         .update(customerAddresses)
         .set({ isDefault: false })
@@ -841,7 +856,7 @@ export class CustomerAuthService {
         city: dto.city,
         reference: dto.reference ?? null,
         deliveryInstructions: dto.deliveryInstructions ?? null,
-        isDefault: dto.isDefault ?? false,
+        isDefault: makeDefault,
       })
       .returning({ id: customerAddresses.id });
 
@@ -907,7 +922,10 @@ export class CustomerAuthService {
 
   async deleteAddress(customerId: number, addressId: number) {
     const [existing] = await this.db
-      .select({ id: customerAddresses.id })
+      .select({
+        id: customerAddresses.id,
+        isDefault: customerAddresses.isDefault,
+      })
       .from(customerAddresses)
       .where(
         and(
@@ -922,6 +940,29 @@ export class CustomerAuthService {
       .update(customerAddresses)
       .set({ deletedAt: new Date().toISOString() })
       .where(eq(customerAddresses.id, BigInt(addressId)));
+
+    // Si se borró la predeterminada, la más reciente de las que quedan pasa a
+    // serlo: nunca debe quedar una sola dirección sin ser predeterminada.
+    if (existing.isDefault) {
+      const [next] = await this.db
+        .select({ id: customerAddresses.id })
+        .from(customerAddresses)
+        .where(
+          and(
+            eq(customerAddresses.customerId, customerId),
+            isNull(customerAddresses.deletedAt),
+          ),
+        )
+        .orderBy(desc(customerAddresses.createdAt))
+        .limit(1);
+
+      if (next) {
+        await this.db
+          .update(customerAddresses)
+          .set({ isDefault: true })
+          .where(eq(customerAddresses.id, next.id));
+      }
+    }
 
     return { success: true };
   }
