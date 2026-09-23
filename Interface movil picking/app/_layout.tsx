@@ -3,7 +3,6 @@ import {
   ActivityIndicator,
   AppState,
   Image,
-  Pressable,
   StyleSheet,
   Text,
   View,
@@ -22,7 +21,7 @@ import { getApiUrl } from "@/api/apiConfig";
 import { connectPickingSocket, disconnectPickingSocket, connectOrderEvents, disconnectOrderEvents } from "@/socket";
 import { configureNewOrderSound } from "@/notifications/sound";
 import { configureNotifications, setPendingBadge } from "@/notifications/push";
-import { colors, radius, spacing } from "@/theme";
+import { colors, spacing } from "@/theme";
 
 export default function RootLayout() {
   const restore = useAuthStore((s) => s.restore);
@@ -59,6 +58,19 @@ export default function RootLayout() {
       netSub.remove();
     };
   }, [ensureServer]);
+
+  // 2.b) La búsqueda del servidor es continua y en segundo plano: mientras no
+  //      aparezca se reintenta sola cada pocos segundos, y cuando ya está se
+  //      vigila que siga respondiendo (otra Wi-Fi, IP nueva del servidor…).
+  //      Sin botones: el picker no tiene que buscar nada a mano.
+  const serverReady = status === "ok";
+  useEffect(() => {
+    const timer = setInterval(
+      () => void useServerGate.getState().ensureServer(true),
+      serverReady ? 30_000 : 8_000,
+    );
+    return () => clearInterval(timer);
+  }, [serverReady]);
 
   // 3) Con servidor disponible: restaura la sesión (una vez).
   useEffect(() => {
@@ -105,8 +117,6 @@ export default function RootLayout() {
     };
   }, [status]);
 
-  const retry = () => void ensureServer(true);
-
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
@@ -114,7 +124,7 @@ export default function RootLayout() {
           <View style={styles.root}>
             {/* La app sigue montada para no perder el trabajo en curso; solo se
                 avisa que el servidor no está disponible. */}
-            {status !== "ok" ? <ServerBanner status={status} onRetry={retry} /> : null}
+            {status !== "ok" ? <ServerBanner status={status} /> : null}
             <Stack
               screenOptions={{
                 headerShown: false,
@@ -123,7 +133,7 @@ export default function RootLayout() {
             />
           </View>
         ) : bootChecked ? (
-          <ServerMissing onRetry={retry} />
+          <ServerMissing />
         ) : (
           <ServerSearching />
         )}
@@ -152,30 +162,24 @@ function ServerSearching() {
   );
 }
 
-/** El arranque no encontró el backend en la red local. */
-function ServerMissing({ onRetry }: { onRetry: () => void }) {
+/** El arranque no encontró el backend; la app sigue buscándolo sola. */
+function ServerMissing() {
   return (
     <View style={styles.splash}>
       <Ionicons name="cloud-offline-outline" size={44} color={colors.textHint} />
       <Text style={styles.splashTitle}>No se encontró el servidor</Text>
       <Text style={styles.splashText}>
-        No hay respuesta del backend en esta red. Verifica que el teléfono esté
-        en la misma Wi-Fi que el servidor y vuelve a intentarlo.
+        No hay respuesta del backend en esta red. Verifica que el teléfono esté en
+        la misma Wi-Fi que el servidor: la app seguirá buscándolo sola.
       </Text>
-      <Pressable
-        onPress={onRetry}
-        style={({ pressed }) => [styles.retryBtn, pressed && { opacity: 0.9 }]}
-      >
-        <Ionicons name="refresh-outline" size={18} color={colors.onAccent} />
-        <Text style={styles.retryText}>Volver a buscar</Text>
-      </Pressable>
+      <ActivityIndicator color={colors.accent} />
       <Text style={styles.splashUrl}>{getApiUrl()}</Text>
     </View>
   );
 }
 
 /** Aviso no intrusivo cuando el servidor se pierde con la app ya abierta. */
-function ServerBanner({ status, onRetry }: { status: "checking" | "missing"; onRetry: () => void }) {
+function ServerBanner({ status }: { status: "checking" | "missing" }) {
   // El banner va arriba del Stack, así que sin este inset el texto queda
   // debajo de la barra de estado (edge-to-edge).
   const insets = useSafeAreaInsets();
@@ -189,13 +193,8 @@ function ServerBanner({ status, onRetry }: { status: "checking" | "missing"; onR
       <Text style={styles.bannerText} numberOfLines={1}>
         {status === "checking"
           ? "Buscando el servidor en la red…"
-          : "Sin conexión con el servidor"}
+          : "Sin conexión con el servidor · reintentando…"}
       </Text>
-      {status === "missing" ? (
-        <Pressable onPress={onRetry} hitSlop={8}>
-          <Text style={styles.bannerAction}>Reintentar</Text>
-        </Pressable>
-      ) : null}
     </View>
   );
 }
@@ -219,17 +218,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   splashUrl: { color: colors.textHint, fontSize: 11, fontWeight: "600" },
-  retryBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing(2),
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing(5),
-    paddingVertical: spacing(3),
-    marginTop: spacing(2),
-  },
-  retryText: { color: colors.onAccent, fontSize: 14, fontWeight: "800" },
   banner: {
     flexDirection: "row",
     alignItems: "center",
@@ -241,10 +229,4 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   bannerText: { flex: 1, color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-  bannerAction: {
-    color: colors.accent,
-    fontSize: 12,
-    fontWeight: "800",
-    textDecorationLine: "underline",
-  },
 });

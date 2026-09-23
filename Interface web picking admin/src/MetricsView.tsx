@@ -280,9 +280,18 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
           <div key={p.id} className="bg-[#161618] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
             {/* Nombre */}
             <div className="flex items-center gap-3">
-              <span className="w-10 h-10 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold">
-                {p.name[0]?.toUpperCase()}
-              </span>
+              {/* Foto que sube el picker desde la app móvil; si no tiene, su inicial. */}
+              {p.avatarUrl ? (
+                <img
+                  src={p.avatarUrl}
+                  alt={p.name}
+                  className="w-10 h-10 rounded-full object-cover shrink-0 bg-white/5"
+                />
+              ) : (
+                <span className="w-10 h-10 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold shrink-0">
+                  {p.name[0]?.toUpperCase()}
+                </span>
+              )}
               <div className="min-w-0">
                 <p className="font-extrabold truncate">{p.name}</p>
                 <p className="text-white/35 text-xs font-medium truncate">{p.email}</p>

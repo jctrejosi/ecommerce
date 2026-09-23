@@ -29,7 +29,11 @@ export function requestNotificationPermission(): void {
 }
 
 /** Muestra el aviso del navegador (no hace nada si no hay permiso). */
-export function showBrowserNotification(title: string, body: string): void {
+export function showBrowserNotification(
+  title: string,
+  body: string,
+  onClick?: () => void,
+): void {
   if (!canShowNotifications()) return;
   try {
     const notification = new Notification(title, {
@@ -39,6 +43,7 @@ export function showBrowserNotification(title: string, body: string): void {
     notification.onclick = () => {
       window.focus();
       notification.close();
+      onClick?.();
     };
   } catch {
     /* WebView sin soporte real para notificaciones */

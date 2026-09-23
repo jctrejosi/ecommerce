@@ -300,6 +300,8 @@ export const users = pgTable(
     firstName: varchar('first_name', { length: 100 }).notNull(),
     lastName: varchar('last_name', { length: 100 }).notNull(),
     phone: varchar({ length: 50 }),
+    /** Foto de perfil (URL pública de Cloudinary); null si no tiene. */
+    avatarUrl: text('avatar_url'),
     isSuperuser: boolean('is_superuser').default(false).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     // Marca que el usuario puede iniciar sesión en la app móvil de picking.
@@ -1405,6 +1407,9 @@ export const customers = pgTable(
     providerId: varchar('provider_id', { length: 255 }),
     avatarUrl: text('avatar_url'),
     emailVerified: boolean('email_verified').default(false),
+
+    // Token push del dispositivo (FCM) — lo registra la app del cliente.
+    pushToken: text('push_token'),
 
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()

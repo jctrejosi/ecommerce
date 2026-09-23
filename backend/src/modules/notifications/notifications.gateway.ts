@@ -38,4 +38,37 @@ export class NotificationsGateway implements OnGatewayConnection, OnGatewayDisco
     this.server.to(room).emit('notification:new', notification);
     this.logger.log(`Notification sent to ${room}: ${notification.title}`);
   }
+
+  /**
+   * El PC pide la ubicación del teléfono. Se reenvía a los DEMÁS dispositivos
+   * del mismo cliente (el emisor no lo recibe), que la responderán capturando
+   * el GPS del teléfono.
+   */
+  @SubscribeMessage('location:request')
+  handleLocationRequest(
+    client: Socket,
+    payload: { customerId: number; requestId: string },
+  ) {
+    const room = `customer:${Number(payload?.customerId)}`;
+    client.to(room).emit('location:request', { requestId: payload?.requestId });
+    this.logger.log(`Location request ${payload?.requestId} → ${room}`);
+  }
+
+  /**
+   * El teléfono devuelve las coordenadas. Se reenvían a los DEMÁS dispositivos
+   * del cliente (el que responde no las recibe), que las aplicarán.
+   */
+  @SubscribeMessage('location:response')
+  handleLocationResponse(
+    client: Socket,
+    payload: { customerId: number; requestId: string; lat: number; lng: number },
+  ) {
+    const room = `customer:${Number(payload?.customerId)}`;
+    client.to(room).emit('location:response', {
+      requestId: payload?.requestId,
+      lat: payload?.lat,
+      lng: payload?.lng,
+    });
+    this.logger.log(`Location response ${payload?.requestId} → ${room}`);
+  }
 }

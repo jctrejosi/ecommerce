@@ -24,6 +24,8 @@ interface AuthState {
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   setUser: (user: AuthUser | null) => void;
+  /** Fusiona campos del usuario activo (foto, nombre…) y los persiste. */
+  patchUser: (patch: Partial<AuthUser>) => Promise<void>;
   /** Marca actividad (llamado por cada respuesta del API) para el vencimiento. */
   touchActivity: () => void;
   /** Revisa vencimiento por fin de turno o inactividad y cierra la sesión si toca. */
@@ -92,6 +94,7 @@ export const useAuthStore = create<AuthState>((set) => ({
           username: me.username,
           email: me.email,
           isSuperuser: me.isSuperuser,
+          avatarUrl: me.avatarUrl ?? null,
         };
         set({ user });
         await setStoredUser(user);
@@ -126,6 +129,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       username: u.username,
       email: u.email,
       isSuperuser: u.isSuperuser,
+      avatarUrl: u.avatarUrl ?? null,
     };
     await setStoredUser(user);
 
@@ -149,6 +153,18 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
 
   setUser: (user) => set({ user }),
+
+  /**
+   * Actualiza los datos del usuario activo (p. ej. la foto recién subida) y los
+   * persiste, para que sigan ahí al reabrir la app.
+   */
+  patchUser: async (patch: Partial<AuthUser>) => {
+    const current = useAuthStore.getState().user;
+    if (!current) return;
+    const next: AuthUser = { ...current, ...patch };
+    set({ user: next });
+    await setStoredUser(next);
+  },
 
   touchActivity: () => {
     const now = Date.now();

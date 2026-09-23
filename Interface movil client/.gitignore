@@ -40,3 +40,7 @@ yarn-error.*
 
 # JDK portátil local (descargado porque el sistema solo tiene JRE)
 .jdk/
+
+# Firebase (no subir)
+google-services.json
+*firebase-adminsdk*.json

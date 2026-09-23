@@ -80,6 +80,43 @@ export const pickingApi = {
 
   sendChatMessage: (body: string) =>
     post<PickerChatMessage>("/picking/chat", { body }),
+
+  // ─── Perfil del picker (app móvil) ────────────────────────────────────────
+
+  /** Cambio de la propia contraseña; el backend exige la actual. */
+  changePassword: (currentPassword: string, newPassword: string) =>
+    post<{ success: boolean }>("/picking/profile/password", {
+      currentPassword,
+      newPassword,
+    }),
+
+  /**
+   * Foto de perfil: el archivo va al backend, que lo publica en Cloudinary y
+   * guarda la URL en el usuario. Devuelve la URL pública, que es la misma que
+   * muestra el panel de picking admin.
+   */
+  uploadAvatar: async (uri: string) => {
+    const form = new FormData();
+    form.append("file", {
+      uri,
+      name: `avatar_${Date.now()}.jpg`,
+      type: "image/jpeg",
+    } as unknown as Blob);
+    try {
+      const res = await http.post<{ ok: boolean; avatarUrl: string }>(
+        "/picking/profile/avatar",
+        form,
+        {
+          // La subida incluye el procesado de la imagen en el backend.
+          timeout: 60_000,
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
+      return res.data;
+    } catch (err) {
+      throw toApiError(err, "No se pudo subir la foto de perfil");
+    }
+  },
 };
 
 export type { PickingLocation, PickingOrder, PickingShelf, ScanResult };

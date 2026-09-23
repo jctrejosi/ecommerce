@@ -1379,9 +1379,18 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
           {users.map((u) => (
             <div key={u.id} className="bg-[#141416] border border-white/10 rounded-2xl p-3.5">
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] font-extrabold flex items-center justify-center text-sm">
-                  {u.name.charAt(0).toUpperCase() || '?'}
-                </div>
+                {/* Foto que sube el picker desde la app móvil; si no tiene, su inicial. */}
+                {u.avatarUrl ? (
+                  <img
+                    src={u.avatarUrl}
+                    alt={u.name}
+                    className="w-9 h-9 rounded-full object-cover shrink-0 bg-white/5"
+                  />
+                ) : (
+                  <div className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] font-extrabold flex items-center justify-center text-sm shrink-0">
+                    {u.name.charAt(0).toUpperCase() || '?'}
+                  </div>
+                )}
                 <div className="min-w-0 flex-1">
                   <p className="text-white text-sm font-bold truncate">{u.name}</p>
                   <p className="text-white/40 text-xs truncate">

@@ -34,6 +34,8 @@ export interface LoginResponse {
     isSuperuser: boolean;
     isActive: boolean;
     phone?: string | null;
+    /** Foto de perfil (Cloudinary); null si no tiene. */
+    avatarUrl?: string | null;
   };
 }
 
@@ -204,6 +206,7 @@ export class AuthService {
         isSuperuser: user.isSuperuser,
         isActive: user.isActive,
         phone: user.phone,
+        avatarUrl: user.avatarUrl ?? null,
       },
     };
   }
@@ -333,6 +336,7 @@ export class AuthService {
       lastName: user.lastName,
       fullName,
       phone: user.phone,
+      avatarUrl: user.avatarUrl ?? null,
       isSuperuser: user.isSuperuser,
       isActive: user.isActive,
       lastLoginAt: user.lastLoginAt,

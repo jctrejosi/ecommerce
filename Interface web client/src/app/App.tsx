@@ -9,7 +9,7 @@ import {
 } from "../services/customer-auth.service";
 import { useOrderSocket } from "../hooks/useOrderSocket";
 import { useCustomerOrderEvents } from "../hooks/useCustomerOrderEvents";
-import { useNotifications } from "../hooks/useNotifications";
+import { useNotifications, isMobileDevice } from "../hooks/useNotifications";
 import { useBackendStatus } from "../hooks/useBackendStatus";
 import { ChatbotWidget } from "../components/ChatbotWidget";
 import { OrderChatWidget } from "./components/OrderChatWidget";
@@ -292,9 +292,8 @@ export default function App() {
         .catch(() => setSavedAddresses([]));
     }
   }, [checkoutOpen, customer]);
-  const { notifications, unreadCount, markAsRead } = useNotifications(
-    customer?.id ?? null,
-  );
+  const { notifications, unreadCount, markAsRead, requestPhoneLocation } =
+    useNotifications(customer?.id ?? null);
   const [authError, setAuthError] = useState<string | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
   const [pendingPostLoginAction, setPendingPostLoginAction] = useState<
@@ -1124,6 +1123,8 @@ export default function App() {
         onPlaceOrder={placeOrder}
         orderPending={orderPending}
         orderDeclineReason={orderDeclineReason}
+        onRequestLocation={requestPhoneLocation}
+        isMobileDevice={isMobileDevice()}
         fmt={fmt}
       />
       <OrdersPanel

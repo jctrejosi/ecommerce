@@ -99,6 +99,8 @@ export interface PickerSummary {
   email: string;
   username: string;
   phone: string | null;
+  /** Foto de perfil que sube el picker desde la app móvil (Cloudinary). */
+  avatarUrl: string | null;
   currentOrder: {
     id: number;
     referenceCode: string;

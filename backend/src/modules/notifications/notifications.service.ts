@@ -3,6 +3,7 @@ import { and, eq, isNull, desc } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { notifications } from '../../../drizzle/schema';
 import { NotificationsGateway } from './notifications.gateway';
+import { PushService } from './push.service';
 import type { InferInsertModel } from 'drizzle-orm';
 
 @Injectable()
@@ -12,6 +13,7 @@ export class NotificationsService {
   constructor(
     private readonly drizzleService: DrizzleService,
     private readonly gateway: NotificationsGateway,
+    private readonly pushService: PushService,
   ) {}
 
   async getForCustomer(customerId: number) {
@@ -88,6 +90,20 @@ export class NotificationsService {
     };
 
     this.gateway.notifyCustomer(data.targetCustomerId, notification);
+
+    // Además del aviso in-app (Socket.IO), se manda el push al dispositivo del
+    // cliente (si tiene la app con token registrado). Es "best-effort": nunca
+    // bloquea ni rompe la creación de la notificación.
+    void this.pushService.sendToCustomer(data.targetCustomerId, {
+      title: data.title,
+      body: data.message,
+      data: {
+        type: data.type,
+        notificationId: String(notification.id),
+        linkUrl: data.linkUrl ?? '',
+      },
+    });
+
     return notification;
   }
 }

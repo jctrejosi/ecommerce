@@ -48,6 +48,8 @@ export interface AuthUser {
   username: string;
   email: string;
   isSuperuser: boolean;
+  /** Foto de perfil (Cloudinary); la misma que muestra el panel de picking. */
+  avatarUrl?: string | null;
 }
 
 export async function getTokens(): Promise<StoredTokens | null> {

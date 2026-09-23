@@ -123,6 +123,10 @@ interface CheckoutModalProps {
   orderDeclineReason?: string | null;
   onPlaceOrder: () => Promise<void>;
   fmt: (n: number) => string;
+  /** Pide la ubicación al teléfono del cliente (para PCs). */
+  onRequestLocation?: () => Promise<{ lat: number; lng: number } | null>;
+  /** Si el dispositivo actual es un teléfono (GPS fiable). */
+  isMobileDevice?: boolean;
 }
 
 export function CheckoutModal({
@@ -168,6 +172,8 @@ export function CheckoutModal({
   onSetNequiPayment,
   onPlaceOrder,
   fmt,
+  onRequestLocation,
+  isMobileDevice = true,
 }: CheckoutModalProps) {
   if (!checkoutOpen) return null;
 
@@ -800,6 +806,8 @@ export function CheckoutModal({
               onConfirmedChange={onSetAddressConfirmed}
               onLocateResult={handleLocateResult}
               locateRequest={locateRequest}
+              onRequestLocation={onRequestLocation}
+              isMobile={isMobileDevice}
             />
 
             {!addressConfirmed && (

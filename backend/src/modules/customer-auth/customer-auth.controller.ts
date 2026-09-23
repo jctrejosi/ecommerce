@@ -143,6 +143,20 @@ export class CustomerAuthController {
   }
 
   @UseGuards(CustomerJwtAuthGuard)
+  @Post('push-token')
+  @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth('customer_access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({ summary: 'Registrar el token push (FCM) del dispositivo' })
+  async setPushToken(
+    @CurrentUser() customer: AuthenticatedCustomer,
+    @Body() body: { token?: string | null },
+  ) {
+    await this.customerAuthService.setPushToken(customer.sub, body?.token ?? null);
+    return { success: true };
+  }
+
+  @UseGuards(CustomerJwtAuthGuard)
   @Delete('me')
   @HttpCode(HttpStatus.OK)
   @ApiCookieAuth('customer_access_token')

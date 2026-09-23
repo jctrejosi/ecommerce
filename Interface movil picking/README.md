@@ -33,10 +33,13 @@ activa (guardada localmente; si no hay, la de `EXPO_PUBLIC_API_URL`, con
 subred del dispositivo buscando quién responda `/api-status` en el puerto `3000`.
 La URL encontrada se guarda y se reutiliza en los siguientes arranques.
 
-Esa búsqueda se repite cuando la app **vuelve a primer plano** y cuando **cambia
-la conectividad** (otra Wi-Fi, se cayó la red), así que no hay que reconfigurar la
-IP al cambiar de red. Mientras busca se muestra un aviso; si no encuentra nada,
-pide reintentar. También se puede forzar desde **Ajustes → Buscar servidor ahora**.
+Esa búsqueda es **continua y en segundo plano**: mientras no aparezca el
+servidor se reintenta sola cada pocos segundos, y cuando ya está se vigila que
+siga respondiendo. Además se revisa al **volver a primer plano** y al **cambiar la
+conectividad** (otra Wi-Fi, se cayó la red), así que no hay que reconfigurar la IP
+al cambiar de red. Mientras busca se muestra un aviso y, si no encuentra nada,
+sigue intentándolo por su cuenta: **no hay ningún botón de "buscar servidor"**.
+En **Ajustes** solo se ve la URL activa, si responde y las acciones de sesión.
 
 `EXPO_PUBLIC_API_URL` solo fija la URL inicial sugerida:
 

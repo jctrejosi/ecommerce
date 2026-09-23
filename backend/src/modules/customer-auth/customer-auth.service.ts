@@ -570,6 +570,22 @@ export class CustomerAuthService {
   }
 
   /**
+   * Guarda (o limpia) el token push (FCM) del dispositivo del cliente. Un token
+   * vacío desactiva los push (p. ej. al cerrar sesión en el dispositivo).
+   */
+  async setPushToken(customerId: number, token: string | null) {
+    await this.db
+      .update(customers)
+      .set({
+        pushToken: token && token.trim() ? token.trim() : null,
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(customers.id, BigInt(customerId)));
+
+    return { success: true };
+  }
+
+  /**
    * Mantiene consistencia entre customers.acceptsMarketing y la tabla
    * newsletter_subscribers (mismo correo).
    */

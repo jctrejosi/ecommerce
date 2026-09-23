@@ -222,14 +222,6 @@ export async function resolveServer(): Promise<ResolveResult> {
   return { url: null, tried };
 }
 
-/** Fija manualmente el servidor (pantalla de configuración) y lo persiste. */
-export async function useManualServer(url: string): Promise<boolean> {
-  if (!(await pingServer(url, 2500))) return false;
-  setServerUrl(url);
-  await writeStoredUrl(currentUrl);
-  return true;
-}
-
 /**
  * Avisa cuando cambia la red local (cambia el prefijo /24 de la IP del
  * celular). `expo-network` no expone un listener, así que se consulta la IP

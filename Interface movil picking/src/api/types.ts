@@ -87,6 +87,8 @@ export interface AuthMe {
   isSuperuser: boolean;
   isActive: boolean;
   phone?: string | null;
+  /** Foto de perfil (Cloudinary); null si no tiene. */
+  avatarUrl?: string | null;
 }
 
 export interface LoginResponse {

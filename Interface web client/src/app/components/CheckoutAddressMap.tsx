@@ -11,6 +11,26 @@ import {
 /** Centro de Manizales cuando el cliente aún no ha ubicado nada. */
 const DEFAULT_CENTER = { lat: 5.067, lng: -75.517 };
 
+/**
+ * Distancia (m) a partir de la cual se avisa que el dispositivo está lejos del
+ * punto de entrega elegido. El aviso NO bloquea la compra.
+ */
+const MISMATCH_WARN_METERS = 100;
+
+/** Distancia en metros entre dos coordenadas (fórmula de Haversine). */
+function distanceMeters(a: AddressCoords, b: AddressCoords): number {
+  const R = 6371000;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
 export type AddressCoords = { lat: number; lng: number };
 
 /** Resultado de ubicar una dirección en el mapa. */
@@ -47,6 +67,13 @@ interface CheckoutAddressMapProps {
    * geocoder no la encontró hay que avisarle al cliente junto al campo.
    */
   onLocateResult?: (result: LocateResult) => void;
+  /**
+   * En PC: pide la ubicación al teléfono del cliente (el GPS del navegador en un
+   * computador no es fiable). Devuelve las coordenadas o null si no llegan.
+   */
+  onRequestLocation?: () => Promise<AddressCoords | null>;
+  /** Si el dispositivo actual es un teléfono (su GPS sí es fiable). */
+  isMobile?: boolean;
 }
 
 /**
@@ -69,6 +96,8 @@ export function CheckoutAddressMap({
   resetKey,
   locateRequest,
   onLocateResult,
+  onRequestLocation,
+  isMobile = true,
 }: CheckoutAddressMapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -86,6 +115,17 @@ export function CheckoutAddressMap({
 
   const [resolving, setResolving] = useState(false);
   const [suggestion, setSuggestion] = useState<GeocodePlace | null>(null);
+
+  // Última ubicación conocida del dispositivo (solo si el navegador la dio).
+  const [devicePos, setDevicePos] = useState<AddressCoords | null>(null);
+  // Distancia del dispositivo al punto de entrega elegido (null = sin datos).
+  const [distanceM, setDistanceM] = useState<number | null>(null);
+  // El cliente eligió continuar pese al aviso (el aviso nunca bloquea).
+  const [distanceDismissed, setDistanceDismissed] = useState(false);
+  // En PC: esperando que el teléfono devuelva su ubicación.
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  // En PC: no llegó la ubicación del teléfono.
+  const [phoneError, setPhoneError] = useState<string | null>(null);
 
   // Evita la geocodificación inversa justo después de ubicar una dirección ya
   // resuelta (la del formulario): volvería a sugerir exactamente lo mismo.
@@ -285,6 +325,42 @@ export function CheckoutAddressMap({
     };
   }, [locateRequest]);
 
+  // Leer la ubicación del dispositivo para compararla con el punto elegido.
+  // Solo en teléfonos: en un PC el GPS del navegador no es fiable (ahí se pide
+  // al celular). Si no hay permisos, no se avisa y se puede continuar.
+  useEffect(() => {
+    if (!isMobile || !ready || !navigator.geolocation) return;
+    let cancelled = false;
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        if (!cancelled) {
+          setDevicePos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        }
+      },
+      () => {
+        /* Sin permiso o error: sin aviso, se deja continuar. */
+      },
+      { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 },
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, isMobile]);
+
+  // Distancia al punto elegido: si supera el umbral se avisa (no bloquea).
+  useEffect(() => {
+    if (!coords || !devicePos) {
+      setDistanceM(null);
+      return;
+    }
+    setDistanceM(distanceMeters(devicePos, coords));
+  }, [coords, devicePos]);
+
+  // Al mover el punto se vuelve a evaluar el aviso.
+  useEffect(() => {
+    setDistanceDismissed(false);
+  }, [coords]);
+
   const useMyLocation = () => {
     if (!navigator.geolocation) {
       setLocateError("Tu dispositivo no permite obtener la ubicación.");
@@ -296,6 +372,7 @@ export function CheckoutAddressMap({
       (pos) => {
         setGpsBusy(false);
         skipReverseRef.current = false;
+        setDevicePos({ lat: pos.coords.latitude, lng: pos.coords.longitude });
         onCoordsChange({
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -317,6 +394,27 @@ export function CheckoutAddressMap({
     appliedAddressRef.current = suggestion.address;
     onPickAddress({ address: suggestion.address, city: suggestion.city });
     setSuggestion(null);
+  };
+
+  // PC: pide al teléfono del cliente que comparta su ubicación actual para
+  // compararla con el punto de entrega elegido (aviso de >100 m, no bloqueante).
+  const validateWithPhone = async () => {
+    if (!onRequestLocation) return;
+    setPhoneBusy(true);
+    setPhoneError(null);
+    try {
+      const coordsFromPhone = await onRequestLocation();
+      if (coordsFromPhone) {
+        setDevicePos(coordsFromPhone);
+        setDistanceDismissed(false);
+      } else {
+        setPhoneError(
+          "No recibimos la ubicación del teléfono. Puedes continuar o intentarlo de nuevo.",
+        );
+      }
+    } finally {
+      setPhoneBusy(false);
+    }
   };
 
   return (
@@ -366,24 +464,55 @@ export function CheckoutAddressMap({
             </p>
           </div>
         )}
-        {/* Ubicación actual del dispositivo */}
-        <button
-          type="button"
-          onClick={useMyLocation}
-          disabled={gpsBusy || !ready}
-          title="Usar mi ubicación actual"
-          className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/95 border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
-        >
-          {gpsBusy ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <LocateFixed className="w-4 h-4" />
-          )}
-        </button>
+        {/* Ubicación actual del dispositivo (solo teléfonos: GPS fiable) */}
+        {isMobile && (
+          <button
+            type="button"
+            onClick={useMyLocation}
+            disabled={gpsBusy || !ready}
+            title="Usar mi ubicación actual"
+            className="absolute top-3 right-3 w-9 h-9 rounded-full bg-white/95 border border-border shadow-sm flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40"
+          >
+            {gpsBusy ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <LocateFixed className="w-4 h-4" />
+            )}
+          </button>
+        )}
       </div>
       <p className="text-[10px] text-muted-foreground text-right">
         Mapas © OpenStreetMap
       </p>
+
+      {/* PC: validar la ubicación con el celular del cliente */}
+      {!isMobile && onRequestLocation && (
+        <div className="space-y-1.5">
+          <button
+            type="button"
+            onClick={validateWithPhone}
+            disabled={phoneBusy}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border border-border text-sm font-semibold hover:bg-muted transition-colors disabled:opacity-50"
+          >
+            {phoneBusy ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Esperando al celular…
+              </>
+            ) : (
+              "Validar ubicación con mi celular"
+            )}
+          </button>
+          <p className="text-[11px] text-muted-foreground">
+            {phoneBusy
+              ? "Confirma la solicitud en tu celular para compartir su ubicación."
+              : "En un computador la ubicación del navegador no es fiable: validamos con tu celular."}
+          </p>
+          {phoneError && (
+            <p className="text-xs text-amber-700">{phoneError}</p>
+          )}
+        </div>
+      )}
 
       {/* Dirección detectada bajo el marcador */}
       {coords && resolving && (
@@ -408,6 +537,55 @@ export function CheckoutAddressMap({
           </button>
         </div>
       )}
+
+      {/* Aviso no bloqueante: el dispositivo está lejos del punto de entrega */}
+      {coords &&
+        distanceM != null &&
+        distanceM > MISMATCH_WARN_METERS &&
+        !distanceDismissed && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 space-y-2">
+            <p className="text-xs font-semibold text-amber-900">
+              Estás a unos {Math.round(distanceM)} m del punto de entrega
+              seleccionado.
+            </p>
+            <p className="text-xs text-amber-800">
+              Verifica que la dirección sea la correcta. Puedes continuar
+              igualmente.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              {isMobile ? (
+                <button
+                  type="button"
+                  onClick={useMyLocation}
+                  disabled={gpsBusy}
+                  className="text-xs font-bold underline underline-offset-2 disabled:opacity-50"
+                  style={{ color: "#1A1A2E" }}
+                >
+                  {gpsBusy ? "Ubicando…" : "Usar mi ubicación actual"}
+                </button>
+              ) : (
+                onRequestLocation && (
+                  <button
+                    type="button"
+                    onClick={validateWithPhone}
+                    disabled={phoneBusy}
+                    className="text-xs font-bold underline underline-offset-2 disabled:opacity-50"
+                    style={{ color: "#1A1A2E" }}
+                  >
+                    {phoneBusy ? "Esperando al celular…" : "Volver a validar con mi celular"}
+                  </button>
+                )
+              )}
+              <button
+                type="button"
+                onClick={() => setDistanceDismissed(true)}
+                className="text-xs font-semibold text-amber-800 underline underline-offset-2"
+              >
+                Continuar de todas formas
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Confirmación obligatoria */}
       <button

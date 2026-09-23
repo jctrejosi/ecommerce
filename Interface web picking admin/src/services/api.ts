@@ -142,6 +142,8 @@ export interface PickUser {
   email: string;
   username: string;
   phone: string | null;
+  /** Foto de perfil que sube el picker desde la app móvil (Cloudinary). */
+  avatarUrl: string | null;
   isActive: boolean;
   isSuperuser: boolean;
   /** Si puede iniciar sesión en la app móvil de picking. */

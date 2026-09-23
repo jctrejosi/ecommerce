@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   Logger,
@@ -60,6 +61,7 @@ export class PickersService {
         email: users.email,
         username: users.username,
         phone: users.phone,
+        avatarUrl: users.avatarUrl,
       })
       .from(users)
       .where(
@@ -77,6 +79,7 @@ export class PickersService {
       email: u.email,
       username: u.username,
       phone: u.phone,
+      avatarUrl: u.avatarUrl,
     }));
   }
 
@@ -88,6 +91,7 @@ export class PickersService {
     email: users.email,
     username: users.username,
     phone: users.phone,
+    avatarUrl: users.avatarUrl,
     isActive: users.isActive,
     isSuperuser: users.isSuperuser,
     isPicker: users.isPicker,
@@ -100,6 +104,7 @@ export class PickersService {
     email: string;
     username: string;
     phone: string | null;
+    avatarUrl: string | null;
     isActive: boolean;
     isSuperuser: boolean;
     isPicker: boolean;
@@ -110,10 +115,59 @@ export class PickersService {
       email: u.email,
       username: u.username,
       phone: u.phone,
+      avatarUrl: u.avatarUrl,
       isActive: u.isActive,
       isSuperuser: u.isSuperuser,
       isPicker: u.isPicker,
     };
+  }
+
+  // ─── Perfil del propio picker (app móvil) ──────────────────────────────────
+
+  /**
+   * Guarda la URL pública de la foto de perfil del usuario.
+   *
+   * El archivo lo sube antes el controlador a Cloudinary; aquí solo se persiste
+   * la URL (la misma que ve el panel de picking admin).
+   */
+  async setAvatarUrl(userId: number, avatarUrl: string) {
+    await this.db
+      .update(users)
+      .set({ avatarUrl, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, BigInt(userId)));
+    return { ok: true, avatarUrl };
+  }
+
+  /**
+   * Cambia la contraseña del propio usuario.
+   *
+   * Exige la actual: el dispositivo queda en la bodega y sin ese control
+   * cualquiera podría cambiarla desde la app abierta.
+   */
+  async changeOwnPassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const [user] = await this.db
+      .select({ id: users.id, passwordHash: users.passwordHash })
+      .from(users)
+      .where(eq(users.id, BigInt(userId)))
+      .limit(1);
+    if (!user) throw new NotFoundException(`Usuario ${userId} no encontrado`);
+
+    const matches = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!matches) {
+      throw new BadRequestException('La contraseña actual no es correcta.');
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, BigInt(userId)));
+
+    return { success: true };
   }
 
   /** Todos los usuarios (incluye inactivos) para la gestión desde el panel. */

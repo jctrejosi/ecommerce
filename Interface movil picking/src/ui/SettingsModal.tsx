@@ -1,18 +1,20 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
+  Image,
   Modal,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, radius, spacing } from "@/theme";
-import { getApiUrl } from "@/api/apiConfig";
-import { probeBackend } from "@/api/discovery";
-import { useServerGate } from "@/api/serverGate";
+import { apiErrorMessage, pickingApi } from "@/api";
 import { useAuthStore } from "@/auth/authStore";
 
 interface SettingsModalProps {
@@ -23,57 +25,71 @@ interface SettingsModalProps {
 }
 
 /**
- * Información del usuario activo + estado del servidor. El backend se
- * descubre automáticamente en la red local; aquí solo se muestra y se puede
- * forzar una nueva búsqueda.
+ * Información del usuario activo y acciones sobre su cuenta: su foto, su
+ * contraseña y la sesión.
+ *
+ * El backend se descubre solo, en segundo plano (ver `api/serverGate`), así que
+ * aquí no se muestra nada del servidor.
  */
 export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalProps) {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const ensureServer = useServerGate((s) => s.ensureServer);
+  const patchUser = useAuthStore((s) => s.patchUser);
 
-  const [url, setUrl] = useState(getApiUrl());
-  const [searching, setSearching] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
 
-  useEffect(() => {
-    if (visible) {
-      setUrl(getApiUrl());
-      setStatus(null);
-    }
-  }, [visible]);
-
-  const rescan = async () => {
-    setSearching(true);
-    setStatus(null);
+  /** Sube la foto elegida y la refleja en la app (y en el panel, vía backend). */
+  const uploadAvatar = async (uri: string) => {
+    setUploading(true);
     try {
-      // Misma rutina que usa la app al arrancar y al cambiar de red.
-      await ensureServer(true);
-      const { status: serverStatus, url: found } = useServerGate.getState();
-      setUrl(found);
-      setStatus(
-        serverStatus === "ok"
-          ? `Servidor encontrado: ${found}`
-          : "No se encontró ningún servidor en la red local.",
-      );
+      const { avatarUrl } = await pickingApi.uploadAvatar(uri);
+      await patchUser({ avatarUrl });
+    } catch (e) {
+      Alert.alert("No se pudo cambiar la foto", apiErrorMessage(e, "Intenta de nuevo."));
     } finally {
-      setSearching(false);
+      setUploading(false);
     }
   };
 
-  // Estado en vivo del servidor activo.
-  const [online, setOnline] = useState<boolean | null>(null);
-  useEffect(() => {
-    if (!visible) return;
-    let cancelled = false;
-    void probeBackend(getApiUrl(), 1500).then((ok) => {
-      if (!cancelled) setOnline(ok);
+  const fromCamera = async () => {
+    const perm = await ImagePicker.requestCameraPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permiso necesario", "Habilita la cámara para tomar tu foto.");
+      return;
+    }
+    const res = await ImagePicker.launchCameraAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
     });
-    return () => {
-      cancelled = true;
-    };
-  }, [visible, url]);
+    if (!res.canceled && res.assets[0]?.uri) await uploadAvatar(res.assets[0].uri);
+  };
+
+  const fromGallery = async () => {
+    // En Android 13+ se usa el selector del sistema (no hace falta permiso de
+    // lectura); en versiones viejas se pide el de siempre.
+    const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!perm.granted) {
+      Alert.alert("Permiso necesario", "Habilita el acceso a las fotos para elegir tu imagen.");
+      return;
+    }
+    const res = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!res.canceled && res.assets[0]?.uri) await uploadAvatar(res.assets[0].uri);
+  };
+
+  const changeAvatar = () => {
+    Alert.alert("Cambiar foto", "¿De dónde tomamos la foto?", [
+      { text: "Tomar una foto", onPress: () => void fromCamera() },
+      { text: "Elegir de la galería", onPress: () => void fromGallery() },
+      { text: "Cancelar", style: "cancel" },
+    ]);
+  };
 
   return (
     <Modal
@@ -91,11 +107,30 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
 
           {/* Usuario */}
           <View style={styles.userRow}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>
-                {(user?.name ?? "?").charAt(0).toUpperCase()}
-              </Text>
-            </View>
+            <Pressable
+              onPress={changeAvatar}
+              disabled={uploading}
+              accessibilityLabel="Cambiar foto de perfil"
+              style={({ pressed }) => [styles.avatarWrap, pressed && { opacity: 0.85 }]}
+            >
+              {user?.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatarImg} />
+              ) : (
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>
+                    {(user?.name ?? "?").charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              {/* Pista de que la foto es tocable (y estado de subida). */}
+              <View style={styles.avatarBadge}>
+                {uploading ? (
+                  <ActivityIndicator size="small" color={colors.onAccent} />
+                ) : (
+                  <Ionicons name="camera" size={13} color={colors.onAccent} />
+                )}
+              </View>
+            </Pressable>
             <View style={styles.userInfo}>
               <Text style={styles.name} numberOfLines={1}>
                 {user?.name ?? "Sin sesión"}
@@ -111,56 +146,28 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
             </View>
           </View>
 
-          {/* Servidor */}
-          <View style={styles.serverHeader}>
-            <Text style={styles.sectionTitle}>Servidor</Text>
-            <View style={styles.statusRow}>
-              <View
-                style={[
-                  styles.dot,
-                  online === null
-                    ? styles.dotUnknown
-                    : online
-                      ? styles.dotOk
-                      : styles.dotBad,
-                ]}
-              />
-              <Text style={styles.statusText}>
-                {online === null
-                  ? "verificando…"
-                  : online
-                    ? "conectado"
-                    : "sin conexión"}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.urlBox}>
-            <Text style={styles.urlLabel}>URL activa (descubierta en la red)</Text>
-            <Text style={styles.url} numberOfLines={1}>
-              {url}
-            </Text>
-          </View>
-
-          <Pressable
-            onPress={() => void rescan()}
-            disabled={searching}
-            style={({ pressed }) => [styles.scanBtn, pressed && { opacity: 0.9 }]}
-          >
-            {searching ? (
-              <ActivityIndicator color={colors.onAccent} size="small" />
-            ) : (
-              <Ionicons name="wifi-outline" size={18} color={colors.onAccent} />
-            )}
-            <Text style={styles.scanText}>
-              {searching ? "Buscando en la red…" : "Buscar servidor ahora"}
-            </Text>
-          </Pressable>
-
-          {status ? <Text style={styles.saved}>{status}</Text> : null}
-
-          {/* Acciones de sesión */}
+          {/* Acciones sobre la cuenta */}
           <View style={styles.actions}>
+            <Pressable
+              onPress={changeAvatar}
+              disabled={uploading}
+              style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Ionicons name="camera-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.actionText}>
+                {uploading ? "Subiendo foto…" : "Cambiar foto"}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                onClose();
+                router.push("/(main)/change-password");
+              }}
+              style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Ionicons name="key-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.actionText}>Cambiar contraseña</Text>
+            </Pressable>
             <Pressable
               onPress={onSwitchUser}
               style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
@@ -206,11 +213,26 @@ const styles = StyleSheet.create({
     marginBottom: spacing(4),
   },
   userRow: { flexDirection: "row", alignItems: "center", gap: spacing(3), marginBottom: spacing(5) },
+  avatarWrap: { width: 52, height: 52 },
   avatar: {
     width: 52,
     height: 52,
     borderRadius: radius.pill,
     backgroundColor: colors.accent,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarImg: { width: 52, height: 52, borderRadius: radius.pill, backgroundColor: colors.chip },
+  avatarBadge: {
+    position: "absolute",
+    right: -2,
+    bottom: -2,
+    width: 22,
+    height: 22,
+    borderRadius: radius.pill,
+    backgroundColor: colors.accent,
+    borderWidth: 2,
+    borderColor: colors.surfaceAlt,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -229,47 +251,6 @@ const styles = StyleSheet.create({
     marginTop: spacing(2),
   },
   badgeText: { color: "#FFB300", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  serverHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: spacing(2),
-  },
-  sectionTitle: {
-    color: colors.textHint,
-    fontSize: 11,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.8,
-  },
-  statusRow: { flexDirection: "row", alignItems: "center", gap: spacing(1.5) },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  dotOk: { backgroundColor: "#34C759" },
-  dotBad: { backgroundColor: colors.danger },
-  dotUnknown: { backgroundColor: colors.textHint },
-  statusText: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
-  urlBox: {
-    backgroundColor: colors.chip,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing(3),
-    paddingVertical: spacing(2.5),
-    marginBottom: spacing(2),
-  },
-  urlLabel: { color: colors.textHint, fontSize: 10, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
-  url: { color: colors.text, fontSize: 14, fontWeight: "700", marginTop: 2 },
-  scanBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing(2),
-    backgroundColor: colors.accent,
-    borderRadius: radius.md,
-    paddingVertical: spacing(3),
-  },
-  scanText: { color: colors.onAccent, fontSize: 14, fontWeight: "800" },
-  saved: { color: "#34C759", fontSize: 12, fontWeight: "700", marginTop: spacing(2) },
   actions: { gap: spacing(2), marginTop: spacing(6) },
   actionBtn: {
     flexDirection: "row",
