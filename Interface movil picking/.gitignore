@@ -7,3 +7,7 @@ web-build/
 android/
 ios/
 expo-env.d.ts
+
+# Firebase (no subir)
+google-services.json
+*firebase-adminsdk*.json

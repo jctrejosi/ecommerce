@@ -1,9 +1,9 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import jwt from 'jsonwebtoken';
 import { DrizzleService } from '../../database/drizzle.service';
-import { customers } from '../../../drizzle/schema';
+import { customers, deliveryDrivers, users } from '../../../drizzle/schema';
 
 interface ServiceAccount {
   project_id: string;
@@ -11,13 +11,28 @@ interface ServiceAccount {
   private_key: string;
 }
 
+/** Aviso push. `channelId` debe existir en la app que lo recibe. */
+interface PushPayload {
+  title: string;
+  body: string;
+  data?: Record<string, string>;
+  channelId?: string;
+}
+
 const FCM_SCOPE = 'https://www.googleapis.com/auth/firebase.messaging';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
+/** Canal de Android por defecto (app del cliente). */
+const DEFAULT_CHANNEL = 'mercaldas';
+/** Canal de Android de la app de repartidores (`com.dsi.deliveryapp`). */
+const DELIVERY_CHANNEL = 'delivery';
 const fcmEndpoint = (projectId: string) =>
   `https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`;
 
 /**
- * Envía notificaciones push (FCM HTTP v1) al dispositivo del cliente.
+ * Envía notificaciones push (FCM HTTP v1) a los dispositivos.
+ *
+ * Cubre los tres públicos con app: el cliente (app móvil del cliente, tokens en
+ * `customers.push_token`) y el staff de picking (tokens en `users.push_token`).
  *
  * Se configura con la cuenta de servicio de Firebase en la variable de entorno
  * `FIREBASE_SERVICE_ACCOUNT_JSON` (el JSON completo, o su base64 para evitar
@@ -113,12 +128,57 @@ export class PushService implements OnModuleInit {
   }
 
   /**
+   * Núcleo: manda el mensaje a un token FCM. Devuelve si el token quedó
+   * inválido (para quien llama pueda limpiarlo de la BD).
+   */
+  private async sendToToken(
+    token: string,
+    payload: PushPayload,
+  ): Promise<{ invalid: boolean }> {
+    const accessToken = await this.getAccessToken();
+    const res = await fetch(fcmEndpoint(this.account!.project_id), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: {
+          token,
+          notification: { title: payload.title, body: payload.body },
+          data: payload.data ?? {},
+          android: {
+            priority: 'high',
+            notification: {
+              channelId: payload.channelId ?? DEFAULT_CHANNEL,
+              sound: 'default',
+            },
+          },
+        },
+      }),
+    });
+
+    if (res.ok) return { invalid: false };
+
+    const err = (await res.json().catch(() => ({}))) as {
+      error?: { status?: string; message?: string };
+    };
+    const status = err?.error?.status;
+    this.logger.warn(
+      `Push falló (${status ?? res.status}): ${err?.error?.message ?? ''}`,
+    );
+    // Token caducado/inexistente: se limpia para no reintentar siempre.
+    // (No se limpia en INVALID_ARGUMENT: puede ser un error del payload.)
+    return { invalid: status === 'UNREGISTERED' || status === 'NOT_FOUND' };
+  }
+
+  /**
    * Manda un push al cliente si tiene token registrado. No lanza: el push es un
    * extra y nunca debe tumbar el flujo de la notificación in-app.
    */
   async sendToCustomer(
     customerId: number,
-    payload: { title: string; body: string; data?: Record<string, string> },
+    payload: PushPayload,
   ): Promise<void> {
     if (!this.account) return;
 
@@ -140,39 +200,12 @@ export class PushService implements OnModuleInit {
     if (!token) return;
 
     try {
-      const accessToken = await this.getAccessToken();
-      const res = await fetch(fcmEndpoint(this.account.project_id), {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: {
-            token,
-            notification: { title: payload.title, body: payload.body },
-            data: payload.data ?? {},
-            android: {
-              priority: 'high',
-              notification: { channelId: 'mercaldas', sound: 'default' },
-            },
-          },
-        }),
-      });
-
-      if (!res.ok) {
-        const err = (await res.json().catch(() => ({}))) as {
-          error?: { status?: string; message?: string };
-        };
-        const status = err?.error?.status;
-        // Token caducado/inexistente: se limpia para no reintentar siempre.
-        // (No se limpia en INVALID_ARGUMENT: puede ser un error del payload.)
-        if (status === 'UNREGISTERED' || status === 'NOT_FOUND') {
-          await this.clearToken(customerId);
-        }
-        this.logger.warn(
-          `Push al cliente ${customerId} falló (${status ?? res.status}): ${err?.error?.message ?? ''}`,
-        );
+      const { invalid } = await this.sendToToken(token, payload);
+      if (invalid) {
+        await this.drizzle.db
+          .update(customers)
+          .set({ pushToken: null })
+          .where(eq(customers.id, BigInt(customerId)));
       }
     } catch (err) {
       this.logger.warn(
@@ -181,12 +214,140 @@ export class PushService implements OnModuleInit {
     }
   }
 
-  private async clearToken(customerId: number) {
+  /** Push al dispositivo de un usuario de staff (picker), vía `users.push_token`. */
+  async sendToUser(userId: number, payload: PushPayload): Promise<void> {
+    if (!this.account) return;
+
+    let token: string | null | undefined;
+    try {
+      const [row] = await this.drizzle.db
+        .select({ token: users.pushToken })
+        .from(users)
+        .where(eq(users.id, BigInt(userId)))
+        .limit(1);
+      token = row?.token;
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo leer el token push del usuario ${userId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+
+    if (!token) return;
+
+    try {
+      const { invalid } = await this.sendToToken(token, payload);
+      if (invalid) await this.clearUserToken(userId);
+    } catch (err) {
+      this.logger.warn(
+        `Push al usuario ${userId} falló: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /**
+   * Push al dispositivo de un repartidor, vía `delivery_drivers.push_token`.
+   * La app de repartidores (`com.dsi.deliveryapp`) solo declara el canal
+   * `delivery`, así que se fuerza cuando el payload no trae uno.
+   */
+  async sendToDriver(driverId: number, payload: PushPayload): Promise<void> {
+    if (!this.account) return;
+
+    let token: string | null | undefined;
+    try {
+      const [row] = await this.drizzle.db
+        .select({ token: deliveryDrivers.pushToken })
+        .from(deliveryDrivers)
+        .where(eq(deliveryDrivers.id, BigInt(driverId)))
+        .limit(1);
+      token = row?.token;
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo leer el token push del repartidor ${driverId}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+
+    if (!token) return;
+
+    const effective: PushPayload = payload.channelId
+      ? payload
+      : { ...payload, channelId: DELIVERY_CHANNEL };
+
+    try {
+      const { invalid } = await this.sendToToken(token, effective);
+      if (invalid) await this.clearDriverToken(driverId);
+    } catch (err) {
+      this.logger.warn(
+        `Push al repartidor ${driverId} falló: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+
+  /**
+   * Push a todos los pickers activos con token registrado. Se usa para anunciar
+   * un pedido nuevo: los pickers no están atados a una sucursal, así que el aviso
+   * es general y el primero que lo reclame se lo queda.
+   */
+  async sendToPickers(
+    payload: PushPayload,
+    opts: { excludeUserId?: number } = {},
+  ): Promise<void> {
+    if (!this.account) return;
+
+    let rows: { id: bigint; token: string | null }[];
+    try {
+      rows = await this.drizzle.db
+        .select({ id: users.id, token: users.pushToken })
+        .from(users)
+        .where(
+          and(
+            eq(users.isPicker, true),
+            eq(users.isActive, true),
+            isNotNull(users.pushToken),
+            isNull(users.deletedAt),
+          ),
+        );
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo listar los tokens de picking: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
+
+    await Promise.all(
+      rows
+        .filter((r) => r.token && Number(r.id) !== opts.excludeUserId)
+        .map(async (r) => {
+          try {
+            const { invalid } = await this.sendToToken(r.token!, payload);
+            if (invalid) await this.clearUserToken(Number(r.id));
+          } catch (err) {
+            this.logger.warn(
+              `Push al picker ${Number(r.id)} falló: ${err instanceof Error ? err.message : String(err)}`,
+            );
+          }
+        }),
+    );
+  }
+
+  private async clearDriverToken(driverId: number) {
     try {
       await this.drizzle.db
-        .update(customers)
+        .update(deliveryDrivers)
         .set({ pushToken: null })
-        .where(eq(customers.id, BigInt(customerId)));
+        .where(eq(deliveryDrivers.id, BigInt(driverId)));
+    } catch {
+      /* best-effort */
+    }
+  }
+
+  private async clearUserToken(userId: number) {
+    try {
+      await this.drizzle.db
+        .update(users)
+        .set({ pushToken: null })
+        .where(eq(users.id, BigInt(userId)));
     } catch {
       /* best-effort */
     }

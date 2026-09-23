@@ -18,6 +18,7 @@ import { parsePoint } from './delivery.service';
 import { DeliveryGateway } from './delivery.gateway';
 import { OrdersGateway } from '../orders/orders.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushService } from '../notifications/push.service';
 import { toIsoTimestamp } from '../../utils/date-utils';
 import type { TransitionDto } from './dto/transition.dto';
 
@@ -210,6 +211,7 @@ export class DeliveryOrdersService {
     private readonly gateway: DeliveryGateway,
     private readonly ordersGateway: OrdersGateway,
     private readonly notificationsService: NotificationsService,
+    private readonly pushService: PushService,
   ) {}
 
   private get db() {
@@ -460,6 +462,7 @@ export class DeliveryOrdersService {
 
     const now = new Date().toISOString();
     const notifiedUserIds: number[] = [];
+    const notifiedDriverIds: number[] = [];
 
     for (const driver of drivers) {
       const [existing] = await this.db
@@ -487,6 +490,7 @@ export class DeliveryOrdersService {
       if (driver.authUserId != null) {
         notifiedUserIds.push(Number(driver.authUserId));
       }
+      notifiedDriverIds.push(Number(driver.id));
     }
 
     for (const userId of notifiedUserIds) {
@@ -502,6 +506,23 @@ export class DeliveryOrdersService {
         referenceCode,
         drivers: notifiedUserIds.length,
       });
+    }
+
+    // Push a cada repartidor notificado: la app puede estar en segundo plano o
+    // cerrada. Best-effort: si falla, el aviso en vivo por WebSocket sigue igual.
+    // Ojo: `sendToDriver` espera el id de `delivery_drivers`, no el `authUserId`.
+    for (const driverId of notifiedDriverIds) {
+      void this.pushService
+        .sendToDriver(driverId, {
+          title: 'Nuevo pedido asignado',
+          body: `${referenceCode} · listo para recoger`,
+          data: {
+            type: 'new-order',
+            orderId: String(orderId),
+            referenceCode,
+          },
+        })
+        .catch(() => undefined);
     }
   }
 

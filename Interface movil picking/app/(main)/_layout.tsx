@@ -3,6 +3,7 @@ import { Redirect, Stack } from "expo-router";
 import { useAuthStore } from "@/auth/authStore";
 import { useNewOrderAlerts } from "@/notifications/newOrderAlerts";
 import { useAppBadge } from "@/notifications/badge";
+import { useNotificationRouting, usePushRegistration } from "@/notifications/register";
 import { colors } from "@/theme";
 
 /**
@@ -37,6 +38,9 @@ export default function MainLayout() {
 function AuthedArea() {
   useNewOrderAlerts();
   useAppBadge();
+  // Push: registra el dispositivo y abre el destino al tocar una notificación.
+  usePushRegistration();
+  useNotificationRouting();
 
   return (
     <Stack

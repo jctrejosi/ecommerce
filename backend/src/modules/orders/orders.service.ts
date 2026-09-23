@@ -42,11 +42,17 @@ import { PaymentVerificationService } from './payment-verification.service';
 import { WompiService } from '../payments/wompi.service';
 import { EpaycoService } from '../payments/epayco.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PushService } from '../notifications/push.service';
 import { OrdersGateway } from './orders.gateway';
 import { toIsoTimestamp } from '../../utils/date-utils';
 import { parsePointText } from '../../utils/geolocation';
 
 const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
+
+/** Recorta el cuerpo para la notificación push (~120 caracteres). */
+function truncatePushBody(text: string, max = 120): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
 /** La vista pública del cliente puede refrescar seguido: cachear la ruta. */
 const LIVE_ROUTE_TTL_MS = 30_000;
 
@@ -67,6 +73,7 @@ export class OrdersService {
     private readonly epaycoService: EpaycoService,
     private readonly paymentVerification: PaymentVerificationService,
     private readonly notificationsService: NotificationsService,
+    private readonly pushService: PushService,
     private readonly ordersGateway: OrdersGateway,
   ) {}
 
@@ -467,6 +474,19 @@ export class OrdersService {
       { customerId },
     );
 
+    // Push a los pickers: la app puede estar en segundo plano o cerrada. Es
+    // best-effort (si falla, el aviso en vivo por WebSocket sigue funcionando).
+    void this.pushService.sendToPickers({
+      title: 'Nuevo pedido 🛒',
+      body: `Pedido ${result.referenceCode} listo para alistar.`,
+      data: {
+        type: 'ORDER',
+        orderId: String(result.orderId),
+        referenceCode: result.referenceCode,
+      },
+      channelId: 'picking-alerts',
+    });
+
     // Notificar al cliente registrado (los invitados ven el código en pantalla)
     if (customerId != null) {
       await this.notificationsService.create({
@@ -686,6 +706,10 @@ export class OrdersService {
       })
       .returning();
 
+    // Push al repartidor asignado: la app puede estar en segundo plano o cerrada.
+    // Best-effort; si no hay repartidor activo, no se manda nada.
+    void this.pushCustomerMessageToDriver(order.id, text).catch(() => undefined);
+
     return {
       id: String(row.id),
       senderType: row.senderType,
@@ -693,6 +717,40 @@ export class OrdersService {
       createdAt: toIsoTimestamp(row.createdAt),
       readAt: toIsoTimestamp(row.readAt),
     };
+  }
+
+  /**
+   * Avisa por push al repartidor con asignación activa del pedido de un mensaje
+   * nuevo del cliente. Best-effort: no lanza y, sin repartidor asignado, no hace
+   * nada. `sendToDriver` espera el id de `delivery_drivers`.
+   */
+  private async pushCustomerMessageToDriver(orderId: bigint, body: string) {
+    const [assignment] = await this.db
+      .select({ driverId: deliveryAssignments.driverId })
+      .from(deliveryAssignments)
+      .innerJoin(shipments, eq(shipments.id, deliveryAssignments.shipmentId))
+      .where(
+        and(
+          eq(shipments.orderId, Number(orderId)),
+          inArray(deliveryAssignments.status, [
+            'ASSIGNED',
+            'ACCEPTED',
+            'READY_FOR_PICKUP',
+            'PICKED_UP',
+            'IN_DELIVERY',
+          ]),
+        ),
+      )
+      .orderBy(desc(deliveryAssignments.id))
+      .limit(1);
+
+    if (!assignment) return;
+
+    await this.pushService.sendToDriver(assignment.driverId, {
+      title: 'Mensaje del cliente',
+      body: truncatePushBody(body),
+      data: { type: 'customer-chat', orderId: String(orderId) },
+    });
   }
 
   /**

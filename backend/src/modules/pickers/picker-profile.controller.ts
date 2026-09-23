@@ -5,6 +5,7 @@ import {
   HttpCode,
   HttpStatus,
   Post,
+  Put,
   UploadedFile,
   UseGuards,
   UseInterceptors,
@@ -15,6 +16,7 @@ import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { ChangeOwnPasswordDto } from './dto/change-password.dto';
+import { PushTokenDto } from './dto/push-token.dto';
 import { PickersService } from './pickers.service';
 
 /**
@@ -46,6 +48,19 @@ export class PickerProfileController {
       dto.currentPassword,
       dto.newPassword,
     );
+  }
+
+  @Put('push-token')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({
+    summary: 'Registrar el token FCM del dispositivo del picker',
+  })
+  setPushToken(
+    @CurrentUser('sub') userId: bigint,
+    @Body() dto: PushTokenDto,
+  ) {
+    return this.pickers.setPushToken(Number(userId), dto.token);
   }
 
   @Post('avatar')

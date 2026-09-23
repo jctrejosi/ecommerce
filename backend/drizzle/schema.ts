@@ -302,6 +302,8 @@ export const users = pgTable(
     phone: varchar({ length: 50 }),
     /** Foto de perfil (URL pública de Cloudinary); null si no tiene. */
     avatarUrl: text('avatar_url'),
+    /** Token FCM del dispositivo; lo registra la app de picking para el push. */
+    pushToken: text('push_token'),
     isSuperuser: boolean('is_superuser').default(false).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     // Marca que el usuario puede iniciar sesión en la app móvil de picking.

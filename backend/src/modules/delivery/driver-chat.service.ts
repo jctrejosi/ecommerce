@@ -7,8 +7,14 @@ import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { deliveryDrivers, driverChatMessages } from '../../../drizzle/schema';
 import { DeliveryGateway } from './delivery.gateway';
+import { PushService } from '../notifications/push.service';
 
 const MAX_MESSAGE_LENGTH = 2000;
+
+/** Recorta el cuerpo para la notificación push (~120 caracteres). */
+function truncatePushBody(text: string, max = 120): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
 
 /** Lado del chat desde el que se lee/escribe. */
 export type ChatSide = 'driver' | 'admin';
@@ -49,6 +55,7 @@ export class DriverChatService {
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly gateway: DeliveryGateway,
+    private readonly pushService: PushService,
   ) {}
 
   private get db() {
@@ -265,6 +272,19 @@ export class DriverChatService {
       );
     }
     this.gateway.emitFleetChat({ driverId, message });
+
+    // Push al repartidor cuando el mensaje viene del panel. Best-effort: la app
+    // puede estar en segundo plano o cerrada. `driverId` ya es el id de
+    // `delivery_drivers` que espera `sendToDriver`.
+    if (side === 'admin') {
+      void this.pushService
+        .sendToDriver(driverId, {
+          title: 'Mensaje del administrador',
+          body: truncatePushBody(text),
+          data: { type: 'admin-chat', driverId: String(driverId) },
+        })
+        .catch(() => undefined);
+    }
 
     return message;
   }

@@ -28,6 +28,15 @@ async function post<T>(url: string, body?: unknown): Promise<T> {
   }
 }
 
+async function put<T>(url: string, body?: unknown): Promise<T> {
+  try {
+    const res = await http.put<T>(url, body);
+    return res.data;
+  } catch (err) {
+    throw toApiError(err, "No se pudo completar la operación");
+  }
+}
+
 export const pickingApi = {
   /** Inicia sesión con email o username + contraseña. */
   login: (identifier: string, password: string) =>
@@ -80,6 +89,15 @@ export const pickingApi = {
 
   sendChatMessage: (body: string) =>
     post<PickerChatMessage>("/picking/chat", { body }),
+
+  /**
+   * Registra el token FCM del dispositivo para recibir push (pedidos y chat).
+   *
+   * Es idempotente: al iniciar sesión se vuelve a enviar para que el backend
+   * apunte al dispositivo actual del picker.
+   */
+  registerPushToken: (token: string) =>
+    put<{ ok: boolean }>("/picking/profile/push-token", { token }),
 
   // ─── Perfil del picker (app móvil) ────────────────────────────────────────
 

@@ -139,6 +139,20 @@ export class PickersService {
   }
 
   /**
+   * Guarda el token FCM del dispositivo del picker.
+   *
+   * Lo registra la app al iniciar sesión; es el destino de los push de pedido
+   * nuevo y de mensajes del chat de administración.
+   */
+  async setPushToken(userId: number, token: string) {
+    await this.db
+      .update(users)
+      .set({ pushToken: token, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, BigInt(userId)));
+    return { ok: true };
+  }
+
+  /**
    * Cambia la contraseña del propio usuario.
    *
    * Exige la actual: el dispositivo queda en la bodega y sin ese control

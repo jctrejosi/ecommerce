@@ -7,7 +7,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { queryClient } from "@/lib/queryClient";
 import { useAuthStore } from "@/auth/authStore";
 import { getTokens } from "@/auth/storage";
-import { configureNotifications, registerPushToken, setNotificationTapHandler } from "@/notifications/push";
+import { configureNotifications, registerPushToken, setNotificationTapHandler, watchPushTokenRefresh } from "@/notifications/push";
 import { configureMessageSound } from "@/notifications/sound";
 import { useIncomingMessageSound } from "@/notifications/useIncomingMessageSound";
 import {
@@ -94,8 +94,19 @@ function RootShell() {
     void getTokens().then((tokens) => {
       if (tokens?.accessToken) connectDeliverySocket(tokens.accessToken);
     });
-    if (!USE_MOCK) void registerPushToken();
-    return () => disconnectDeliverySocket();
+
+    let stopWatchingToken = () => {};
+    if (!USE_MOCK) {
+      void registerPushToken();
+      // Si FCM rota el token, se vuelve a registrar sin reiniciar la app.
+      void watchPushTokenRefresh().then((fn) => {
+        stopWatchingToken = fn;
+      });
+    }
+    return () => {
+      disconnectDeliverySocket();
+      stopWatchingToken();
+    };
   }, [user]);
 
   // Presencia: avisa cada minuto que la app sigue viva aunque no haya entrega

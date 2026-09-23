@@ -6,6 +6,7 @@ import {
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { pickerChatMessages, users } from '../../../drizzle/schema';
+import { PushService } from '../notifications/push.service';
 import { PickingGateway } from './picking.gateway';
 
 const MAX_MESSAGE_LENGTH = 2000;
@@ -47,6 +48,7 @@ export class PickerChatService {
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly gateway: PickingGateway,
+    private readonly push: PushService,
   ) {}
 
   private get db() {
@@ -256,6 +258,13 @@ export class PickerChatService {
     // sala `staff` para que varias pestañas del panel queden sincronizadas.
     if (side === 'admin') {
       this.gateway.emitToPicker(pickerId, 'picking:chat', { pickerId, message });
+      // Aviso push: el picker puede tener la app en segundo plano o cerrada.
+      void this.push.sendToUser(pickerId, {
+        title: 'Mensaje de administración',
+        body: text,
+        data: { type: 'CHAT', pickerId: String(pickerId) },
+        channelId: 'picking-alerts',
+      });
     }
     this.gateway.emitStaff('picking:chat', { pickerId, message });
 

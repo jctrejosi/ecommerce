@@ -177,7 +177,7 @@ export async function setNotificationTapHandler(
 }
 
 /**
- * Pide permisos y registra el token FCM en el backend.
+ * Pide permisos y registra el token FCM del dispositivo en el backend.
  * En modo mock o Expo Go devuelve null sin romper.
  */
 export async function registerPushToken(): Promise<string | null> {
@@ -189,14 +189,32 @@ export async function registerPushToken(): Promise<string | null> {
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== "granted") return null;
 
-    const projectId = Constants.easConfig?.projectId;
-    const token = await Notifications.getExpoPushTokenAsync(
-      projectId ? { projectId } : undefined,
-    );
-    await api.setPushToken(token.data);
-    return token.data;
+    // Token **FCM nativo**: el backend envía por FCM HTTP v1 directamente, no
+    // por el servicio de Expo, así que `getExpoPushTokenAsync` no le sirve.
+    const token = await Notifications.getDevicePushTokenAsync();
+    const value = typeof token.data === "string" ? token.data : null;
+    if (value) await api.setPushToken(value);
+    return value;
   } catch (err) {
     console.warn("⚠️ No se pudo registrar el token push:", err);
     return null;
   }
+}
+
+/**
+ * Re-registra el token si FCM lo rota (pasa al reinstalar la app o cada
+ * varios meses; sin esto el backend dejaría de poder avisar al dispositivo).
+ */
+export async function watchPushTokenRefresh(): Promise<() => void> {
+  const Notifications = await loadNotifications();
+  if (!Notifications) return () => {};
+
+  const subscription = Notifications.addPushTokenListener((token) => {
+    const value = typeof token.data === "string" ? token.data : null;
+    if (!value) return;
+    void api.setPushToken(value).catch(() => {
+      /* se reintenta en el próximo arranque */
+    });
+  });
+  return () => subscription.remove();
 }
