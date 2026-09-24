@@ -72,6 +72,11 @@ export class CreateBranchDto {
   @IsOptional()
   schedule?: any;
 
+  @ApiPropertyOptional({ description: 'URL de imagen (crea un media)' })
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
   @ApiPropertyOptional({ description: 'Activo', default: true })
   @IsOptional()
   @IsBoolean()

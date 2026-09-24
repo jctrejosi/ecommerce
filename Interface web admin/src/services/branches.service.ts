@@ -16,8 +16,9 @@ export type Branch = {
   branchType: string;
   deliveryRadiusKm: string;
   maxDailyOrders: number | null;
-  schedule: any;
+  schedule: Record<string, string> | null;
   isActive: boolean;
+  imagePath: string | null;
   productCount: number;
   orderCount: number;
   createdAt: string;

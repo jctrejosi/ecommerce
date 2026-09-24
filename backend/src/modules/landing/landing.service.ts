@@ -578,14 +578,23 @@ export class LandingService {
       .where(eq(settings.key, 'general_logo'))
       .limit(1);
     const value = row.length ? (row[0].value as any) ?? {} : {};
-    return { url: value.url ?? '', title: value.title ?? '' };
+    return {
+      url: value.url ?? '',
+      title: value.title ?? '',
+      favicon: value.favicon ?? '',
+    };
   }
 
-  async updateGeneralLogo(body: { url?: string; title?: string }) {
+  async updateGeneralLogo(body: {
+    url?: string;
+    title?: string;
+    favicon?: string;
+  }) {
     const current = await this.getGeneralLogo();
     const value = {
       url: body.url !== undefined ? body.url : current.url,
       title: body.title !== undefined ? body.title.trim() : current.title,
+      favicon: body.favicon !== undefined ? body.favicon : current.favicon,
     };
     const row = await this.db
       .select()
@@ -603,7 +612,7 @@ export class LandingService {
         value: value as any,
         dataType: 'json',
         module: 'general',
-        description: 'Logo y título de la empresa',
+        description: 'Logo, favicon y título de la empresa',
         isPublic: true,
       } as any);
     }

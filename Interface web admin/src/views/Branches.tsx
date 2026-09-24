@@ -2,11 +2,81 @@ import { useState, useEffect, useCallback } from "react";
 import { Plus, Edit, Trash2, X, Loader2, MapPin, Package, FolderTree, Tag, Truck, Store, Phone, Mail, User } from "lucide-react";
 import { branchesService, type Branch, type BranchProduct, type BranchCategory, type BranchBrand, type DeliveryZone } from "../services/branches.service";
 
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+// Imágenes por defecto (las mismas que usa el cliente cuando la sucursal no tiene imagen propia).
+const BRANCH_FALLBACK_IMAGES = [
+  "https://images.unsplash.com/photo-1779370139349-c5a1d667cc9e?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1759178388578-d3589d058c0f?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1758701446898-83d8dcf6309c?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1770993189356-f8def91ec5a5?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1770927423667-3c701c99ba3a?w=400&h=260&fit=crop&auto=format",
+  "https://images.unsplash.com/photo-1779370139349-c5a1d667cc9e?w=400&h=260&fit=crop&auto=format&crop=right",
+  "https://images.unsplash.com/photo-1758701446898-83d8dcf6309c?w=400&h=260&fit=crop&auto=format",
+];
+
+const branchImage = (branch: { imagePath?: string | null }, index: number) =>
+  branch.imagePath || BRANCH_FALLBACK_IMAGES[index % BRANCH_FALLBACK_IMAGES.length];
+
+function openBranchMap(b: { name: string; address: string; city: string }) {
+  const q = encodeURIComponent(`${b.name}, ${b.address}, ${b.city}, Colombia`);
+  window.open(`https://www.google.com/maps/search/?api=1&query=${q}`, "_blank");
+}
+
+const BRANCH_DAYS: { key: string; label: string }[] = [
+  { key: "monday", label: "Lunes" },
+  { key: "tuesday", label: "Martes" },
+  { key: "wednesday", label: "Miércoles" },
+  { key: "thursday", label: "Jueves" },
+  { key: "friday", label: "Viernes" },
+  { key: "saturday", label: "Sábado" },
+  { key: "sunday", label: "Domingo" },
+];
+
+function branchScheduleSummary(schedule: Record<string, string> | null): string {
+  if (!schedule) return "Horario no configurado";
+  const filled = BRANCH_DAYS.filter((d) => schedule[d.key]?.trim());
+  if (filled.length === 0) return "Horario no configurado";
+  return `${filled.length} días · ${schedule[filled[0].key]}`;
+}
+
+/** Normaliza "8:00", "8:00 am", "20:00" → "HH:MM" (24h). Devuelve "" si no es válido. */
+function to24(raw: string | undefined): string {
+  if (!raw) return "";
+  const m = raw.trim().toLowerCase().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/);
+  if (!m) return "";
+  let h = parseInt(m[1], 10);
+  const min = m[2] ?? "00";
+  if (m[3] === "pm" && h < 12) h += 12;
+  if (m[3] === "am" && h === 12) h = 0;
+  if (h > 23 || parseInt(min, 10) > 59) return "";
+  return `${String(h).padStart(2, "0")}:${min}`;
+}
+
+function parseRange(value: string | undefined): { start: string; end: string } {
+  if (!value) return { start: "", end: "" };
+  const parts = value.split(/\s*[-–—]\s*/);
+  return { start: to24(parts[0]), end: to24(parts[1]) };
+}
+
+function parseSchedule(
+  schedule: Record<string, string> | null | undefined,
+): Record<string, { start: string; end: string }> {
+  const out: Record<string, { start: string; end: string }> = {};
+  if (schedule) {
+    for (const [day, value] of Object.entries(schedule)) out[day] = parseRange(value);
+  }
+  return out;
+}
+
 // ── Branch Editor Modal ──
 function BranchModal({ branch, onClose, onSaved }: { branch: Branch | null; onClose: () => void; onSaved: () => void }) {
   const isEdit = !!branch;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [imageUrl, setImageUrl] = useState(branch?.imagePath ?? "");
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingPreview, setPendingPreview] = useState("");
   const [f, setF] = useState({
     code: branch?.code ?? "", name: branch?.name ?? "", address: branch?.address ?? "",
     city: branch?.city ?? "Manizales", phone: branch?.phone ?? "", email: branch?.email ?? "",
@@ -15,15 +85,46 @@ function BranchModal({ branch, onClose, onSaved }: { branch: Branch | null; onCl
     priority: branch?.priority?.toString() ?? "1", branchType: branch?.branchType ?? "STORE",
     deliveryRadiusKm: branch?.deliveryRadiusKm?.toString() ?? "5",
     maxDailyOrders: branch?.maxDailyOrders?.toString() ?? "", isActive: branch?.isActive ?? true,
+    schedule: parseSchedule(branch?.schedule),
   });
 
   const set = (k: string, v: string | boolean) => setF((prev) => ({ ...prev, [k]: v }));
+  const setTime = (day: string, field: "start" | "end", value: string) =>
+    setF((prev) => ({
+      ...prev,
+      schedule: {
+        ...prev.schedule,
+        [day]: { ...(prev.schedule[day] ?? { start: "", end: "" }), [field]: value },
+      },
+    }));
 
   const handleSave = async () => {
     if (!f.code || !f.name || !f.address) { setError("Código, nombre y dirección son obligatorios"); return; }
     setSaving(true); setError("");
     try {
-      const data = { ...f, storeId: parseInt(f.storeId), priority: parseInt(f.priority), deliveryRadiusKm: parseFloat(f.deliveryRadiusKm), maxDailyOrders: f.maxDailyOrders ? parseInt(f.maxDailyOrders) : null };
+      let finalImage = imageUrl;
+      if (pendingFile) {
+        const fd = new FormData();
+        fd.append("file", pendingFile);
+        fd.append("code", `branch_${(f.name || "sucursal").replace(/\s+/g, "_")}`);
+        const res = await fetch(`${API_BASE}/upload/image`, { method: "POST", body: fd });
+        if (!res.ok) throw new Error("Error al subir la imagen");
+        finalImage = (await res.json()).url;
+      }
+      const schedule: Record<string, string> = {};
+      for (const d of BRANCH_DAYS) {
+        const t = f.schedule[d.key];
+        if (t?.start && t?.end) schedule[d.key] = `${t.start}-${t.end}`;
+      }
+      const data: Record<string, unknown> = {
+        ...f,
+        schedule,
+        storeId: parseInt(f.storeId),
+        priority: parseInt(f.priority),
+        deliveryRadiusKm: parseFloat(f.deliveryRadiusKm),
+        maxDailyOrders: f.maxDailyOrders ? parseInt(f.maxDailyOrders) : null,
+      };
+      if (finalImage) data.imageUrl = finalImage;
       if (isEdit && branch) await branchesService.update(branch.id, data);
       else await branchesService.create(data);
       onSaved();
@@ -64,6 +165,53 @@ function BranchModal({ branch, onClose, onSaved }: { branch: Branch | null; onCl
             <div><label className="block text-xs font-semibold text-gray-600 mb-1">Máx. pedidos/día</label><input type="number" value={f.maxDailyOrders} onChange={(e) => set("maxDailyOrders", e.target.value)} className="w-full px-3 py-2.5 text-sm border rounded-xl" /></div>
             <div><label className="block text-xs font-semibold text-gray-600 mb-1">Coordenadas GPS</label><input value={f.location} onChange={(e) => set("location", e.target.value)} placeholder="5.067,-75.517" className="w-full px-3 py-2.5 text-sm border rounded-xl" /></div>
           </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Imagen</label>
+            {(pendingPreview || imageUrl) ? (
+              <div className="relative mb-2">
+                <img src={pendingPreview || imageUrl} alt="" className="w-full h-32 object-cover rounded-xl border border-gray-200" />
+                <button
+                  onClick={() => { setPendingFile(null); setPendingPreview(""); setImageUrl(""); }}
+                  className="absolute top-1.5 right-1.5 w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600"
+                ><X size={12} /></button>
+              </div>
+            ) : (
+              <div className="mb-2 h-32 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center text-xs text-gray-400">Sin imagen</div>
+            )}
+            <label className="flex items-center justify-center gap-1.5 px-4 py-2 text-xs font-semibold border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors">
+              Subir imagen
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  setPendingFile(file);
+                  setPendingPreview(URL.createObjectURL(file));
+                }}
+                className="hidden"
+              />
+            </label>
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-gray-600 mb-1">Horario</label>
+            <div className="space-y-1.5">
+              {BRANCH_DAYS.map((d) => {
+                const t = f.schedule[d.key] ?? { start: "", end: "" };
+                return (
+                  <div key={d.key} className="flex items-center gap-2">
+                    <span className="w-16 text-xs text-gray-500">{d.label}</span>
+                    <input type="time" value={t.start} onChange={(e) => setTime(d.key, "start", e.target.value)} className="flex-1 min-w-0 px-2.5 py-2 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                    <span className="text-xs text-gray-400">a</span>
+                    <input type="time" value={t.end} onChange={(e) => setTime(d.key, "end", e.target.value)} className="flex-1 min-w-0 px-2.5 py-2 text-sm border rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300" />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={f.isActive} onChange={(e) => set("isActive", e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-amber-500" /><span className="text-sm text-gray-700">Sucursal activa</span></label>
         </div>
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 sticky bottom-0">
@@ -214,52 +362,79 @@ export default function Branches() {
     try { await branchesService.remove(deleteConfirm.id); setDeleteConfirm(null); fetchAll(); } catch {}
   };
 
+  const toggleActive = async (b: Branch) => {
+    const next = !b.isActive;
+    setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: next } : x)));
+    try { await branchesService.update(b.id, { isActive: next }); }
+    catch { setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: b.isActive } : x))); }
+  };
+
   return (
     <>
       <div className="p-6 space-y-5">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Sucursales</h1>
-            <p className="text-sm text-gray-500 mt-0.5">{branches.length} sucursales · administra inventario y zonas de entrega</p>
+            <p className="text-sm text-gray-500 mt-0.5">{branches.length} sucursales · datos, visibilidad, imagen, horario y zonas de entrega</p>
           </div>
           <button onClick={() => setModal("new")} className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl"><Plus size={14} /> Nueva sucursal</button>
         </div>
 
         {loading ? <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-gray-400" /></div> : (
           <div className="grid md:grid-cols-2 gap-4">
-            {branches.map((b) => (
-              <div key={b.id} className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-shadow">
-                <div className="flex items-start justify-between mb-3">
+            {branches.map((b, idx) => (
+              <div key={b.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
+                <div className="relative h-32 bg-gray-100">
+                  <img src={branchImage(b, idx)} alt={b.name} className="w-full h-full object-cover" />
+                  <span className={`absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${b.isActive ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>{b.isActive ? "Visible" : "Oculta"}</span>
+                </div>
+                <div className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${b.isActive ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"}`}>
+                        <Store size={15} />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-900 text-sm">{b.name}</p>
+                        <p className="text-xs text-gray-400">{b.code} · {b.branchType}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => setModal(b)} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"><Edit size={13} /></button>
+                      <button onClick={() => setDeleteConfirm(b)} title="Eliminar" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                    </div>
+                  </div>
+                  <div className="space-y-1.5 text-xs text-gray-500 mb-3">
+                    <div className="flex items-center gap-1.5"><MapPin size={11} /> {b.address}, {b.city}</div>
+                    <div className="flex items-center gap-3"><span className="flex items-center gap-1"><Phone size={11} /> {b.phone}</span><span className="flex items-center gap-1"><Mail size={11} /> {b.email}</span></div>
+                    <div className="flex items-center gap-1.5"><User size={11} /> {b.managerName} · {b.managerPhone}</div>
+                    <div className="flex items-center gap-1.5 text-gray-400">{branchScheduleSummary(b.schedule)}</div>
+                  </div>
+                  <div className="flex items-center gap-2 mb-3">
+                    <div onClick={() => setDetailId(b.id)} className="flex-1 bg-amber-50 hover:bg-amber-100 rounded-xl p-2.5 text-center cursor-pointer transition-colors">
+                      <p className="text-lg font-bold text-amber-700">{b.productCount}</p>
+                      <p className="text-[10px] text-amber-600">productos</p>
+                    </div>
+                    <div onClick={() => setDetailId(b.id)} className="flex-1 bg-blue-50 hover:bg-blue-100 rounded-xl p-2.5 text-center cursor-pointer transition-colors">
+                      <p className="text-lg font-bold text-blue-700">{b.orderCount}</p>
+                      <p className="text-[10px] text-blue-600">pedidos</p>
+                    </div>
+                  </div>
                   <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${b.isActive ? "bg-green-100 text-green-600" : "bg-gray-100 text-gray-400"}`}>
-                      <Store size={15} />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-gray-900 text-sm">{b.name}</p>
-                      <p className="text-xs text-gray-400">{b.code} · {b.branchType}</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => setModal(b)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"><Edit size={13} /></button>
-                    <button onClick={() => setDeleteConfirm(b)} className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
-                  </div>
-                </div>
-                <div className="space-y-1.5 text-xs text-gray-500 mb-3">
-                  <div className="flex items-center gap-1.5"><MapPin size={11} /> {b.address}, {b.city}</div>
-                  <div className="flex items-center gap-3"><span className="flex items-center gap-1"><Phone size={11} /> {b.phone}</span><span className="flex items-center gap-1"><Mail size={11} /> {b.email}</span></div>
-                  <div className="flex items-center gap-1.5"><User size={11} /> {b.managerName} · {b.managerPhone}</div>
-                </div>
-                <div className="flex items-center gap-4 mb-3">
-                  <div onClick={(e) => { e.stopPropagation(); setDetailId(b.id); }} className="flex-1 bg-amber-50 hover:bg-amber-100 rounded-xl p-2.5 text-center cursor-pointer transition-colors">
-                    <p className="text-lg font-bold text-amber-700">{b.productCount}</p>
-                    <p className="text-[10px] text-amber-600">productos</p>
-                  </div>
-                  <div onClick={(e) => { e.stopPropagation(); setDetailId(b.id); }} className="flex-1 bg-blue-50 hover:bg-blue-100 rounded-xl p-2.5 text-center cursor-pointer transition-colors">
-                    <p className="text-lg font-bold text-blue-700">{b.orderCount}</p>
-                    <p className="text-[10px] text-blue-600">pedidos</p>
+                    <button onClick={() => openBranchMap(b)} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-600 border border-gray-200 hover:border-amber-300 hover:text-amber-600 rounded-lg transition-colors"><MapPin size={13} /> Ver mapa</button>
+                    <button
+                      onClick={() => toggleActive(b)}
+                      title={b.isActive ? "Ocultar en la landing" : "Mostrar en la landing"}
+                      className="flex items-center gap-1.5 shrink-0"
+                    >
+                      <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`} />
+                      </span>
+                      <span className={`text-xs font-semibold ${b.isActive ? "text-green-600" : "text-gray-400"}`}>{b.isActive ? "Visible" : "Oculta"}</span>
+                    </button>
+                    <button onClick={() => setDetailId(b.id)} className="flex-1 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">Ver detalle →</button>
                   </div>
                 </div>
-                <button onClick={() => setDetailId(b.id)} className="w-full py-2 text-xs font-semibold text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">Ver detalle completo →</button>
               </div>
             ))}
           </div>

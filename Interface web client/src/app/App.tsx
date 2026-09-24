@@ -250,7 +250,11 @@ export default function App() {
     featuredItems: any[];
     carousel: Product[];
   } | null>(null);
-  const [generalLogo, setGeneralLogo] = useState<{ url?: string; title?: string } | null>(null);
+  const [generalLogo, setGeneralLogo] = useState<{
+    url?: string;
+    title?: string;
+    favicon?: string;
+  } | null>(null);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
   const [landingProductTypes, setLandingProductTypes] = useState<
@@ -338,6 +342,21 @@ export default function App() {
   useEffect(() => {
     const base = (generalLogo?.title || "Mercaldas").trim();
     document.title = `${base} | DSI`;
+  }, [generalLogo]);
+
+  // Favicon de la pestaña: configurable en el admin. Si no hay favicon propio,
+  // se usa el logo de la empresa; si tampoco, se deja el /favicon.png estático.
+  useEffect(() => {
+    const href = (generalLogo?.favicon || generalLogo?.url || "").trim();
+    if (!href) return;
+    let link = document.querySelector<HTMLLinkElement>("link[rel~='icon']");
+    if (!link) {
+      link = document.createElement("link");
+      link.rel = "icon";
+      document.head.appendChild(link);
+    }
+    link.type = "image/png";
+    link.href = href;
   }, [generalLogo]);
 
   useEffect(() => {

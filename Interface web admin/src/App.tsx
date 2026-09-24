@@ -33,7 +33,6 @@ import {
   LayoutTemplate,
   Mail,
   Clock,
-  Store,
   Star,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
@@ -49,8 +48,6 @@ import {
   HomeBenefitsBarSection,
   HomeFeaturedSection,
   HomeDealsSection,
-  HomeBrandsSection,
-  HomeBranchesSection,
   HomeBenefitsSection,
   HomeFooterSection,
 } from "./views/Banners";
@@ -87,8 +84,6 @@ export type ViewId =
   | "homeBenefitsBar"
   | "homeFeatured"
   | "homeDeals"
-  | "homeBrands"
-  | "homeBranches"
   | "homeBenefits"
   | "homeFooter"
   | "marketplace"
@@ -125,21 +120,9 @@ const NAV: NavSection[] = [
       { id: "brands", label: "Marcas", icon: Tag },
       { id: "suppliers", label: "Proveedores", icon: Building2 },
       { id: "branches", label: "Sucursales", icon: Building2 },
-    ],
-  },
-  {
-    title: "Comercio",
-    items: [
       { id: "orders", label: "Pedidos", icon: ShoppingCart },
       { id: "customers", label: "Clientes", icon: Users },
       { id: "promotions", label: "Promociones", icon: Percent },
-    ],
-  },
-  {
-    title: "Marketing",
-    items: [
-      { id: "popups", label: "Popups", icon: Megaphone },
-      { id: "newsletter", label: "Newsletter", icon: Mail },
     ],
   },
   {
@@ -151,10 +134,10 @@ const NAV: NavSection[] = [
       { id: "homeFeatured", label: "Productos Destacados", icon: Package },
       { id: "homePromos", label: "Banners Promocionales", icon: Megaphone },
       { id: "homeDeals", label: "Ofertas del Día", icon: Clock },
-      { id: "homeBrands", label: "Marcas", icon: Tag },
-      { id: "homeBranches", label: "Sucursales", icon: Store },
       { id: "homeBenefits", label: "Beneficios", icon: Star },
       { id: "homeFooter", label: "Footer", icon: LayoutTemplate },
+      { id: "popups", label: "Popups", icon: Megaphone },
+      { id: "newsletter", label: "Newsletter", icon: Mail },
       { id: "general", label: "General", icon: SlidersHorizontal },
     ],
   },
@@ -185,8 +168,6 @@ const VIEW_PATHS: Record<string, ViewId> = {
   "home/benefits-bar": "homeBenefitsBar",
   "home/featured": "homeFeatured",
   "home/deals": "homeDeals",
-  "home/brands": "homeBrands",
-  "home/branches": "homeBranches",
   "home/benefits": "homeBenefits",
   "home/footer": "homeFooter",
   marketplace: "marketplace",
@@ -215,8 +196,6 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   homeBenefitsBar: "home/benefits-bar",
   homeFeatured: "home/featured",
   homeDeals: "home/deals",
-  homeBrands: "home/brands",
-  homeBranches: "home/branches",
   homeBenefits: "home/benefits",
   homeFooter: "home/footer",
   marketplace: "marketplace",
@@ -285,8 +264,6 @@ const LABELS: Record<ViewId, string> = {
   homeBenefitsBar: "Barra de Beneficios",
   homeFeatured: "Productos Destacados",
   homeDeals: "Ofertas del Día",
-  homeBrands: "Marcas",
-  homeBranches: "Sucursales",
   homeBenefits: "Beneficios",
   homeFooter: "Footer",
   marketplace: "Publicidad Marketplace",
@@ -750,10 +727,6 @@ function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProf
       return <HomeFeaturedSection />;
     case "homeDeals":
       return <HomeDealsSection />;
-    case "homeBrands":
-      return <HomeBrandsSection />;
-    case "homeBranches":
-      return <HomeBranchesSection />;
     case "homeBenefits":
       return <HomeBenefitsSection />;
     case "homeFooter":

@@ -8,9 +8,19 @@ import {
   Globe,
   MapPin,
   Star,
+  Loader2,
 } from "lucide-react";
 import { catalogService, CatalogProduct } from "../services/catalog.service";
 import { BrandEditorPanel, type AdminBrand } from "../components/BrandEditorPanel";
+import { apiFetch, API_BASE_URL } from "../lib/api";
+
+interface LandingBrandRow {
+  id: number;
+  code: string | null;
+  name: string;
+  isActive: boolean;
+  selected: boolean;
+}
 
 export default function Brands() {
   const [brands, setBrands] = useState<AdminBrand[]>([]);
@@ -39,6 +49,12 @@ export default function Brands() {
   const [assignBrandId, setAssignBrandId] = useState("");
   const [assignBrandSearch, setAssignBrandSearch] = useState("");
   const [assignBrandDropdownOpen, setAssignBrandDropdownOpen] = useState(false);
+
+  // Selección de marcas para la landing (por id de marca)
+  const [selected, setSelected] = useState<Record<number, boolean>>({});
+  const [savingSelection, setSavingSelection] = useState(false);
+  const [selectionDirty, setSelectionDirty] = useState(false);
+  const [batchBusy, setBatchBusy] = useState(false);
 
   const loadUnbranded = async (reset = false) => {
     setUnbrandedLoading(true);
@@ -126,6 +142,89 @@ export default function Brands() {
     loadBrands();
   }, [loadBrands]);
 
+  // ── Landing: selección y visibilidad ──
+  const loadLanding = useCallback(async () => {
+    try {
+      const rows = await apiFetch<LandingBrandRow[]>(`${API_BASE_URL}/admin/landing/brands`);
+      const map: Record<number, boolean> = {};
+      for (const r of rows) map[r.id] = r.selected;
+      setSelected(map);
+      setSelectionDirty(false);
+    } catch {
+      /* silent */
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLanding();
+  }, [loadLanding]);
+
+  const toggleSelected = (id: number) => {
+    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+    setSelectionDirty(true);
+  };
+
+  const saveSelection = async () => {
+    setSavingSelection(true);
+    try {
+      const codes = brands
+        .filter((b) => selected[b.id] && b.code)
+        .map((b) => b.code as string);
+      await apiFetch(`${API_BASE_URL}/admin/landing/brands`, {
+        method: "PUT",
+        body: JSON.stringify({ codes }),
+      });
+      setSelectionDirty(false);
+    } catch {
+      /* silent */
+    } finally {
+      setSavingSelection(false);
+    }
+  };
+
+  const toggleActive = async (b: AdminBrand) => {
+    const next = !b.isActive;
+    setBrands((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: next } : x)));
+    try {
+      await apiFetch(`${API_BASE_URL}/admin/landing/brands/${b.id}/active`, {
+        method: "PATCH",
+        body: JSON.stringify({ isActive: next }),
+      });
+    } catch {
+      setBrands((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: b.isActive } : x)));
+    }
+  };
+
+  const batchSelected = async (isActive: boolean) => {
+    const targets = brands.filter((b) => selected[b.id]);
+    if (targets.length === 0) return;
+    setBatchBusy(true);
+    try {
+      for (const b of targets) {
+        await apiFetch(`${API_BASE_URL}/admin/landing/brands/${b.id}/active`, {
+          method: "PATCH",
+          body: JSON.stringify({ isActive }),
+        });
+        setBrands((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive } : x)));
+      }
+    } catch {
+      /* silent */
+    } finally {
+      setBatchBusy(false);
+    }
+  };
+
+  const selectableBrands = brands.filter((b) => b.code);
+  const allSelected =
+    selectableBrands.length > 0 && selectableBrands.every((b) => selected[b.id]);
+  const selectedCount = selectableBrands.filter((b) => selected[b.id]).length;
+  const toggleSelectAll = () => {
+    const next: Record<number, boolean> = {};
+    for (const b of selectableBrands) next[b.id] = !allSelected;
+    setSelected(next);
+    setSelectionDirty(true);
+  };
+
   // ── Debounced search ──
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
@@ -158,7 +257,7 @@ export default function Brands() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Marcas</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            {brands.length} marcas en el catálogo
+            {brands.length} marcas · {brands.filter((b) => b.isActive).length} visibles · {selectedCount} en la landing
           </p>
         </div>
         <button
@@ -201,6 +300,32 @@ export default function Brands() {
         </div>
       </div>
 
+      {/* Landing: selección + acciones por lote */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
+          <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
+          Seleccionar todas
+        </label>
+        <div className="flex items-center gap-2">
+          {selectedCount > 0 && (
+            <>
+              <span className="text-[11px] font-semibold text-amber-700">{selectedCount} seleccionada{selectedCount !== 1 ? "s" : ""}</span>
+              <button onClick={() => batchSelected(true)} disabled={batchBusy} className="px-2.5 py-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50">Activar</button>
+              <button onClick={() => batchSelected(false)} disabled={batchBusy} className="px-2.5 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 disabled:opacity-50">Inactivar</button>
+            </>
+          )}
+          <button
+            onClick={saveSelection}
+            disabled={savingSelection || !selectionDirty}
+            title="Guardar qué marcas se muestran en la landing"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg disabled:opacity-50"
+          >
+            {savingSelection && <Loader2 size={12} className="animate-spin" />}
+            Guardar selección
+          </button>
+        </div>
+      </div>
+
       {/* Brand Grid */}
       {loading ? (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -227,18 +352,30 @@ export default function Brands() {
               onClick={() => setEditorOpen(b)}
             >
               <div className="flex items-start justify-between mb-3">
-                <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden">
-                  {b.image ? (
-                    <img
-                      src={b.image}
-                      alt={b.name}
-                      className="w-full h-full object-cover"
+                <div className="flex items-center gap-2">
+                  {b.code && (
+                    <input
+                      type="checkbox"
+                      checked={!!selected[b.id]}
+                      onClick={(e) => e.stopPropagation()}
+                      onChange={() => toggleSelected(b.id)}
+                      title="Mostrar en la landing"
+                      className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300 cursor-pointer shrink-0"
                     />
-                  ) : (
-                    <span className="text-2xl select-none opacity-40">
-                      {b.name.charAt(0)}
-                    </span>
                   )}
+                  <div className="w-12 h-12 rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden">
+                    {b.image ? (
+                      <img
+                        src={b.image}
+                        alt={b.name}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <span className="text-2xl select-none opacity-40">
+                        {b.name.charAt(0)}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1">
                   {b.isFeatured && (
@@ -294,6 +431,20 @@ export default function Brands() {
                     <Globe size={12} />
                   </a>
                 )}
+              </div>
+              <div className="flex items-center justify-between mt-3 pt-3 border-t border-gray-50">
+                <span className={`text-xs font-semibold ${b.isActive ? "text-green-600" : "text-gray-400"}`}>
+                  {b.isActive ? "Visible" : "Oculta"}
+                </span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleActive(b); }}
+                  title={b.isActive ? "Ocultar en la landing" : "Mostrar en la landing"}
+                  className="flex items-center gap-1.5"
+                >
+                  <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}>
+                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`} />
+                  </span>
+                </button>
               </div>
             </div>
           ))}

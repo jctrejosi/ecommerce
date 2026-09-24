@@ -132,6 +132,24 @@ export class BranchesService {
     };
   }
 
+  private async createImageMedia(url: string): Promise<number> {
+    const [inserted] = await this.db
+      .insert(media)
+      .values({
+        path: url,
+        fileName: url.split('/').pop()?.substring(0, 50) ?? 'branch_image',
+        mimeType: 'image/jpeg',
+        mediaType: 'image',
+        provider: 'cloudinary',
+        sizeBytes: 0,
+        checksum: `branch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        status: 'active',
+        isPublic: true,
+      })
+      .returning({ id: media.id });
+    return Number(inserted.id);
+  }
+
   async create(dto: CreateBranchDto) {
     const existing = await this.db
       .select({ id: branches.id })
@@ -139,6 +157,11 @@ export class BranchesService {
       .where(eq(branches.code, dto.code))
       .limit(1);
     if (existing.length) throw new BadRequestException(`El código ${dto.code} ya existe`);
+
+    const imageMediaId = dto.imageUrl
+      ? await this.createImageMedia(dto.imageUrl)
+      : null;
+
     const [row] = await this.db
       .insert(branches)
       .values({
@@ -157,6 +180,7 @@ export class BranchesService {
         deliveryRadiusKm: String(dto.deliveryRadiusKm ?? 5),
         maxDailyOrders: dto.maxDailyOrders ?? null,
         schedule: dto.schedule ?? null,
+        imageMediaId,
         isActive: dto.isActive ?? true,
       })
       .returning({ id: branches.id });
@@ -171,22 +195,7 @@ export class BranchesService {
     }
     if (dto.deliveryRadiusKm !== undefined) data.deliveryRadiusKm = String(dto.deliveryRadiusKm);
     if (dto.imageUrl) {
-      const [inserted] = await this.db
-        .insert(media)
-        .values({
-          path: dto.imageUrl,
-          fileName:
-            dto.imageUrl.split('/').pop()?.substring(0, 50) ?? 'branch_image',
-          mimeType: 'image/jpeg',
-          mediaType: 'image',
-          provider: 'cloudinary',
-          sizeBytes: 0,
-          checksum: `branch_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          status: 'active',
-          isPublic: true,
-        })
-        .returning({ id: media.id });
-      data.imageMediaId = Number(inserted.id);
+      data.imageMediaId = await this.createImageMedia(dto.imageUrl);
     }
     if (Object.keys(data).length > 0) {
       await this.db.update(branches).set(data).where(eq(branches.id, BigInt(id)));
