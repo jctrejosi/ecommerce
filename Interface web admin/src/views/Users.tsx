@@ -771,7 +771,7 @@ function UserModal({
           </Field>
         )}
 
-        <Field label="Roles">
+        <Field label="Roles (puede tener varios)">
           <div className="flex flex-wrap gap-2">
             {roles.map((r) => {
               const active = form.roleIds.includes(r.id);
@@ -796,6 +796,9 @@ function UserModal({
               );
             })}
           </div>
+          <p className="text-[11px] text-gray-400 mt-1">
+            Puedes asignar varios roles (p. ej. Picking y Delivery a la vez).
+          </p>
         </Field>
 
         <div className="space-y-2 pt-1">

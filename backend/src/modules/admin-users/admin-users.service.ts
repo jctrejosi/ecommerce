@@ -163,7 +163,7 @@ const PERMISSION_CATALOG: {
   },
 ];
 
-/** Roles por defecto que se crean la primera vez (idempotente). */
+/** Roles por defecto que se crean/actualizan de forma idempotente. */
 const DEFAULT_ROLES: {
   name: string;
   description: string;
@@ -171,34 +171,24 @@ const DEFAULT_ROLES: {
 }[] = [
   {
     name: 'Administrador',
-    description:
-      'Acceso total a las interfaces de administración, delivery y picking.',
-    permissionCodes: PERMISSION_CATALOG.map((p) => p.code),
+    description: 'Acceso a la interface web de administración.',
+    permissionCodes: PERMISSION_CATALOG.filter(
+      (p) => p.module === 'admin',
+    ).map((p) => p.code),
   },
   {
-    name: 'Supervisor',
-    description:
-      'Operación diaria: catálogo, pedidos, clientes y vista de flota/picking.',
-    permissionCodes: [
-      'admin:dashboard:view',
-      'admin:catalog:view',
-      'admin:catalog:manage',
-      'admin:orders:view',
-      'admin:orders:manage',
-      'admin:customers:view',
-      'admin:customers:manage',
-      'admin:promotions:manage',
-      'admin:content:manage',
-      'admin:users:view',
-      'delivery:dashboard:view',
-      'delivery:drivers:view',
-      'delivery:orders:view',
-      'delivery:orders:assign',
-      'picking:dashboard:view',
-      'picking:users:view',
-      'picking:orders:view',
-      'picking:metrics:view',
-    ],
+    name: 'Picking',
+    description: 'Acceso a la administración de picking (app de picking).',
+    permissionCodes: PERMISSION_CATALOG.filter(
+      (p) => p.module === 'picking',
+    ).map((p) => p.code),
+  },
+  {
+    name: 'Delivery',
+    description: 'Acceso a la administración de delivery (app de reparto).',
+    permissionCodes: PERMISSION_CATALOG.filter(
+      (p) => p.module === 'delivery',
+    ).map((p) => p.code),
   },
   {
     name: 'Consulta',
@@ -227,7 +217,14 @@ export class AdminUsersService implements OnModuleInit {
     });
   }
 
-  /** Siembra permisos, roles por defecto y sus permisos (idempotente). */
+  /**
+   * Siembra permisos, roles por defecto y sus permisos de forma idempotente.
+   *
+   * A diferencia de antes (solo si la tabla estaba vacía), ahora garantiza los
+   * roles en cada arranque: crea los que falten y sincroniza sus permisos con
+   * el catálogo. Los roles de sistema que ya no están definidos (p. ej. el
+   * antiguo "Supervisor") se eliminan solo si no tienen usuarios asignados.
+   */
   private async seedDefaults() {
     const [anyPermission] = await this.db
       .select({ id: permissions.id })
@@ -238,30 +235,44 @@ export class AdminUsersService implements OnModuleInit {
       await this.db.insert(permissions).values(PERMISSION_CATALOG);
     }
 
-    const existingRoles = await this.db.select({ id: roles.id }).from(roles);
-    if (existingRoles.length > 0) return;
-
     for (const def of DEFAULT_ROLES) {
-      const [role] = await this.db
-        .insert(roles)
-        .values({
-          name: def.name,
-          description: def.description,
-          isSystem: true,
-        })
-        .returning({ id: roles.id });
+      const [existing] = await this.db
+        .select({ id: roles.id })
+        .from(roles)
+        .where(eq(roles.name, def.name))
+        .limit(1);
+
+      const roleId = existing
+        ? Number(existing.id)
+        : Number(
+            (
+              await this.db
+                .insert(roles)
+                .values({
+                  name: def.name,
+                  description: def.description,
+                  isSystem: true,
+                })
+                .returning({ id: roles.id })
+            )[0].id,
+          );
 
       const permRows = await this.db
-        .select({ id: permissions.id, code: permissions.code })
+        .select({ id: permissions.id })
         .from(permissions)
         .where(inArray(permissions.code, def.permissionCodes));
+
+      // Reemplaza los permisos del rol por los definidos (roles de sistema).
+      await this.db
+        .delete(rolePermissions)
+        .where(eq(rolePermissions.roleId, roleId));
 
       if (permRows.length) {
         await this.db
           .insert(rolePermissions)
           .values(
             permRows.map((p) => ({
-              roleId: Number(role.id),
+              roleId,
               permissionId: Number(p.id),
             })),
           )
@@ -269,7 +280,42 @@ export class AdminUsersService implements OnModuleInit {
       }
     }
 
+    await this.removeObsoleteSystemRoles();
+
     this.logger.log('Roles y permisos por defecto sembrados correctamente.');
+  }
+
+  /** Elimina roles de sistema obsoletos que no tengan usuarios asignados. */
+  private async removeObsoleteSystemRoles() {
+    const defaultNames = DEFAULT_ROLES.map((r) => r.name);
+    const systemRoles = await this.db
+      .select({ id: roles.id, name: roles.name })
+      .from(roles)
+      .where(eq(roles.isSystem, true));
+
+    for (const role of systemRoles) {
+      if (defaultNames.includes(role.name)) continue;
+      const roleId = Number(role.id);
+
+      const [assigned] = await this.db
+        .select({ userId: userRoles.userId })
+        .from(userRoles)
+        .where(eq(userRoles.roleId, roleId))
+        .limit(1);
+
+      if (assigned) {
+        this.logger.warn(
+          `Rol de sistema obsoleto "${role.name}" conservado: tiene usuarios asignados.`,
+        );
+        continue;
+      }
+
+      await this.db
+        .delete(rolePermissions)
+        .where(eq(rolePermissions.roleId, roleId));
+      await this.db.delete(roles).where(eq(roles.id, BigInt(roleId)));
+      this.logger.log(`Rol de sistema obsoleto "${role.name}" eliminado.`);
+    }
   }
 
   // ─── Usuarios ────────────────────────────────────────────────────────────

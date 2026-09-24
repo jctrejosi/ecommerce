@@ -34,6 +34,7 @@ import {
   Mail,
   Clock,
   Star,
+  CreditCard,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
@@ -61,6 +62,7 @@ import Promotions from "./views/Promotions";
 import Marketplace from "./views/Marketplace";
 import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
+import PaymentMethodsView from "./views/PaymentMethods";
 import Branches from "./views/Branches";
 import Popups from "./views/Popups";
 import Login from "./views/Login";
@@ -89,6 +91,7 @@ export type ViewId =
   | "marketplace"
   | "users"
   | "settings"
+  | "paymentMethods"
   | "branches"
   | "general"
   | "popups"
@@ -146,6 +149,7 @@ const NAV: NavSection[] = [
     items: [
       { id: "users", label: "Usuarios y Permisos", icon: Shield },
       { id: "settings", label: "Configuración", icon: Settings },
+      { id: "paymentMethods", label: "Métodos de pago", icon: CreditCard },
     ],
   },
 ];
@@ -174,6 +178,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   branches: "branches",
   users: "users",
   settings: "settings",
+  "payment-methods": "paymentMethods",
   general: "general",
   popups: "popups",
   newsletter: "newsletter",
@@ -202,6 +207,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   branches: "branches",
   users: "users",
   settings: "settings",
+  paymentMethods: "payment-methods",
   general: "general",
   popups: "popups",
   newsletter: "newsletter",
@@ -270,6 +276,7 @@ const LABELS: Record<ViewId, string> = {
   branches: "Sucursales",
   users: "Usuarios y Permisos",
   settings: "Configuración",
+  paymentMethods: "Métodos de pago",
   general: "General",
   popups: "Popups",
   newsletter: "Newsletter",
@@ -745,6 +752,8 @@ function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProf
       return <UsersView />;
     case "settings":
       return <SettingsView />;
+    case "paymentMethods":
+      return <PaymentMethodsView />;
     default:
       return <Dashboard />;
   }
