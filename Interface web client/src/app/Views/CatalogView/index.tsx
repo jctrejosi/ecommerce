@@ -9,6 +9,7 @@ import { ProductCard } from "./ProductCard";
 import { SkeletonCard } from "./SkeletonCard";
 import type {
   Brand,
+  Branch,
   CatalogCategory,
   CatalogPageProps,
   Product,
@@ -82,6 +83,8 @@ export function CatalogPage({
   setCatalogSearch,
   catalogBrand,
   setCatalogBrand,
+  catalogBranch,
+  setCatalogBranch,
   mobileFiltersOpen,
   setMobileFiltersOpen,
   catalogProductType,
@@ -94,6 +97,7 @@ export function CatalogPage({
   const [loadingMore, setLoadingMore] = useState(false);
   const [searchInput, setSearchInput] = useState(catalogSearch);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [branches, setBranches] = useState<Branch[]>([]);
   const [productTypes, setProductTypes] = useState<
     { id: number; code: string; name: string; imagePath: string | null; count: number }[]
   >([]);
@@ -175,6 +179,10 @@ export function CatalogPage({
       .getProductTypes()
       .then(setProductTypes)
       .catch(() => {});
+    catalogService
+      .getBranches()
+      .then(setBranches)
+      .catch(() => {});
   }, []);
   const PAGE_SIZE = 20;
 
@@ -197,6 +205,7 @@ export function CatalogPage({
       sort: catalogSort,
       search: catalogSearch,
       brandId: catalogSearch ? undefined : (catalogBrand ?? undefined),
+      branchId: catalogBranch ?? undefined,
       productTypeCode: catalogSearch
         ? undefined
         : catalogProductType || undefined,
@@ -324,7 +333,8 @@ export function CatalogPage({
     (catalogProductIds.length > 0 ? 1 : 0) +
     (catalogOnSale ? 1 : 0) +
     (catalogPriceRange !== "all" ? 1 : 0) +
-    (catalogProductType ? 1 : 0);
+    (catalogProductType ? 1 : 0) +
+    (catalogBranch ? 1 : 0);
 
   const clearAll = () => {
     setCatalogCategory([]);
@@ -333,6 +343,7 @@ export function CatalogPage({
     setCatalogPriceRange("all");
     setCatalogSearch("");
     setCatalogBrand(null);
+    setCatalogBranch(null);
     setCatalogProductType("");
   };
 
@@ -812,7 +823,8 @@ export function CatalogPage({
                 catalogPriceRange !== "all" ||
                 catalogSearch ||
                 catalogBrand ||
-                catalogProductType) && (
+                catalogProductType ||
+                catalogBranch) && (
                 <div className="flex flex-wrap items-center gap-1.5">
                   {catalogCategory.map((cat) => (
                     <span
@@ -880,6 +892,18 @@ export function CatalogPage({
                       </button>
                     </span>
                   )}
+                  {catalogBranch && (
+                    <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
+                      {branches.find((b) => b.id === catalogBranch)?.name ||
+                        `Sucursal #${catalogBranch}`}
+                      <button
+                        onClick={() => setCatalogBranch(null)}
+                        className="hover:opacity-70 ml-0.5"
+                      >
+                        <X className="w-2.5 h-2.5" />
+                      </button>
+                    </span>
+                  )}
                   {catalogSearch && (
                     <span className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border border-border text-muted-foreground">
                       "{catalogSearch}"
@@ -931,6 +955,58 @@ export function CatalogPage({
               ))}
             </select>
           </div>
+
+          {/* Filtro por sucursal: tabs, una sola a la vez */}
+          {branches.length > 0 && (
+            <div
+              className="flex items-center gap-2 mb-3 overflow-x-auto pb-1 flex-shrink-0"
+              style={{ scrollbarWidth: "none" }}
+            >
+              <button
+                onClick={() => setCatalogBranch(null)}
+                className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap"
+                style={
+                  catalogBranch === null
+                    ? {
+                        background: "#1A1A2E",
+                        color: "#FFF200",
+                        borderColor: "#1A1A2E",
+                      }
+                    : {
+                        background: "#F4F4F6",
+                        color: "#6B7280",
+                        borderColor: "transparent",
+                      }
+                }
+              >
+                Todas las sucursales
+              </button>
+              {branches.map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() =>
+                    setCatalogBranch(catalogBranch === b.id ? null : b.id)
+                  }
+                  className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition-all border whitespace-nowrap"
+                  style={
+                    catalogBranch === b.id
+                      ? {
+                          background: "#1A1A2E",
+                          color: "#FFF200",
+                          borderColor: "#1A1A2E",
+                        }
+                      : {
+                          background: "#F4F4F6",
+                          color: "#6B7280",
+                          borderColor: "transparent",
+                        }
+                  }
+                >
+                  {b.name}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Grid */}
           <div

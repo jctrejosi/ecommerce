@@ -1,5 +1,8 @@
 /ADDT
 
+# tablas ADS del sistema TID (ADD_CONTAB): datos crudos, no se versionan
+/ADD_CONTAB/
+
 # servidor ADS en docker: instalador (con licencia) y copia de datos
 /ads/installers/
 /ads/data/

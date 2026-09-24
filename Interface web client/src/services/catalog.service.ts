@@ -13,6 +13,7 @@ export type CatalogProductsQuery = {
   categoryIds?: number[];
   productIds?: number[];
   brandId?: number;
+  branchId?: number;
   productTypeCode?: string;
   onSale?: boolean;
   priceRange?: string;
@@ -28,6 +29,7 @@ function buildProductsPayload(params?: CatalogProductsQuery) {
     categoryIds: params?.categoryIds?.length ? params.categoryIds : undefined,
     productIds: params?.productIds?.length ? params.productIds : undefined,
     brandId: params?.brandId || undefined,
+    branchId: params?.branchId || undefined,
     productTypeCode: params?.productTypeCode || undefined,
     onSale: params?.onSale || undefined,
     priceRange:
@@ -159,6 +161,13 @@ export const catalogService = {
   async getRelatedProductsById(id: number): Promise<Product[]> {
     return fetchJson<Product[]>(
       `${API_BASE_URL}/catalog/products/${id}/related`,
+    );
+  },
+
+  /** Detalle del producto para el cliente (descripción, atributos, dimensiones). */
+  async getProductDetail(id: number): Promise<Product | null> {
+    return fetchJson<Product | null>(
+      `${API_BASE_URL}/catalog/products/${id}/detail`,
     );
   },
 

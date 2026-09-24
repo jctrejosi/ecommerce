@@ -976,6 +976,8 @@ export const prices = pgTable(
     productVariantId: bigint('product_variant_id', {
       mode: 'number',
     }).notNull(),
+    // Sucursal del precio. NULL = precio global (aplica a todas las sucursales).
+    branchId: bigint('branch_id', { mode: 'number' }),
     startDate: timestamp('start_date', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -992,9 +994,23 @@ export const prices = pgTable(
       .notNull(),
   },
   (table) => [
-    uniqueIndex('idx_prices_active_unique')
+    // Un solo precio activo global por variante (sin sucursal)
+    uniqueIndex('idx_prices_active_global')
       .using('btree', table.productVariantId.asc().nullsLast().op('int8_ops'))
-      .where(sql`(end_date IS NULL)`),
+      .where(sql`(end_date IS NULL AND branch_id IS NULL)`),
+    // Un solo precio activo por variante y sucursal
+    uniqueIndex('idx_prices_active_branch')
+      .using(
+        'btree',
+        table.productVariantId.asc().nullsLast().op('int8_ops'),
+        table.branchId.asc().nullsLast().op('int8_ops'),
+      )
+      .where(sql`(end_date IS NULL AND branch_id IS NOT NULL)`),
+    foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'prices_branch_id_fkey',
+    }).onDelete('restrict'),
     foreignKey({
       columns: [table.changedBy],
       foreignColumns: [users.id],
@@ -1149,6 +1165,50 @@ export const inventory = pgTable(
     check('inventory_reorder_point_check', sql`reorder_point >= 0`),
     check('inventory_reserved_stock_check', sql`reserved_stock >= 0`),
     check('inventory_stock_check', sql`stock >= 0`),
+  ],
+);
+
+export const branchProducts = pgTable(
+  'branch_products',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    branchId: bigint('branch_id', { mode: 'number' }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    productId: bigint('product_id', { mode: 'number' }).notNull(),
+    isAvailable: boolean('is_available').default(true).notNull(),
+    isPublic: boolean('is_public').default(true).notNull(),
+    position: integer().default(0).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_branch_products_branch').using(
+      'btree',
+      table.branchId.asc().nullsLast().op('int8_ops'),
+    ),
+    index('idx_branch_products_product').using(
+      'btree',
+      table.productId.asc().nullsLast().op('int8_ops'),
+    ),
+    uniqueIndex('branch_products_branch_product_uq').on(
+      table.branchId,
+      table.productId,
+    ),
+    foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'branch_products_branch_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.productId],
+      foreignColumns: [products.id],
+      name: 'branch_products_product_id_fkey',
+    }).onDelete('cascade'),
   ],
 );
 

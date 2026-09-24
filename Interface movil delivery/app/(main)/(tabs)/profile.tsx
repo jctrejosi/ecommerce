@@ -17,7 +17,6 @@ import { Button } from "@/ui/Button";
 import { InfoRow } from "@/ui/InfoRow";
 import { Screen } from "@/ui/Screen";
 import { api, USE_MOCK } from "@/api";
-import { getServerUrl, resolveServer } from "@/api/server";
 import { colors, radius, spacing } from "@/theme";
 
 export default function ProfileScreen() {
@@ -25,8 +24,6 @@ export default function ProfileScreen() {
   const user = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const logout = useAuthStore((s) => s.logout);
-  const [server, setServer] = useState(getServerUrl());
-  const [searching, setSearching] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   /**
@@ -57,19 +54,6 @@ export default function ProfileScreen() {
     } finally {
       setUploading(false);
     }
-  };
-
-  const searchServer = async () => {
-    setSearching(true);
-    const res = await resolveServer();
-    setServer(getServerUrl());
-    setSearching(false);
-    Alert.alert(
-      res.url ? "Servidor encontrado" : "Sin conexión",
-      res.url
-        ? `Conectado a ${res.url}`
-        : "No se encontró el servidor en la red local.",
-    );
   };
 
   const confirmLogout = () => {
@@ -134,24 +118,6 @@ export default function ProfileScreen() {
           label="Estado"
           value={user?.isActive === false ? "Inactivo" : "Activo"}
         />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Servidor</Text>
-        <InfoRow label="Dirección" value={server || "—"} />
-        <Text style={styles.serverHint}>
-          Si cambias de red, la app vuelve a buscar el servidor automáticamente.
-          Puedes forzarlo aquí.
-        </Text>
-        <View style={styles.serverBtn}>
-          <Button
-            label="Buscar servidor de nuevo"
-            icon="search-outline"
-            variant="secondary"
-            loading={searching}
-            onPress={() => void searchServer()}
-          />
-        </View>
       </View>
 
       <View style={styles.logoutWrap}>
@@ -237,19 +203,4 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   logoutWrap: { marginTop: spacing(2) },
-  cardTitle: {
-    fontSize: 12,
-    fontWeight: "800",
-    textTransform: "uppercase",
-    letterSpacing: 0.6,
-    color: colors.textFaint,
-    marginBottom: spacing(2),
-  },
-  serverHint: {
-    fontSize: 12,
-    color: colors.textMuted,
-    marginTop: spacing(2),
-    lineHeight: 17,
-  },
-  serverBtn: { marginTop: spacing(3) },
 });

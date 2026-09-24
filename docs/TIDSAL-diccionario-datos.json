@@ -1,0 +1,2984 @@
+{
+  "tabla": "TIDSAL",
+  "sistema": "TID (contabilidad/inventario)",
+  "archivo_fuente": "db/ADD_CONTAB/TIDSAL.adt",
+  "descripcion": "Articulos y sus saldos/existencias por sucursal y bodega (una fila por articulo+sucursal+bodega).",
+  "registros": 51938,
+  "longitud_registro": 2619,
+  "total_columnas": 296,
+  "generado": "2026-09-24",
+  "nota": "Los significados son APROXIMADOS; el campo 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {
+    "prefijo_IN": "Inventario / articulos (tabla de saldos)",
+    "prefijo_IE": "Inventario - Entradas",
+    "prefijo_IS": "Inventario - Salidas",
+    "sufijo_U": "unidades",
+    "sufijo_V": "valor",
+    "IEU/IEV/ISU/ISV_0n": "historicos por sucursal 01..13",
+    "VTA01..13": "ventas acumuladas por periodo/mes",
+    "S01..S53": "saldos por sucursal",
+    "fechas": "enteras en formato YYYYMMDD"
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "INSUC",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 5,
+      "significado": "Codigo de sucursal (empresa/tienda)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "INBODEGA",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 13,
+      "significado": "Codigo de bodega / almacen dentro de la sucursal",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "INARTIC",
+      "tipo": "char",
+      "bytes": 19,
+      "decimales": 0,
+      "offset": 15,
+      "significado": "Codigo interno del articulo (PLU)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 3,
+      "columna": "NUMERO",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": 34,
+      "significado": "Numero consecutivo del registro",
+      "confianza": "media"
+    },
+    {
+      "idx": 4,
+      "columna": "INEAN",
+      "tipo": "char",
+      "bytes": 13,
+      "decimales": 0,
+      "offset": 38,
+      "significado": "Codigo de barras EAN del articulo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 5,
+      "columna": "INEANC",
+      "tipo": "char",
+      "bytes": 13,
+      "decimales": 0,
+      "offset": 51,
+      "significado": "Codigo de barras alterno / corto",
+      "confianza": "media"
+    },
+    {
+      "idx": 6,
+      "columna": "INPARTE",
+      "tipo": "char",
+      "bytes": 16,
+      "decimales": 0,
+      "offset": 64,
+      "significado": "Numero de parte / referencia del fabricante",
+      "confianza": "media"
+    },
+    {
+      "idx": 7,
+      "columna": "INNOMBRE",
+      "tipo": "char",
+      "bytes": 60,
+      "decimales": 0,
+      "offset": 80,
+      "significado": "Nombre o descripcion del articulo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 8,
+      "columna": "INNOMBRE3",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 140,
+      "significado": "Nombre corto del articulo (etiquetas/tickets)",
+      "confianza": "media"
+    },
+    {
+      "idx": 9,
+      "columna": "INUNIDAD",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 160,
+      "significado": "Unidad de medida (UN, KG, LT, ...)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 10,
+      "columna": "INPROVEE",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 162,
+      "significado": "Codigo del proveedor principal",
+      "confianza": "alta"
+    },
+    {
+      "idx": 11,
+      "columna": "INTIPO",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 172,
+      "significado": "Codigo de tipo de articulo (clasificacion)",
+      "confianza": "media"
+    },
+    {
+      "idx": 12,
+      "columna": "INEMBALAJE",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": 175,
+      "significado": "Factor de empaque (unidades por empaque)",
+      "confianza": "media"
+    },
+    {
+      "idx": 13,
+      "columna": "INVRVENTA1",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 179,
+      "significado": "Precio de venta lista 1",
+      "confianza": "alta"
+    },
+    {
+      "idx": 14,
+      "columna": "INVRVENTA2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 187,
+      "significado": "Precio de venta lista 2",
+      "confianza": "alta"
+    },
+    {
+      "idx": 15,
+      "columna": "INVRVENTA3",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 195,
+      "significado": "Precio de venta lista 3",
+      "confianza": "alta"
+    },
+    {
+      "idx": 16,
+      "columna": "INVRVENTA4",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 203,
+      "significado": "Precio de venta lista 4",
+      "confianza": "alta"
+    },
+    {
+      "idx": 17,
+      "columna": "INVRVENTA5",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 211,
+      "significado": "Precio de venta lista 5",
+      "confianza": "alta"
+    },
+    {
+      "idx": 18,
+      "columna": "INVRVENTA6",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 219,
+      "significado": "Precio de venta lista 6",
+      "confianza": "alta"
+    },
+    {
+      "idx": 19,
+      "columna": "INVRVENTA7",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 227,
+      "significado": "Precio de venta lista 7",
+      "confianza": "alta"
+    },
+    {
+      "idx": 20,
+      "columna": "INVRVENTA8",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 235,
+      "significado": "Precio de venta lista 8",
+      "confianza": "alta"
+    },
+    {
+      "idx": 21,
+      "columna": "INVRVENTA9",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 243,
+      "significado": "Precio de venta lista 9",
+      "confianza": "alta"
+    },
+    {
+      "idx": 22,
+      "columna": "INVRVENTA0",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 251,
+      "significado": "Precio de venta lista 10 (decimo precio)",
+      "confianza": "media"
+    },
+    {
+      "idx": 23,
+      "columna": "INTIMP",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 259,
+      "significado": "Codigo de tipo de impuesto",
+      "confianza": "media"
+    },
+    {
+      "idx": 24,
+      "columna": "INIMPC",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 261,
+      "significado": "Porcentaje del impuesto (IVA) vigente",
+      "confianza": "alta"
+    },
+    {
+      "idx": 25,
+      "columna": "INIMP3",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 269,
+      "significado": "Porcentaje de un segundo/tercer impuesto",
+      "confianza": "media"
+    },
+    {
+      "idx": 26,
+      "columna": "INTIPINV",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 277,
+      "significado": "Tipo/clase de inventario (clasificacion contable)",
+      "confianza": "media"
+    },
+    {
+      "idx": 27,
+      "columna": "INMINIMO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 279,
+      "significado": "Existencia minima (stock minimo)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 28,
+      "columna": "INMAXIMO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 287,
+      "significado": "Existencia maxima (stock maximo)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 29,
+      "columna": "INVRULTC",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 295,
+      "significado": "Ultimo costo / costo de reposicion unitario",
+      "confianza": "alta"
+    },
+    {
+      "idx": 30,
+      "columna": "INFCHULTC",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": 303,
+      "significado": "Fecha del ultimo costo (formato YYYYMMDD)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 31,
+      "columna": "INFCUSAL1",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": 307,
+      "significado": "Fecha de causacion / ultimo movimiento (YYYYMMDD)",
+      "confianza": "media"
+    },
+    {
+      "idx": 32,
+      "columna": "INUBIC",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 311,
+      "significado": "Ubicacion fisica en la bodega",
+      "confianza": "alta"
+    },
+    {
+      "idx": 33,
+      "columna": "INCOMPRO",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": 321,
+      "significado": "Comprobante / marca interna de compra (uso interno)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 34,
+      "columna": "INGANAN",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 325,
+      "significado": "Margen / ganancia % para el precio 1",
+      "confianza": "media"
+    },
+    {
+      "idx": 35,
+      "columna": "INGANAN2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 333,
+      "significado": "Margen / ganancia % para el precio 2",
+      "confianza": "media"
+    },
+    {
+      "idx": 36,
+      "columna": "INGANAN3",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 341,
+      "significado": "Margen / ganancia % para el precio 3",
+      "confianza": "media"
+    },
+    {
+      "idx": 37,
+      "columna": "INCONVER",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 349,
+      "significado": "Factor de conversion de unidad (venta fraccionada/peso)",
+      "confianza": "media"
+    },
+    {
+      "idx": 38,
+      "columna": "INTREPOS",
+      "tipo": "bin(2B)",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 357,
+      "significado": "Indicador de reposicion automatica (0/1)",
+      "confianza": "media"
+    },
+    {
+      "idx": 39,
+      "columna": "INPESO",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 359,
+      "significado": "Indicador: el articulo se vende por peso",
+      "confianza": "alta"
+    },
+    {
+      "idx": 40,
+      "columna": "INFPRECIO",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 360,
+      "significado": "Indicador de manejo de precio (libre/fijo)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 41,
+      "columna": "INFORMULA",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 361,
+      "significado": "Codigo de formula para calcular el precio",
+      "confianza": "media"
+    },
+    {
+      "idx": 42,
+      "columna": "INOUT",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 363,
+      "significado": "Indicador IN/OUT (estado en catalogo/rotacion)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 43,
+      "columna": "INCOSTO00",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 364,
+      "significado": "Costo actual (costo base)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 44,
+      "columna": "INSALDO00",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 372,
+      "significado": "Existencia / saldo actual en la sucursal-bodega",
+      "confianza": "alta"
+    },
+    {
+      "idx": 45,
+      "columna": "INSALDO002",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 380,
+      "significado": "Saldo alterno (segunda bodega / contable)",
+      "confianza": "media"
+    },
+    {
+      "idx": 46,
+      "columna": "IEU01",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 388,
+      "significado": "Entradas en unidades - sucursal 01 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 47,
+      "columna": "IEV01",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 396,
+      "significado": "Entradas en valor - sucursal 01 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 48,
+      "columna": "ISV01",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 404,
+      "significado": "Salidas en valor - sucursal 01 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 49,
+      "columna": "ISU01",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 412,
+      "significado": "Salidas en unidades - sucursal 01 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 50,
+      "columna": "IEU02",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 420,
+      "significado": "Entradas en unidades - sucursal 02 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 51,
+      "columna": "IEV02",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 428,
+      "significado": "Entradas en valor - sucursal 02 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 52,
+      "columna": "ISU02",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 436,
+      "significado": "Salidas en unidades - sucursal 02 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 53,
+      "columna": "ISV02",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 444,
+      "significado": "Salidas en valor - sucursal 02 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 54,
+      "columna": "IEU03",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 452,
+      "significado": "Entradas en unidades - sucursal 03 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 55,
+      "columna": "IEV03",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 460,
+      "significado": "Entradas en valor - sucursal 03 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 56,
+      "columna": "ISU03",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 468,
+      "significado": "Salidas en unidades - sucursal 03 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 57,
+      "columna": "ISV03",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 476,
+      "significado": "Salidas en valor - sucursal 03 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 58,
+      "columna": "IEU04",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 484,
+      "significado": "Entradas en unidades - sucursal 04 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 59,
+      "columna": "IEV04",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 492,
+      "significado": "Entradas en valor - sucursal 04 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 60,
+      "columna": "ISU04",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 500,
+      "significado": "Salidas en unidades - sucursal 04 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 61,
+      "columna": "ISV04",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 508,
+      "significado": "Salidas en valor - sucursal 04 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 62,
+      "columna": "IEU05",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 516,
+      "significado": "Entradas en unidades - sucursal 05 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 63,
+      "columna": "IEV05",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 524,
+      "significado": "Entradas en valor - sucursal 05 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 64,
+      "columna": "ISU05",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 532,
+      "significado": "Salidas en unidades - sucursal 05 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 65,
+      "columna": "ISV05",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 540,
+      "significado": "Salidas en valor - sucursal 05 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 66,
+      "columna": "IEU06",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 548,
+      "significado": "Entradas en unidades - sucursal 06 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 67,
+      "columna": "IEV06",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 556,
+      "significado": "Entradas en valor - sucursal 06 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 68,
+      "columna": "ISU06",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 564,
+      "significado": "Salidas en unidades - sucursal 06 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 69,
+      "columna": "ISV06",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 572,
+      "significado": "Salidas en valor - sucursal 06 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 70,
+      "columna": "IEU07",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 580,
+      "significado": "Entradas en unidades - sucursal 07 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 71,
+      "columna": "IEV07",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 588,
+      "significado": "Entradas en valor - sucursal 07 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 72,
+      "columna": "ISU07",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 596,
+      "significado": "Salidas en unidades - sucursal 07 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 73,
+      "columna": "ISV07",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 604,
+      "significado": "Salidas en valor - sucursal 07 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 74,
+      "columna": "IEU08",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 612,
+      "significado": "Entradas en unidades - sucursal 08 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 75,
+      "columna": "IEV08",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 620,
+      "significado": "Entradas en valor - sucursal 08 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 76,
+      "columna": "ISU08",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 628,
+      "significado": "Salidas en unidades - sucursal 08 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 77,
+      "columna": "ISV08",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 636,
+      "significado": "Salidas en valor - sucursal 08 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 78,
+      "columna": "IEU09",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 644,
+      "significado": "Entradas en unidades - sucursal 09 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 79,
+      "columna": "IEV09",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 652,
+      "significado": "Entradas en valor - sucursal 09 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 80,
+      "columna": "ISU09",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 660,
+      "significado": "Salidas en unidades - sucursal 09 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 81,
+      "columna": "ISV09",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 668,
+      "significado": "Salidas en valor - sucursal 09 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 82,
+      "columna": "IEU10",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 676,
+      "significado": "Entradas en unidades - sucursal 10 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 83,
+      "columna": "IEV10",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 684,
+      "significado": "Entradas en valor - sucursal 10 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 84,
+      "columna": "ISU10",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 692,
+      "significado": "Salidas en unidades - sucursal 10 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 85,
+      "columna": "ISV10",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 700,
+      "significado": "Salidas en valor - sucursal 10 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 86,
+      "columna": "IEU11",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 708,
+      "significado": "Entradas en unidades - sucursal 11 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 87,
+      "columna": "IEV11",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 716,
+      "significado": "Entradas en valor - sucursal 11 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 88,
+      "columna": "ISU11",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 724,
+      "significado": "Salidas en unidades - sucursal 11 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 89,
+      "columna": "ISV11",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 732,
+      "significado": "Salidas en valor - sucursal 11 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 90,
+      "columna": "IEU12",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 740,
+      "significado": "Entradas en unidades - sucursal 12 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 91,
+      "columna": "IEV12",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 748,
+      "significado": "Entradas en valor - sucursal 12 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 92,
+      "columna": "ISU12",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 756,
+      "significado": "Salidas en unidades - sucursal 12 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 93,
+      "columna": "ISV12",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 764,
+      "significado": "Salidas en valor - sucursal 12 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 94,
+      "columna": "IEU13",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 772,
+      "significado": "Entradas en unidades - sucursal 13 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 95,
+      "columna": "IEV13",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 780,
+      "significado": "Entradas en valor - sucursal 13 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 96,
+      "columna": "ISU13",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 788,
+      "significado": "Salidas en unidades - sucursal 13 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 97,
+      "columna": "ISV13",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 796,
+      "significado": "Salidas en valor - sucursal 13 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 98,
+      "columna": "INRETEN",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 804,
+      "significado": "Codigo de retencion aplicable",
+      "confianza": "media"
+    },
+    {
+      "idx": 99,
+      "columna": "INARTICES",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 806,
+      "significado": "Referencia cruzada del articulo (equivalente en otra empresa/lista)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 100,
+      "columna": "INFINANCIA",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 814,
+      "significado": "Indicador financiero / financiacion",
+      "confianza": "baja"
+    },
+    {
+      "idx": 101,
+      "columna": "INASALDO",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 815,
+      "significado": "Indicador de actualizacion de saldo",
+      "confianza": "baja"
+    },
+    {
+      "idx": 102,
+      "columna": "INTRANSF",
+      "tipo": "char",
+      "bytes": 19,
+      "decimales": 0,
+      "offset": 816,
+      "significado": "Articulo destino en transferencia (mismo formato que INARTIC)",
+      "confianza": "media"
+    },
+    {
+      "idx": 103,
+      "columna": "INCPESO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 835,
+      "significado": "Costo/precio por peso (por kg)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 104,
+      "columna": "INMARCA",
+      "tipo": "char",
+      "bytes": 16,
+      "decimales": 0,
+      "offset": 843,
+      "significado": "Marca del articulo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 105,
+      "columna": "INFRACC",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 859,
+      "significado": "Factor de fraccionamiento (venta por fraccion)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 106,
+      "columna": "INVLFRA",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 867,
+      "significado": "Valor / precio de la fraccion",
+      "confianza": "baja"
+    },
+    {
+      "idx": 107,
+      "columna": "INPRESEN",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 875,
+      "significado": "Codigo de presentacion del empaque",
+      "confianza": "media"
+    },
+    {
+      "idx": 108,
+      "columna": "INBLOQUEO",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 878,
+      "significado": "Indicador de articulo bloqueado",
+      "confianza": "media"
+    },
+    {
+      "idx": 109,
+      "columna": "INVTACOS",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 879,
+      "significado": "Permitir venta al costo",
+      "confianza": "media"
+    },
+    {
+      "idx": 110,
+      "columna": "VTA01",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 880,
+      "significado": "Ventas acumuladas del periodo/mes 1 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 111,
+      "columna": "VTA02",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 888,
+      "significado": "Ventas acumuladas del periodo/mes 2 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 112,
+      "columna": "VTA03",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 896,
+      "significado": "Ventas acumuladas del periodo/mes 3 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 113,
+      "columna": "VTA04",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 904,
+      "significado": "Ventas acumuladas del periodo/mes 4 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 114,
+      "columna": "VTA05",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 912,
+      "significado": "Ventas acumuladas del periodo/mes 5 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 115,
+      "columna": "VTA06",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 920,
+      "significado": "Ventas acumuladas del periodo/mes 6 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 116,
+      "columna": "VTA07",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 928,
+      "significado": "Ventas acumuladas del periodo/mes 7 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 117,
+      "columna": "VTA08",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 936,
+      "significado": "Ventas acumuladas del periodo/mes 8 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 118,
+      "columna": "VTA09",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 944,
+      "significado": "Ventas acumuladas del periodo/mes 9 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 119,
+      "columna": "VTA10",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 952,
+      "significado": "Ventas acumuladas del periodo/mes 10 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 120,
+      "columna": "VTA11",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 960,
+      "significado": "Ventas acumuladas del periodo/mes 11 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 121,
+      "columna": "VTA12",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 968,
+      "significado": "Ventas acumuladas del periodo/mes 12 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 122,
+      "columna": "VTA13",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 976,
+      "significado": "Ventas acumuladas del periodo/mes 13 (historico)",
+      "confianza": "media"
+    },
+    {
+      "idx": 123,
+      "columna": "INACTIVO",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 984,
+      "significado": "Estado del articulo (activo/inactivo) en la sucursal",
+      "confianza": "alta"
+    },
+    {
+      "idx": 124,
+      "columna": "INFECHA",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": 985,
+      "significado": "Fecha de creacion / ultima modificacion (YYYYMMDD)",
+      "confianza": "media"
+    },
+    {
+      "idx": 125,
+      "columna": "INBLOCOM",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 989,
+      "significado": "Bloquear compras del articulo",
+      "confianza": "media"
+    },
+    {
+      "idx": 126,
+      "columna": "INAPLIDCTO",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 990,
+      "significado": "Indicador de aplicacion de descuentos",
+      "confianza": "media"
+    },
+    {
+      "idx": 127,
+      "columna": "INPTOPOS",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 991,
+      "significado": "Punto de pedido / reorden",
+      "confianza": "alta"
+    },
+    {
+      "idx": 128,
+      "columna": "INEAN14",
+      "tipo": "char",
+      "bytes": 14,
+      "decimales": 0,
+      "offset": 999,
+      "significado": "Codigo de barras EAN-14 (caja/empaque)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 129,
+      "columna": "INTIPOFRA",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1013,
+      "significado": "Tipo de fraccionamiento (clase de venta fraccionada)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 130,
+      "columna": "INPROTOR",
+      "tipo": "char",
+      "bytes": 40,
+      "decimales": 0,
+      "offset": 1021,
+      "significado": "Proveedores adicionales / texto libre de proveedores",
+      "confianza": "baja"
+    },
+    {
+      "idx": 131,
+      "columna": "INCUM",
+      "tipo": "char",
+      "bytes": 18,
+      "decimales": 0,
+      "offset": 1061,
+      "significado": "Campo auxiliar (posible registro sanitario / CUM) - verificar",
+      "confianza": "baja"
+    },
+    {
+      "idx": 132,
+      "columna": "ININVIMA",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1079,
+      "significado": "Registro sanitario INVIMA",
+      "confianza": "alta"
+    },
+    {
+      "idx": 133,
+      "columna": "INMARCAP",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1099,
+      "significado": "Marca propia / marca del proveedor (marca privada)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 134,
+      "columna": "INNOMBRE4",
+      "tipo": "char",
+      "bytes": 100,
+      "decimales": 0,
+      "offset": 1119,
+      "significado": "Nombre largo del articulo (para facturacion)",
+      "confianza": "media"
+    },
+    {
+      "idx": 135,
+      "columna": "INWEB",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1219,
+      "significado": "Publicado en el catalogo web (T/F)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 136,
+      "columna": "INFCHREG",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1220,
+      "significado": "Fecha de registro (numerica YYYYMMDD)",
+      "confianza": "media"
+    },
+    {
+      "idx": 137,
+      "columna": "INGARANTIA",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1228,
+      "significado": "Texto / codigo de garantia",
+      "confianza": "media"
+    },
+    {
+      "idx": 138,
+      "columna": "INARTOFER",
+      "tipo": "char",
+      "bytes": 19,
+      "decimales": 0,
+      "offset": 1248,
+      "significado": "Articulo asociado a oferta",
+      "confianza": "media"
+    },
+    {
+      "idx": 139,
+      "columna": "INSUBEPRE",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1267,
+      "significado": "Indicador para subir/aplicar precio automaticamente",
+      "confianza": "baja"
+    },
+    {
+      "idx": 140,
+      "columna": "INREGIMPC",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1268,
+      "significado": "Regimen de impuesto (responsable/no responsable de IVA)",
+      "confianza": "media"
+    },
+    {
+      "idx": 141,
+      "columna": "INSALDOWEB",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1269,
+      "significado": "Existencia disponible para la web",
+      "confianza": "alta"
+    },
+    {
+      "idx": 142,
+      "columna": "INGSALWEB",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1277,
+      "significado": "Indicador de manejo de saldo web",
+      "confianza": "media"
+    },
+    {
+      "idx": 143,
+      "columna": "INBOTONG",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1278,
+      "significado": "Indicador de visualizacion de boton en POS",
+      "confianza": "baja"
+    },
+    {
+      "idx": 144,
+      "columna": "INDCTO3X2",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1279,
+      "significado": "Indicador de descuento 3x2",
+      "confianza": "media"
+    },
+    {
+      "idx": 145,
+      "columna": "INIMPCOSTO",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1280,
+      "significado": "Indicador: el impuesto se calcula sobre el costo",
+      "confianza": "media"
+    },
+    {
+      "idx": 146,
+      "columna": "INTIENDAB",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1281,
+      "significado": "Indicador de tienda B / catalogo alterno",
+      "confianza": "baja"
+    },
+    {
+      "idx": 147,
+      "columna": "INCCOSTO",
+      "tipo": "char",
+      "bytes": 7,
+      "decimales": 0,
+      "offset": 1282,
+      "significado": "Centro de costo (codigo)",
+      "confianza": "media"
+    },
+    {
+      "idx": 148,
+      "columna": "INCOSIVA",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1289,
+      "significado": "Indicador de costo incluye / no IVA",
+      "confianza": "media"
+    },
+    {
+      "idx": 149,
+      "columna": "MODI1",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 1290,
+      "significado": "Campo modificador / auxiliar libre 1",
+      "confianza": "media"
+    },
+    {
+      "idx": 150,
+      "columna": "MODI2",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 1300,
+      "significado": "Campo modificador / auxiliar libre 2",
+      "confianza": "media"
+    },
+    {
+      "idx": 151,
+      "columna": "MODI3",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 1310,
+      "significado": "Campo modificador / auxiliar libre 3",
+      "confianza": "media"
+    },
+    {
+      "idx": 152,
+      "columna": "MODI4",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 1320,
+      "significado": "Campo modificador / auxiliar libre 4",
+      "confianza": "media"
+    },
+    {
+      "idx": 153,
+      "columna": "MODI5",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 1330,
+      "significado": "Campo modificador / auxiliar libre 5",
+      "confianza": "media"
+    },
+    {
+      "idx": 154,
+      "columna": "INEMBALAJE2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1340,
+      "significado": "Segundo factor de empaque (alterno)",
+      "confianza": "media"
+    },
+    {
+      "idx": 155,
+      "columna": "INPORIMC",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1348,
+      "significado": "Porcentaje del impuesto (alterno)",
+      "confianza": "media"
+    },
+    {
+      "idx": 156,
+      "columna": "INFAMIS",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1356,
+      "significado": "Indicador de agrupacion por familia",
+      "confianza": "baja"
+    },
+    {
+      "idx": 157,
+      "columna": "INGANAN4",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1357,
+      "significado": "Margen / ganancia % para el precio 4",
+      "confianza": "media"
+    },
+    {
+      "idx": 158,
+      "columna": "INGANAN5",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1365,
+      "significado": "Margen / ganancia % para el precio 5",
+      "confianza": "media"
+    },
+    {
+      "idx": 159,
+      "columna": "INGANAN6",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1373,
+      "significado": "Margen / ganancia % para el precio 6",
+      "confianza": "media"
+    },
+    {
+      "idx": 160,
+      "columna": "INGANAN7",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1381,
+      "significado": "Margen / ganancia % para el precio 7",
+      "confianza": "media"
+    },
+    {
+      "idx": 161,
+      "columna": "INGANAN8",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1389,
+      "significado": "Margen / ganancia % para el precio 8",
+      "confianza": "media"
+    },
+    {
+      "idx": 162,
+      "columna": "INGANAN9",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1397,
+      "significado": "Margen / ganancia % para el precio 9",
+      "confianza": "media"
+    },
+    {
+      "idx": 163,
+      "columna": "DESMAR1",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1405,
+      "significado": "Descripcion de marca 1 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 164,
+      "columna": "DESMAR2",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1435,
+      "significado": "Descripcion de marca 2 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 165,
+      "columna": "DESMAR3",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1465,
+      "significado": "Descripcion de marca 3 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 166,
+      "columna": "DESMAR4",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1495,
+      "significado": "Descripcion de marca 4 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 167,
+      "columna": "DESMAR5",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1525,
+      "significado": "Descripcion de marca 5 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 168,
+      "columna": "DESMAR6",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1555,
+      "significado": "Descripcion de marca 6 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 169,
+      "columna": "DESMAR7",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1585,
+      "significado": "Descripcion de marca 7 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 170,
+      "columna": "DESMAR8",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1615,
+      "significado": "Descripcion de marca 8 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 171,
+      "columna": "DESMAR9",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": 1645,
+      "significado": "Descripcion de marca 9 (texto libre)",
+      "confianza": "media"
+    },
+    {
+      "idx": 172,
+      "columna": "SACATWEB",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1675,
+      "significado": "Sacar el articulo del catalogo web",
+      "confianza": "media"
+    },
+    {
+      "idx": 173,
+      "columna": "INALTO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1676,
+      "significado": "Alto (dimensiones del articulo)",
+      "confianza": "media"
+    },
+    {
+      "idx": 174,
+      "columna": "INANCHO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1684,
+      "significado": "Ancho (dimensiones del articulo)",
+      "confianza": "media"
+    },
+    {
+      "idx": 175,
+      "columna": "INLARGO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1692,
+      "significado": "Largo (dimensiones del articulo)",
+      "confianza": "media"
+    },
+    {
+      "idx": 176,
+      "columna": "INACTI1",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1700,
+      "significado": "Codigo de actividad / clasificacion 1",
+      "confianza": "baja"
+    },
+    {
+      "idx": 177,
+      "columna": "INACTI2",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1703,
+      "significado": "Codigo de actividad / clasificacion 2",
+      "confianza": "baja"
+    },
+    {
+      "idx": 178,
+      "columna": "INACTI3",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1706,
+      "significado": "Codigo de actividad / clasificacion 3",
+      "confianza": "baja"
+    },
+    {
+      "idx": 179,
+      "columna": "INACTI4",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1709,
+      "significado": "Codigo de actividad / clasificacion 4",
+      "confianza": "baja"
+    },
+    {
+      "idx": 180,
+      "columna": "INACTI5",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1712,
+      "significado": "Codigo de actividad / clasificacion 5",
+      "confianza": "baja"
+    },
+    {
+      "idx": 181,
+      "columna": "INAPP",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1715,
+      "significado": "Visible en la app movil",
+      "confianza": "media"
+    },
+    {
+      "idx": 182,
+      "columna": "INESCA",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 1716,
+      "significado": "Codigo de escala (bascula)",
+      "confianza": "media"
+    },
+    {
+      "idx": 183,
+      "columna": "INACTI6",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1718,
+      "significado": "Codigo de actividad / clasificacion 6",
+      "confianza": "baja"
+    },
+    {
+      "idx": 184,
+      "columna": "INACTI7",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1721,
+      "significado": "Codigo de actividad / clasificacion 7",
+      "confianza": "baja"
+    },
+    {
+      "idx": 185,
+      "columna": "INACTI8",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1724,
+      "significado": "Codigo de actividad / clasificacion 8",
+      "confianza": "baja"
+    },
+    {
+      "idx": 186,
+      "columna": "INACTI9",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1727,
+      "significado": "Codigo de actividad / clasificacion 9",
+      "confianza": "baja"
+    },
+    {
+      "idx": 187,
+      "columna": "INACTI10",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1730,
+      "significado": "Codigo de actividad / clasificacion 10",
+      "confianza": "baja"
+    },
+    {
+      "idx": 188,
+      "columna": "INOPLOG",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1733,
+      "significado": "Indicador de operacion logistica",
+      "confianza": "baja"
+    },
+    {
+      "idx": 189,
+      "columna": "INVTACAF",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1734,
+      "significado": "Indicador de venta (canal cafeteria/otro)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 190,
+      "columna": "INFINVIMA",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 1735,
+      "significado": "Fecha del registro INVIMA",
+      "confianza": "media"
+    },
+    {
+      "idx": 191,
+      "columna": "INWEBSER",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1743,
+      "significado": "Visible en el portal web de servicios",
+      "confianza": "media"
+    },
+    {
+      "idx": 192,
+      "columna": "INR1",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1744,
+      "significado": "Indicador R1 (retencion / regimen)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 193,
+      "columna": "INR2",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1745,
+      "significado": "Indicador R2 (retencion / regimen)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 194,
+      "columna": "INR3",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1746,
+      "significado": "Indicador R3 (retencion / regimen)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 195,
+      "columna": "INR4",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1747,
+      "significado": "Indicador R4 (retencion / regimen)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 196,
+      "columna": "INR5",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1748,
+      "significado": "Indicador R5 (retencion / regimen)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 197,
+      "columna": "INDOMICOM",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1749,
+      "significado": "Habilitado para domicilio / comercio electronico",
+      "confianza": "media"
+    },
+    {
+      "idx": 198,
+      "columna": "INDOMIURL",
+      "tipo": "char",
+      "bytes": 100,
+      "decimales": 0,
+      "offset": 1750,
+      "significado": "URL de pedidos / domicilio",
+      "confianza": "media"
+    },
+    {
+      "idx": 199,
+      "columna": "INIUM1",
+      "tipo": "char",
+      "bytes": 15,
+      "decimales": 0,
+      "offset": 1850,
+      "significado": "Identificador de ubicacion/medida 1",
+      "confianza": "baja"
+    },
+    {
+      "idx": 200,
+      "columna": "INIUM2",
+      "tipo": "char",
+      "bytes": 15,
+      "decimales": 0,
+      "offset": 1865,
+      "significado": "Identificador de ubicacion/medida 2",
+      "confianza": "baja"
+    },
+    {
+      "idx": 201,
+      "columna": "INIUM3",
+      "tipo": "char",
+      "bytes": 15,
+      "decimales": 0,
+      "offset": 1880,
+      "significado": "Identificador de ubicacion/medida 3",
+      "confianza": "baja"
+    },
+    {
+      "idx": 202,
+      "columna": "INDOMIRAP",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1895,
+      "significado": "Habilitado para domicilio expres / rapido",
+      "confianza": "baja"
+    },
+    {
+      "idx": 203,
+      "columna": "ARTICDSI",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1896,
+      "significado": "Indicador de articulo integrado con DSI",
+      "confianza": "baja"
+    },
+    {
+      "idx": 204,
+      "columna": "INCATE",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 1897,
+      "significado": "Codigo de categoria",
+      "confianza": "alta"
+    },
+    {
+      "idx": 205,
+      "columna": "ETIDIG",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 1900,
+      "significado": "Indicador de etiqueta digital",
+      "confianza": "baja"
+    },
+    {
+      "idx": 206,
+      "columna": "ETI_IDP",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1901,
+      "significado": "ID de plantilla de etiqueta de precio",
+      "confianza": "media"
+    },
+    {
+      "idx": 207,
+      "columna": "ETI_PUM",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1921,
+      "significado": "Plantilla de etiqueta de unidad de medida",
+      "confianza": "baja"
+    },
+    {
+      "idx": 208,
+      "columna": "ETI_TEMPL1",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1941,
+      "significado": "Plantilla de etiqueta 1",
+      "confianza": "baja"
+    },
+    {
+      "idx": 209,
+      "columna": "ETI_TEMPL2",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1961,
+      "significado": "Plantilla de etiqueta 2",
+      "confianza": "baja"
+    },
+    {
+      "idx": 210,
+      "columna": "ETI_IDT",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": 1981,
+      "significado": "ID de plantilla de etiqueta",
+      "confianza": "baja"
+    },
+    {
+      "idx": 211,
+      "columna": "ININACVER",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 2001,
+      "significado": "Indicador de inactivacion (verificacion/version)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 212,
+      "columna": "INETISEC",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 2002,
+      "significado": "Seccion / sector de etiqueta",
+      "confianza": "baja"
+    },
+    {
+      "idx": 213,
+      "columna": "INACTI11",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2003,
+      "significado": "Codigo de actividad / clasificacion 11",
+      "confianza": "baja"
+    },
+    {
+      "idx": 214,
+      "columna": "INACTI12",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2006,
+      "significado": "Codigo de actividad / clasificacion 12",
+      "confianza": "baja"
+    },
+    {
+      "idx": 215,
+      "columna": "INACTI13",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2009,
+      "significado": "Codigo de actividad / clasificacion 13",
+      "confianza": "baja"
+    },
+    {
+      "idx": 216,
+      "columna": "INACTI14",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2012,
+      "significado": "Codigo de actividad / clasificacion 14",
+      "confianza": "baja"
+    },
+    {
+      "idx": 217,
+      "columna": "INACTI15",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2015,
+      "significado": "Codigo de actividad / clasificacion 15",
+      "confianza": "baja"
+    },
+    {
+      "idx": 218,
+      "columna": "INACTI16",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2018,
+      "significado": "Codigo de actividad / clasificacion 16",
+      "confianza": "baja"
+    },
+    {
+      "idx": 219,
+      "columna": "INACTI17",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2021,
+      "significado": "Codigo de actividad / clasificacion 17",
+      "confianza": "baja"
+    },
+    {
+      "idx": 220,
+      "columna": "INACTI18",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2024,
+      "significado": "Codigo de actividad / clasificacion 18",
+      "confianza": "baja"
+    },
+    {
+      "idx": 221,
+      "columna": "INACTI19",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2027,
+      "significado": "Codigo de actividad / clasificacion 19",
+      "confianza": "baja"
+    },
+    {
+      "idx": 222,
+      "columna": "INACTI20",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2030,
+      "significado": "Codigo de actividad / clasificacion 20",
+      "confianza": "baja"
+    },
+    {
+      "idx": 223,
+      "columna": "INULTRAP",
+      "tipo": "logico",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 2033,
+      "significado": "Indicador de ultima reposicion",
+      "confianza": "baja"
+    },
+    {
+      "idx": 224,
+      "columna": "INIMP4",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2034,
+      "significado": "Porcentaje de un cuarto impuesto",
+      "confianza": "baja"
+    },
+    {
+      "idx": 225,
+      "columna": "INMETCOMP",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2042,
+      "significado": "Metodo / codigo de compra",
+      "confianza": "baja"
+    },
+    {
+      "idx": 226,
+      "columna": "INFCHVIGMC",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2050,
+      "significado": "Fecha de vigencia del metodo de compra",
+      "confianza": "baja"
+    },
+    {
+      "idx": 227,
+      "columna": "INCLACOMP",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 2058,
+      "significado": "Clase de compra",
+      "confianza": "baja"
+    },
+    {
+      "idx": 228,
+      "columna": "INUMINIDES",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2059,
+      "significado": "Cantidad minima de despacho / venta",
+      "confianza": "media"
+    },
+    {
+      "idx": 229,
+      "columna": "INABC",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": 2067,
+      "significado": "Clasificacion ABC (rotacion)",
+      "confianza": "media"
+    },
+    {
+      "idx": 230,
+      "columna": "INRESERV",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2068,
+      "significado": "Cantidad reservada",
+      "confianza": "alta"
+    },
+    {
+      "idx": 231,
+      "columna": "INSEMANA",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": 2076,
+      "significado": "Semana (codigo de semana de pedido)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 232,
+      "columna": "INPRONOSTI",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2078,
+      "significado": "Pronostico de demanda / ventas",
+      "confianza": "media"
+    },
+    {
+      "idx": 233,
+      "columna": "INSTOCKPR",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2086,
+      "significado": "Stock proyectado",
+      "confianza": "media"
+    },
+    {
+      "idx": 234,
+      "columna": "INLARGO14",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2094,
+      "significado": "Largo para EAN-14 (caja)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 235,
+      "columna": "INANCHO14",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2102,
+      "significado": "Ancho para EAN-14 (caja)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 236,
+      "columna": "INALTO14",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2110,
+      "significado": "Alto para EAN-14 (caja)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 237,
+      "columna": "INPESO14",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2118,
+      "significado": "Peso para EAN-14 (caja)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 238,
+      "columna": "INESTADO",
+      "tipo": "char",
+      "bytes": 50,
+      "decimales": 0,
+      "offset": 2126,
+      "significado": "Estado del articulo (texto)",
+      "confianza": "media"
+    },
+    {
+      "idx": 239,
+      "columna": "INCATECO",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": 2176,
+      "significado": "Categoria economica / contable",
+      "confianza": "media"
+    },
+    {
+      "idx": 240,
+      "columna": "INANALI",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2186,
+      "significado": "Codigo de analisis",
+      "confianza": "baja"
+    },
+    {
+      "idx": 241,
+      "columna": "INCATCOM",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2189,
+      "significado": "Categoria comercial",
+      "confianza": "media"
+    },
+    {
+      "idx": 242,
+      "columna": "INCASACOM",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": 2192,
+      "significado": "Casa comercial",
+      "confianza": "media"
+    },
+    {
+      "idx": 243,
+      "columna": "S01",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2195,
+      "significado": "Saldo / existencia en la sucursal 01",
+      "confianza": "media"
+    },
+    {
+      "idx": 244,
+      "columna": "S02",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2203,
+      "significado": "Saldo / existencia en la sucursal 02",
+      "confianza": "media"
+    },
+    {
+      "idx": 245,
+      "columna": "S03",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2211,
+      "significado": "Saldo / existencia en la sucursal 03",
+      "confianza": "media"
+    },
+    {
+      "idx": 246,
+      "columna": "S04",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2219,
+      "significado": "Saldo / existencia en la sucursal 04",
+      "confianza": "media"
+    },
+    {
+      "idx": 247,
+      "columna": "S05",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2227,
+      "significado": "Saldo / existencia en la sucursal 05",
+      "confianza": "media"
+    },
+    {
+      "idx": 248,
+      "columna": "S06",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2235,
+      "significado": "Saldo / existencia en la sucursal 06",
+      "confianza": "media"
+    },
+    {
+      "idx": 249,
+      "columna": "S07",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2243,
+      "significado": "Saldo / existencia en la sucursal 07",
+      "confianza": "media"
+    },
+    {
+      "idx": 250,
+      "columna": "S08",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2251,
+      "significado": "Saldo / existencia en la sucursal 08",
+      "confianza": "media"
+    },
+    {
+      "idx": 251,
+      "columna": "S09",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2259,
+      "significado": "Saldo / existencia en la sucursal 09",
+      "confianza": "media"
+    },
+    {
+      "idx": 252,
+      "columna": "S10",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2267,
+      "significado": "Saldo / existencia en la sucursal 10",
+      "confianza": "media"
+    },
+    {
+      "idx": 253,
+      "columna": "S11",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2275,
+      "significado": "Saldo / existencia en la sucursal 11",
+      "confianza": "media"
+    },
+    {
+      "idx": 254,
+      "columna": "S12",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2283,
+      "significado": "Saldo / existencia en la sucursal 12",
+      "confianza": "media"
+    },
+    {
+      "idx": 255,
+      "columna": "S13",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2291,
+      "significado": "Saldo / existencia en la sucursal 13",
+      "confianza": "media"
+    },
+    {
+      "idx": 256,
+      "columna": "S14",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2299,
+      "significado": "Saldo / existencia en la sucursal 14",
+      "confianza": "media"
+    },
+    {
+      "idx": 257,
+      "columna": "S15",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2307,
+      "significado": "Saldo / existencia en la sucursal 15",
+      "confianza": "media"
+    },
+    {
+      "idx": 258,
+      "columna": "S16",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2315,
+      "significado": "Saldo / existencia en la sucursal 16",
+      "confianza": "media"
+    },
+    {
+      "idx": 259,
+      "columna": "S17",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2323,
+      "significado": "Saldo / existencia en la sucursal 17",
+      "confianza": "media"
+    },
+    {
+      "idx": 260,
+      "columna": "S18",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2331,
+      "significado": "Saldo / existencia en la sucursal 18",
+      "confianza": "media"
+    },
+    {
+      "idx": 261,
+      "columna": "S19",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2339,
+      "significado": "Saldo / existencia en la sucursal 19",
+      "confianza": "media"
+    },
+    {
+      "idx": 262,
+      "columna": "S20",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2347,
+      "significado": "Saldo / existencia en la sucursal 20",
+      "confianza": "media"
+    },
+    {
+      "idx": 263,
+      "columna": "S21",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2355,
+      "significado": "Saldo / existencia en la sucursal 21",
+      "confianza": "media"
+    },
+    {
+      "idx": 264,
+      "columna": "S22",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2363,
+      "significado": "Saldo / existencia en la sucursal 22",
+      "confianza": "media"
+    },
+    {
+      "idx": 265,
+      "columna": "S23",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2371,
+      "significado": "Saldo / existencia en la sucursal 23",
+      "confianza": "media"
+    },
+    {
+      "idx": 266,
+      "columna": "S24",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2379,
+      "significado": "Saldo / existencia en la sucursal 24",
+      "confianza": "media"
+    },
+    {
+      "idx": 267,
+      "columna": "S25",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2387,
+      "significado": "Saldo / existencia en la sucursal 25",
+      "confianza": "media"
+    },
+    {
+      "idx": 268,
+      "columna": "S26",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2395,
+      "significado": "Saldo / existencia en la sucursal 26",
+      "confianza": "media"
+    },
+    {
+      "idx": 269,
+      "columna": "S27",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2403,
+      "significado": "Saldo / existencia en la sucursal 27",
+      "confianza": "media"
+    },
+    {
+      "idx": 270,
+      "columna": "S28",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2411,
+      "significado": "Saldo / existencia en la sucursal 28",
+      "confianza": "media"
+    },
+    {
+      "idx": 271,
+      "columna": "S29",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2419,
+      "significado": "Saldo / existencia en la sucursal 29",
+      "confianza": "media"
+    },
+    {
+      "idx": 272,
+      "columna": "S30",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2427,
+      "significado": "Saldo / existencia en la sucursal 30",
+      "confianza": "media"
+    },
+    {
+      "idx": 273,
+      "columna": "S31",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2435,
+      "significado": "Saldo / existencia en la sucursal 31",
+      "confianza": "media"
+    },
+    {
+      "idx": 274,
+      "columna": "S32",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2443,
+      "significado": "Saldo / existencia en la sucursal 32",
+      "confianza": "media"
+    },
+    {
+      "idx": 275,
+      "columna": "S33",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2451,
+      "significado": "Saldo / existencia en la sucursal 33",
+      "confianza": "media"
+    },
+    {
+      "idx": 276,
+      "columna": "S34",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2459,
+      "significado": "Saldo / existencia en la sucursal 34",
+      "confianza": "media"
+    },
+    {
+      "idx": 277,
+      "columna": "S35",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2467,
+      "significado": "Saldo / existencia en la sucursal 35",
+      "confianza": "media"
+    },
+    {
+      "idx": 278,
+      "columna": "S36",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2475,
+      "significado": "Saldo / existencia en la sucursal 36",
+      "confianza": "media"
+    },
+    {
+      "idx": 279,
+      "columna": "S37",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2483,
+      "significado": "Saldo / existencia en la sucursal 37",
+      "confianza": "media"
+    },
+    {
+      "idx": 280,
+      "columna": "S38",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2491,
+      "significado": "Saldo / existencia en la sucursal 38",
+      "confianza": "media"
+    },
+    {
+      "idx": 281,
+      "columna": "S39",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2499,
+      "significado": "Saldo / existencia en la sucursal 39",
+      "confianza": "media"
+    },
+    {
+      "idx": 282,
+      "columna": "S40",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2507,
+      "significado": "Saldo / existencia en la sucursal 40",
+      "confianza": "media"
+    },
+    {
+      "idx": 283,
+      "columna": "S41",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2515,
+      "significado": "Saldo / existencia en la sucursal 41",
+      "confianza": "media"
+    },
+    {
+      "idx": 284,
+      "columna": "S42",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2523,
+      "significado": "Saldo / existencia en la sucursal 42",
+      "confianza": "media"
+    },
+    {
+      "idx": 285,
+      "columna": "S43",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2531,
+      "significado": "Saldo / existencia en la sucursal 43",
+      "confianza": "media"
+    },
+    {
+      "idx": 286,
+      "columna": "S44",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2539,
+      "significado": "Saldo / existencia en la sucursal 44",
+      "confianza": "media"
+    },
+    {
+      "idx": 287,
+      "columna": "S45",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2547,
+      "significado": "Saldo / existencia en la sucursal 45",
+      "confianza": "media"
+    },
+    {
+      "idx": 288,
+      "columna": "S46",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2555,
+      "significado": "Saldo / existencia en la sucursal 46",
+      "confianza": "media"
+    },
+    {
+      "idx": 289,
+      "columna": "S47",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2563,
+      "significado": "Saldo / existencia en la sucursal 47",
+      "confianza": "media"
+    },
+    {
+      "idx": 290,
+      "columna": "S48",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2571,
+      "significado": "Saldo / existencia en la sucursal 48",
+      "confianza": "media"
+    },
+    {
+      "idx": 291,
+      "columna": "S49",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2579,
+      "significado": "Saldo / existencia en la sucursal 49",
+      "confianza": "media"
+    },
+    {
+      "idx": 292,
+      "columna": "S50",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2587,
+      "significado": "Saldo / existencia en la sucursal 50",
+      "confianza": "media"
+    },
+    {
+      "idx": 293,
+      "columna": "S51",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2595,
+      "significado": "Saldo / existencia en la sucursal 51",
+      "confianza": "media"
+    },
+    {
+      "idx": 294,
+      "columna": "S52",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2603,
+      "significado": "Saldo / existencia en la sucursal 52",
+      "confianza": "media"
+    },
+    {
+      "idx": 295,
+      "columna": "S53",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": 2611,
+      "significado": "Saldo / existencia en la sucursal 53",
+      "confianza": "media"
+    }
+  ]
+}

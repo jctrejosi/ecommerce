@@ -204,11 +204,3 @@ export async function resolveServer(): Promise<ResolveResult> {
 
   return { url: null, tried };
 }
-
-/** Fija manualmente el servidor (pantalla de configuración) y lo persiste. */
-export async function useManualServer(url: string): Promise<boolean> {
-  if (!(await pingServer(url, 2500))) return false;
-  setServerUrl(url);
-  await writeStoredUrl(currentUrl);
-  return true;
-}

@@ -3,50 +3,17 @@ import { CartItem, ProductDetailModalProps, Product } from "./types";
 import { Minus, Plus, ShoppingCart, TrendingUp, X } from "lucide-react";
 import { catalogService } from "../services/catalog.service";
 
-const MOCK_SPECS: Record<string, Array<{ label: string; value: string }>> = {
-  "Carnes y Pollo": [
-    { label: "Origen", value: "Colombia" },
-    { label: "Temperatura", value: "Refrigerado 0–4 °C" },
-    { label: "Proteína", value: "23 g por 100 g" },
-    { label: "Grasa total", value: "3.5 g por 100 g" },
-  ],
-  Lácteos: [
-    { label: "Origen", value: "Caldas, Colombia" },
-    { label: "Temperatura", value: "Refrigerado 0–4 °C" },
-    { label: "Calcio", value: "120 mg por 100 mL" },
-    { label: "Proteína", value: "3.2 g por 100 mL" },
-  ],
-  "Frutas y Verduras": [
-    { label: "Origen", value: "Región Andina, Colombia" },
-    { label: "Conservación", value: "Lugar fresco y seco" },
-    { label: "Calorías", value: "Aprox. 40–80 kcal / 100 g" },
-    { label: "Libre de", value: "Conservantes artificiales" },
-  ],
-  Despensa: [
-    { label: "Contenido", value: "Ver empaque" },
-    { label: "Conservación", value: "Lugar fresco y seco" },
-    { label: "Registro INVIMA", value: "RSA-F-0012345" },
-    { label: "Hecho en", value: "Colombia" },
-  ],
-  Limpieza: [
-    { label: "Rendimiento", value: "Hasta 80 lavadas" },
-    { label: "Concentración", value: "Alta" },
-    { label: "Fragancia", value: "Brisa marina" },
-    { label: "Biodegradable", value: "Sí" },
-  ],
-  "Cuidado Personal": [
-    { label: "pH", value: "Balanceado (5.5)" },
-    { label: "Libre de parabenos", value: "Sí" },
-    { label: "Tipo de piel", value: "Todo tipo" },
-    { label: "Dermatológicamente probado", value: "Sí" },
-  ],
-  "Cuidado del Bebé": [
-    { label: "Hipoalergénico", value: "Sí" },
-    { label: "Libre de fragancias fuertes", value: "Sí" },
-    { label: "Dermatológicamente probado", value: "Sí" },
-    { label: "Edad recomendada", value: "Desde el nacimiento" },
-  ],
-};
+const SPEC_ORDER = [
+  "Presentación",
+  "Unidad de medida",
+  "Unidades por empaque",
+  "Nombre corto",
+  "EAN caja (EAN-14)",
+  "Referencia fabricante",
+  "Registro sanitario INVIMA",
+  "CUM",
+  "Ubicación bodega",
+];
 
 const fmt = (n: number) =>
   new Intl.NumberFormat("es-CO", {
@@ -95,43 +62,8 @@ function ZoomImage({ src, alt }: { src?: string; alt: string }) {
   );
 }
 
-function getSpec(category: string) {
-  return (
-    MOCK_SPECS[category] ?? [
-      { label: "Contenido neto", value: "Ver empaque" },
-      { label: "País de origen", value: "Colombia" },
-      { label: "Registro", value: "RSA-F-0012345" },
-      { label: "Garantía", value: "Según fabricante" },
-    ]
-  );
-}
-
-const MOCK_DESCRIPTIONS: Record<string, string> = {
-  "Carnes y Pollo":
-    "Producto de primera calidad, seleccionado directamente de proveedores locales certificados. Garantizamos la cadena de frío y frescura desde el origen hasta tu mesa.",
-  Lácteos:
-    "Producto lácteo de alta calidad elaborado con leche fresca de vacas alimentadas en pasturas naturales. Rico en calcio, proteínas y vitaminas esenciales.",
-  "Frutas y Verduras":
-    "Producto fresco traído directamente de las fincas de la región. Sin conservantes, seleccionado en su punto óptimo de madurez para garantizar el mejor sabor.",
-  Despensa:
-    "Producto de despensa esencial para tu hogar. Elaborado con ingredientes de alta calidad y procesos certificados de inocuidad alimentaria.",
-  Limpieza:
-    "Fórmula concentrada de alto rendimiento. Eficaz contra el 99.9% de gérmenes y bacterias, con un aroma fresco duradero.",
-  "Cuidado Personal":
-    "Formulado dermatológicamente para el cuidado diario. pH balanceado, sin parabenos. Adecuado para todo tipo de piel.",
-  "Cuidado del Bebé":
-    "Especialmente formulado para la delicada piel del bebé. Dermatológicamente probado, hipoalergénico y libre de sustancias agresivas.",
-  "Vinos y Licores":
-    "Seleccionado por nuestros expertos enólogos. Proveniente de viñedos de altitud con características organolépticas excepcionales.",
-  Hogar:
-    "Diseñado para durar. Fabricado con materiales resistentes y de alta calidad para el uso cotidiano del hogar.",
-  Tecnología:
-    "Tecnología de última generación. Compatible con los principales estándares del mercado, con garantía oficial del fabricante.",
-  Mascotas:
-    "Nutricionalmente balanceado para cubrir todas las necesidades de tu mascota en cada etapa de su vida.",
-  Electrodomésticos:
-    "Electrodoméstico de alta eficiencia energética. Certificado con garantía del fabricante y soporte técnico especializado.",
-};
+// Las especificaciones y la descripción se construyen en tiempo de render a
+// partir de los datos reales del producto (description + attributes + dimensions).
 
 export function ProductDetailModal({
   product,
@@ -142,6 +74,7 @@ export function ProductDetailModal({
 }: ProductDetailModalProps) {
   const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [localQty, setLocalQty] = useState(1);
+  const [detail, setDetail] = useState<Product | null>(null);
   const inCart = product ? cartItems.find((c) => c.id === product.id) : null;
   const cartQty = inCart?.quantity ?? 0;
 
@@ -183,16 +116,55 @@ export function ProductDetailModal({
     };
   }, [product]);
 
+  useEffect(() => {
+    let mounted = true;
+    if (!product) {
+      setDetail(null);
+      return;
+    }
+    catalogService
+      .getProductDetail(product.id)
+      .then((d) => {
+        if (mounted) setDetail(d);
+      })
+      .catch(() => {});
+    return () => {
+      mounted = false;
+    };
+  }, [product?.id]);
+
   if (!product) return null;
 
   const discount = product.originalPrice
     ? Math.round((1 - product.price / product.originalPrice) * 100)
     : null;
 
-  const specs = getSpec(product.category);
+  const info = detail ?? product;
   const description =
-    MOCK_DESCRIPTIONS[product.category] ??
-    "Producto de excelente calidad seleccionado por el equipo Mercaldas para garantizar la mejor experiencia de compra.";
+    (detail?.description || product.description || "").trim() ||
+    "Producto seleccionado por Mercaldas para tu hogar.";
+
+  const attrs = [...(detail?.attributes ?? [])].sort((a, b) => {
+    const ia = SPEC_ORDER.indexOf(a.name);
+    const ib = SPEC_ORDER.indexOf(b.name);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+  const specs: { label: string; value: string }[] = [];
+  const brand = detail?.brandName || detail?.manufacturer || null;
+  if (brand) specs.push({ label: "Marca", value: brand });
+  if (info.category) specs.push({ label: "Categoría", value: info.category });
+  if (detail?.productTypeName)
+    specs.push({ label: "Tipo", value: detail.productTypeName });
+  for (const a of attrs) specs.push({ label: a.name, value: a.value });
+  const dims = detail?.dimensions;
+  if (dims && (dims.lengthMm || dims.widthMm || dims.heightMm)) {
+    const cm = (n: number | null) =>
+      n != null ? String(Math.round((n / 10) * 10) / 10) : "—";
+    specs.push({
+      label: "Dimensiones (L × A × H)",
+      value: `${cm(dims.lengthMm)} × ${cm(dims.widthMm)} × ${cm(dims.heightMm)} cm`,
+    });
+  }
 
   return (
     <div
@@ -260,7 +232,7 @@ export function ProductDetailModal({
                   {product.name}
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {product.unit}
+                  {detail?.brandName || detail?.manufacturer || ""}
                 </p>
               </div>
 

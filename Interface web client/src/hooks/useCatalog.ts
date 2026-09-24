@@ -66,6 +66,7 @@ export function useCatalog(
     filters?.sort,
     filters?.search,
     filters?.brandId,
+    filters?.branchId,
     filters?.limit,
     filters?.offset, // el scroll infinito depende del offset; sin esto se repite la página 1
   ]);

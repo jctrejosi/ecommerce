@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { ActivityIndicator, AppState, Image, StyleSheet, Text, View } from "react-native";
 import { Stack, router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -20,7 +20,6 @@ import { startBackgroundTracking, stopBackgroundTracking } from "@/tracking/loca
 import { startPresenceHeartbeat, stopPresenceHeartbeat } from "@/tracking/presence";
 import { USE_MOCK } from "@/api";
 import { getServerUrl, resolveServer, watchNetworkPrefix } from "@/api/server";
-import { ServerSetup } from "@/ui/ServerSetup";
 import { colors, spacing } from "@/theme";
 
 function RootShell() {
@@ -135,26 +134,41 @@ export default function RootLayout() {
   );
 }
 
+/** Cada cuánto se vuelve a intentar si el backend aún no aparece. */
+const RETRY_MS = 10_000;
+
 /**
- * Antes de montar la app se resuelve la URL del backend: guardada → pista del
- * build → escaneo de la red local. Si no aparece, se muestra la pantalla de
- * configuración de servidor.
+ * La app resuelve el backend **en segundo plano** (URL guardada → pista del
+ * build → escaneo de la red local) y, mientras tanto, solo se ve
+ * "Estableciendo conexión…": nada de pantallas de diagnóstico ni de
+ * configuración manual. Si aún no aparece, se reintenta en silencio.
  */
 function ServerGate() {
-  const [state, setState] = useState<"searching" | "ready" | "missing">(
-    USE_MOCK ? "ready" : "searching",
-  );
-  const [tried, setTried] = useState<string[]>([]);
-
-  const search = useCallback(async () => {
-    const res = await resolveServer();
-    setTried(res.tried);
-    setState(res.url ? "ready" : "missing");
-  }, []);
+  const [ready, setReady] = useState(USE_MOCK);
 
   useEffect(() => {
-    if (!USE_MOCK) void search();
-  }, [search]);
+    if (USE_MOCK) return;
+    let cancelled = false;
+
+    const run = async () => {
+      for (;;) {
+        const res = await resolveServer();
+        if (cancelled) return;
+        if (res.url) {
+          setReady(true);
+          return;
+        }
+        // Se espera antes de reintentar: el escaneo de la subred es costoso.
+        await new Promise((r) => setTimeout(r, RETRY_MS));
+        if (cancelled) return;
+      }
+    };
+    void run();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Si cambia la red local (otro Wi-Fi, otra subred) se vuelve a buscar el
   // servidor sin reiniciar la app. Si aparece en otra dirección, el cliente
@@ -165,9 +179,8 @@ function ServerGate() {
       void (async () => {
         const previous = getServerUrl();
         const res = await resolveServer();
-        if (!res.url) return; // sin servidor: la app sigue y muestra sus errores
-        setTried(res.tried);
-        setState("ready");
+        if (!res.url) return; // sin servidor: sigue la búsqueda en segundo plano
+        setReady(true);
         if (previous && res.url !== previous) {
           disconnectDeliverySocket();
           const tokens = await getTokens();
@@ -178,15 +191,12 @@ function ServerGate() {
     return unsubscribe;
   }, []);
 
-  if (state === "searching") return <SearchingServer />;
-  if (state === "missing") {
-    return <ServerSetup tried={tried} onResolved={() => setState("ready")} />;
-  }
+  if (!ready) return <ConnectingScreen />;
   return <RootShell />;
 }
 
-/** Pantalla mientras se busca el backend en la red local. */
-function SearchingServer() {
+/** Pantalla mínima mientras se establece la conexión con el backend. */
+function ConnectingScreen() {
   return (
     <View style={styles.splash}>
       <Image
@@ -195,10 +205,7 @@ function SearchingServer() {
         resizeMode="contain"
       />
       <ActivityIndicator size="large" color={colors.primary} />
-      <Text style={styles.splashTitle}>Buscando el servidor…</Text>
-      <Text style={styles.splashText}>
-        Localizando el backend en la red local. Mantén el Wi-Fi conectado.
-      </Text>
+      <Text style={styles.splashTitle}>Estableciendo conexión…</Text>
     </View>
   );
 }
@@ -214,10 +221,4 @@ const styles = StyleSheet.create({
   },
   logo: { height: 72, width: 72 },
   splashTitle: { fontSize: 16, fontWeight: "800", color: colors.text },
-  splashText: {
-    fontSize: 13,
-    color: colors.textMuted,
-    textAlign: "center",
-    lineHeight: 19,
-  },
 });

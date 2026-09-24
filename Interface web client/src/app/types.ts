@@ -32,6 +32,8 @@ export interface CatalogPageProps {
   setCatalogSearch: (v: string) => void;
   catalogBrand: number | null;
   setCatalogBrand: (v: number | null) => void;
+  catalogBranch: number | null;
+  setCatalogBranch: (v: number | null) => void;
   catalogProductType: string;
   setCatalogProductType: (v: string) => void;
   mobileFiltersOpen: boolean;
@@ -56,6 +58,15 @@ export interface Product {
   categoryId?: number;
   productTypeCode?: string | null;
   productTypeName?: string | null;
+  brandId?: number | null;
+  brandName?: string | null;
+  manufacturer?: string | null;
+  attributes?: { name: string; value: string }[];
+  dimensions?: {
+    lengthMm: number | null;
+    widthMm: number | null;
+    heightMm: number | null;
+  } | null;
   badge?: string;
   tabs?: string[];
   unit?: string;

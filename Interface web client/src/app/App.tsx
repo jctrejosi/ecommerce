@@ -98,6 +98,7 @@ export default function App() {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [catalogSearch, setCatalogSearch] = useState("");
   const [catalogBrand, setCatalogBrand] = useState<number | null>(null);
+  const [catalogBranch, setCatalogBranch] = useState<number | null>(null);
   const [catalogProductType, setCatalogProductType] = useState("");
   const [loginModal, setLoginModal] = useState(false);
   const [modalView, setModalView] = useState<"choice" | "login" | "register">(
@@ -968,6 +969,8 @@ export default function App() {
           setCatalogSearch={setCatalogSearch}
           catalogBrand={catalogBrand}
           setCatalogBrand={setCatalogBrand}
+          catalogBranch={catalogBranch}
+          setCatalogBranch={setCatalogBranch}
           catalogProductType={catalogProductType}
           setCatalogProductType={setCatalogProductType}
           mobileFiltersOpen={mobileFiltersOpen}

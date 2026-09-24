@@ -130,6 +130,17 @@ export class CatalogProductsQueryDto {
   @IsNumber()
   brandId?: number;
 
+  /** Sucursal: solo productos que la sucursal tiene disponibles. */
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return Number(value);
+  })
+  @IsNumber()
+  branchId?: number;
+
   @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {

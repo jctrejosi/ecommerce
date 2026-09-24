@@ -21,12 +21,14 @@ import {
 } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
+  attributes,
   branches,
   brands,
   categories,
   favorites,
   inventory,
   media,
+  productAttributes,
   productCategories,
   productImages,
   productTypeAssignments,
@@ -1816,6 +1818,9 @@ export class CatalogService {
             ? sql`${productVariants.currentComparePrice} IS NOT NULL`
             : undefined,
           query.brandId ? eq(products.brandId, query.brandId) : undefined,
+          query.branchId
+            ? sql`EXISTS (SELECT 1 FROM branch_products bp WHERE bp.product_id = ${products.id} AND bp.branch_id = ${query.branchId} AND bp.is_available = true)`
+            : undefined,
           normalizedProductIds.length > 0
             ? inArray(
                 products.id,
@@ -1947,6 +1952,119 @@ export class CatalogService {
    * falta, por la misma marca. El esquema no tiene tabla de "relacionados",
    * así que se derivan dinámicamente.
    */
+  // ── Product detail (vista cliente) ──
+
+  async getProductDetail(productId: number) {
+    const db = this.drizzleService.db;
+
+    const [p] = await db
+      .select({
+        id: products.id,
+        externalId: products.externalId,
+        slug: products.slug,
+        name: products.name,
+        description: products.description,
+        brandId: products.brandId,
+        brandName: brands.name,
+        plu: products.plu,
+        manufacturer: products.manufacturer,
+        isActive: products.isActive,
+        isFeatured: products.featured,
+        isPublic: products.isPublic,
+      })
+      .from(products)
+      .leftJoin(brands, eq(brands.id, products.brandId))
+      .where(and(eq(products.id, BigInt(productId)), isNull(products.deletedAt)))
+      .limit(1);
+
+    if (!p) return null;
+
+    const [v] = await db
+      .select({
+        barcode: productVariants.barcode,
+        price: productVariants.currentPrice,
+        comparePrice: productVariants.currentComparePrice,
+        lengthMm: productVariants.lengthMm,
+        widthMm: productVariants.widthMm,
+        heightMm: productVariants.heightMm,
+      })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.productId, productId),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .limit(1);
+
+    const attrRows = await db
+      .select({ name: attributes.name, value: productAttributes.customValue })
+      .from(productAttributes)
+      .innerJoin(attributes, eq(attributes.id, productAttributes.attributeId))
+      .where(eq(productAttributes.productId, productId));
+
+    const [cat] = await db
+      .select({ id: categories.id, name: categories.name })
+      .from(productCategories)
+      .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+      .where(eq(productCategories.productId, productId))
+      .limit(1);
+
+    const [pt] = await db
+      .select({ code: productTypes.code, name: productTypes.name })
+      .from(productTypeAssignments)
+      .innerJoin(
+        productTypes,
+        eq(productTypes.id, productTypeAssignments.productTypeId),
+      )
+      .where(eq(productTypeAssignments.productId, productId))
+      .limit(1);
+
+    const [stockRow] = await db
+      .select({ stock: sql<number>`COALESCE(SUM(${inventory.stock}), 0)` })
+      .from(inventory)
+      .innerJoin(
+        productVariants,
+        eq(productVariants.id, inventory.productVariantId),
+      )
+      .where(eq(productVariants.productId, productId));
+
+    const dimensions =
+      v && (v.lengthMm || v.widthMm || v.heightMm)
+        ? { lengthMm: v.lengthMm, widthMm: v.widthMm, heightMm: v.heightMm }
+        : null;
+
+    return {
+      id: Number(p.id),
+      externalId: p.externalId,
+      slug: p.slug,
+      name: p.name,
+      description: p.description,
+      price: Number(v?.price ?? 0),
+      originalPrice:
+        v?.comparePrice != null ? Number(v.comparePrice) : undefined,
+      image: null as string | null,
+      images: [] as string[],
+      category: cat?.name ?? 'Sin categoría',
+      categoryId: cat ? Number(cat.id) : 0,
+      brandId: p.brandId ? Number(p.brandId) : null,
+      brandName: p.brandName ?? null,
+      plu: p.plu,
+      barcode: v?.barcode ?? null,
+      productTypeCode: pt?.code ?? null,
+      productTypeName: pt?.name ?? null,
+      manufacturer: p.manufacturer ?? null,
+      isActive: p.isActive,
+      isFeatured: p.isFeatured,
+      isPublic: p.isPublic,
+      stock: Number(stockRow?.stock ?? 0),
+      attributes: attrRows
+        .map((a) => ({ name: a.name, value: a.value ?? '' }))
+        .filter((a) => a.value),
+      dimensions,
+    };
+  }
+
   async getRelatedProducts(
     productId: number,
     limit = 8,

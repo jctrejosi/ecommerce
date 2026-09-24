@@ -124,6 +124,16 @@ export class CatalogController {
   }
 
   @Public()
+  @Get('products/:id/detail')
+  @ApiOperation({
+    summary: 'Detalle de producto para el cliente (atributos y dimensiones)',
+  })
+  @ApiResponse({ status: 200, description: 'Detalle del producto' })
+  getProductDetail(@Param('id') id: string) {
+    return this.catalogService.getProductDetail(Number(id));
+  }
+
+  @Public()
   @Get('products/:id/related')
   @ApiOperation({ summary: 'Productos relacionados (misma categoría o marca)' })
   @ApiResponse({ status: 200, description: 'Listado de productos relacionados' })
