@@ -8,6 +8,7 @@ import {
   Mail,
   Package,
   ChevronRight,
+  ChevronDown,
   X,
   Edit,
   Trash2,
@@ -36,9 +37,16 @@ type AdminSupplier = {
   productCount: number;
 };
 
+const SUPPLIERS_PAGE_SIZE = 20;
+
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState<AdminSupplier[]>([]);
   const [loading, setLoading] = useState(true);
+  const [suppliersLoadingMore, setSuppliersLoadingMore] = useState(false);
+  const [supplierHasMore, setSupplierHasMore] = useState(true);
+  const supplierOffsetRef = useRef(0);
+  const supplierListRef = useRef<HTMLDivElement>(null);
+  const supplierSentinelRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
 
   const [editing, setEditing] = useState<AdminSupplier | null>(null);
@@ -83,6 +91,7 @@ export default function Suppliers() {
   // Unsupplied products
   const [unsupplied, setUnsupplied] = useState<CatalogProduct[]>([]);
   const [unsuppliedLoading, setUnsuppliedLoading] = useState(false);
+  const [unsuppliedOpen, setUnsuppliedOpen] = useState(false);
   const [unsuppliedSearch, setUnsuppliedSearch] = useState("");
   const [unsuppliedOffset, setUnsuppliedOffset] = useState(0);
   const [unsuppliedHasMore, setUnsuppliedHasMore] = useState(true);
@@ -132,7 +141,7 @@ export default function Suppliers() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [unsuppliedHasMore, unsuppliedLoading]);
+  }, [unsuppliedHasMore, unsuppliedLoading, unsuppliedOpen]);
 
   useEffect(() => {
     if (!unsuppliedSearch) {
@@ -226,29 +235,58 @@ export default function Suppliers() {
     } catch {}
   };
 
-  const loadSuppliers = async () => {
-    try {
-      setLoading(true);
-      setSuppliers(await catalogService.getSuppliersAdmin());
-    } catch {
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadSuppliers();
-  }, []);
-
   const [debouncedSearch, setDebouncedSearch] = useState("");
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const filtered = suppliers.filter((s) =>
-    s.legalName.toLowerCase().includes(debouncedSearch.toLowerCase()),
+  const loadSuppliers = useCallback(
+    async (reset = true) => {
+      const offset = reset ? 0 : supplierOffsetRef.current;
+      if (reset) setLoading(true);
+      else setSuppliersLoadingMore(true);
+      try {
+        const data = await catalogService.getSuppliersAdmin({
+          offset,
+          limit: SUPPLIERS_PAGE_SIZE,
+          search: debouncedSearch || undefined,
+        });
+        setSuppliers((prev) => (reset ? data : [...prev, ...data]));
+        supplierOffsetRef.current = offset + data.length;
+        setSupplierHasMore(data.length === SUPPLIERS_PAGE_SIZE);
+        if (reset) supplierListRef.current?.scrollTo({ top: 0 });
+      } catch {
+        if (reset) setSuppliers([]);
+        setSupplierHasMore(false);
+      } finally {
+        setLoading(false);
+        setSuppliersLoadingMore(false);
+      }
+    },
+    [debouncedSearch],
   );
+
+  useEffect(() => {
+    void loadSuppliers(true);
+  }, [loadSuppliers]);
+
+  // Carga incremental: al acercarse al final de la lista scrolleable, trae la
+  // siguiente página de 20 proveedores.
+  useEffect(() => {
+    if (!supplierHasMore || loading || suppliersLoadingMore) return;
+    const el = supplierSentinelRef.current;
+    const root = supplierListRef.current;
+    if (!el || !root) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void loadSuppliers(false);
+      },
+      { root, rootMargin: "200px" },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [supplierHasMore, loading, suppliersLoadingMore, loadSuppliers]);
 
   const openCreate = () => {
     setCreating(true);
@@ -391,16 +429,47 @@ export default function Suppliers() {
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Proveedores</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              {suppliers.length} proveedores en el catálogo
+              {suppliers.length}
+              {supplierHasMore ? "+" : ""} proveedores en el catálogo
             </p>
           </div>
-          <button
-            onClick={openCreate}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all hover:brightness-95"
-            style={{ background: "#FFF200", color: "#1A1A2E" }}
-          >
-            <Plus size={15} /> Nuevo proveedor
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              disabled={unsuppliedTotal === 0}
+              onClick={() => setUnsuppliedOpen((o) => !o)}
+              className={`flex items-center gap-2 px-3 py-2 text-sm font-semibold rounded-xl border transition-colors ${
+                unsuppliedTotal === 0
+                  ? "bg-gray-50 border-gray-200 text-gray-400 cursor-not-allowed"
+                  : "bg-red-50 border-red-200 text-red-600 hover:bg-red-100"
+              }`}
+            >
+              <Package size={15} />
+              Productos sin proveedor
+              <span
+                className={`text-xs px-1.5 py-0.5 rounded-full font-bold ${
+                  unsuppliedTotal === 0
+                    ? "bg-gray-200 text-gray-500"
+                    : "bg-red-200 text-red-700"
+                }`}
+              >
+                {unsuppliedTotal}
+              </span>
+              <ChevronDown
+                size={15}
+                className={`transition-transform ${
+                  unsuppliedOpen ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            <button
+              onClick={openCreate}
+              className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all hover:brightness-95"
+              style={{ background: "#FFF200", color: "#1A1A2E" }}
+            >
+              <Plus size={15} /> Nuevo proveedor
+            </button>
+          </div>
         </div>
 
         <div className="relative max-w-sm">
@@ -423,9 +492,12 @@ export default function Suppliers() {
             </div>
           </div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
+          <div
+            ref={supplierListRef}
+            className="bg-white rounded-2xl border border-gray-100 overflow-y-auto max-h-[calc(100vh-19rem)]"
+          >
             <table className="w-full">
-              <thead>
+              <thead className="sticky top-0 z-10">
                 <tr className="border-b border-gray-100 bg-gray-50">
                   {[
                     "Proveedor",
@@ -446,7 +518,7 @@ export default function Suppliers() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {filtered.map((s) => (
+                {suppliers.map((s) => (
                   <tr
                     key={s.id}
                     className="hover:bg-gray-50 transition-colors cursor-pointer group"
@@ -512,7 +584,7 @@ export default function Suppliers() {
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && !loading && (
+                {suppliers.length === 0 && !loading && (
                   <tr>
                     <td
                       colSpan={7}
@@ -524,92 +596,123 @@ export default function Suppliers() {
                 )}
               </tbody>
             </table>
-          </div>
-        )}
-      </div>
 
-      {/* ── Products Without Supplier ── */}
-      <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50">
-          <div className="flex items-center gap-2">
-            <Package size={14} className="text-gray-400" />
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-              Productos sin proveedor
-            </p>
-          </div>
-          <span className="text-xs bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">
-            {unsuppliedTotal}
-          </span>
-        </div>
-        <div className="px-4 py-3 border-b border-gray-50">
-          <div className="relative">
-            <Search
-              size={13}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
-            />
-            <input
-              value={unsuppliedSearch}
-              onChange={(e) => setUnsuppliedSearch(e.target.value)}
-              placeholder="Buscar productos sin proveedor..."
-              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
-            />
-          </div>
-        </div>
-        {unsuppliedLoading && unsupplied.length === 0 ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
-          </div>
-        ) : unsupplied.length === 0 && !unsuppliedLoading ? (
-          <div className="py-12 text-center">
-            <p className="text-sm text-gray-400">
-              Todos los productos tienen proveedor asignado
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
-            {unsupplied.map((p) => (
-              <div
-                key={p.id}
-                onClick={() => {
-                  setAssignProductId(p.id);
-                  setAssignSupplierId("");
-                  setAssignSearch("");
-                  setAssignDropdownOpen(false);
-                }}
-                className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
-              >
-                <div className="w-8 h-8 rounded bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
-                  {p.image ? (
-                    <img
-                      src={p.image}
-                      alt={p.name}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <Package size={14} className="text-gray-300" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs font-medium text-gray-800 truncate">
-                    {p.name}
-                  </p>
-                  {p.productTypeCode && (
-                    <p className="text-[10px] text-gray-400">
-                      {p.productTypeCode}
-                    </p>
-                  )}
-                </div>
+            {suppliersLoadingMore && (
+              <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-400">
+                <div className="w-4 h-4 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                Cargando más proveedores...
               </div>
-            ))}
-            <div ref={unsuppliedSentinelRef} className="h-4" />
-            {unsuppliedLoading && unsupplied.length > 0 && (
-              <div className="flex justify-center py-4">
-                <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
-              </div>
+            )}
+            {supplierHasMore && (
+              <div ref={supplierSentinelRef} className="h-1" />
+            )}
+            {!supplierHasMore && suppliers.length > SUPPLIERS_PAGE_SIZE && (
+              <p className="text-center text-xs text-gray-400 py-4">
+                ✓ Has visto todos los proveedores
+              </p>
             )}
           </div>
         )}
       </div>
+
+      {/* ── Products Without Supplier (modal) ── */}
+      {unsuppliedOpen && unsuppliedTotal > 0 && (
+        <>
+          <div
+            className="fixed inset-0 bg-black/40 z-[60]"
+            onClick={() => setUnsuppliedOpen(false)}
+          />
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg pointer-events-auto flex flex-col max-h-[80vh] overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
+                <div className="flex items-center gap-2">
+                  <Package size={16} className="text-red-500" />
+                  <h4 className="font-bold text-sm text-gray-900">
+                    Productos sin proveedor
+                  </h4>
+                  <span className="text-xs px-1.5 py-0.5 rounded-full font-bold bg-red-100 text-red-700">
+                    {unsuppliedTotal}
+                  </span>
+                </div>
+                <button
+                  onClick={() => setUnsuppliedOpen(false)}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+              <div className="px-4 py-3 border-b border-gray-50 shrink-0">
+                <div className="relative">
+                  <Search
+                    size={13}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+                  />
+                  <input
+                    value={unsuppliedSearch}
+                    onChange={(e) => setUnsuppliedSearch(e.target.value)}
+                    placeholder="Buscar productos sin proveedor..."
+                    className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  />
+                </div>
+              </div>
+              {unsuppliedLoading && unsupplied.length === 0 ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                </div>
+              ) : unsupplied.length === 0 && !unsuppliedLoading ? (
+                <div className="py-12 text-center">
+                  <p className="text-sm text-gray-400">
+                    Todos los productos tienen proveedor asignado
+                  </p>
+                </div>
+              ) : (
+                <div className="divide-y divide-gray-50 flex-1 min-h-0 overflow-y-auto">
+                  {unsupplied.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => {
+                        setAssignProductId(p.id);
+                        setAssignSupplierId("");
+                        setAssignSearch("");
+                        setAssignDropdownOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors cursor-pointer"
+                    >
+                      <div className="w-8 h-8 rounded bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
+                        {p.image ? (
+                          <img
+                            src={p.image}
+                            alt={p.name}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <Package size={14} className="text-gray-300" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 truncate">
+                          {p.name}
+                        </p>
+                        {p.productTypeCode && (
+                          <p className="text-[10px] text-gray-400">
+                            {p.productTypeCode}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  <div ref={unsuppliedSentinelRef} className="h-4" />
+                  {unsuppliedLoading && unsupplied.length > 0 && (
+                    <div className="flex justify-center py-4">
+                      <div className="w-5 h-5 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* ── Edit/Create Panel ── */}
       {isPanelOpen && (
@@ -1134,11 +1237,25 @@ export default function Suppliers() {
             className="fixed inset-0 bg-black/40 z-[60]"
             onClick={() => setAssignProductId(null)}
           />
-          <div className="fixed inset-0 z-[70] flex items-center justify-center">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5">
-              <h4 className="font-bold text-sm text-gray-900 mb-4">
-                Asignar proveedor
-              </h4>
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center"
+            onClick={() => setAssignProductId(null)}
+          >
+            <div
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 p-5"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h4 className="font-bold text-sm text-gray-900">
+                  Asignar proveedor
+                </h4>
+                <button
+                  onClick={() => setAssignProductId(null)}
+                  className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"
+                >
+                  <X size={15} />
+                </button>
+              </div>
               <div className="relative mb-4">
                 <Search
                   size={14}
@@ -1195,13 +1312,21 @@ export default function Suppliers() {
                   </div>
                 )}
               </div>
-              <button
-                onClick={assignSupplierToProduct}
-                disabled={!assignSupplierId}
-                className="w-full py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
-              >
-                Asignar proveedor
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setAssignProductId(null)}
+                  className="flex-1 py-2 rounded-xl text-sm font-semibold border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={assignSupplierToProduct}
+                  disabled={!assignSupplierId}
+                  className="flex-1 py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                >
+                  Asignar proveedor
+                </button>
+              </div>
             </div>
           </div>
         </>

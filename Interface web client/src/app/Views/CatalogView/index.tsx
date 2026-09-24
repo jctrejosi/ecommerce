@@ -1,5 +1,12 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Search, X, ChevronRight } from "lucide-react";
+import {
+  Search,
+  X,
+  ChevronRight,
+  ChevronDown,
+  Check,
+  ArrowUpDown,
+} from "lucide-react";
 import { useCatalog } from "../../../hooks/useCatalog";
 import { catalogService } from "../../../services/catalog.service";
 import { productTypeIcon } from "../../productTypeIcons";
@@ -102,6 +109,24 @@ export function CatalogPage({
     { id: number; code: string; name: string; imagePath: string | null; count: number }[]
   >([]);
   const [brandSearch, setBrandSearch] = useState("");
+  const [sortOpen, setSortOpen] = useState(false);
+  const sortRef = useRef<HTMLDivElement | null>(null);
+
+  // Cierra el dropdown de orden al hacer click fuera.
+  useEffect(() => {
+    if (!sortOpen) return;
+    const onDown = (e: MouseEvent | TouchEvent) => {
+      if (sortRef.current && !sortRef.current.contains(e.target as Node)) {
+        setSortOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("touchstart", onDown);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("touchstart", onDown);
+    };
+  }, [sortOpen]);
 
   // ── Animación del drawer de filtros móvil (entrada/salida suave) ──
   // `mounted` mantiene el drawer en el DOM durante la animación de salida,
@@ -936,24 +961,86 @@ export function CatalogPage({
               )}
             </div>
 
-            {/* Sort */}
-            <select
-              value={catalogSort}
-              onChange={(e) => setCatalogSort(e.target.value)}
-              className="pl-3 pr-7 py-2 text-xs rounded-lg border border-border bg-white focus:outline-none appearance-none cursor-pointer font-medium shrink-0"
-              style={{
-                backgroundImage:
-                  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E\")",
-                backgroundRepeat: "no-repeat",
-                backgroundPosition: "right 6px center",
-              }}
-            >
-              {SORT_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            {/* Sort: dropdown propio */}
+            <div ref={sortRef} className="relative shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setSortOpen((v) => !v)}
+                  aria-haspopup="listbox"
+                  aria-expanded={sortOpen}
+                  className={`flex items-center gap-2 pl-3 pr-2.5 py-2 text-xs rounded-xl border bg-white font-medium shadow-sm hover:shadow transition-all cursor-pointer ${
+                    sortOpen ? "" : "border-border"
+                  }`}
+                  style={
+                    sortOpen
+                      ? {
+                          borderColor: "#FFF200",
+                          boxShadow: "0 0 0 2px rgba(255,242,0,0.35)",
+                        }
+                      : undefined
+                  }
+                >
+                  <ArrowUpDown className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground hidden sm:inline">
+                    Ordenar por
+                  </span>
+                  <span className="font-bold whitespace-nowrap">
+                    {SORT_OPTIONS.find((o) => o.id === catalogSort)?.label ??
+                      "Relevancia"}
+                  </span>
+                  <ChevronDown
+                    className={`w-3.5 h-3.5 text-muted-foreground transition-transform duration-200 ${
+                      sortOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {sortOpen && (
+                  <div
+                    role="listbox"
+                    className="absolute right-0 top-full mt-2 z-50 w-56 rounded-xl border border-border bg-white shadow-xl overflow-hidden py-1"
+                  >
+                    {SORT_OPTIONS.map((o) => {
+                      const active = o.id === catalogSort;
+                      return (
+                        <button
+                          key={o.id}
+                          type="button"
+                          role="option"
+                          aria-selected={active}
+                          onClick={() => {
+                            setCatalogSort(o.id);
+                            setSortOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between gap-2 px-3 py-2 text-xs text-left transition-colors"
+                          style={
+                            active
+                              ? {
+                                  background: "#FFF200",
+                                  color: "#1A1A2E",
+                                  fontWeight: 700,
+                                }
+                              : undefined
+                          }
+                          onMouseEnter={(e) => {
+                            if (!active) {
+                              e.currentTarget.style.background = "#F4F4F6";
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!active) {
+                              e.currentTarget.style.background = "";
+                            }
+                          }}
+                        >
+                          <span>{o.label}</span>
+                          {active && <Check className="w-3.5 h-3.5" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
           </div>
 
           {/* Filtro por sucursal: tabs, una sola a la vez */}

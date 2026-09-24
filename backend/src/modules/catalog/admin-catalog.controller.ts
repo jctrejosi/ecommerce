@@ -1,4 +1,4 @@
-import { Body, Controller, Delete, Get, Param, Post } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { CatalogService } from './catalog.service';
@@ -288,9 +288,17 @@ export class AdminCatalogController {
 
   @Public()
   @Get('suppliers')
-  @ApiOperation({ summary: 'Obtener todos los proveedores (admin)' })
-  async getAllSuppliers() {
-    return this.catalogService.getAllSuppliersAdmin();
+  @ApiOperation({ summary: 'Obtener proveedores (admin, paginado)' })
+  async getAllSuppliers(
+    @Query('offset') offset?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+  ) {
+    return this.catalogService.getAllSuppliersAdmin({
+      offset: offset !== undefined ? Number(offset) : undefined,
+      limit: limit !== undefined ? Number(limit) : undefined,
+      search,
+    });
   }
 
   @Public()

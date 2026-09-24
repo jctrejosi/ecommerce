@@ -660,7 +660,7 @@ function CarouselManager({
   };
 
   return (
-    <div className="flex flex-col [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed [&_select]:cursor-pointer [&_label]:cursor-pointer">
+    <div className="flex-1 min-h-0 flex flex-col [&_button:not(:disabled)]:cursor-pointer [&_button:disabled]:cursor-not-allowed [&_select]:cursor-pointer [&_label]:cursor-pointer">
         {/* Header with tabs */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-6">
@@ -686,19 +686,19 @@ function CarouselManager({
         </div>
 
         {/* Tab content */}
-        <div className="flex-1 overflow-y-auto">
-          {activeTab === "contenido" ? (
-            <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <p className="text-sm text-gray-500">{sortedSlides.length} slides · ordenados por posición</p>
-                <button
-                  onClick={() => setSlideEditor("new")}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors"
-                >
-                  <Plus size={13} /> Añadir slide
-                </button>
-              </div>
+        {activeTab === "contenido" ? (
+          <div className="flex-1 min-h-0 flex flex-col">
+            <div className="flex items-center justify-between px-6 py-3 border-b border-gray-100 shrink-0">
+              <p className="text-sm text-gray-500">{sortedSlides.length} slides · ordenados por posición</p>
+              <button
+                onClick={() => setSlideEditor("new")}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors"
+              >
+                <Plus size={13} /> Añadir slide
+              </button>
+            </div>
 
+            <div className="flex-1 min-h-0 overflow-y-auto p-6">
               {sortedSlides.length === 0 ? (
                 <div className="text-center py-16 text-sm text-gray-400">
                   <Image size={32} className="mx-auto text-gray-300 mb-3" />
@@ -762,11 +762,13 @@ function CarouselManager({
                 </div>
               )}
             </div>
-          ) : (
-            /* ── FILTROS TAB ── */
+          </div>
+        ) : (
+          /* ── FILTROS TAB ── */
+          <div className="flex-1 min-h-0 overflow-y-auto">
             <SlideFiltersTab slides={slides} filters={filters} onSaved={onSaved} />
-          )}
-        </div>
+          </div>
+        )}
 
       {/* Slide Editor (nested modal) */}
       {slideEditor !== null && (
@@ -2407,6 +2409,7 @@ function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const API_BASE = resolveApiBaseUrl();
+  const savedSnapshotRef = useRef<string>("");
 
   const load = useCallback(async () => {
     try {
@@ -2415,14 +2418,16 @@ function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
       });
       if (res.ok) {
         const data = await res.json();
-        setItems(
-          (Array.isArray(data) ? data : []).map((it: any, idx: number) => ({
+        const mapped = (Array.isArray(data) ? data : []).map(
+          (it: any, idx: number) => ({
             id: String(it.id ?? idx),
             icon: it.icon ?? "Star",
             title: it.title ?? "",
             desc: it.desc ?? "",
-          })),
+          }),
         );
+        setItems(mapped);
+        savedSnapshotRef.current = JSON.stringify(mapped);
       }
     } catch (e) {
       console.error(e);
@@ -2450,7 +2455,7 @@ function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
     setItems((prev) => prev.filter((_, i) => i !== idx));
   };
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     setSaving(true);
     setError("");
     try {
@@ -2468,25 +2473,53 @@ function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
         body: JSON.stringify(payload),
       });
       if (!res.ok) throw new Error("Error al guardar");
+      savedSnapshotRef.current = JSON.stringify(items);
       onSaved?.();
     } catch (e: any) {
       setError(e.message || "Error al guardar");
     } finally {
       setSaving(false);
     }
-  };
+  }, [items, API_BASE, onSaved]);
+
+  // Autoguardado con debounce: ya no hay botón "Guardar cambios".
+  useEffect(() => {
+    if (loading) return;
+    if (JSON.stringify(items) === savedSnapshotRef.current) return;
+    const t = setTimeout(() => {
+      void handleSave();
+    }, 900);
+    return () => clearTimeout(t);
+  }, [items, loading, handleSave]);
 
   const inputCls =
     "w-full text-xs border border-gray-200 rounded-lg px-2.5 py-2 focus:outline-none focus:ring-2 focus:ring-amber-300";
 
   return (
-    <div className="flex flex-col">
+    <div className="flex-1 min-h-0 flex flex-col">
+        <div className="flex items-center justify-between gap-3 px-6 py-3 border-b border-gray-100 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <p className="text-sm text-gray-500">{items.length} beneficios</p>
+            {saving && (
+              <span className="flex items-center gap-1 text-xs text-gray-400">
+                <Loader2 size={12} className="animate-spin" /> Guardando…
+              </span>
+            )}
+            {error && <span className="text-xs text-red-500">{error}</span>}
+          </div>
+          <button
+            onClick={addItem}
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg transition-colors shrink-0"
+          >
+            <Plus size={13} /> Añadir beneficio
+          </button>
+        </div>
         {loading ? (
-          <div className="flex items-center justify-center py-16">
+          <div className="flex-1 flex items-center justify-center py-16">
             <div className="w-6 h-6 border-2 border-gray-300 border-t-amber-400 rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-6 space-y-3">
+          <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-3">
             {items.length === 0 && (
               <p className="text-center text-xs text-gray-400 py-8">Sin beneficios configurados</p>
             )}
@@ -2525,21 +2558,8 @@ function BenefitsLandingManager({ onSaved }: { onSaved?: () => void }) {
                 />
               </div>
             ))}
-            <button
-              onClick={addItem}
-              className="w-full flex items-center justify-center gap-1.5 py-2.5 text-xs font-semibold text-gray-500 border border-dashed border-gray-300 rounded-xl hover:border-amber-300 hover:text-amber-600 transition-colors"
-            >
-              <Plus size={13} /> Añadir beneficio
-            </button>
           </div>
         )}
-
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          {error && <span className="text-xs text-red-500">{error}</span>}
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
-            {saving && <Loader2 size={14} className="animate-spin" />} Guardar cambios
-          </button>
-        </div>
     </div>
   );
 }
@@ -2918,7 +2938,7 @@ function ProductTypeEditor({
     });
 
   return (
-    <div className="flex flex-col">
+    <div className="flex-1 min-h-0 flex flex-col">
         <div className="px-6 pt-4 pb-1 space-y-3 shrink-0">
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -2979,7 +2999,7 @@ function ProductTypeEditor({
             </div>
           )}
         </div>
-        <div className="flex-1 overflow-y-auto p-6 space-y-1">
+        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-1">
           {filtered.map((t) => (
             <div key={t.code} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
               <label className="flex items-center gap-3 flex-1 cursor-pointer">
@@ -3453,7 +3473,8 @@ export function HomeHeroSection() {
           <div><span className="font-bold text-gray-900">{slides.length}</span> <span className="text-gray-400 text-xs">slides</span></div>
           <div><span className="font-bold text-green-600">{slides.filter((s) => s.status === "activo").length}</span> <span className="text-gray-400 text-xs">activos</span></div>
         </div>
-      }>
+      }
+      fill>
       <CarouselManager slides={slides} filters={filters} onSaved={fetchData} />
     </HomeSection>
   );
@@ -3480,6 +3501,7 @@ export function HomeProductTypesSection() {
   if (loading) return <HomeLoading />;
   return (
     <HomeSection icon={Layers} iconClass="bg-purple-100 text-purple-600" title="Tipos de Producto" subtitle="Selecciona cuáles mostrar en la landing"
+      fill
       stats={
         <div className="flex gap-6 text-sm">
           <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos</span></div>
@@ -3520,7 +3542,7 @@ export function HomeDealsSection() {
 
 export function HomeBenefitsSection() {
   return (
-    <HomeSection icon={Star} iconClass="bg-rose-100 text-rose-600" title="Beneficios" subtitle="Sección ¿Por qué comprar en Mercaldas?">
+    <HomeSection icon={Star} iconClass="bg-rose-100 text-rose-600" title="Beneficios" subtitle="Sección ¿Por qué comprar en Mercaldas?" fill>
       <BenefitsLandingManager />
     </HomeSection>
   );

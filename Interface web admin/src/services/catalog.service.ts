@@ -403,7 +403,11 @@ export const catalogService = {
 
   // ── Admin Supplier CRUD ──
 
-  async getSuppliersAdmin(): Promise<
+  async getSuppliersAdmin(params?: {
+    offset?: number;
+    limit?: number;
+    search?: string;
+  }): Promise<
     Array<{
       id: number;
       code: string | null;
@@ -424,7 +428,14 @@ export const catalogService = {
       productCount: number;
     }>
   > {
-    return fetchJson(`${API_BASE_URL}/admin/catalog/suppliers`);
+    const qs = new URLSearchParams();
+    if (typeof params?.offset === "number")
+      qs.set("offset", String(params.offset));
+    if (typeof params?.limit === "number")
+      qs.set("limit", String(params.limit));
+    if (params?.search?.trim()) qs.set("search", params.search.trim());
+    const suffix = qs.toString() ? `?${qs.toString()}` : "";
+    return fetchJson(`${API_BASE_URL}/admin/catalog/suppliers${suffix}`);
   },
 
   async createSupplier(data: {

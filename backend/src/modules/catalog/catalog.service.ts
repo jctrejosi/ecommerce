@@ -12,6 +12,7 @@ import {
   desc,
   eq,
   gte,
+  ilike,
   inArray,
   isNull,
   lte,
@@ -1038,8 +1039,16 @@ export class CatalogService {
 
   // ── Admin Suppliers ──
 
-  async getAllSuppliersAdmin() {
-    const rows = await this.drizzleService.db
+  async getAllSuppliersAdmin(params?: {
+    offset?: number;
+    limit?: number;
+    search?: string;
+  }) {
+    const search = params?.search?.trim();
+    const conditions = [isNull(suppliers.deletedAt)];
+    if (search) conditions.push(ilike(suppliers.legalName, `%${search}%`));
+
+    let query: any = this.drizzleService.db
       .select({
         id: suppliers.id,
         code: suppliers.code,
@@ -1061,7 +1070,7 @@ export class CatalogService {
       })
       .from(suppliers)
       .leftJoin(supplierProducts, eq(supplierProducts.supplierId, suppliers.id))
-      .where(isNull(suppliers.deletedAt))
+      .where(and(...conditions))
       .groupBy(
         suppliers.id,
         suppliers.code,
@@ -1081,6 +1090,11 @@ export class CatalogService {
         suppliers.createdAt,
       )
       .orderBy(asc(suppliers.legalName));
+
+    if (typeof params?.limit === 'number') query = query.limit(params.limit);
+    if (typeof params?.offset === 'number') query = query.offset(params.offset);
+
+    const rows = (await query) as Array<any>;
 
     return rows.map((row) => ({
       id: Number(row.id),
