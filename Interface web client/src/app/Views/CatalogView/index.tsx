@@ -706,7 +706,7 @@ export function CatalogPage({
                     />
                   ) : (
                     <span className="text-sm leading-none">
-                      {productTypeIcon(pt.code)}
+                      {productTypeIcon(pt.code, 0, pt.name)}
                     </span>
                   )}
                   <span

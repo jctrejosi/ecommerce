@@ -96,7 +96,9 @@ export function DailyDealsSection({
     ...item,
     title: (item.title || "").replace(/\\n/g, "\n"),
   }));
-  const carouselProducts = dailyDeals ? dailyDeals.carousel ?? [] : dealProducts;
+  const carouselProducts = dailyDeals?.carousel?.length
+    ? dailyDeals.carousel
+    : dealProducts;
 
   const [featuredIdx, setFeaturedIdx] = useState(0);
   const [carouselStart, setCarouselStart] = useState(0);

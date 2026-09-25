@@ -373,8 +373,8 @@ export default function App() {
           .then(setLandingCategories)
           .catch(() => {});
         void catalogService
-          .getProducts({ onSale: true, sort: "descuento", limit: 8 })
-          .then(setDealProducts)
+          .getProducts({ onSale: true, sort: "descuento", limit: 60 })
+          .then((ps) => setDealProducts(ps.filter((p) => p.image).slice(0, 12)))
           .catch(() => {});
         // Config de Ofertas del día (display rotativo + carousel administrados)
         void fetch(`${(import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"))}/landing/daily-deals`)

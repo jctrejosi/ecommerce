@@ -48,7 +48,7 @@ function ProductTypeButton({
             className="w-full h-full object-cover"
           />
         ) : (
-          productTypeIcon(pt.code, index)
+          productTypeIcon(pt.code, index, pt.name)
         )}
       </div>
       <span className="text-xs font-semibold text-center text-foreground leading-tight max-w-[90px]">
