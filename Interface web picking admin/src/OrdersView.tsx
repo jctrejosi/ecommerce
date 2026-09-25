@@ -89,7 +89,9 @@ export default function OrdersView({
   const [detailLoading, setDetailLoading] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const socketRef = useRef<Socket | null>(null)
-  const lastBranch = useRef<number | null>(null)
+  // Arranca en `undefined` (no en null) para que "Todas" también cuente como
+  // cambio de sucursal la primera vez.
+  const lastBranch = useRef<number | null | undefined>(undefined)
 
   // La búsqueda no dispara una consulta por tecla.
   useEffect(() => {
@@ -98,10 +100,10 @@ export default function OrdersView({
   }, [search])
 
   const load = useCallback(async () => {
-    if (!branchId) return
     try {
+      // Sin sucursal: el backend lista los pedidos de todas.
       const res = await api.orders({
-        branchId,
+        branchId: branchId ?? undefined,
         status: status || undefined,
         search: appliedSearch || undefined,
         limit: 100,
@@ -115,7 +117,6 @@ export default function OrdersView({
   }, [branchId, status, appliedSearch, notify])
 
   useEffect(() => {
-    if (!branchId) return
     // Solo se marca "cargando" al cambiar de sucursal: filtrar no debe parpadear.
     if (lastBranch.current !== branchId) {
       lastBranch.current = branchId
@@ -206,10 +207,6 @@ export default function OrdersView({
     }
   }
 
-  if (!branchId) {
-    return <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
-  }
-
   const orders = data?.orders ?? []
   const total = data?.total ?? 0
 
@@ -220,7 +217,8 @@ export default function OrdersView({
         <div>
           <h2 className="text-lg font-extrabold tracking-tight">Pedidos</h2>
           <p className="text-white/40 text-xs font-medium">
-            {branchName || 'Sucursal'} · {total} pedido{total === 1 ? '' : 's'}
+            {branchId ? branchName || 'Sucursal' : 'Todas las sucursales'} · {total} pedido
+            {total === 1 ? '' : 's'}
           </p>
         </div>
         <div className="ml-auto flex items-center gap-2">

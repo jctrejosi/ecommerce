@@ -40,8 +40,9 @@ import {
 } from './services/browserNotifications';
 import LoginScreen from './components/LoginScreen';
 import AppFooter from './components/AppFooter';
-// El logo del header es el del delivery; el del footer (copyright) sigue siendo logo.png.
-import headerLogo from './assets/delivery.png';
+// El logo del header es el de DSI; el del icono de las notificaciones sigue
+// siendo delivery.png.
+import headerLogo from './assets/logo.png';
 import FleetMap, { type FleetMapHandle } from './components/FleetMap';
 import DriversSidebar from './components/DriversSidebar';
 import DriversPanel from './components/DriversPanel';

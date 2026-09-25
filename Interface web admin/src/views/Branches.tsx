@@ -85,6 +85,7 @@ function BranchModal({ branch, onClose, onSaved }: { branch: Branch | null; onCl
     priority: branch?.priority?.toString() ?? "1", branchType: branch?.branchType ?? "STORE",
     deliveryRadiusKm: branch?.deliveryRadiusKm?.toString() ?? "5",
     maxDailyOrders: branch?.maxDailyOrders?.toString() ?? "", isActive: branch?.isActive ?? true,
+    isVisible: branch?.isVisible ?? true,
     schedule: parseSchedule(branch?.schedule),
   });
 
@@ -213,6 +214,7 @@ function BranchModal({ branch, onClose, onSaved }: { branch: Branch | null; onCl
           </div>
 
           <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={f.isActive} onChange={(e) => set("isActive", e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-amber-500" /><span className="text-sm text-gray-700">Sucursal activa</span></label>
+          <label className="flex items-center gap-3 cursor-pointer"><input type="checkbox" checked={f.isVisible} onChange={(e) => set("isVisible", e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-amber-500" /><span className="text-sm text-gray-700">Visible en la tienda</span></label>
         </div>
         <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 sticky bottom-0">
           <button onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
@@ -348,6 +350,7 @@ export default function Branches() {
   const [modal, setModal] = useState<Branch | null | "new">(null);
   const [detailId, setDetailId] = useState<number | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<Branch | null>(null);
+  const [activeConfirm, setActiveConfirm] = useState<Branch | null>(null);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -369,6 +372,20 @@ export default function Branches() {
     catch { setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isActive: b.isActive } : x))); }
   };
 
+  const confirmActiveChange = async () => {
+    if (!activeConfirm) return;
+    const b = activeConfirm;
+    setActiveConfirm(null);
+    await toggleActive(b);
+  };
+
+  const toggleVisible = async (b: Branch) => {
+    const next = !b.isVisible;
+    setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isVisible: next } : x)));
+    try { await branchesService.update(b.id, { isVisible: next }); }
+    catch { setBranches((prev) => prev.map((x) => (x.id === b.id ? { ...x, isVisible: b.isVisible } : x))); }
+  };
+
   return (
     <>
       <div className="p-6 space-y-5">
@@ -386,7 +403,10 @@ export default function Branches() {
               <div key={b.id} className="bg-white rounded-2xl border border-gray-100 overflow-hidden hover:shadow-md transition-shadow">
                 <div className="relative h-32 bg-gray-100">
                   <img src={branchImage(b, idx)} alt={b.name} className="w-full h-full object-cover" />
-                  <span className={`absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${b.isActive ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>{b.isActive ? "Visible" : "Oculta"}</span>
+                  <span className={`absolute top-2 left-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${b.isVisible ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500"}`}>{b.isVisible ? "Visible" : "Oculta"}</span>
+                  {!b.isActive && (
+                    <span className="absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-800/80 text-white">Inactiva</span>
+                  )}
                 </div>
                 <div className="p-5">
                   <div className="flex items-start justify-between mb-3">
@@ -420,19 +440,31 @@ export default function Branches() {
                       <p className="text-[10px] text-blue-600">pedidos</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 mb-2">
                     <button onClick={() => openBranchMap(b)} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-600 border border-gray-200 hover:border-amber-300 hover:text-amber-600 rounded-lg transition-colors"><MapPin size={13} /> Ver mapa</button>
+                    <button onClick={() => setDetailId(b.id)} className="flex-1 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">Ver detalle →</button>
+                  </div>
+                  <div className="flex items-center gap-4">
                     <button
-                      onClick={() => toggleActive(b)}
-                      title={b.isActive ? "Ocultar en la landing" : "Mostrar en la landing"}
-                      className="flex items-center gap-1.5 shrink-0"
+                      onClick={() => setActiveConfirm(b)}
+                      title={b.isActive ? "Marcar como inactiva" : "Marcar como activa"}
+                      className="flex items-center gap-1.5"
                     >
                       <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}>
                         <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`} />
                       </span>
-                      <span className={`text-xs font-semibold ${b.isActive ? "text-green-600" : "text-gray-400"}`}>{b.isActive ? "Visible" : "Oculta"}</span>
+                      <span className={`text-xs font-semibold ${b.isActive ? "text-green-600" : "text-gray-400"}`}>{b.isActive ? "Activa" : "Inactiva"}</span>
                     </button>
-                    <button onClick={() => setDetailId(b.id)} className="flex-1 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">Ver detalle →</button>
+                    <button
+                      onClick={() => toggleVisible(b)}
+                      title={b.isVisible ? "Ocultar en la landing" : "Mostrar en la landing"}
+                      className="flex items-center gap-1.5"
+                    >
+                      <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isVisible ? "bg-blue-500" : "bg-gray-300"}`}>
+                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isVisible ? "translate-x-4" : "translate-x-0"}`} />
+                      </span>
+                      <span className={`text-xs font-semibold ${b.isVisible ? "text-blue-600" : "text-gray-400"}`}>{b.isVisible ? "Visible" : "Oculta"}</span>
+                    </button>
                   </div>
                 </div>
               </div>
@@ -450,6 +482,32 @@ export default function Branches() {
             <h3 className="font-semibold text-gray-900 mb-2">Eliminar sucursal</h3>
             <p className="text-sm text-gray-500 mb-5">¿Eliminar "{deleteConfirm.name}"?</p>
             <div className="flex justify-end gap-2"><button onClick={() => setDeleteConfirm(null)} className="px-4 py-2 text-sm text-gray-600">Cancelar</button><button onClick={handleDelete} className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 rounded-xl">Eliminar</button></div>
+          </div>
+        </div>
+      )}
+
+      {activeConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setActiveConfirm(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6 mx-4">
+            <h3 className="font-semibold text-gray-900 mb-2">
+              {activeConfirm.isActive ? "Desactivar sucursal" : "Activar sucursal"}
+            </h3>
+            <p className="text-sm text-gray-500 mb-1">{activeConfirm.name}</p>
+            <p className="text-xs text-gray-400 mb-5">
+              {activeConfirm.isActive
+                ? "Dejará de estar operativa (no recibirá pedidos)."
+                : "Volverá a estar operativa para recibir pedidos."}
+            </p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setActiveConfirm(null)} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+              <button
+                onClick={confirmActiveChange}
+                className={`px-4 py-2 text-sm font-bold text-white rounded-xl ${activeConfirm.isActive ? "bg-red-500 hover:bg-red-600" : "bg-green-600 hover:bg-green-700"}`}
+              >
+                {activeConfirm.isActive ? "Desactivar" : "Activar"}
+              </button>
+            </div>
           </div>
         </div>
       )}

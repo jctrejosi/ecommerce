@@ -11,9 +11,10 @@ import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType 
 import MapView from './MapView'
 import MetricsView from './MetricsView'
 import OrdersView from './OrdersView'
-import footerLogo from './assets/logo.png'
-// El logo del header es el del picking; el del footer (copyright) sigue siendo logo.png.
-import headerLogo from './assets/picking.png'
+// Logo corporativo (DSI): lo comparten el header del panel y el pie de copyright.
+import logo from './assets/logo.png'
+// Marca de la app de picking: se conserva al pie de la pantalla de login.
+import pickingLogo from './assets/picking.png'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -168,13 +169,14 @@ export default function App() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="sticky top-0 z-40 bg-[#0C0C0D]/90 backdrop-blur border-b border-white/8 px-5 pt-4 pb-3">
-        <div className="max-w-6xl mx-auto flex flex-col gap-3">
+      {/* Header. El `pr` reserva el ancho del scrollbar del contenido, para que
+          el header quede en la misma columna que tabs y contenido. */}
+      <header className="sticky top-0 z-40 bg-[#0C0C0D]/90 backdrop-blur border-b border-white/8 pt-4 pb-3 pr-[var(--app-scrollbar)]">
+        <div className="max-w-6xl mx-auto px-5 flex flex-col gap-3">
           {/* Fila superior: marca + usuario */}
           <div className="flex items-center gap-4">
             <div className="mr-auto flex items-center gap-3">
-              <img src={headerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+              <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
               <div>
                 <h1 className="text-2xl font-extrabold tracking-tight">Picking <span className="text-amber-400">Admin</span></h1>
                 <p className="text-white/40 text-xs font-medium mt-0.5">Estanterías y ubicaciones por sucursal</p>
@@ -210,6 +212,18 @@ export default function App() {
           {/* Fila inferior: selector de sucursales */}
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">Sucursales</span>
+            {/* "Todas": solo lo aprovechan las vistas que no dependen de una
+                sucursal (Pedidos); las de estantería piden elegir una. */}
+            <button
+              onClick={() => setBranchId(null)}
+              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                branchId === null
+                  ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
+                  : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
+              }`}
+            >
+              Todas
+            </button>
             {branches.map((b) => (
               <button
                 key={b.id}
@@ -228,25 +242,29 @@ export default function App() {
       </header>
 
       <main className="flex-1 flex flex-col min-h-0">
-        {/* Tabs fijos (no scrolleables) */}
-        <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3 shrink-0">
-          <div className="flex gap-2 flex-wrap">
-            {(['shelves', 'categories', 'map', 'products', 'orders', 'users', 'schedule', 'metrics'] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                  tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
-                }`}
-              >
-                {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'orders' ? 'Pedidos' : t === 'users' ? 'Usuarios' : t === 'schedule' ? 'Horarios' : 'Pickers'}
-              </button>
-            ))}
+        {/* Tabs fijos (no scrolleables). Igual que el header, reservan el ancho
+            del scrollbar para quedar alineados con el contenido. */}
+        <div className="shrink-0 pr-[var(--app-scrollbar)]">
+          <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3">
+            <div className="flex gap-2 flex-wrap">
+              {(['shelves', 'categories', 'map', 'products', 'orders', 'users', 'schedule', 'metrics'] as const).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTab(t)}
+                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                    tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'orders' ? 'Pedidos' : t === 'users' ? 'Usuarios' : t === 'schedule' ? 'Horarios' : 'Pickers'}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Contenido scrolleable */}
-        <div className="flex-1 overflow-y-auto">
+        {/* Contenido scrolleable. Reserva el gutter del scrollbar para que el
+            ancho no cambie (ni el contenido salte) cuando aparece. */}
+        <div className="flex-1 overflow-y-auto [scrollbar-gutter:stable]">
           <div className="w-full max-w-6xl mx-auto px-5 pb-16">
 
         {error && (
@@ -347,7 +365,7 @@ function CopyrightFooter() {
     <footer className="shrink-0" style={{ background: '#111827' }}>
       <div className="flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center">
         <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
-          <img src={footerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+          <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
         </a>
         <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
           © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
@@ -1181,7 +1199,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
           </form>
 
           {/* Marca de la app, al pie del contenido. */}
-          <img src={headerLogo} alt="Picking" className="h-14 w-auto object-contain opacity-90" />
+          <img src={pickingLogo} alt="Picking" className="h-14 w-auto object-contain opacity-90" />
         </div>
       </div>
 

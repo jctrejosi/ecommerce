@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Platform, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { isRunningInExpoGo } from "expo";
 import type { LatLng } from "@/api/types";
@@ -34,6 +34,11 @@ export interface DeliveryMapProps {
   /** Punto de recogida (tienda). */
   pickup?: LatLng | null;
   /**
+   * Foto de perfil del repartidor (Cloudinary). Si existe, el marcador de
+   * `origin` la muestra; si no, cae al ícono de la moto.
+   */
+  driverAvatarUrl?: string | null;
+  /**
    * Polyline (OSRM) de la ruta recomendada. Mientras no esté calculada no se
    * dibuja nada: primero se calcula la ruta y luego se muestra (nada de línea
    * recta provisional).
@@ -52,12 +57,16 @@ export function DeliveryMap({
   destination,
   origin,
   pickup,
+  driverAvatarUrl,
   routePolyline,
 }: DeliveryMapProps) {
   const [ml, setMl] = useState<MapLibreModule | null>(null);
   const [failed, setFailed] = useState(false);
   /** El mapa nativo ya terminó de cargar el estilo y los tiles. */
   const [mapLoaded, setMapLoaded] = useState(false);
+  /** La foto del repartidor no cargó: se usa el ícono de la moto. */
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  const showAvatar = Boolean(driverAvatarUrl) && !avatarFailed;
 
   useEffect(() => {
     if (MAP_UNAVAILABLE) {
@@ -141,9 +150,17 @@ export function DeliveryMap({
         {origin && (
           <Marker lngLat={[origin.lng, origin.lat]}>
             <View style={styles.markerRing}>
-              <View style={[styles.markerBadge, styles.badgeDriver]}>
-                <Text style={styles.markerEmoji}>🛵</Text>
-              </View>
+              {showAvatar ? (
+                <Image
+                  source={{ uri: driverAvatarUrl! }}
+                  style={styles.markerAvatar}
+                  onError={() => setAvatarFailed(true)}
+                />
+              ) : (
+                <View style={[styles.markerBadge, styles.badgeDriver]}>
+                  <Text style={styles.markerEmoji}>🛵</Text>
+                </View>
+              )}
             </View>
           </Marker>
         )}
@@ -259,6 +276,14 @@ const styles = StyleSheet.create({
   },
   badgeDest: { borderColor: "#16A34A" },
   badgeDriver: { borderColor: "#FFF200" },
+  markerAvatar: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    borderWidth: 3,
+    borderColor: "#FFF200",
+    backgroundColor: "#FFFFFF",
+  },
   markerCircle: {
     width: 34,
     height: 34,

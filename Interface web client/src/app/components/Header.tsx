@@ -19,7 +19,7 @@ import {
   MessageCircle,
 } from "lucide-react";
 import { Logo } from "../Logo";
-import storeLogo from "../../assets/tienda.png";
+import storeLogo from "../../assets/logo.png";
 import type { CartItem, CatalogCategory, Product } from "../types";
 import { catalogService } from "../../services/catalog.service";
 import { NotificationsDropdown } from "./NotificationsDropdown";

@@ -26,6 +26,7 @@ import {
   type ClientFilterOptions,
 } from "../services/campaigns.service";
 import { catalogService, type CatalogProduct, type CatalogCategory, type PluFileImportResult } from "../services/catalog.service";
+import footerLogo from "../assets/logo.png";
 
 /* ─── Types ─────────────────────────────────────── */
 /** Producto del catálogo real (alias del tipo del servicio de catálogo). */
@@ -2115,7 +2116,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
           <div className="w-8 h-8 rounded-xl bg-amber-400 flex items-center justify-center">
             <Zap size={15} className="text-amber-900" />
           </div>
-          <p className="font-bold text-gray-900 text-sm">Nueva Campaña Omnicanal</p>
+          <p className="font-bold text-gray-900 text-sm">Nueva campaña</p>
         </div>
         <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors">
           <X size={16} />
@@ -2230,6 +2231,26 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
           />
         )}
       </div>
+
+      {/* Footer institucional (mismo del panel, fondo blanco y letra negra) */}
+      <footer className="shrink-0 bg-white border-t border-gray-100">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center">
+          <a
+            href="https://dsi.com.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center hover:opacity-80 transition-opacity"
+          >
+            <img src={footerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+          </a>
+          <p className="text-xs" style={{ color: "rgba(0,0,0,0.65)" }}>
+            © 2026 Desarrollado por <span className="font-bold text-black/80">DSI SA</span> · Todos los derechos reservados
+          </p>
+          <p className="text-xs" style={{ color: "rgba(0,0,0,0.45)" }}>
+            Manizales, Caldas, Colombia
+          </p>
+        </div>
+      </footer>
 
       {/* Diseñador de correo (drag & drop) */}
       {emailDesignOpen && (

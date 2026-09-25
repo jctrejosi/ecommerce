@@ -459,6 +459,7 @@ export const branches = pgTable(
     schedule: jsonb(),
     imageMediaId: bigint('image_media_id', { mode: 'number' }),
     isActive: boolean('is_active').default(true).notNull(),
+    isVisible: boolean('is_visible').default(true).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),

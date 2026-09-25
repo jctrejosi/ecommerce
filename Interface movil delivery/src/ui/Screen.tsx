@@ -1,8 +1,9 @@
-import { ReactNode } from "react";
+import { ReactNode, useState } from "react";
 import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useKeyboardHeight } from "@/lib/keyboard";
 import { colors, spacing } from "@/theme";
+import { HeaderLogo } from "./HeaderLogo";
 
 interface ScreenProps {
   title?: string;
@@ -71,20 +72,21 @@ export function Screen({
     >
       {title ? (
         <View style={styles.headerBar}>
-          <Image
-            source={require("../../assets/delivery.png")}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={[styles.title, { fontSize: titleSize }]} numberOfLines={1}>
-            {title}
-          </Text>
-          {headerRight ? (
-            <View style={styles.headerRight}>{headerRight}</View>
-          ) : (
-            /* Espaciador del mismo ancho que el logo para centrar el título */
-            <View style={styles.logoSpacer} />
-          )}
+          <View style={styles.brand}>
+            <Image
+              source={require("../../assets/delivery.png")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={styles.brandText}>Delivery</Text>
+          </View>
+          <AutoFitTitle text={title} baseSize={titleSize} />
+          <View style={styles.headerRight}>
+            {headerRight ?? (
+              /* Logo DSI al lado del título; si hay acción (p. ej. chat), manda la acción */
+              <HeaderLogo width={62} />
+            )}
+          </View>
         </View>
       ) : null}
       {scroll ? (
@@ -93,6 +95,40 @@ export function Screen({
         content
       )}
     </SafeAreaView>
+  );
+}
+
+/**
+ * Título de cabecera que se encoge lo justo para caber en una línea.
+ *
+ * En Android `adjustsFontSizeToFit`/`minimumFontScale` son solo iOS, así que
+ * medimos el texto a su tamaño base (fuera del flujo, invisible) y calculamos el
+ * tamaño final proporcional al ancho disponible. Evita que se corte el código
+ * largo de un pedido sin dejarlo ilegible.
+ */
+function AutoFitTitle({ text, baseSize }: { text: string; baseSize: number }) {
+  const [boxWidth, setBoxWidth] = useState(0);
+  const [textWidth, setTextWidth] = useState(0);
+  const minSize = 11;
+
+  // Margen de seguridad: `letterSpacing` no escala con el tamaño de fuente.
+  const ratio = boxWidth > 0 && textWidth > 0 ? (boxWidth * 0.98) / textWidth : 1;
+  const fontSize = Math.max(minSize, Math.min(baseSize, baseSize * ratio));
+
+  return (
+    <View style={styles.titleBox} onLayout={(e) => setBoxWidth(e.nativeEvent.layout.width)}>
+      {/* Solo sirve para medir el ancho natural del texto a `baseSize`. */}
+      <Text
+        style={[styles.title, styles.measure, { fontSize: baseSize }]}
+        numberOfLines={1}
+        onLayout={(e) => setTextWidth(e.nativeEvent.layout.width)}
+      >
+        {text}
+      </Text>
+      <Text style={[styles.title, { fontSize }]} numberOfLines={1}>
+        {text}
+      </Text>
+    </View>
   );
 }
 
@@ -109,15 +145,23 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(3),
     backgroundColor: colors.background,
   },
-  logo: { height: 40, width: 40 },
-  logoSpacer: { width: 40 },
+  brand: { width: 62, alignItems: "center", justifyContent: "center" },
+  brandText: {
+    fontSize: 8,
+    fontWeight: "800",
+    letterSpacing: 0.3,
+    marginTop: 1,
+    color: colors.textMuted,
+  },
+  logo: { height: 34, width: 34 },
   headerRight: {
-    width: 40,
+    width: 62,
     alignItems: "flex-end",
     justifyContent: "center",
   },
+  titleBox: { flex: 1 },
+  measure: { position: "absolute", opacity: 0 },
   title: {
-    flex: 1,
     textAlign: "center",
     textTransform: "uppercase",
     fontWeight: "800",

@@ -72,6 +72,7 @@ export class BranchesService {
           maxDailyOrders: r.maxDailyOrders,
           schedule: r.schedule,
           isActive: r.isActive,
+          isVisible: r.isVisible,
           imagePath:
             r.imageMediaId != null ? (mediaMap.get(Number(r.imageMediaId)) ?? null) : null,
           productCount: stats?.cnt ?? 0,
@@ -124,6 +125,7 @@ export class BranchesService {
       maxDailyOrders: r.maxDailyOrders,
       schedule: r.schedule,
       isActive: r.isActive,
+      isVisible: r.isVisible,
       imagePath,
       productCount: stats?.cnt ?? 0,
       orderCount: orderCount?.cnt ?? 0,
@@ -182,6 +184,7 @@ export class BranchesService {
         schedule: dto.schedule ?? null,
         imageMediaId,
         isActive: dto.isActive ?? true,
+        isVisible: dto.isVisible ?? true,
       })
       .returning({ id: branches.id });
     return this.findOne(Number(row.id));

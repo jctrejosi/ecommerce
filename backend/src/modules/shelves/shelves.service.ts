@@ -81,7 +81,9 @@ export class ShelvesService {
         schedule: branches.schedule,
       })
       .from(branches)
-      .where(isNull(branches.deletedAt))
+      // Solo sucursales activas: el filtro del panel no debe ofrecer sucursales
+      // dadas de baja.
+      .where(and(isNull(branches.deletedAt), eq(branches.isActive, true)))
       .orderBy(asc(branches.priority), asc(branches.name));
 
     return rows.map((r) => ({

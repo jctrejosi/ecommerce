@@ -18,6 +18,7 @@ export type Branch = {
   maxDailyOrders: number | null;
   schedule: Record<string, string> | null;
   isActive: boolean;
+  isVisible: boolean;
   imagePath: string | null;
   productCount: number;
   orderCount: number;

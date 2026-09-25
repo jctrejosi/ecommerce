@@ -28,12 +28,12 @@ export function Header({ title, subtitle, onBack, right, logo = false }: HeaderP
           </Pressable>
         ) : logo ? (
           <View style={styles.logoBlock}>
+            {/* Ícono arriba y el título debajo, centrados entre sí. */}
             <Image
-              source={require("../../assets/picking.png")}
+              source={require("../../assets/logo.png")}
               style={styles.logo}
               resizeMode="contain"
             />
-            {/* Título debajo del logo, al ancho del logo y en letra pequeña */}
             <Text style={styles.logoTitle} numberOfLines={1}>
               {title}
             </Text>
@@ -72,15 +72,16 @@ const styles = StyleSheet.create({
   left: { flexDirection: "row", alignItems: "center", gap: spacing(3), flexShrink: 1 },
   titles: { flexShrink: 1 },
   right: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
-  logo: { height: 44, width: 92 },
-  logoBlock: { alignItems: "center", width: 92 },
+  // El logo DSI es apaisado (213x69): a 92 de ancho mide ~30 de alto.
+  logo: { width: 92, height: 30 },
+  logoBlock: { alignItems: "center" },
   logoTitle: {
-    width: 92,
-    color: colors.textMuted,
-    fontSize: 10,
-    fontWeight: "700",
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: "800",
+    letterSpacing: -0.2,
     textAlign: "center",
-    marginTop: 2,
+    marginTop: 3,
   },
   backBtn: {
     width: 40,

@@ -81,6 +81,11 @@ export class CreateBranchDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Visible en la landing', default: true })
+  @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
 }
 
 export class UpdateBranchDto {
@@ -168,6 +173,11 @@ export class UpdateBranchDto {
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
+
+  @ApiPropertyOptional({ description: 'Visible en la landing' })
+  @IsOptional()
+  @IsBoolean()
+  isVisible?: boolean;
 }
 
 export class CreateDeliveryZoneDto {

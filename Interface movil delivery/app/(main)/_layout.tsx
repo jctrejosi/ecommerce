@@ -2,7 +2,11 @@ import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
 import { useAuthStore } from "@/auth/authStore";
+import { HeaderLogo } from "@/ui/HeaderLogo";
 import { colors } from "@/theme";
+
+/** Logo DSI a la derecha del título en las cabeceras nativas de detalle. */
+const headerRight = () => <HeaderLogo width={62} />;
 
 /**
  * Área autenticada. Si no hay sesión (logout manual o token vencido a mitad
@@ -34,15 +38,15 @@ export default function MainLayout() {
       <Stack.Screen name="order/[id]" options={{ headerShown: false }} />
       <Stack.Screen
         name="map/[id]"
-        options={{ title: "Mapa de entrega", headerBackTitle: "Pedido" }}
+        options={{ title: "Mapa de entrega", headerBackTitle: "Pedido", headerRight }}
       />
       <Stack.Screen
         name="chat/[id]"
-        options={{ title: "Chat del pedido", headerBackTitle: "Pedido" }}
+        options={{ title: "Chat del pedido", headerBackTitle: "Pedido", headerRight }}
       />
       <Stack.Screen
         name="admin-chat"
-        options={{ title: "Chat con administración", headerBackTitle: "Atrás" }}
+        options={{ title: "Chat con administración", headerBackTitle: "Atrás", headerRight }}
       />
     </Stack>
   );

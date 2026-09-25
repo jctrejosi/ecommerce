@@ -86,6 +86,21 @@ export async function getCurrentPosition(): Promise<LatLng | null> {
 }
 
 /**
+ * Última posición conocida por el sistema (caché del GPS). Resuelve al instante,
+ * sin esperar un fix nuevo: se usa para pintar el marcador del repartidor de una
+ * vez mientras llega la posición real.
+ */
+export async function getLastKnownPosition(): Promise<LatLng | null> {
+  try {
+    const pos = await Location.getLastKnownPositionAsync();
+    if (!pos) return null;
+    return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Tracking en primer plano (fase 1): ping cada 15 s o 20 m según movimiento.
  * Si el tracking en background ya está activo, no se duplica (la tarea cubre
  * también el primer plano).

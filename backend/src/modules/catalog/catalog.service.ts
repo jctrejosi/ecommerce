@@ -2472,7 +2472,13 @@ export class CatalogService {
       })
       .from(branches)
       .leftJoin(media, eq(branches.imageMediaId, media.id))
-      .where(and(eq(branches.isActive, true), isNull(branches.deletedAt)))
+      .where(
+        and(
+          eq(branches.isActive, true),
+          eq(branches.isVisible, true),
+          isNull(branches.deletedAt),
+        ),
+      )
       .orderBy(asc(branches.priority));
 
     return rows.map((row) => ({

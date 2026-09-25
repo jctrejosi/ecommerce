@@ -33,6 +33,9 @@ const COLUMNS = [
   // picking: unidades alistadas por item (backend/src/modules/picking/*)
   `ALTER TABLE order_items
      ADD COLUMN IF NOT EXISTS picked_qty integer NOT NULL DEFAULT 0`,
+  // sucursales: visibilidad en la landing (independiente de is_active)
+  `ALTER TABLE branches
+     ADD COLUMN IF NOT EXISTS is_visible boolean NOT NULL DEFAULT true`,
   // picking: revisión de pedidos en la cola (complementa a picked_qty)
   `ALTER TABLE orders
      ADD COLUMN IF NOT EXISTS reviewed_at timestamptz`,

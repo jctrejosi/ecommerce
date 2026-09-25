@@ -17,13 +17,22 @@ body,
   background: #0c0c0d;
 }
 
+:root {
+  /*
+   * Ancho del scrollbar del panel. El área de contenido reserva este espacio
+   * siempre (`scrollbar-gutter: stable`) para que no salte al aparecer, y el
+   * header y las tabs lo reservan igual para quedar en la misma columna.
+   */
+  --app-scrollbar: 6px;
+}
+
 * {
   -webkit-tap-highlight-color: transparent;
 }
 
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: var(--app-scrollbar);
+  height: var(--app-scrollbar);
 }
 ::-webkit-scrollbar-thumb {
   background: rgba(255, 255, 255, 0.15);
