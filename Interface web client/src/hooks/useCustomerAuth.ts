@@ -4,6 +4,7 @@ import {
   getCustomerAccessToken,
   CustomerAuthResponse,
 } from "../services/customer-auth.service";
+import { GOOGLE_REDIRECT_URI } from "../app/lib/googleAuth";
 
 export function useCustomerAuth() {
   const [customer, setCustomer] = useState<
@@ -87,6 +88,21 @@ export function useCustomerAuth() {
     [],
   );
 
+  const loginWithGoogleCode = useCallback(async (code: string) => {
+    setError(null);
+    try {
+      const response = await customerAuthService.socialLoginWithGoogleCode(
+        code,
+        GOOGLE_REDIRECT_URI,
+      );
+      setCustomer(response.customer);
+      return response;
+    } catch (err: any) {
+      setError(err.message || "Error en login con Google");
+      throw err;
+    }
+  }, []);
+
   const logout = useCallback(async (refreshToken?: string) => {
     try {
       await customerAuthService.logout(refreshToken);
@@ -112,6 +128,7 @@ export function useCustomerAuth() {
     login,
     register,
     socialLogin,
+    loginWithGoogleCode,
     logout,
     loadProfile,
     updateProfile,

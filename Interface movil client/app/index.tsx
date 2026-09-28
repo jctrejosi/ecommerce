@@ -188,6 +188,26 @@ export default function WebClientScreen() {
           mixedContentMode="always"
           allowsInlineMediaPlayback
           setSupportMultipleWindows={false}
+          // El login con Google redirige a `http://localhost:4173` (el
+          // redirect_uri registrado en Google). En el celular no hay nada
+          // escuchando ahí, así que se intercepta y se carga esa misma ruta en
+          // el origen real de la app, para que la web procese el `code`.
+          onShouldStartLoadWithRequest={(request) => {
+            const target = request.url;
+            if (/^https?:\/\/localhost:4173(\/|$|\?)/i.test(target) && url) {
+              try {
+                const parsed = new URL(target);
+                const appUrl = `${url.replace(/\/+$/, "")}${parsed.pathname}${parsed.search}${parsed.hash}`;
+                webViewRef.current?.injectJavaScript(
+                  `window.location.replace(${JSON.stringify(appUrl)}); true;`,
+                );
+              } catch {
+                /* URL inesperada: se ignora */
+              }
+              return false;
+            }
+            return true;
+          }}
           allowsBackForwardNavigationGestures
           startInLoadingState
           onError={handleWebError}

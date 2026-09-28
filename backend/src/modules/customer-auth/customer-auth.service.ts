@@ -22,6 +22,7 @@ import { randomUUID } from 'crypto';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { CustomerSocialLoginDto } from './dto/customer-social-login.dto';
+import { CustomerGoogleCodeDto } from './dto/customer-google-code.dto';
 import * as bcrypt from 'bcryptjs';
 
 interface GoogleTokenInfoResponse {
@@ -213,6 +214,56 @@ export class CustomerAuthService {
     }
 
     return this.buildAuthResponse(customer);
+  }
+
+  /** `redirect_uri` registrado en Google Cloud Console para el flujo `code`. */
+  private static readonly GOOGLE_REDIRECT_URI = 'http://localhost:4173';
+
+  /**
+   * Login con Google por **flujo de código**: el cliente devuelve el `code` que
+   * Google puso en la redirección; aquí se intercambia por tokens con el client
+   * secret (solo servidor) y se reutiliza `socialLogin` con el access token.
+   */
+  async socialLoginWithGoogleCode(
+    dto: CustomerGoogleCodeDto,
+  ): Promise<CustomerAuthResponse> {
+    const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
+    if (!clientId || !clientSecret) {
+      throw new UnauthorizedException(
+        'Google login no está configurado en el servidor',
+      );
+    }
+
+    const body = new URLSearchParams({
+      code: dto.code,
+      client_id: clientId,
+      client_secret: clientSecret,
+      redirect_uri:
+        dto.redirectUri ?? CustomerAuthService.GOOGLE_REDIRECT_URI,
+      grant_type: 'authorization_code',
+    });
+
+    const response = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body,
+    });
+
+    if (!response.ok) {
+      this.logger.warn('Google code exchange failed');
+      throw new UnauthorizedException('Código de Google inválido o expirado');
+    }
+
+    const tokens = (await response.json()) as { access_token?: string };
+    if (!tokens.access_token) {
+      throw new UnauthorizedException('Google no devolvió un token de acceso');
+    }
+
+    return this.socialLogin({
+      provider: 'google',
+      accessToken: tokens.access_token,
+    } as CustomerSocialLoginDto);
   }
 
   async socialLogin(

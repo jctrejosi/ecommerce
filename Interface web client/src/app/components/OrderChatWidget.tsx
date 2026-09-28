@@ -149,7 +149,7 @@ export function OrderChatWidget({ orders }: OrderChatWidgetProps) {
             ? `Chat con tu repartidor, ${totalUnread} mensaje${totalUnread === 1 ? "" : "s"} sin leer`
             : "Chat con tu repartidor"
         }
-        className="fixed bottom-20 right-3 sm:bottom-24 sm:right-5 z-[92] w-14 h-14 rounded-full bg-secondary text-primary border-2 border-secondary/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-90 transition-all"
+        className="relative z-[92] w-14 h-14 rounded-full bg-secondary text-primary border-2 border-secondary/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-90 transition-all"
       >
         {totalUnread > 0 ? (
           <span className="chat-alert" aria-hidden="true" />

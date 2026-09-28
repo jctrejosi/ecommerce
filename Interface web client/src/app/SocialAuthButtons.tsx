@@ -1,8 +1,5 @@
 import { useState } from "react";
-import {
-  GoogleOAuthProvider,
-  useGoogleLogin,
-} from "@react-oauth/google";
+import { GOOGLE_CLIENT_ID, startGoogleLogin } from "./lib/googleAuth";
 
 type SocialAuthButtonsProps = {
   label: string;
@@ -15,102 +12,47 @@ type SocialAuthButtonsProps = {
   onError?: (error: unknown) => void;
 };
 
-// Client ID del OAuth web de Google (VITE_GOOGLE_CLIENT_ID en .env).
-// Vacío = Google OAuth no configurado → el botón se deshabilita en vez de crashear.
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as
-  | string
-  | undefined;
-
-function GoogleButton({
-  label,
-  socialLogin,
-  onSuccess,
-  onError,
-}: {
-  label: string;
-  socialLogin: SocialAuthButtonsProps["socialLogin"];
-  onSuccess?: () => void;
-  onError?: (error: unknown) => void;
-}) {
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleGoogleLogin = useGoogleLogin({
-    onSuccess: async (tokenResponse) => {
-      try {
-        setIsSubmitting(true);
-        const userInfo = await fetch(
-          "https://www.googleapis.com/oauth2/v3/userinfo",
-          {
-            headers: {
-              Authorization: `Bearer ${tokenResponse.access_token}`,
-            },
-          },
-        ).then((res) => res.json());
-
-        await socialLogin("google", tokenResponse.access_token, {
-          email: userInfo.email,
-          name: userInfo.name,
-          picture: userInfo.picture,
-          id: userInfo.sub,
-        });
-        onSuccess?.();
-      } catch (error) {
-        onError?.(error);
-      } finally {
-        setIsSubmitting(false);
-      }
-    },
-    onError: () => onError?.("Google login failed"),
-  });
-
+function GoogleIcon() {
   return (
-    <button
-      onClick={() => handleGoogleLogin()}
-      type="button"
-      disabled={isSubmitting}
-      className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-border bg-white hover:bg-muted transition-colors text-sm font-semibold text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
-    >
-      {/* Google icon */}
-      <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
-        <path
-          d="M43.611 20.083H42V20H24v8h11.303C33.92 32.657 29.418 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
-          fill="#FFC107"
-        />
-        <path
-          d="M6.306 14.691l6.571 4.819C14.655 15.108 19.001 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
-          fill="#FF3D00"
-        />
-        <path
-          d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0124 36c-5.402 0-9.894-3.338-11.298-7.976l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
-          fill="#4CAF50"
-        />
-        <path
-          d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
-          fill="#1976D2"
-        />
-      </svg>
-      {label} con Google
-    </button>
+    <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
+      <path
+        d="M43.611 20.083H42V20H24v8h11.303C33.92 32.657 29.418 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
+        fill="#FFC107"
+      />
+      <path
+        d="M6.306 14.691l6.571 4.819C14.655 15.108 19.001 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
+        fill="#FF3D00"
+      />
+      <path
+        d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0124 36c-5.402 0-9.894-3.338-11.298-7.976l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
+        fill="#4CAF50"
+      />
+      <path
+        d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
+        fill="#1976D2"
+      />
+    </svg>
   );
 }
 
-export function SocialAuthButtons({
-  label,
-  socialLogin,
-  onSuccess,
-  onError,
-}: SocialAuthButtonsProps) {
+export function SocialAuthButtons({ label }: SocialAuthButtonsProps) {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   return (
     <div className="space-y-2">
       {GOOGLE_CLIENT_ID ? (
-        <GoogleOAuthProvider clientId={GOOGLE_CLIENT_ID}>
-          <GoogleButton
-            label={label}
-            socialLogin={socialLogin}
-            onSuccess={onSuccess}
-            onError={onError}
-          />
-        </GoogleOAuthProvider>
+        <button
+          onClick={() => {
+            setIsSubmitting(true);
+            startGoogleLogin();
+          }}
+          type="button"
+          disabled={isSubmitting}
+          className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-border bg-white hover:bg-muted transition-colors text-sm font-semibold text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <GoogleIcon />
+          {label} con Google
+        </button>
       ) : (
         <button
           type="button"
@@ -118,24 +60,7 @@ export function SocialAuthButtons({
           title="Google OAuth no configurado (falta VITE_GOOGLE_CLIENT_ID)"
           className="w-full flex items-center justify-center gap-3 py-2.5 rounded-xl border border-border bg-white text-sm font-semibold text-muted-foreground opacity-50 cursor-not-allowed"
         >
-          <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
-            <path
-              d="M43.611 20.083H42V20H24v8h11.303C33.92 32.657 29.418 36 24 36c-6.627 0-12-5.373-12-12s5.373-12 12-12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 12.955 4 4 12.955 4 24s8.955 20 20 20 20-8.955 20-20c0-1.341-.138-2.65-.389-3.917z"
-              fill="#FFC107"
-            />
-            <path
-              d="M6.306 14.691l6.571 4.819C14.655 15.108 19.001 12 24 12c3.059 0 5.842 1.154 7.961 3.039l5.657-5.657C34.046 6.053 29.268 4 24 4 16.318 4 9.656 8.337 6.306 14.691z"
-              fill="#FF3D00"
-            />
-            <path
-              d="M24 44c5.166 0 9.86-1.977 13.409-5.192l-6.19-5.238A11.91 11.91 0 0124 36c-5.402 0-9.894-3.338-11.298-7.976l-6.522 5.025C9.505 39.556 16.227 44 24 44z"
-              fill="#4CAF50"
-            />
-            <path
-              d="M43.611 20.083H42V20H24v8h11.303a12.04 12.04 0 01-4.087 5.571l.003-.002 6.19 5.238C36.971 39.205 44 34 44 24c0-1.341-.138-2.65-.389-3.917z"
-              fill="#1976D2"
-            />
-          </svg>
+          <GoogleIcon />
           {label} con Google
         </button>
       )}

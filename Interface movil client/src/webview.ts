@@ -7,9 +7,8 @@
  * servidor igual y lo guarda para los siguientes arranques. Solo aporta un
  * arranque en frío más rápido (~1 s) cuando acierta.
  *
- * Se usa el **hostname** (`192-168-0-132.sslip.io`) y no la IP porque Google
- * Identity Services exige un origen con dominio para el login con Google; el
- * alias resuelve a `192.168.0.132` y hay que tenerlo registrado en los
- * "Authorized JavaScript origins" del cliente OAuth.
+ * Se usa la **IP literal** (`http://192.168.0.132:4173`), que es el
+ * `redirect_uri` registrado en Google Cloud Console para el login con Google.
+ * Si el PC cambia de IP, la app lo reencuentra por escaneo de subred.
  */
-export const WEB_CLIENT_URL = "http://192-168-0-132.sslip.io:4173";
+export const WEB_CLIENT_URL = "http://192.168.0.132:4173";

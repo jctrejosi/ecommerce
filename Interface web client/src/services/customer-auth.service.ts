@@ -109,6 +109,37 @@ export const customerAuthService = {
     return result;
   },
 
+  async socialLoginWithGoogleCode(
+    code: string,
+    redirectUri?: string,
+  ): Promise<CustomerAuthResponse> {
+    const response = await fetch(
+      `${API_BASE_URL}/customer-auth/social-login/google-code`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ code, redirectUri }),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.message || "No se pudo iniciar sesión con Google",
+      );
+    }
+
+    const result = (await response.json()) as CustomerAuthResponse;
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(
+        CUSTOMER_ACCESS_TOKEN_KEY,
+        result.accessToken,
+      );
+    }
+    return result;
+  },
+
   async socialLogin(
     data: CustomerSocialLoginData,
   ): Promise<CustomerAuthResponse> {

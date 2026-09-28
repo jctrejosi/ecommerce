@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { useCustomerAuth } from "../hooks/useCustomerAuth";
+import { consumeGoogleRedirect } from "./lib/googleAuth";
 import { catalogService } from "../services/catalog.service";
 import { ordersService } from "../services/orders.service";
 import {
@@ -272,8 +273,26 @@ export default function App() {
     login,
     register,
     socialLogin,
+    loginWithGoogleCode,
     updateProfile,
   } = useCustomerAuth();
+
+  // Retorno del login con Google (redirección de página completa): la URL trae
+  // `#access_token=…`. Se completa la sesión y se limpia el hash.
+  const googleRedirectHandledRef = useRef(false);
+  useEffect(() => {
+    if (googleRedirectHandledRef.current) return;
+    googleRedirectHandledRef.current = true;
+    const accessToken = consumeGoogleRedirect();
+    if (!accessToken) return;
+    void (async () => {
+      try {
+        await loginWithGoogleCode(accessToken);
+      } catch (error) {
+        console.error("Login con Google falló:", error);
+      }
+    })();
+  }, [loginWithGoogleCode]);
   // Cargar direcciones guardadas al abrir el checkout y sugerir la default
   useEffect(() => {
     if (checkoutOpen && customer) {
@@ -1176,15 +1195,19 @@ export default function App() {
         />
       )}
 
-      {/* Chatbot de compras (parte inferior derecha) */}
-      <ChatbotWidget
-        onAddProduct={addToCart}
-        onApplyCart={applyBotCart}
-        pageCartItems={cartItems}
-      />
+      {/* Acciones flotantes (chat de pedido + bot): un solo contenedor en la
+          esquina inferior derecha, apilados para que no se solapen. */}
+      <div className="fixed bottom-4 right-3 sm:bottom-5 sm:right-5 z-[90] flex flex-col items-center gap-2">
+        {/* Chat por pedido (repartidor ↔ cliente) cuando hay pedidos en camino */}
+        <OrderChatWidget orders={orders} />
 
-      {/* Chat por pedido (repartidor ↔ cliente) cuando hay pedidos en camino */}
-      <OrderChatWidget orders={orders} />
+        {/* Chatbot de compras */}
+        <ChatbotWidget
+          onAddProduct={addToCart}
+          onApplyCart={applyBotCart}
+          pageCartItems={cartItems}
+        />
+      </div>
 
       {/* Aviso de backend caído */}
       {backendOnline === false && !reloadingSite && (

@@ -27,6 +27,7 @@ import { CustomerAuthService } from './customer-auth.service';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
 import { CustomerSocialLoginDto } from './dto/customer-social-login.dto';
+import { CustomerGoogleCodeDto } from './dto/customer-google-code.dto';
 import { CustomerJwtAuthGuard } from './guards/customer-jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
@@ -96,6 +97,27 @@ export class CustomerAuthController {
     @Res({ passthrough: true }) response: Response,
   ) {
     const result = await this.customerAuthService.socialLogin(socialLoginDto);
+    this.setAuthCookies(response, result.accessToken, result.refreshToken);
+    return result;
+  }
+
+  @Public()
+  @Post('social-login/google-code')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Iniciar sesión con Google (flujo de código)',
+    description:
+      'Intercambia el `code` de Google por tokens y autentica o registra al cliente.',
+  })
+  @ApiBody({ type: CustomerGoogleCodeDto })
+  @ApiResponse({ status: 200, description: 'Login exitoso' })
+  @ApiUnauthorizedResponse({ description: 'Código inválido o expirado' })
+  async socialLoginGoogleCode(
+    @Body() dto: CustomerGoogleCodeDto,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result =
+      await this.customerAuthService.socialLoginWithGoogleCode(dto);
     this.setAuthCookies(response, result.accessToken, result.refreshToken);
     return result;
   }

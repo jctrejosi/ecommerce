@@ -343,7 +343,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
       {/* Burbuja de atención sobre el botón (se oculta sola a los 9s) */}
       {showHint && !open && (
         <div
-          className="fixed bottom-36 sm:bottom-40 right-3 sm:right-5 z-[93] w-[280px] max-w-[calc(100vw-1.5rem)] bg-white border-2 border-primary rounded-2xl shadow-xl p-4"
+          className="absolute bottom-full right-0 mb-3 z-[93] w-[280px] max-w-[calc(100vw-1.5rem)] bg-white border-2 border-primary rounded-2xl shadow-xl p-4"
           style={{ animation: "hintIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
         >
           <button
@@ -366,12 +366,12 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
         </div>
       )}
 
-      {/* Botón flotante — solo la imagen del bot y, debajo, su nombre */}
+      {/* Botón flotante — logo y nombre dentro del mismo contenedor circular */}
       <button
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Daisy"
         style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
-        className="fixed bottom-4 right-3 sm:bottom-5 sm:right-5 z-[90] flex flex-col items-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+        className="relative z-[90] w-[84px] h-[84px] rounded-full bg-white shadow-[0_6px_20px_rgba(26,26,46,0.35)] hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] flex flex-col items-center justify-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-all"
       >
         <span className="relative block w-14 h-14">
           {showHint && !open && (
@@ -395,7 +395,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
             <img
               src={logoBot}
               alt="Daisy"
-              className="w-full h-full rounded-full object-cover drop-shadow-[0_6px_14px_rgba(26,26,46,0.35)]"
+              className="w-full h-full rounded-full object-cover"
             />
           )}
         </span>
