@@ -149,7 +149,7 @@ export function OrderChatWidget({ orders }: OrderChatWidgetProps) {
             ? `Chat con tu repartidor, ${totalUnread} mensaje${totalUnread === 1 ? "" : "s"} sin leer`
             : "Chat con tu repartidor"
         }
-        className="fixed bottom-20 right-3 sm:bottom-24 sm:right-5 z-[92] w-14 h-14 rounded-full bg-[#1A1A2E] text-[#FFF200] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-90 transition-all"
+        className="fixed bottom-20 right-3 sm:bottom-24 sm:right-5 z-[92] w-14 h-14 rounded-full bg-secondary text-primary border-2 border-secondary/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 active:scale-90 transition-all"
       >
         {totalUnread > 0 ? (
           <span className="chat-alert" aria-hidden="true" />
@@ -196,14 +196,14 @@ export function OrderChatWidget({ orders }: OrderChatWidgetProps) {
           ) : (
             <>
               {/* Encabezado */}
-              <div className="bg-[#1A1A2E] text-white px-4 py-3 flex items-center justify-between shrink-0">
+              <div className="bg-secondary text-white px-4 py-3 flex items-center justify-between shrink-0">
                 <div>
                   <p className="text-sm font-bold leading-tight">
                     Chat con tu repartidor
                   </p>
                   <p
                     className={`text-[10px] ${
-                      totalUnread > 0 ? "text-[#FFF200] font-semibold" : "text-white/70"
+                      totalUnread > 0 ? "text-primary font-semibold" : "text-white/70"
                     }`}
                   >
                     {totalUnread > 0
@@ -238,11 +238,11 @@ export function OrderChatWidget({ orders }: OrderChatWidgetProps) {
                       onClick={() => openConversation(o.id)}
                       className={`w-full text-left rounded-2xl border p-3.5 flex items-center gap-3 transition-all ${
                         unread > 0
-                          ? "bg-[#FFF200]/25 border-[#FFF200] shadow-sm hover:shadow-md"
-                          : "bg-white border-border hover:border-[#1A1A2E]/40 hover:shadow-sm"
+                          ? "bg-primary/25 border-primary shadow-sm hover:shadow-md"
+                          : "bg-white border-border hover:border-secondary/40 hover:shadow-sm"
                       }`}
                     >
-                      <span className="relative w-10 h-10 rounded-xl bg-[#FFF200] flex items-center justify-center text-lg shrink-0">
+                      <span className="relative w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-lg shrink-0">
                         🛵
                         {unread > 0 && (
                           <span className="absolute -top-1 -right-1 min-w-4 h-4 px-1 rounded-full bg-[#EF4444] text-white text-[9px] font-black flex items-center justify-center border border-white">

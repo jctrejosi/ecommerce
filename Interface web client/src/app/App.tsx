@@ -1188,7 +1188,7 @@ export default function App() {
 
       {/* Aviso de backend caído */}
       {backendOnline === false && !reloadingSite && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-[#1A1A2E] text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2">
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-secondary text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           Sin conexión con el servidor — reintentando...
         </div>

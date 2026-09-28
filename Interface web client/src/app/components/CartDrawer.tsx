@@ -112,8 +112,8 @@ function RelatedCarousel({
             <button
               onClick={() => onAdd(p, 1)}
               aria-label={`Agregar ${p.name}`}
-              className="w-5 h-5 rounded-md flex items-center justify-center text-[#1A1A2E] text-[11px] font-bold cursor-pointer shrink-0"
-              style={{ background: "#FFF200" }}
+              className="w-5 h-5 rounded-md flex items-center justify-center text-foreground text-[11px] font-bold cursor-pointer shrink-0"
+              style={{ background: "var(--primary)" }}
             >
               +
             </button>
@@ -234,7 +234,7 @@ export function CartDrawer({
             {cartCount > 0 && (
               <span
                 className="text-xs font-bold px-2 py-0.5 rounded-full"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
+                style={{ background: "var(--primary)", color: "var(--foreground)" }}
               >
                 {cartCount}
               </span>
@@ -266,7 +266,7 @@ export function CartDrawer({
               <button
                 onClick={onClose}
                 className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-95"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
+                style={{ background: "var(--primary)", color: "var(--foreground)" }}
               >
                 Seguir comprando
               </button>
@@ -363,7 +363,7 @@ export function CartDrawer({
             <button
               onClick={onCheckout}
               className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
-              style={{ background: "#1A1A2E", color: "#FFF200" }}
+              style={{ background: "var(--secondary)", color: "var(--primary)" }}
             >
               Finalizar pedido →
             </button>

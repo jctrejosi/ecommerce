@@ -594,7 +594,7 @@ function Step1({
       {/* Modal: productos seleccionados */}
       {showSelected && (
         <div
-          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40"
+          className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40 cursor-pointer"
           onClick={() => setShowSelected(false)}
         >
           <div
@@ -1735,7 +1735,7 @@ function ImportPluModal({
 
   return (
     <div
-      className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40"
+      className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-black/40 cursor-pointer"
       onClick={onClose}
     >
       <div
@@ -2109,7 +2109,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-gray-50">
+    <div className="fixed inset-0 z-50 flex flex-col bg-(--app-bg)">
       {/* Topbar */}
       <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-gray-100 shrink-0">
         <div className="flex items-center gap-3">
@@ -2234,7 +2234,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
 
       {/* Footer institucional (mismo del panel, fondo blanco y letra negra) */}
       <footer className="shrink-0 bg-white border-t border-gray-100">
-        <div className="flex flex-col md:flex-row items-center justify-center gap-x-3 gap-y-[3px] px-3 py-1.5 text-center">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-x-3 gap-y-0.75 px-3 py-1.5 text-center">
           <a
             href="https://dsi.com.co"
             target="_blank"
@@ -2609,7 +2609,7 @@ function ExplainModal({ ctx, onClose }: { ctx: ExplainContext; onClose: () => vo
 
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
@@ -3220,7 +3220,7 @@ function RecipientsModal({
           : "fixed inset-0 z-50 flex items-center justify-center p-4"
       }
     >
-      {!inline && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />}
+      {!inline && <div className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer" onClick={onClose} />}
       <div
         className={`relative bg-white rounded-2xl flex flex-col overflow-hidden ${
           inline ? "w-full h-full border-0 shadow-none" : "w-full max-w-4xl max-h-[85vh] shadow-2xl"
@@ -4140,7 +4140,7 @@ function SegmentFiltersModal({
 
   return (
     <div className="fixed inset-0 z-[85] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-gray-50 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 bg-white border-b border-gray-200 shrink-0">
@@ -4335,7 +4335,7 @@ function ManualSegModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
@@ -4491,7 +4491,7 @@ function ConfirmModal({
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm p-6">
         <h3 className="text-lg font-bold text-gray-900">{title}</h3>
         <p className="text-sm text-gray-500 mt-2 leading-relaxed">{message}</p>
@@ -4537,7 +4537,7 @@ function HistoryModal({
 }) {
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -4670,7 +4670,7 @@ function EditCampaignModal({
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer" onClick={onClose} />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
           <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -4822,7 +4822,7 @@ function CampaignCard({
 
       {menu && (
         <>
-          <div className="fixed inset-0 z-30" onClick={() => setMenu(false)} />
+          <div className="fixed inset-0 z-30 cursor-pointer" onClick={() => setMenu(false)} />
           <div className="absolute right-3 top-12 z-40 w-44 bg-white rounded-xl border border-gray-100 shadow-xl py-1.5">
             <button
               onClick={() => { setMenu(false); onEdit(); }}

@@ -40,7 +40,7 @@ export function ProductCard({
           <span
             className="absolute top-2 left-2 text-xs font-bold px-2 py-0.5 rounded-full text-white"
             style={{
-              background: product.badge === "Nuevo" ? "#1A1A2E" : "#FF4444",
+              background: product.badge === "Nuevo" ? "var(--secondary)" : "var(--accent)",
             }}
           >
             {product.badge}
@@ -100,7 +100,7 @@ export function ProductCard({
             onAdd(product, localQty);
           }}
           className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-semibold text-sm mt-1.5 transition-all hover:brightness-95 active:scale-95"
-          style={{ background: "#FFF200", color: "#1A1A2E" }}
+          style={{ background: "var(--primary)", color: "var(--foreground)" }}
         >
           <ShoppingCart className="w-3.5 h-3.5" />
           {cartQty === 0 ? `Agregar ${localQty}` : `Agregar ${localQty} más`}

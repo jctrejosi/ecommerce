@@ -17,10 +17,13 @@ import {
   ShoppingCart,
   Zap,
   Users,
+  Palette,
+  Check,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Campaigns from "./views/Campaigns";
 import { authService, type UserProfile } from "./services/auth.service";
+import { THEMES, useTheme } from "./theme";
 
 export type ViewId = "dashboard" | "campaigns";
 
@@ -121,7 +124,7 @@ function CommandPalette({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4"
+      className="fixed inset-0 z-50 flex items-start justify-center pt-24 px-4 cursor-pointer"
       onClick={onClose}
     >
       <div
@@ -275,7 +278,7 @@ function Sidebar({
   return (
     <aside
       className="flex flex-col h-full border-r border-white/[0.06] transition-all duration-300"
-      style={{ background: "#0C0C0D", width: collapsed ? 56 : 240 }}
+      style={{ background: "var(--app-sidebar)", width: collapsed ? 56 : 240 }}
     >
       {/* Logos + título */}
       <div className="flex flex-col gap-3 px-4 py-5 border-b border-white/[0.06] shrink-0">
@@ -369,6 +372,7 @@ function TopBar({
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     const handler = () => {
@@ -453,6 +457,36 @@ function TopBar({
                 <p className="text-sm font-semibold text-gray-800">{displayName}</p>
                 <p className="text-xs text-gray-500">{displayEmail}</p>
               </div>
+
+              {/* Panel de temas */}
+              <div className="px-4 py-2 border-b border-gray-100">
+                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400 mb-2">
+                  <Palette size={11} /> Tema
+                </p>
+                <div className="flex items-center gap-2">
+                  {THEMES.map((t) => {
+                    const active = theme === t.id;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setTheme(t.id)}
+                        title={t.label}
+                        aria-label={`Tema ${t.label}`}
+                        aria-pressed={active}
+                        className={`w-6 h-6 rounded-full flex items-center justify-center transition-transform hover:scale-110 ${
+                          active
+                            ? "ring-2 ring-offset-2 ring-gray-800"
+                            : "ring-1 ring-black/10"
+                        }`}
+                        style={{ background: t.swatch }}
+                      >
+                        {active && <Check size={12} className="text-white" />}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {[
                 { icon: User, label: "Mi perfil" },
                 { icon: HelpCircle, label: "Ayuda y soporte" },
@@ -547,7 +581,7 @@ export default function App() {
   );
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-screen overflow-hidden bg-(--app-bg)">
       <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} storeLogo={storeLogo} />
 
       <div className="flex flex-col flex-1 min-w-0">
@@ -561,7 +595,7 @@ export default function App() {
         <main className="flex-1 overflow-y-auto">
           <ViewRenderer view={view} user={user} onNavigate={handleDashboardNavigate} />
         </main>
-        <footer className="shrink-0" style={{ background: "#111827" }}>
+        <footer className="shrink-0" style={{ background: "var(--app-footer)" }}>
           <div className="flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center">
             <a
               href="https://dsi.com.co"
@@ -569,7 +603,7 @@ export default function App() {
               rel="noopener noreferrer"
               className="flex items-center hover:opacity-80 transition-opacity"
             >
-              <img src={footerLogo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+              <img src={footerLogo} alt="Mercaldas" className="h-[25.6px] w-auto object-contain" />
             </a>
             <p className="text-xs" style={{ color: "rgba(255,255,255,0.4)" }}>
               © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados

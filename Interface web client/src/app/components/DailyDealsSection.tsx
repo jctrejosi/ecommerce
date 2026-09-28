@@ -193,7 +193,7 @@ export function DailyDealsSection({
         {/* Section header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-8 rounded-full" style={{ background: "#FFF200" }} />
+            <div className="w-2 h-8 rounded-full" style={{ background: "var(--primary)" }} />
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Cada día</p>
               <h2 className="font-black text-2xl text-foreground leading-tight" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>
@@ -207,7 +207,7 @@ export function DailyDealsSection({
                 key={i}
                 onClick={() => setFeaturedIdx(i)}
                 className="w-2 h-2 rounded-full transition-all duration-500"
-                style={{ background: i === featuredIdx ? "#1A1A2E" : "#D1D5DB", width: i === featuredIdx ? "20px" : "8px" }}
+                style={{ background: i === featuredIdx ? "var(--secondary)" : "#D1D5DB", width: i === featuredIdx ? "20px" : "8px" }}
               />
             ))}
           </div>
@@ -225,7 +225,7 @@ export function DailyDealsSection({
               <div key={`content-${featured.id}-${featuredIdx}`} style={{ animation: "dealBlink 0.9s ease both" }}>
                 <span
                   className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-4"
-                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  style={{ background: "var(--primary)", color: "var(--foreground)" }}
                 >
                   {featured.discount}
                 </span>
@@ -245,7 +245,7 @@ export function DailyDealsSection({
                   </span>
                 </div>
                 <p className="text-xs mt-1.5" style={{ color: "rgba(255,255,255,0.5)" }}>{featured.unit}</p>
-                <p className="text-xs mt-3 font-semibold" style={{ color: "#FFF200" }}>⏱ {featured.endsAt}</p>
+                <p className="text-xs mt-3 font-semibold" style={{ color: "var(--primary)" }}>⏱ {featured.endsAt}</p>
               </div>
             </div>
 
@@ -270,7 +270,7 @@ export function DailyDealsSection({
                     setFeaturedIdx(i);
                   }}
                   className="h-1 rounded-full transition-all duration-500"
-                  style={{ width: i === featuredIdx ? "16px" : "5px", background: i === featuredIdx ? "#FFF200" : "rgba(255,255,255,0.4)" }}
+                  style={{ width: i === featuredIdx ? "16px" : "5px", background: i === featuredIdx ? "var(--primary)" : "rgba(255,255,255,0.4)" }}
                 />
               ))}
             </div>
@@ -325,7 +325,7 @@ export function DailyDealsSection({
                       <img src={p.image} alt={p.name} className="w-full h-full object-cover hover:scale-105 transition-transform duration-500" />
                       <span
                         className="absolute top-2 left-2 text-xs font-black px-2 py-0.5 rounded-full text-white"
-                        style={{ background: "#FF4444" }}
+                        style={{ background: "var(--accent)" }}
                       >
                         {discountPct}% OFF
                       </span>
@@ -354,7 +354,7 @@ export function DailyDealsSection({
                       <button
                         onClick={() => handleAdd(p)}
                         className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-semibold text-sm mt-1 transition-all hover:brightness-95 active:scale-95"
-                        style={{ background: "#FFF200", color: "#1A1A2E" }}
+                        style={{ background: "var(--primary)", color: "var(--foreground)" }}
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
                         Agregar {qty}

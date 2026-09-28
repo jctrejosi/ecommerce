@@ -202,7 +202,7 @@ export function ProductDetailModal({
                   className="absolute top-3 left-3 z-[2] text-xs font-bold px-2.5 py-1 rounded-full text-white"
                   style={{
                     background:
-                      product.badge === "Nuevo" ? "#1A1A2E" : "#FF4444",
+                      product.badge === "Nuevo" ? "var(--secondary)" : "var(--accent)",
                   }}
                 >
                   {product.badge}
@@ -211,7 +211,7 @@ export function ProductDetailModal({
               {discount && (
                 <div
                   className="absolute bottom-3 left-3 z-[2] flex items-center gap-1 text-white text-xs font-bold px-2.5 py-1 rounded-full"
-                  style={{ background: "#FF4444" }}
+                  style={{ background: "var(--accent)" }}
                 >
                   <TrendingUp className="w-3 h-3" />
                   {discount}% OFF
@@ -289,7 +289,7 @@ export function ProductDetailModal({
                 <button
                   onClick={() => onAdd(product, localQty)}
                   className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-[0.98]"
-                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  style={{ background: "var(--primary)", color: "var(--foreground)" }}
                 >
                   <ShoppingCart className="w-4 h-4" />
                   {cartQty === 0
@@ -416,7 +416,7 @@ function RelatedProductCard({
         <button
           onClick={() => onAdd(rp, localQty)}
           className="w-full flex items-center justify-center gap-1 py-1 rounded-lg font-semibold text-xs mt-1.5 transition-all hover:brightness-95 active:scale-95"
-          style={{ background: "#FFF200", color: "#1A1A2E" }}
+          style={{ background: "var(--primary)", color: "var(--foreground)" }}
         >
           <ShoppingCart className="w-3 h-3" />
           Agregar {localQty}

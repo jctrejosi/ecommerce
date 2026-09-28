@@ -39,7 +39,7 @@ function ProductTypeButton({
     >
       <div
         className="w-16 h-16 rounded-2xl flex items-center justify-center text-4xl overflow-hidden"
-        style={{ background: "#F4F4F6", color: "#6B7280" }}
+        style={{ background: "var(--muted)", color: "var(--muted-foreground)" }}
       >
         {pt.imagePath ? (
           <img

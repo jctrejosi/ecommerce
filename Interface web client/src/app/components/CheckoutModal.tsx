@@ -364,8 +364,8 @@ export function CheckoutModal({
                     done
                       ? { background: "#34C759", color: "#fff" }
                       : active
-                        ? { background: "#1A1A2E", color: "#FFF200" }
-                        : { background: "#F4F4F6", color: "#6B7280" }
+                        ? { background: "var(--secondary)", color: "var(--primary)" }
+                        : { background: "var(--muted)", color: "var(--muted-foreground)" }
                   }
                 >
                   {done ? <CheckCircle2 className="w-4 h-4" /> : step}
@@ -483,7 +483,7 @@ export function CheckoutModal({
             <button
               onClick={() => onSetCheckoutStep(2)}
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all"
-              style={{ background: "#1A1A2E", color: "#FFF200" }}
+              style={{ background: "var(--secondary)", color: "var(--primary)" }}
             >
               Continuar con la dirección →
             </button>
@@ -530,7 +530,7 @@ export function CheckoutModal({
                           {a.isDefault && (
                             <span
                               className="text-[10px] font-bold px-2 py-0.5 rounded-full"
-                              style={{ background: "#FFF200", color: "#1A1A2E" }}
+                              style={{ background: "var(--primary)", color: "var(--foreground)" }}
                             >
                               Predeterminada
                             </span>
@@ -707,7 +707,7 @@ export function CheckoutModal({
                       className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none"
                       onFocus={(e) => {
                         e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                        e.target.style.borderColor = "#FFF200";
+                        e.target.style.borderColor = "var(--primary)";
                       }}
                       onBlur={(e) => {
                         e.target.style.boxShadow = "none";
@@ -827,7 +827,7 @@ export function CheckoutModal({
                 !addressConfirmed
               }
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-40"
-              style={{ background: "#1A1A2E", color: "#FFF200" }}
+              style={{ background: "var(--secondary)", color: "var(--primary)" }}
             >
               Continuar con el pago →
             </button>
@@ -1212,7 +1212,7 @@ export function CheckoutModal({
                   !isValidPhone(nequiPayment.phone))
               }
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-              style={{ background: "#FFF200", color: "#1A1A2E" }}
+              style={{ background: "var(--primary)", color: "var(--foreground)" }}
             >
               {checkoutLoading
                 ? "Procesando pedido..."
@@ -1346,7 +1346,7 @@ export function CheckoutModal({
             <button
               onClick={onViewOrders}
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all"
-              style={{ background: "#1A1A2E", color: "#FFF200" }}
+              style={{ background: "var(--secondary)", color: "var(--primary)" }}
             >
               Ver mis pedidos
             </button>

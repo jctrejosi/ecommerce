@@ -146,7 +146,7 @@ export function LiveOrderMap({
       inner.style.height = "100%";
       inner.style.fontSize = "20px";
       inner.style.boxSizing = "border-box";
-      inner.style.border = "3px solid #FFF200";
+      inner.style.border = "3px solid var(--primary)";
       inner.style.animation = "deliveryBlink 1.4s ease-in-out infinite";
       inner.style.overflow = "hidden";
       if (driverAvatar) {

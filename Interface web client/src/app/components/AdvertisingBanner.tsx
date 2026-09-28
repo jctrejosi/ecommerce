@@ -35,7 +35,7 @@ async function fetchPromoBanners(): Promise<AdBanner[]> {
     badge: b.title ? b.title.split(" ").slice(0, 2).join(" ").toUpperCase() : "OFERTA",
     bg: b.bgColor
       ? `linear-gradient(135deg, ${b.bgColor} 0%, ${b.bgColor}dd 100%)`
-      : "linear-gradient(135deg, #1A1A2E 0%, #16213E 60%, #0F3460 100%)",
+      : "linear-gradient(135deg, var(--secondary) 0%, #16213E 60%, #0F3460 100%)",
     accent: b.accentColor || "#FFF200",
     filter: b.filter || null,
   }));
@@ -48,7 +48,7 @@ const FALLBACK: AdBanner[] = [
     subtitle: "Hasta 40% de descuento en miles de productos seleccionados",
     ctaText: "Aprovechar ahora",
     badge: "OFERTA LIMITADA",
-    bg: "linear-gradient(135deg, #1A1A2E 0%, #16213E 60%, #0F3460 100%)",
+    bg: "linear-gradient(135deg, var(--secondary) 0%, #16213E 60%, #0F3460 100%)",
     accent: "#FFF200",
     image: "https://images.unsplash.com/photo-1607083207685-aaf05f2c908c?w=900&h=300&fit=crop&auto=format",
     filter: null,
@@ -228,7 +228,7 @@ export function AdvertisingBanner({
                   className="inline-block text-[10px] font-black tracking-widest px-2.5 py-1 rounded-full mb-2"
                   style={{
                     background: banner.accent,
-                    color: "#1A1A2E",
+                    color: "var(--foreground)",
                     animation: "promoFadeIn 0.5s ease both",
                     animationDelay: "0ms",
                   }}
@@ -270,7 +270,7 @@ export function AdvertisingBanner({
                 className="flex-shrink-0 flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95 self-start md:self-auto"
                 style={{
                   background: banner.accent,
-                  color: "#1A1A2E",
+                  color: "var(--foreground)",
                   animation: "promoFadeIn 0.5s ease both",
                   animationDelay: "240ms",
                 }}
@@ -321,7 +321,7 @@ export function AdvertisingBanner({
                   className="h-1.5 rounded-full transition-all duration-300"
                   style={{
                     width: i === current ? "20px" : "6px",
-                    background: i === current ? "#FFF200" : "rgba(255,255,255,0.4)",
+                    background: i === current ? "var(--primary)" : "rgba(255,255,255,0.4)",
                   }}
                 />
               ))}

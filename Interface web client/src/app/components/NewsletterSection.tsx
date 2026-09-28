@@ -48,13 +48,13 @@ export function NewsletterSection() {
   };
 
   return (
-    <section className="py-14" style={{ background: "#1A1A2E" }}>
+    <section className="py-14" style={{ background: "var(--secondary)" }}>
       <div className="max-w-xl mx-auto px-4 text-center">
         <div
           className="inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4"
-          style={{ background: "#FFF200" }}
+          style={{ background: "var(--primary)" }}
         >
-          <Mail className="w-6 h-6" style={{ color: "#1A1A2E" }} />
+          <Mail className="w-6 h-6" style={{ color: "var(--foreground)" }} />
         </div>
         <h2
           className="font-black text-2xl md:text-3xl text-white mb-2"
@@ -72,7 +72,7 @@ export function NewsletterSection() {
         {emailSent ? (
           <div
             className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm"
-            style={{ background: "#FFF200", color: "#1A1A2E" }}
+            style={{ background: "var(--primary)", color: "var(--foreground)" }}
           >
             <ShieldCheck className="w-4 h-4" />
             ¡Listo! Te notificaremos las mejores ofertas.
@@ -106,7 +106,7 @@ export function NewsletterSection() {
               />
               <span className="text-xs leading-relaxed">
                 Acepto los{" "}
-                <span className="font-semibold" style={{ color: "#FFF200" }}>
+                <span className="font-semibold" style={{ color: "var(--primary)" }}>
                   términos y condiciones
                 </span>{" "}
                 del newsletter y autorizo el envío de comunicaciones
@@ -129,7 +129,7 @@ export function NewsletterSection() {
               type="submit"
               disabled={loading}
               className="w-full px-5 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95 disabled:opacity-60"
-              style={{ background: "#FFF200", color: "#1A1A2E" }}
+              style={{ background: "var(--primary)", color: "var(--foreground)" }}
             >
               {loading ? (
                 <span className="inline-flex items-center gap-2">

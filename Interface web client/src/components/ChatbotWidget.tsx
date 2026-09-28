@@ -343,54 +343,72 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
       {/* Burbuja de atención sobre el botón (se oculta sola a los 9s) */}
       {showHint && !open && (
         <div
-          className="fixed bottom-20 sm:bottom-24 right-3 sm:right-5 z-[91] w-[280px] max-w-[calc(100vw-1.5rem)] bg-white border-2 border-[#FFF200] rounded-2xl shadow-xl p-4"
+          className="fixed bottom-36 sm:bottom-40 right-3 sm:right-5 z-[93] w-[280px] max-w-[calc(100vw-1.5rem)] bg-white border-2 border-primary rounded-2xl shadow-xl p-4"
           style={{ animation: "hintIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
         >
           <button
             onClick={() => setShowHint(false)}
             aria-label="Cerrar aviso"
-            className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-[#1A1A2E] hover:bg-gray-100 cursor-pointer"
+            className="absolute top-2 right-2 w-6 h-6 flex items-center justify-center rounded-full text-gray-400 hover:text-foreground hover:bg-gray-100 cursor-pointer"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <path d="M18 6 6 18M6 6l12 12" />
             </svg>
           </button>
-          <p className="text-sm text-[#1A1A2E] font-semibold leading-snug pr-6">
+          <p className="text-sm text-foreground font-semibold leading-snug pr-6">
             ¡Hola! 👋 Soy Daisy, tu asistente de compras.
           </p>
           <p className="text-xs text-gray-500 mt-1 pr-6">
             Te ayudo a armar tu carrito 🛒
           </p>
           {/* flecha que apunta al botón */}
-          <div className="absolute -bottom-2 right-11 w-4 h-4 bg-white border-r-2 border-b-2 border-[#FFF200] rotate-45" />
+          <div className="absolute -bottom-2 right-11 w-4 h-4 bg-white border-r-2 border-b-2 border-primary rotate-45" />
         </div>
       )}
 
-      {/* Botón flotante — círculo blanco con borde, visible sobre cualquier fondo */}
+      {/* Botón flotante — solo la imagen del bot y, debajo, su nombre */}
       <button
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Daisy"
         style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
-        className="fixed bottom-4 right-3 sm:bottom-5 sm:right-5 z-[90] w-14 h-14 rounded-full bg-white text-[#1A1A2E] border-2 border-[#1A1A2E]/90 shadow-[0_6px_20px_rgba(26,26,46,0.35)] flex items-center justify-center cursor-pointer hover:scale-110 hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] active:scale-90 transition-all"
+        className="fixed bottom-4 right-3 sm:bottom-5 sm:right-5 z-[90] flex flex-col items-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
       >
-        {showHint && !open && (
-          <span className="absolute inset-0 rounded-full bg-[#FFF200]/40 animate-ping pointer-events-none" />
-        )}
-        {open ? (
-          <svg
-            width="26"
-            height="26"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2.2"
-            strokeLinecap="round"
-          >
-            <path d="M18 6 6 18M6 6l12 12" />
-          </svg>
-        ) : (
-          <img src={logoBot} alt="Daisy" className="w-full h-full rounded-full object-cover" />
-        )}
+        <span className="relative block w-14 h-14">
+          {showHint && !open && (
+            <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping pointer-events-none" />
+          )}
+          {open ? (
+            <span className="flex w-full h-full items-center justify-center rounded-full bg-white text-foreground shadow-[0_6px_20px_rgba(26,26,46,0.35)]">
+              <svg
+                width="26"
+                height="26"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+              >
+                <path d="M18 6 6 18M6 6l12 12" />
+              </svg>
+            </span>
+          ) : (
+            <img
+              src={logoBot}
+              alt="Daisy"
+              className="w-full h-full rounded-full object-cover drop-shadow-[0_6px_14px_rgba(26,26,46,0.35)]"
+            />
+          )}
+        </span>
+        <span
+          className="text-lg font-black leading-none -mt-1"
+          style={{
+            fontFamily: "var(--font-script)",
+            color: "var(--foreground)",
+            WebkitTextStroke: "0.4px currentColor",
+          }}
+        >
+          Daisy
+        </span>
       </button>
 
       {/* Panel — en móvil ocupa la pantalla entera; en escritorio tarjeta flotante */}
@@ -400,14 +418,14 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
           style={{ animation: "panelIn 0.25s ease-out both" }}
         >
           {/* Header */}
-          <div className="relative bg-[#FFF200] text-[#1A1A2E] px-4 py-3 flex items-center justify-between shrink-0">
+          <div className="relative bg-primary text-foreground px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2.5">
-              <div className="w-9 h-9 rounded-full bg-[#FFF200] text-[#1A1A2E] flex items-center justify-center overflow-hidden border-2 border-[#1A1A2E]">
+              <div className="w-9 h-9 rounded-full bg-primary text-foreground flex items-center justify-center overflow-hidden border-2 border-secondary">
                 <img src={logoBot} alt="Daisy" className="w-full h-full object-cover" />
               </div>
               <div>
                 <p className="text-sm font-bold leading-tight">Daisy</p>
-                <p className="text-[10px] text-[#1A1A2E]/70 flex items-center gap-1">
+                <p className="text-[10px] text-foreground/70 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   Arma tu carrito conmigo 🛒
                 </p>
@@ -418,7 +436,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
               <button
                 onClick={openCurrentCart}
                 aria-label="Ver carrito de compras"
-                className="relative p-1.5 rounded-lg text-[#1A1A2E]/70 hover:text-[#1A1A2E] hover:bg-black/10 transition-colors cursor-pointer"
+                className="relative p-1.5 rounded-lg text-foreground/70 hover:text-foreground hover:bg-black/10 transition-colors cursor-pointer"
               >
                 <svg
                   width="19"
@@ -435,7 +453,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                   <path d="M2.5 3h2l2.6 12.5a2 2 0 0 0 2 1.5h8.7a2 2 0 0 0 2-1.5L22 7H6" />
                 </svg>
                 {cartCount > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-[#1A1A2E] text-[#FFF200] text-[9px] font-bold flex items-center justify-center">
+                  <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-secondary text-primary text-[9px] font-bold flex items-center justify-center">
                     {cartCount}
                   </span>
                 )}
@@ -443,7 +461,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
               <button
                 onClick={() => setOpen(false)}
                 aria-label="Cerrar"
-                className="text-[#1A1A2E]/70 hover:text-[#1A1A2E] p-1 rounded-lg hover:bg-black/10"
+                className="text-foreground/70 hover:text-foreground p-1 rounded-lg hover:bg-black/10"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                   <path d="M18 6 6 18M6 6l12 12" />
@@ -475,7 +493,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
             {messages.map((m, i) =>
               m.role === "user" ? (
                 <div key={i} className="flex justify-end">
-                  <div className="max-w-[85%] bg-[#1A1A2E] text-white text-sm px-3.5 py-2 rounded-2xl rounded-br-md whitespace-pre-wrap">
+                  <div className="max-w-[85%] bg-secondary text-white text-sm px-3.5 py-2 rounded-2xl rounded-br-md whitespace-pre-wrap">
                     {m.content}
                   </div>
                 </div>
@@ -485,8 +503,8 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                     {m.content}
                   </div>
                   {m.payload?.receta && (
-                    <div className="mt-1.5 max-w-[90%] w-full bg-[#FFFDF2] border border-[#FFF200] rounded-xl p-3 shadow-sm">
-                      <p className="text-sm font-bold text-[#1A1A2E]">
+                    <div className="mt-1.5 max-w-[90%] w-full bg-[#FFFDF2] border border-primary rounded-xl p-3 shadow-sm">
+                      <p className="text-sm font-bold text-foreground">
                         🍳 {m.payload.receta.nombre}
                       </p>
                       {m.payload.receta.agregados.length > 0 && (
@@ -516,7 +534,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                               key={idx}
                               className="text-xs text-gray-700 flex gap-1.5"
                             >
-                              <span className="font-bold text-[#1A1A2E] shrink-0">
+                              <span className="font-bold text-foreground shrink-0">
                                 {idx + 1}.
                               </span>
                               <span>{p}</span>
@@ -529,7 +547,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                   {m.payload?.cart && m.payload.cart.items.length > 0 && (
                     <button
                       onClick={() => openCartModal(m.payload!)}
-                      className="mt-1.5 text-xs font-semibold text-[#1A1A2E] bg-[#FFF200] px-3 py-1.5 rounded-xl hover:bg-[#ffe60d] transition-colors"
+                      className="mt-1.5 text-xs font-semibold text-foreground bg-primary px-3 py-1.5 rounded-xl hover:bg-[#ffe60d] transition-colors"
                     >
                       🛒 Ver mi carrito ({m.payload.cart.count})
                     </button>
@@ -556,7 +574,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                 <button
                   key={o.id}
                   onClick={() => send(o.message)}
-                  className="text-left text-xs font-medium text-[#1A1A2E] bg-white border border-black/10 hover:border-[#FFF200] hover:bg-[#FFFDF2] px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                  className="text-left text-xs font-medium text-foreground bg-white border border-black/10 hover:border-primary hover:bg-[#FFFDF2] px-3 py-2 rounded-xl transition-colors cursor-pointer"
                 >
                   {o.label}
                 </button>
@@ -577,13 +595,13 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 placeholder="Ej: agrega 2 arroces y 1 leche"
-                className="flex-1 text-sm px-3.5 py-2.5 rounded-xl bg-[#F4F4F6] focus:outline-none focus:ring-2 focus:ring-[#FFF200] placeholder:text-gray-400"
+                className="flex-1 text-sm px-3.5 py-2.5 rounded-xl bg-muted focus:outline-none focus:ring-2 focus:ring-primary placeholder:text-gray-400"
               />
               <button
                 type="submit"
                 disabled={loading || !input.trim()}
                 aria-label="Enviar"
-                className="w-10 h-10 rounded-xl bg-[#FFF200] text-[#1A1A2E] flex items-center justify-center disabled:opacity-40 hover:bg-[#ffe60d] transition-colors shrink-0 cursor-pointer"
+                className="w-10 h-10 rounded-xl bg-primary text-foreground flex items-center justify-center disabled:opacity-40 hover:bg-[#ffe60d] transition-colors shrink-0 cursor-pointer"
               >
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                   <path d="M3.4 20.4l17.45-7.48a1 1 0 0 0 0-1.84L3.4 3.6a.993.993 0 0 0-1.39.91L2 9.12c0 .5.37.93.87.99L17 12 2.87 13.88c-.5.07-.87.5-.87 1l.01 4.61c0 .71.73 1.2 1.39.91z" />
@@ -685,7 +703,7 @@ function BotCartModal({
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/5 shrink-0">
           <div>
-            <h3 className="font-bold text-[#1A1A2E] text-base">Tu carrito de compras 🛒</h3>
+            <h3 className="font-bold text-foreground text-base">Tu carrito de compras 🛒</h3>
             <p className="text-xs text-gray-500">
               Revisa tu lista y elige productos para agregar.
             </p>
@@ -693,7 +711,7 @@ function BotCartModal({
           <button
             onClick={onClose}
             aria-label="Cerrar"
-            className="p-1.5 rounded-lg text-gray-400 hover:text-[#1A1A2E] hover:bg-gray-100 cursor-pointer"
+            className="p-1.5 rounded-lg text-gray-400 hover:text-foreground hover:bg-gray-100 cursor-pointer"
           >
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <path d="M18 6 6 18M6 6l12 12" />
@@ -725,7 +743,7 @@ function BotCartModal({
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-800 line-clamp-1">{it.name}</p>
-                      <p className="text-xs font-bold text-[#1A1A2E]">{fmtPrice(it.subtotal)}</p>
+                      <p className="text-xs font-bold text-foreground">{fmtPrice(it.subtotal)}</p>
                     </div>
                     {readOnlyProductIds.has(it.product_id) ? (
                       <span className="shrink-0 text-[10px] font-semibold text-gray-400">
@@ -737,16 +755,16 @@ function BotCartModal({
                           onClick={() => onDec(it)}
                           disabled={mutating}
                           aria-label="Quitar uno"
-                          className="w-6 h-6 rounded-md bg-white border border-black/10 text-[#1A1A2E] text-sm font-bold leading-none hover:bg-gray-100 disabled:opacity-40 cursor-pointer"
+                          className="w-6 h-6 rounded-md bg-white border border-black/10 text-foreground text-sm font-bold leading-none hover:bg-gray-100 disabled:opacity-40 cursor-pointer"
                         >
                           −
                         </button>
-                        <span className="w-6 text-center text-xs font-bold text-[#1A1A2E]">{it.quantity}</span>
+                        <span className="w-6 text-center text-xs font-bold text-foreground">{it.quantity}</span>
                         <button
                           onClick={() => onInc(it)}
                           disabled={mutating}
                           aria-label="Agregar uno"
-                          className="w-6 h-6 rounded-md bg-[#FFF200] text-[#1A1A2E] text-sm font-bold leading-none hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
+                          className="w-6 h-6 rounded-md bg-primary text-foreground text-sm font-bold leading-none hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
                         >
                           +
                         </button>
@@ -785,12 +803,12 @@ function BotCartModal({
                   }
                 }}
                 placeholder="Buscar más productos…"
-                className="flex-1 text-xs px-3 py-2 rounded-xl bg-[#F4F4F6] focus:outline-none focus:ring-2 focus:ring-[#FFF200]"
+                className="flex-1 text-xs px-3 py-2 rounded-xl bg-muted focus:outline-none focus:ring-2 focus:ring-primary"
               />
               <button
                 onClick={() => void runSearch()}
                 disabled={searching || !searchInput.trim()}
-                className="px-3 py-2 rounded-xl bg-[#1A1A2E] text-white text-xs font-semibold hover:bg-[#2a2a44] disabled:opacity-40 cursor-pointer"
+                className="px-3 py-2 rounded-xl bg-secondary text-white text-xs font-semibold hover:bg-[#2a2a44] disabled:opacity-40 cursor-pointer"
               >
                 {searching ? "…" : "Buscar"}
               </button>
@@ -813,11 +831,11 @@ function BotCartModal({
                     )}
                     <p className="text-[11px] leading-tight text-gray-700 line-clamp-2 flex-1">{p.name}</p>
                     <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-xs font-bold text-[#1A1A2E]">{fmtPrice(p.price)}</span>
+                      <span className="text-xs font-bold text-foreground">{fmtPrice(p.price)}</span>
                       <button
                         onClick={() => onAddProduct(p, 1)}
                         disabled={mutating}
-                        className="text-[11px] font-semibold bg-[#FFF200] text-[#1A1A2E] px-2 py-1 rounded-lg hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
+                        className="text-[11px] font-semibold bg-primary text-foreground px-2 py-1 rounded-lg hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
                       >
                         + Agregar
                       </button>
@@ -836,20 +854,20 @@ function BotCartModal({
               <span className="text-sm text-gray-500">
                 {cart?.count} {cart?.count === 1 ? "producto" : "productos"}
               </span>
-              <span className="text-lg font-bold text-[#1A1A2E]">{fmtPrice(total)}</span>
+              <span className="text-lg font-bold text-foreground">{fmtPrice(total)}</span>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => cart && onApplyCart(cart)}
                 disabled={mutating}
-                className="flex-1 text-sm font-bold bg-[#1A1A2E] text-white py-2.5 rounded-xl hover:bg-[#2a2a44] disabled:opacity-50 cursor-pointer"
+                className="flex-1 text-sm font-bold bg-secondary text-white py-2.5 rounded-xl hover:bg-[#2a2a44] disabled:opacity-50 cursor-pointer"
               >
                 {checkout ? "Ir a pagar →" : "Usar este carrito"}
               </button>
               <button
                 onClick={onClose}
                 disabled={mutating}
-                className="px-4 text-sm font-semibold text-gray-500 hover:text-[#1A1A2E] border border-black/10 rounded-xl hover:bg-gray-50 cursor-pointer"
+                className="px-4 text-sm font-semibold text-gray-500 hover:text-foreground border border-black/10 rounded-xl hover:bg-gray-50 cursor-pointer"
               >
                 Seguir comprando
               </button>

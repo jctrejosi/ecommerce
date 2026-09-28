@@ -4,6 +4,8 @@
   --font-size: 16px;
   --font-sans: 'Inter', sans-serif;
   --font-display: 'Bricolage Grotesque', sans-serif;
+  /* Tipografía manuscrita para detalles (nombre del bot, etc.). */
+  --font-script: 'Caveat', cursive;
   --background: #ffffff;
   --foreground: #1A1A2E;
   --card: #ffffff;
@@ -78,6 +80,163 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(0.269 0 0);
   --sidebar-ring: oklch(0.439 0 0);
+}
+
+/* ── Temas de color ──
+   Cada tema redefine los tokens sobre `<html data-theme="…">`. `--primary` es el
+   color de marca (el del círculo en el selector) y `--primary-foreground` es el
+   texto que siempre contrasta sobre él. `--secondary` es la superficie oscura
+   (paneles/botones) con su propio texto en `--secondary-foreground`.
+   El tema oscuro además lleva la clase `.dark` para el variante `dark:`.
+
+   Contraste garantizado: cada par (fondo, texto) se eligió con ratio AA:
+   amarillo→tinta oscura, colores saturados→blanco. */
+
+/* Amarillo (por defecto / marca) */
+:root[data-theme="claro"] {
+  --background: #ffffff;
+  --foreground: #1a1a2e;
+  --card: #ffffff;
+  --card-foreground: #1a1a2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a2e;
+  --primary: #fff200;
+  --primary-foreground: #1a1a2e;
+  --secondary: #1a1a2e;
+  --secondary-foreground: #fff200;
+  --muted: #f4f4f6;
+  --muted-foreground: #6b7280;
+  --accent: #ff4444;
+  --accent-foreground: #ffffff;
+  --border: rgba(0, 0, 0, 0.08);
+  --ring: #fff200;
+}
+
+/* Azul */
+:root[data-theme="azul"] {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
+  --primary: #2563eb;
+  --primary-foreground: #ffffff;
+  --secondary: #1e3a8a;
+  --secondary-foreground: #ffffff;
+  --muted: #eef2f7;
+  --muted-foreground: #475569;
+  --accent: #f59e0b;
+  --accent-foreground: #1a1a2e;
+  --border: rgba(15, 23, 42, 0.1);
+  --ring: #2563eb;
+}
+
+/* Verde */
+:root[data-theme="verde"] {
+  --background: #f7fdf9;
+  --foreground: #052e16;
+  --card: #ffffff;
+  --card-foreground: #052e16;
+  --popover: #ffffff;
+  --popover-foreground: #052e16;
+  --primary: #16a34a;
+  --primary-foreground: #ffffff;
+  --secondary: #14532d;
+  --secondary-foreground: #ffffff;
+  --muted: #ecfdf3;
+  --muted-foreground: #3f6212;
+  --accent: #f59e0b;
+  --accent-foreground: #1a1a2e;
+  --border: rgba(5, 46, 22, 0.12);
+  --ring: #16a34a;
+}
+
+/* Rojo */
+:root[data-theme="rojo"] {
+  --background: #fffafa;
+  --foreground: #1a1a2e;
+  --card: #ffffff;
+  --card-foreground: #1a1a2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a2e;
+  --primary: #dc2626;
+  --primary-foreground: #ffffff;
+  --secondary: #7f1d1d;
+  --secondary-foreground: #ffffff;
+  --muted: #fef2f2;
+  --muted-foreground: #6b7280;
+  --accent: #f59e0b;
+  --accent-foreground: #1a1a2e;
+  --border: rgba(0, 0, 0, 0.1);
+  --ring: #dc2626;
+}
+
+/* Morado */
+:root[data-theme="morado"] {
+  --background: #faf8ff;
+  --foreground: #1e1b4b;
+  --card: #ffffff;
+  --card-foreground: #1e1b4b;
+  --popover: #ffffff;
+  --popover-foreground: #1e1b4b;
+  --primary: #7c3aed;
+  --primary-foreground: #ffffff;
+  --secondary: #4c1d95;
+  --secondary-foreground: #ffffff;
+  --muted: #f5f3ff;
+  --muted-foreground: #5b21b6;
+  --accent: #f59e0b;
+  --accent-foreground: #1a1a2e;
+  --border: rgba(30, 27, 75, 0.12);
+  --ring: #7c3aed;
+}
+
+/* Oscuro */
+:root[data-theme="oscuro"] {
+  --background: #0f0f1a;
+  --foreground: #f5f5f7;
+  --card: #1a1a26;
+  --card-foreground: #f5f5f7;
+  --popover: #1a1a26;
+  --popover-foreground: #f5f5f7;
+  --primary: #fff200;
+  --primary-foreground: #1a1a2e;
+  --secondary: #2d2d44;
+  --secondary-foreground: #f5f5f7;
+  --muted: #26263d;
+  --muted-foreground: #a1a1aa;
+  --accent: #ff6b6b;
+  --accent-foreground: #1a1a2e;
+  --border: rgba(255, 255, 255, 0.14);
+  --ring: #fff200;
+}
+
+/* ── Compatibilidad de temas ──
+   El cliente usa muchos colores fijos (`bg-white`) para superficies. En el tema
+   oscuro se remapean a `--card` para que no queden tarjetas blancas. Los acentos
+   de marca (#FFF200 / #1A1A2E) se migran a tokens en el código. */
+:root[data-theme="oscuro"] .bg-white,
+.dark .bg-white {
+  background-color: var(--card);
+}
+:root[data-theme="oscuro"] .bg-white\/90,
+.dark .bg-white\/90 {
+  background-color: color-mix(in srgb, var(--card) 90%, transparent);
+}
+:root[data-theme="oscuro"] .bg-white\/95,
+.dark .bg-white\/95 {
+  background-color: color-mix(in srgb, var(--card) 95%, transparent);
+}
+
+/* Texto sobre el color de marca: siempre con el contraste del tema. Cubre tanto
+   utilidades (`bg-primary` + `text-foreground`) como estilos inline
+   (`background: var(--primary)`), que quedan migrados en los componentes. */
+.bg-primary.text-foreground,
+.bg-primary .text-foreground,
+[style*="background: var(--primary)"],
+[style*="background-color: var(--primary)"] {
+  color: var(--primary-foreground) !important;
 }
 
 @theme inline {

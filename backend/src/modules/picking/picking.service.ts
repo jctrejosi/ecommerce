@@ -79,10 +79,15 @@ export class PickingService {
   private async notifyPreparing(order: {
     referenceCode: string | null;
     customerId: number | null;
+    /** Picker que tomó el pedido, si el aviso lo provoca un alistamiento. */
+    pickerName?: string | null;
+    pickerId?: number | null;
   }) {
     if (!order.referenceCode) return;
     this.ordersGateway.notifyOrderStatus(order.referenceCode, 'preparando', {
       customerId: order.customerId,
+      pickerId: order.pickerId ?? null,
+      pickerName: order.pickerName ?? null,
     });
 
     if (order.customerId == null) return;
@@ -102,10 +107,15 @@ export class PickingService {
   private async notifyReady(order: {
     referenceCode: string | null;
     customerId: number | null;
+    /** Picker que cerró el alistamiento, si lo provoca el propio picker. */
+    pickerName?: string | null;
+    pickerId?: number | null;
   }) {
     if (!order.referenceCode) return;
     this.ordersGateway.notifyOrderStatus(order.referenceCode, 'listo', {
       customerId: order.customerId,
+      pickerId: order.pickerId ?? null,
+      pickerName: order.pickerName ?? null,
     });
 
     if (order.customerId == null) return;
@@ -340,7 +350,10 @@ export class PickingService {
     if (!order) throw new NotFoundException(`No existe el pedido ${id}`);
 
     const [user] = await this.db
-      .select({ id: users.id })
+      .select({
+        id: users.id,
+        name: sql<string>`concat(${users.firstName}, ' ', ${users.lastName})`,
+      })
       .from(users)
       .where(eq(users.id, BigInt(pickerId)))
       .limit(1);
@@ -372,7 +385,7 @@ export class PickingService {
 
     // Refleja el cambio de estado en la app del cliente.
     if (nextStatus === 'preparing' && nextStatus !== order.status) {
-      await this.notifyPreparing(order);
+      await this.notifyPreparing({ ...order, pickerId, pickerName: user.name });
     }
 
     this.gateway.emit('picking:claim', {
@@ -572,7 +585,18 @@ export class PickingService {
     });
 
     if (nextStatus === 'ready' && nextStatus !== order.status) {
-      await this.notifyReady(order);
+      // Nombre del picker para que el panel muestre quién cerró el alistamiento.
+      const [picker] =
+        order.pickerId != null
+          ? await this.db
+              .select({
+                name: sql<string>`concat(${users.firstName}, ' ', ${users.lastName})`,
+              })
+              .from(users)
+              .where(eq(users.id, BigInt(order.pickerId)))
+              .limit(1)
+          : [];
+      await this.notifyReady({ ...order, pickerName: picker?.name ?? null });
     }
 
     this.gateway.emit('picking:delivered', {

@@ -137,7 +137,7 @@ export function OrdersPanel({
                   type="submit"
                   disabled={trackLoading || !trackCode.trim()}
                   className="px-3 py-2 rounded-xl text-sm font-bold flex items-center gap-1.5 disabled:opacity-40 cursor-pointer"
-                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  style={{ background: "var(--primary)", color: "var(--foreground)" }}
                 >
                   <Search size={14} />
                   {trackLoading ? "..." : "Buscar"}
@@ -159,7 +159,7 @@ export function OrdersPanel({
               <button
                 onClick={() => onGoToCatalog()}
                 className="mt-2 px-6 py-3 rounded-xl font-bold text-sm"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
+                style={{ background: "var(--primary)", color: "var(--foreground)" }}
               >
                 Ir a comprar
               </button>
@@ -219,7 +219,7 @@ export function OrdersPanel({
                             onTrackOrder(String(order.id));
                           }}
                           className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all hover:brightness-95"
-                          style={{ background: "#FFF200", color: "#1A1A2E" }}
+                          style={{ background: "var(--primary)", color: "var(--foreground)" }}
                         >
                           🛵 Rastrear en el mapa
                         </span>
@@ -269,7 +269,7 @@ export function OrdersPanel({
                 <div className="p-5 space-y-4">
                   <div
                     className="rounded-2xl p-4 space-y-3"
-                    style={{ background: "#F4F4F6" }}
+                    style={{ background: "var(--muted)" }}
                   >
                     <div className="flex items-center gap-2">
                       <div
@@ -319,7 +319,7 @@ export function OrdersPanel({
                     <button
                       onClick={() => onTrackOrder(String(selectedOrder.id))}
                       className="w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-bold text-sm transition-all hover:brightness-95"
-                      style={{ background: "#FFF200", color: "#1A1A2E" }}
+                      style={{ background: "var(--primary)", color: "var(--foreground)" }}
                     >
                       🛵 Ver rastreo en el mapa
                     </button>

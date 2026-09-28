@@ -63,7 +63,7 @@ export function SucursalesSection({ branches = [] }: SucursalesSectionProps) {
           <div>
             <div
               className="inline-block px-2 py-0.5 rounded text-xs font-black tracking-widest mb-2"
-              style={{ background: "#1A1A2E", color: "#FFF200" }}
+              style={{ background: "var(--secondary)", color: "var(--primary)" }}
             >
               NUESTRAS TIENDAS
             </div>
@@ -145,7 +145,7 @@ export function SucursalesSection({ branches = [] }: SucursalesSectionProps) {
                       openMap(branchAddress(s));
                     }}
                     className="w-full py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 mt-auto"
-                    style={{ background: "#FFF200", color: "#1A1A2E" }}
+                    style={{ background: "var(--primary)", color: "var(--foreground)" }}
                   >
                     Cómo llegar
                   </button>

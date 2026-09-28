@@ -253,7 +253,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
                       className="w-11 h-11 rounded-2xl object-cover shrink-0"
                     />
                   ) : (
-                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl bg-[#FFF200] shrink-0">
+                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl bg-primary shrink-0">
                       🛵
                     </div>
                   )}
@@ -272,7 +272,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
                     data.deliveryStatus === "IN_DELIVERY") && (
                     <button
                       onClick={() => setChatOpen(true)}
-                      className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-[#1A1A2E] bg-[#FFF200] hover:brightness-95 transition-all"
+                      className="shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-foreground bg-primary hover:brightness-95 transition-all"
                     >
                       <MessageCircle className="w-3.5 h-3.5" />
                       Chatear

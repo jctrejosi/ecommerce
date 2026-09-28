@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { io, type Socket } from 'socket.io-client'
-import { api, ApiError, API_BASE_URL } from './services/api'
+import { api, ApiError } from './services/api'
+import { onPickingEvent } from './services/pickingSocket'
+import { onOrderEvent } from './services/ordersSocket'
 import type { PickingAdminOrder, PickingAdminOrdersResponse, PickingOrderDetail } from './types'
 
 // ─── Formato ──────────────────────────────────────────────────────────────────
@@ -88,7 +89,6 @@ export default function OrdersView({
   const [detail, setDetail] = useState<PickingOrderDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [now, setNow] = useState(() => Date.now())
-  const socketRef = useRef<Socket | null>(null)
   // Arranca en `undefined` (no en null) para que "Todas" también cuente como
   // cambio de sucursal la primera vez.
   const lastBranch = useRef<number | null | undefined>(undefined)
@@ -152,37 +152,15 @@ export default function OrdersView({
     }, 400)
   }, [load])
 
-  useEffect(() => {
-    const socket = io(`${API_BASE_URL}/picking-events`, { transports: ['websocket', 'polling'] })
-    socketRef.current = socket
+  // Refresco en vivo (conexión compartida, ver `pickingSocket` / `ordersSocket`):
+  // cada acción del picker y cada cambio de estado llegan por socket y recargan
+  // la lista con un debounce.
+  useEffect(() => onPickingEvent('picking:claim', scheduleReload), [scheduleReload])
+  useEffect(() => onPickingEvent('picking:scan', scheduleReload), [scheduleReload])
+  useEffect(() => onPickingEvent('picking:delivered', scheduleReload), [scheduleReload])
 
-    const subscribe = () => socket.emit('subscribe:staff')
-    socket.on('connect', subscribe)
-    socket.on('picking:claim', scheduleReload)
-    socket.on('picking:scan', scheduleReload)
-    socket.on('picking:delivered', scheduleReload)
-
-    return () => {
-      socket.emit('unsubscribe:staff')
-      socket.off('connect', subscribe)
-      socket.disconnect()
-      socketRef.current = null
-    }
-  }, [scheduleReload])
-
-  // Cambios de estado por cualquier otra vía (pago, reparto, admin).
-  useEffect(() => {
-    const socket = io(`${API_BASE_URL}/orders`, { transports: ['websocket', 'polling'] })
-    const subscribe = () => socket.emit('subscribe:staff')
-    socket.on('connect', subscribe)
-    socket.on('order:updated', scheduleReload)
-
-    return () => {
-      socket.emit('unsubscribe:staff')
-      socket.off('connect', subscribe)
-      socket.disconnect()
-    }
-  }, [scheduleReload])
+  // Cambios de estado por cualquier otra vía (creación, pago, reparto, admin).
+  useEffect(() => onOrderEvent('order:updated', scheduleReload), [scheduleReload])
 
   useEffect(() => {
     return () => {

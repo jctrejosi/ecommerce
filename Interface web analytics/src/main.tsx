@@ -1,5 +1,6 @@
 import ReactDOM from 'react-dom/client'
 import App from './App'
+import { ThemeProvider } from './theme'
 import './index.css'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000'
@@ -18,4 +19,8 @@ function setAppTitle(appLabel: string) {
 }
 setAppTitle('analytics')
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<App />)
+ReactDOM.createRoot(document.getElementById('root')!).render(
+  <ThemeProvider>
+    <App />
+  </ThemeProvider>,
+)

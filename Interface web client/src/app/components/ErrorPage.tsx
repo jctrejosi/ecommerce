@@ -95,13 +95,13 @@ export function ErrorPage({ statusCode, onRetry, onGoHome }: ErrorPageProps) {
         {/* Title */}
         <h1
           className="text-2xl md:text-3xl font-black mt-2"
-          style={{ color: "#1A1A2E", fontFamily: "'Bricolage Grotesque', sans-serif" }}
+          style={{ color: "var(--foreground)", fontFamily: "'Bricolage Grotesque', sans-serif" }}
         >
           {config.title}
         </h1>
 
         {/* Subtitle */}
-        <p className="text-sm md:text-base font-semibold mt-1" style={{ color: "#6B7280" }}>
+        <p className="text-sm md:text-base font-semibold mt-1" style={{ color: "var(--muted-foreground)" }}>
           {config.subtitle}
         </p>
 
@@ -118,8 +118,8 @@ export function ErrorPage({ statusCode, onRetry, onGoHome }: ErrorPageProps) {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{
                 background: "#F3F4F6",
-                color: "#1A1A2E",
-                outlineColor: "#1A1A2E",
+                color: "var(--foreground)",
+                outlineColor: "var(--foreground)",
               }}
             >
               <ArrowLeft className="w-4 h-4" aria-hidden="true" />
@@ -144,9 +144,9 @@ export function ErrorPage({ statusCode, onRetry, onGoHome }: ErrorPageProps) {
             onClick={onGoHome}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2"
             style={{
-              background: isClientError ? config.color : "#1A1A2E",
-              color: isClientError ? "#1A1A2E" : "#FFFFFF",
-              outlineColor: isClientError ? config.color : "#1A1A2E",
+              background: isClientError ? config.color : "var(--secondary)",
+              color: isClientError ? "var(--foreground)" : "#FFFFFF",
+              outlineColor: isClientError ? config.color : "var(--foreground)",
             }}
           >
             <Home className="w-4 h-4" aria-hidden="true" />

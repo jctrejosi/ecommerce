@@ -153,7 +153,7 @@ export function CheckoutAddressMap({
       el.style.width = "34px";
       el.style.height = "34px";
       el.style.boxSizing = "border-box";
-      el.style.border = "3px solid #1A1A2E";
+      el.style.border = "3px solid var(--secondary)";
       el.style.fontSize = "17px";
       el.style.lineHeight = "1";
       el.style.cursor = "grab";
@@ -531,7 +531,7 @@ export function CheckoutAddressMap({
             type="button"
             onClick={applySuggestion}
             className="text-xs font-bold underline underline-offset-2"
-            style={{ color: "#1A1A2E" }}
+            style={{ color: "var(--foreground)" }}
           >
             Usar esta dirección
           </button>
@@ -559,7 +559,7 @@ export function CheckoutAddressMap({
                   onClick={useMyLocation}
                   disabled={gpsBusy}
                   className="text-xs font-bold underline underline-offset-2 disabled:opacity-50"
-                  style={{ color: "#1A1A2E" }}
+                  style={{ color: "var(--foreground)" }}
                 >
                   {gpsBusy ? "Ubicando…" : "Usar mi ubicación actual"}
                 </button>
@@ -570,7 +570,7 @@ export function CheckoutAddressMap({
                     onClick={validateWithPhone}
                     disabled={phoneBusy}
                     className="text-xs font-bold underline underline-offset-2 disabled:opacity-50"
-                    style={{ color: "#1A1A2E" }}
+                    style={{ color: "var(--foreground)" }}
                   >
                     {phoneBusy ? "Esperando al celular…" : "Volver a validar con mi celular"}
                   </button>
@@ -598,7 +598,7 @@ export function CheckoutAddressMap({
             : "border-transparent"
         }`}
         style={
-          confirmed ? undefined : { background: "#1A1A2E", color: "#FFF200" }
+          confirmed ? undefined : { background: "var(--secondary)", color: "var(--primary)" }
         }
       >
         {confirmed ? (

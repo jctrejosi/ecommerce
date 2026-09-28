@@ -392,8 +392,8 @@ export function CatalogPage({
             <div
               className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
               style={{
-                borderColor: nodeChecked ? "#1A1A2E" : "#D1D5DB",
-                background: nodeChecked ? "#1A1A2E" : "white",
+                borderColor: nodeChecked ? "var(--secondary)" : "#D1D5DB",
+                background: nodeChecked ? "var(--secondary)" : "white",
               }}
               onClick={() => toggleCategory(node.id)}
             >
@@ -412,7 +412,7 @@ export function CatalogPage({
             <span
               className="text-xs flex-1 min-w-0 transition-colors leading-tight break-words"
               style={{
-                color: nodeChecked ? "#1A1A2E" : "#6B7280",
+                color: nodeChecked ? "var(--foreground)" : "var(--muted-foreground)",
                 fontWeight: nodeChecked ? 600 : 400,
               }}
               onClick={() => toggleCategory(node.id)}
@@ -466,8 +466,8 @@ export function CatalogPage({
                   <div
                     className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
                     style={{
-                      borderColor: checked ? "#1A1A2E" : "#D1D5DB",
-                      background: checked ? "#1A1A2E" : "white",
+                      borderColor: checked ? "var(--secondary)" : "#D1D5DB",
+                      background: checked ? "var(--secondary)" : "white",
                     }}
                     onClick={() => toggleCategory(cat.id)}
                   >
@@ -492,7 +492,7 @@ export function CatalogPage({
                   <span
                     className="text-sm flex-1 min-w-0 transition-colors leading-tight break-words"
                     style={{
-                      color: checked ? "#1A1A2E" : "#6B7280",
+                      color: checked ? "var(--foreground)" : "var(--muted-foreground)",
                       fontWeight: checked ? 600 : 400,
                     }}
                     onClick={() => toggleCategory(cat.id)}
@@ -563,21 +563,21 @@ export function CatalogPage({
                 className="w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0"
                 style={{
                   borderColor:
-                    catalogPriceRange === r.id ? "#1A1A2E" : "#D1D5DB",
+                    catalogPriceRange === r.id ? "var(--secondary)" : "#D1D5DB",
                 }}
                 onClick={() => setCatalogPriceRange(r.id)}
               >
                 {catalogPriceRange === r.id && (
                   <div
                     className="w-2 h-2 rounded-full"
-                    style={{ background: "#1A1A2E" }}
+                    style={{ background: "var(--secondary)" }}
                   />
                 )}
               </div>
               <span
                 className="text-sm flex-1 min-w-0 cursor-pointer break-words"
                 style={{
-                  color: catalogPriceRange === r.id ? "#1A1A2E" : "#6B7280",
+                  color: catalogPriceRange === r.id ? "var(--foreground)" : "var(--muted-foreground)",
                   fontWeight: catalogPriceRange === r.id ? 600 : 400,
                 }}
                 onClick={() => setCatalogPriceRange(r.id)}
@@ -620,8 +620,8 @@ export function CatalogPage({
                     <div
                       className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
                       style={{
-                        borderColor: checked ? "#1A1A2E" : "#D1D5DB",
-                        background: checked ? "#1A1A2E" : "white",
+                        borderColor: checked ? "var(--secondary)" : "#D1D5DB",
+                        background: checked ? "var(--secondary)" : "white",
                       }}
                       onClick={() => setCatalogBrand(checked ? null : brand.id)}
                     >
@@ -644,7 +644,7 @@ export function CatalogPage({
                     <span
                       className="text-sm flex-1 min-w-0 transition-colors break-words"
                       style={{
-                        color: checked ? "#1A1A2E" : "#6B7280",
+                        color: checked ? "var(--foreground)" : "var(--muted-foreground)",
                         fontWeight: checked ? 600 : 400,
                       }}
                       onClick={() => setCatalogBrand(checked ? null : brand.id)}
@@ -675,8 +675,8 @@ export function CatalogPage({
                   <div
                     className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
                     style={{
-                      borderColor: checked ? "#1A1A2E" : "#D1D5DB",
-                      background: checked ? "#1A1A2E" : "white",
+                      borderColor: checked ? "var(--secondary)" : "#D1D5DB",
+                      background: checked ? "var(--secondary)" : "white",
                     }}
                     onClick={() =>
                       setCatalogProductType(checked ? "" : pt.code)
@@ -712,7 +712,7 @@ export function CatalogPage({
                   <span
                     className="text-sm flex-1 min-w-0 transition-colors break-words"
                     style={{
-                      color: checked ? "#1A1A2E" : "#6B7280",
+                      color: checked ? "var(--foreground)" : "var(--muted-foreground)",
                       fontWeight: checked ? 600 : 400,
                     }}
                     onClick={() =>
@@ -742,7 +742,7 @@ export function CatalogPage({
           </div>
           <div
             className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
-            style={{ background: catalogOnSale ? "#FFF200" : "#E5E7EB" }}
+            style={{ background: catalogOnSale ? "var(--primary)" : "#E5E7EB" }}
             onClick={() => setCatalogOnSale(!catalogOnSale)}
           >
             <div
@@ -796,7 +796,7 @@ export function CatalogPage({
                 className="w-full pl-8 pr-3 py-2 text-xs rounded-lg border border-border bg-muted/60 focus:outline-none"
                 onFocus={(e) => {
                   e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                  e.target.style.borderColor = "#FFF200";
+                  e.target.style.borderColor = "var(--primary)";
                 }}
                 onBlur={(e) => {
                   e.target.style.boxShadow = "none";
@@ -836,7 +836,7 @@ export function CatalogPage({
                 {activeFilterCount > 0 && (
                   <span
                     className="w-4 h-4 rounded-full text-xs font-black flex items-center justify-center"
-                    style={{ background: "#FFF200", color: "#1A1A2E" }}
+                    style={{ background: "var(--primary)", color: "var(--foreground)" }}
                   >
                     {activeFilterCount}
                   </span>
@@ -868,7 +868,7 @@ export function CatalogPage({
                   {catalogOnSale && (
                     <span
                       className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-white"
-                      style={{ background: "#FF4444" }}
+                      style={{ background: "var(--accent)" }}
                     >
                       Solo ofertas
                       <button
@@ -974,7 +974,7 @@ export function CatalogPage({
                   style={
                     sortOpen
                       ? {
-                          borderColor: "#FFF200",
+                          borderColor: "var(--primary)",
                           boxShadow: "0 0 0 2px rgba(255,242,0,0.35)",
                         }
                       : undefined
@@ -1016,8 +1016,8 @@ export function CatalogPage({
                           style={
                             active
                               ? {
-                                  background: "#FFF200",
-                                  color: "#1A1A2E",
+                                  background: "var(--primary)",
+                                  color: "var(--foreground)",
                                   fontWeight: 700,
                                 }
                               : undefined
@@ -1055,13 +1055,13 @@ export function CatalogPage({
                 style={
                   catalogBranch === null
                     ? {
-                        background: "#1A1A2E",
-                        color: "#FFF200",
-                        borderColor: "#1A1A2E",
+                        background: "var(--secondary)",
+                        color: "var(--primary)",
+                        borderColor: "var(--secondary)",
                       }
                     : {
-                        background: "#F4F4F6",
-                        color: "#6B7280",
+                        background: "var(--muted)",
+                        color: "var(--muted-foreground)",
                         borderColor: "transparent",
                       }
                 }
@@ -1078,13 +1078,13 @@ export function CatalogPage({
                   style={
                     catalogBranch === b.id
                       ? {
-                          background: "#1A1A2E",
-                          color: "#FFF200",
-                          borderColor: "#1A1A2E",
+                          background: "var(--secondary)",
+                          color: "var(--primary)",
+                          borderColor: "var(--secondary)",
                         }
                       : {
-                          background: "#F4F4F6",
-                          color: "#6B7280",
+                          background: "var(--muted)",
+                          color: "var(--muted-foreground)",
                           borderColor: "transparent",
                         }
                   }
@@ -1146,7 +1146,7 @@ export function CatalogPage({
                 <button
                   onClick={clearAll}
                   className="px-5 py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-95"
-                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  style={{ background: "var(--primary)", color: "var(--foreground)" }}
                 >
                   Limpiar filtros
                 </button>
@@ -1190,7 +1190,7 @@ export function CatalogPage({
               <button
                 onClick={() => setMobileFiltersOpen(false)}
                 className="w-full flex items-center justify-center gap-2 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95"
-                style={{ background: "#1A1A2E", color: "#FFF200" }}
+                style={{ background: "var(--secondary)", color: "var(--primary)" }}
               >
                 <svg
                   width="15"

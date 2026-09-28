@@ -11,6 +11,10 @@ import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType 
 import MapView from './MapView'
 import MetricsView from './MetricsView'
 import OrdersView from './OrdersView'
+import { PickerChatDrawer } from './PickerChat'
+import { useChatAlerts } from './useChatAlerts'
+import { NotificationsBell } from './NotificationsBell'
+import { requestNotificationPermission } from './services/browserNotifications'
 // Logo corporativo (DSI): lo comparten el header del panel y el pie de copyright.
 import logo from './assets/logo.png'
 // Marca de la app de picking: se conserva al pie de la pantalla de login.
@@ -55,11 +59,39 @@ export default function App() {
   const [authUser, setAuthUser] = useState<AuthUser | null>(null)
   const [authState, setAuthState] = useState<'checking' | 'out' | 'in'>('checking')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Bandeja de chat del header (un hilo por picker).
+  const [chatOpen, setChatOpen] = useState(false)
+  // Logo de la tienda configurado en el admin general (endpoint público).
+  const [storeLogo, setStoreLogo] = useState<string | null>(null)
 
   const notify = useCallback((msg: string) => {
     setToast(msg)
     if (toastTimer.current) clearTimeout(toastTimer.current)
     toastTimer.current = setTimeout(() => setToast(null), 3500)
+  }, [])
+
+  // Logo de la tienda que se configura en el admin general.
+  useEffect(() => {
+    let cancelled = false
+    api
+      .storeInfo()
+      .then((d) => {
+        if (!cancelled) setStoreLogo(resolveAssetUrl(d.url))
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  // No leídos del chat + aviso (punto en el botón y notificación del navegador)
+  // cuando llega un mensaje nuevo, en cualquier pestaña del panel.
+  const { unread } = useChatAlerts(authState === 'in')
+
+  const openChat = useCallback(() => {
+    setChatOpen(true)
+    // El permiso de notificaciones exige un gesto del usuario: se pide al abrir.
+    void requestNotificationPermission()
   }, [])
 
   // Sesión: se valida con la cookie httpOnly que deja el login.
@@ -175,16 +207,52 @@ export default function App() {
         <div className="max-w-6xl mx-auto px-5 flex flex-col gap-3">
           {/* Fila superior: marca + usuario */}
           <div className="flex items-center gap-4">
-            <div className="mr-auto flex items-center gap-3">
-              <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
-              <div>
-                <h1 className="text-2xl font-extrabold tracking-tight">Picking <span className="text-amber-400">Admin</span></h1>
-                <p className="text-white/40 text-xs font-medium mt-0.5">Estanterías y ubicaciones por sucursal</p>
+            {/* Marca: los dos logos arriba (el de DSI y el de la tienda que se
+                configura en el admin general) y el título debajo. */}
+            <div className="mr-auto flex flex-col gap-1.5">
+              <div className="flex items-center gap-3">
+                <img src={logo} alt="DSI" className="h-8 w-auto object-contain" />
+                {storeLogo ? (
+                  <img
+                    src={storeLogo}
+                    alt="Tienda"
+                    className="h-8 w-auto max-w-[160px] object-contain"
+                  />
+                ) : null}
               </div>
+              <h1 className="text-2xl font-extrabold tracking-tight leading-tight">
+                Picking <span className="text-amber-400">Admin</span>
+              </h1>
             </div>
 
-            {/* Usuario y salir */}
+            {/* Usuario, avisos, chat y salir */}
             <div className="flex items-center gap-2.5">
+              {/* Campanita: avisos de cada acción sobre los pedidos. */}
+              <NotificationsBell enabled={authState === 'in'} />
+
+              {/* Chat con los pickers: bandeja con un hilo por picker. */}
+              <button
+                onClick={openChat}
+                title="Chat con los pickers"
+                aria-label="Chat con los pickers"
+                className="relative shrink-0 w-11 h-11 rounded-full bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M21 11.5a8 8 0 0 1-8 8H8l-5 3 1.4-4.3A8 8 0 1 1 21 11.5Z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {unread > 0 ? (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-[#0C0C0D]">
+                    {unread > 9 ? '9+' : unread}
+                  </span>
+                ) : null}
+              </button>
+
               <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-full pl-1 pr-3.5 py-1">
                 <span className="w-8 h-8 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold text-sm">
                   {(authUser?.fullName ?? authUser?.username ?? '?').charAt(0).toUpperCase()}
@@ -353,6 +421,9 @@ export default function App() {
 
       {/* Footer */}
       <CopyrightFooter />
+
+      {/* Bandeja de chat (bandeja de pickers + hilo) */}
+      <PickerChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} />
     </div>
   )
 }
@@ -363,14 +434,15 @@ export default function App() {
 function CopyrightFooter() {
   return (
     <footer className="shrink-0" style={{ background: '#111827' }}>
-      <div className="flex flex-col md:flex-row items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center">
+      <div className="flex flex-col md:flex-row items-center justify-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-center">
         <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
-          <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+          {/* Mismo logo (y tamaño) que el footer del admin general. */}
+          <img src={logo} alt="Mercaldas" className="h-[26px] w-auto object-contain" />
         </a>
-        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.4)' }}>
+        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
           © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
         </p>
-        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
           Manizales, Caldas, Colombia
         </p>
       </div>
@@ -405,12 +477,16 @@ function ShelvesView({
   }
 
   async function handleSave(data: ReturnType<typeof emptyShelf>) {
+    // El early return de arriba no estrecha el tipo dentro del closure: lo
+    // capturamos en una const para crear siempre con una sucursal definida.
+    const branch = branchId
+    if (!branch) return
     try {
       if (editing) {
         await api.updateShelf(editing.id, data)
         notify('Estantería actualizada')
       } else {
-        await api.createShelf({ branchId, ...data })
+        await api.createShelf({ branchId: branch, ...data })
         notify('Estantería creada')
       }
       setEditing(null)

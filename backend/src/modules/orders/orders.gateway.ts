@@ -24,6 +24,10 @@ export interface OrderStatusOptions {
   reason?: string | null;
   /** Cliente dueño del pedido: si se pasa, se le avisa por su sala. */
   customerId?: number | null;
+  /** Picker que provocó el cambio (claim / entregado en caja), si aplica. */
+  pickerId?: number | null;
+  /** Nombre del picker, para que la campanita del panel lo muestre. */
+  pickerName?: string | null;
 }
 
 @WebSocketGateway({
@@ -122,7 +126,8 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     status: string,
     opts: OrderStatusOptions = {},
   ) {
-    const { reason = null, customerId = null } = opts;
+    const { reason = null, customerId = null, pickerId = null, pickerName = null } =
+      opts;
     const room = `order:${referenceCode}`;
 
     if (!this.server) {
@@ -138,7 +143,14 @@ export class OrdersGateway implements OnGatewayConnection, OnGatewayDisconnect {
     });
 
     // Evento enriquecido: mismo cambio para el pedido, el cliente y los paneles.
-    const updated = { referenceCode, status, reason, at: new Date().toISOString() };
+    const updated = {
+      referenceCode,
+      status,
+      reason,
+      at: new Date().toISOString(),
+      pickerId,
+      pickerName,
+    };
     this.server.to(room).emit('order:updated', updated);
     if (customerId != null) {
       this.server.to(customerRoom(Number(customerId))).emit('order:updated', updated);

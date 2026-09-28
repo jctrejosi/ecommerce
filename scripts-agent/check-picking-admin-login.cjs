@@ -137,6 +137,13 @@ async function main() {
       'que carguen las imágenes',
       40,
     );
+    // El logo de la tienda se monta tras resolver /landing/general, así que puede
+    // aparecer después del chequeo anterior: esperamos a que cargue de verdad.
+    await until(
+      `(() => { const i = document.querySelector('img[alt="Tienda"]'); return !!i && i.complete && i.naturalWidth > 0; })()`,
+      'que cargue el logo de la tienda',
+      60,
+    ).catch(() => {});
     await sleep(400);
 
     console.log('\n== Imágenes del login ==');

@@ -63,8 +63,8 @@ export function BenefitsSection() {
             const Icon = ICON_MAP[b.icon] || Star;
             return (
               <div key={b.id ?? b.title} className="flex gap-3 p-4 rounded-xl hover:bg-muted/60 transition-colors">
-                <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "#FFF200" }}>
-                  <Icon className="w-5 h-5" style={{ color: "#1A1A2E" }} />
+                <div className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "var(--primary)" }}>
+                  <Icon className="w-5 h-5" style={{ color: "var(--foreground)" }} />
                 </div>
                 <div>
                   <h3 className="font-semibold text-sm text-foreground">{b.title}</h3>

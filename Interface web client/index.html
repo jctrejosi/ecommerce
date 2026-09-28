@@ -11,6 +11,23 @@
       <meta name="description" content="A user-friendly online supermarket for Manizales, enabling quick product searches, easy navigation through categories, and seamless checkout for home grocery shopping." />
       <meta name="robots" content="noindex, nofollow" />
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+      <script>
+        // Aplica el tema guardado antes de pintar (evita el parpadeo).
+        (function () {
+          try {
+            var t = localStorage.getItem("mercaldas-theme");
+            if (t === "light") t = "claro";
+            if (t === "dark") t = "oscuro";
+            var valid = ["claro", "azul", "verde", "rojo", "morado", "oscuro"];
+            if (valid.indexOf(t) === -1) {
+              t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
+            }
+            document.documentElement.dataset.theme = t;
+            if (t === "oscuro") document.documentElement.classList.add("dark");
+            document.documentElement.style.colorScheme = t === "oscuro" ? "dark" : "light";
+          } catch (e) {}
+        })();
+      </script>
       
     </head>
 

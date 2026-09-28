@@ -45,10 +45,10 @@ export function PromoBanner() {
   if (items.length === 0) return null;
 
   return (
-    <section className="py-4" style={{ background: "#FFF200" }}>
+    <section className="py-4" style={{ background: "var(--primary)" }}>
       <div
         className="max-w-7xl mx-auto px-4 flex flex-wrap items-center justify-center gap-6 md:gap-12 text-sm font-bold"
-        style={{ color: "#1A1A2E" }}
+        style={{ color: "var(--foreground)" }}
       >
         {items.map((item) => {
           const Icon = ICON_MAP[item.icon] || Zap;

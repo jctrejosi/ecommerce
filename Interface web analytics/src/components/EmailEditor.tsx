@@ -533,7 +533,7 @@ export default function EmailEditor({
               />
             ) : (
               <div
-                className="w-full h-36 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400"
+                className="w-full h-36 bg-gray-100 border-2 border-dashed border-gray-300 rounded-xl flex flex-col items-center justify-center gap-2 text-gray-400 cursor-pointer"
                 onClick={() => fileInputRef.current?.click()}
               >
                 <Upload size={20} />
@@ -571,7 +571,7 @@ export default function EmailEditor({
         );
       case "divider":
         return (
-          <div className="w-full py-1" onClick={() => setSelectedId(b.id)}>
+          <div className="w-full py-1 cursor-pointer" onClick={() => setSelectedId(b.id)}>
             <div
               style={{
                 borderTopWidth: b.props.thickness ?? 2,
@@ -587,7 +587,7 @@ export default function EmailEditor({
         const n = b.props.columns ?? 2;
         const items = (b.props.items ?? []).slice(0, n);
         return (
-          <div className="w-full flex gap-3" onClick={() => setSelectedId(b.id)}>
+          <div className="w-full flex gap-3 cursor-pointer" onClick={() => setSelectedId(b.id)}>
             {items.map((c, i) => (
               <div key={i} className="flex-1 min-w-0">
                 {c.src && (
@@ -614,7 +614,7 @@ export default function EmailEditor({
         const nets = Object.entries(b.props.networks ?? {}).filter(([, url]) => url);
         return (
           <div
-            className="flex gap-2"
+            className="flex gap-2 cursor-pointer"
             style={{ justifyContent: b.props.align === "left" ? "flex-start" : b.props.align === "right" ? "flex-end" : "center" }}
             onClick={() => setSelectedId(b.id)}
           >
@@ -776,7 +776,7 @@ export default function EmailEditor({
                       e.stopPropagation();
                       setSelectedId(b.id);
                     }}
-                    className={`relative group rounded-lg transition-all ${
+                    className={`relative group rounded-lg transition-all cursor-pointer ${
                       isSelected ? "ring-2 ring-amber-400 bg-amber-50/30" : "ring-1 ring-transparent hover:ring-gray-200"
                     }`}
                   >
@@ -864,7 +864,7 @@ export default function EmailEditor({
 
       {/* ══ Modal exportar HTML ══ */}
       {htmlOpen && (
-        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-6" onClick={() => setHtmlOpen(false)}>
+        <div className="fixed inset-0 z-[80] bg-black/40 flex items-center justify-center p-6 cursor-pointer" onClick={() => setHtmlOpen(false)}>
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-5" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
               <p className="font-bold text-gray-900 text-sm">HTML del correo</p>

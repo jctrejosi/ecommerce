@@ -25,8 +25,8 @@ export function Logo({
       <div
         className={`${boxClassName} rounded-lg flex items-center justify-center font-black text-base md:text-lg leading-none`}
         style={{
-          background: "#FFF200",
-          color: "#1A1A2E",
+          background: "var(--primary)",
+          color: "var(--foreground)",
           fontFamily: "'Bricolage Grotesque', sans-serif",
         }}
       >
@@ -37,7 +37,7 @@ export function Logo({
           hideTextOnMobile ? "hidden md:inline" : ""
         }`}
         style={{
-          color: dark ? "#1A1A2E" : "#ffffff",
+          color: dark ? "var(--foreground)" : "#ffffff",
           fontFamily: "'Bricolage Grotesque', sans-serif",
           letterSpacing: "-0.02em",
         }}

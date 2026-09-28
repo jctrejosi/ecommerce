@@ -145,7 +145,7 @@ export function HeroSection({
     return (
       <section
         className="relative overflow-hidden"
-        style={{ background: "#1A1A2E" }}
+        style={{ background: "var(--secondary)" }}
         aria-busy="true"
         aria-label="Cargando contenido destacado"
       >
@@ -221,7 +221,7 @@ export function HeroSection({
                 className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest px-3 py-1 rounded-full mb-5"
                 style={{
                   background: slide.accent,
-                  color: "#1A1A2E",
+                  color: "var(--foreground)",
                   animation: isLeaving
                     ? "heroFadeOut 0.45s ease both"
                     : "heroFadeIn 0.5s ease both",
@@ -265,7 +265,7 @@ export function HeroSection({
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
                 style={{
                   background: slide.accent,
-                  color: "#1A1A2E",
+                  color: "var(--foreground)",
                   animation: "heroFadeIn 0.5s ease both",
                   animationDelay: "300ms",
                 }}
@@ -342,7 +342,7 @@ export function HeroSection({
               className="h-1.5 rounded-full transition-all duration-300"
               style={{
                 width: i === currentIndex ? "24px" : "6px",
-                background: i === currentIndex ? "#FFF200" : "rgba(255,255,255,0.4)",
+                background: i === currentIndex ? "var(--primary)" : "rgba(255,255,255,0.4)",
               }}
             />
           ))}

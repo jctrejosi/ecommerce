@@ -45,7 +45,7 @@ export function BrandsSection({ brands = [], onBrandClick }: BrandsSectionProps)
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-2 h-8 rounded-full" style={{ background: "#1A1A2E" }} />
+            <div className="w-2 h-8 rounded-full" style={{ background: "var(--secondary)" }} />
             <div>
               <p className="text-xs font-black uppercase tracking-widest text-muted-foreground">Nuestros aliados</p>
               <h2 className="font-black text-2xl text-foreground leading-tight" style={{ fontFamily: "'Bricolage Grotesque', sans-serif" }}>

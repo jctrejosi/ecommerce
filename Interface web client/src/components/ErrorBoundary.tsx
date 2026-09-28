@@ -57,7 +57,7 @@ export class ErrorBoundary extends Component<Props, State> {
             </h1>
             <p
               style={{
-                color: "#6B7280",
+                color: "var(--muted-foreground)",
                 fontSize: 14,
                 margin: "0 0 16px",
                 wordBreak: "break-word",
@@ -68,8 +68,8 @@ export class ErrorBoundary extends Component<Props, State> {
             <button
               onClick={() => window.location.reload()}
               style={{
-                background: "#1A1A2E",
-                color: "#FFF200",
+                background: "var(--secondary)",
+                color: "var(--primary)",
                 border: "none",
                 borderRadius: 12,
                 padding: "10px 20px",

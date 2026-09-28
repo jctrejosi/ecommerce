@@ -106,7 +106,7 @@ export function AuthModal({
               <button
                 onClick={() => onSetModalView("login")}
                 className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
-                style={{ background: "#1A1A2E", color: "#FFF200" }}
+                style={{ background: "var(--secondary)", color: "var(--primary)" }}
               >
                 Iniciar sesión
               </button>
@@ -151,7 +151,7 @@ export function AuthModal({
                   className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none transition-all"
                   onFocus={(e) => {
                     e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                    e.target.style.borderColor = "#FFF200";
+                    e.target.style.borderColor = "var(--primary)";
                   }}
                   onBlur={(e) => {
                     e.target.style.boxShadow = "none";
@@ -181,7 +181,7 @@ export function AuthModal({
                   className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none transition-all"
                   onFocus={(e) => {
                     e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                    e.target.style.borderColor = "#FFF200";
+                    e.target.style.borderColor = "var(--primary)";
                   }}
                   onBlur={(e) => {
                     e.target.style.boxShadow = "none";
@@ -201,7 +201,7 @@ export function AuthModal({
                 type="submit"
                 disabled={authLoading}
                 className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: "#1A1A2E", color: "#FFF200" }}
+                style={{ background: "var(--secondary)", color: "var(--primary)" }}
               >
                 {authLoading ? "Iniciando sesión..." : "Iniciar sesión"}
               </button>
@@ -242,7 +242,7 @@ export function AuthModal({
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none transition-all"
                     onFocus={(e) => {
                       e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                      e.target.style.borderColor = "#FFF200";
+                      e.target.style.borderColor = "var(--primary)";
                     }}
                     onBlur={(e) => {
                       e.target.style.boxShadow = "none";
@@ -263,7 +263,7 @@ export function AuthModal({
                     className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none transition-all"
                     onFocus={(e) => {
                       e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                      e.target.style.borderColor = "#FFF200";
+                      e.target.style.borderColor = "var(--primary)";
                     }}
                     onBlur={(e) => {
                       e.target.style.boxShadow = "none";
@@ -286,7 +286,7 @@ export function AuthModal({
                   className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none transition-all"
                   onFocus={(e) => {
                     e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                    e.target.style.borderColor = "#FFF200";
+                    e.target.style.borderColor = "var(--primary)";
                   }}
                   onBlur={(e) => {
                     e.target.style.boxShadow = "none";
@@ -308,7 +308,7 @@ export function AuthModal({
                   className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none transition-all"
                   onFocus={(e) => {
                     e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                    e.target.style.borderColor = "#FFF200";
+                    e.target.style.borderColor = "var(--primary)";
                   }}
                   onBlur={(e) => {
                     e.target.style.boxShadow = "none";
@@ -331,7 +331,7 @@ export function AuthModal({
                   className="w-full px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm focus:outline-none transition-all"
                   onFocus={(e) => {
                     e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                    e.target.style.borderColor = "#FFF200";
+                    e.target.style.borderColor = "var(--primary)";
                   }}
                   onBlur={(e) => {
                     e.target.style.boxShadow = "none";
@@ -351,7 +351,7 @@ export function AuthModal({
                 type="submit"
                 disabled={authLoading}
                 className="w-full py-3 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                style={{ background: "#1A1A2E", color: "#FFF200" }}
+                style={{ background: "var(--secondary)", color: "var(--primary)" }}
               >
                 {authLoading ? "Creando cuenta..." : "Crear mi cuenta"}
               </button>

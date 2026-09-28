@@ -185,7 +185,7 @@ export function OrderChatConversation({
                 <div
                   className={`max-w-[80%] rounded-2xl px-3.5 py-2 shadow-sm ${
                     mine
-                      ? "bg-[#FFF200] text-[#1A1A2E] rounded-br-md"
+                      ? "bg-primary text-foreground rounded-br-md"
                       : "bg-white border border-border text-foreground rounded-bl-md"
                   }`}
                 >
@@ -200,7 +200,7 @@ export function OrderChatConversation({
                   <p
                     className={`text-[9px] mt-1 flex items-center gap-1 ${
                       mine
-                        ? "text-[#1A1A2E]/50 justify-end"
+                        ? "text-foreground/50 justify-end"
                         : "text-muted-foreground/70"
                     }`}
                   >
@@ -208,7 +208,7 @@ export function OrderChatConversation({
                     {mine &&
                       (m.readAt ? (
                         <CheckCheck
-                          className="w-3.5 h-3.5 text-[#1A1A2E]"
+                          className="w-3.5 h-3.5 text-foreground"
                           aria-label="Leído por tu repartidor"
                         />
                       ) : (
@@ -243,13 +243,13 @@ export function OrderChatConversation({
           }}
           rows={1}
           placeholder="Escribe un mensaje…"
-          className="flex-1 resize-none rounded-2xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-[#FFF200] focus:border-transparent max-h-28"
+          className="flex-1 resize-none rounded-2xl border border-border bg-muted/40 px-3.5 py-2.5 text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent max-h-28"
         />
         <button
           onClick={() => void send()}
           disabled={!draft.trim() || sending}
           aria-label="Enviar mensaje"
-          className="w-10 h-10 rounded-full bg-[#1A1A2E] text-[#FFF200] flex items-center justify-center shrink-0 disabled:opacity-40 transition-all hover:scale-105 active:scale-95"
+          className="w-10 h-10 rounded-full bg-secondary text-primary flex items-center justify-center shrink-0 disabled:opacity-40 transition-all hover:scale-105 active:scale-95"
         >
           {sending ? (
             <Loader2 className="w-4.5 h-4.5 animate-spin" />

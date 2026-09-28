@@ -89,7 +89,7 @@ export function FeaturedProductsSection({
         {!hasTabs ? (
           <div
             className="rounded-2xl p-10 text-center"
-            style={{ background: "#F4F4F6" }}
+            style={{ background: "var(--muted)" }}
           >
             <p className="font-bold text-gray-500">
               Configura los productos destacados desde el panel admin
@@ -114,8 +114,8 @@ export function FeaturedProductsSection({
                     className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 cursor-pointer"
                     style={
                       activeTab === tab.slug
-                        ? { background: "#FFF200", color: "#1A1A2E" }
-                        : { background: "#F4F4F6", color: "#6B7280" }
+                        ? { background: "var(--primary)", color: "var(--foreground)" }
+                        : { background: "var(--muted)", color: "var(--muted-foreground)" }
                     }
                   >
                     {tab.name}
@@ -174,8 +174,8 @@ export function FeaturedProductsSection({
             <div className="text-center mt-8">
               <button
                 onClick={() => onViewAll()}
-                className="px-8 py-3 rounded-xl font-bold text-sm border-2 transition-all cursor-pointer hover:bg-[#1A1A2E] hover:text-white"
-                style={{ borderColor: "#1A1A2E" }}
+                className="px-8 py-3 rounded-xl font-bold text-sm border-2 transition-all cursor-pointer hover:bg-secondary hover:text-white"
+                style={{ borderColor: "var(--secondary)" }}
               >
                 Ver todos los productos
               </button>

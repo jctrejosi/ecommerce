@@ -17,6 +17,7 @@ import {
   Bell,
   Phone,
   MessageCircle,
+  Check,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import storeLogo from "../../assets/logo.png";
@@ -29,6 +30,90 @@ import {
   customerAddressService,
 } from "../../services/customer-auth.service";
 import type { AppNotification } from "../../hooks/useNotifications";
+import { useTheme, THEMES, type Theme } from "../../hooks/useTheme";
+
+/**
+ * Selector de tema: desplegable con un círculo del color de cada tema.
+ * El tema activo se marca con un check.
+ */
+function ThemeSwitcher({
+  theme,
+  setTheme,
+}: {
+  theme: Theme;
+  setTheme: (t: Theme) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  const current = THEMES.find((t) => t.id === theme) ?? THEMES[0];
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label="Cambiar tema"
+        title="Cambiar tema"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-border hover:bg-muted transition-colors cursor-pointer"
+      >
+        <span
+          className="w-4 h-4 rounded-full border border-black/15 shrink-0"
+          style={{ background: current.color }}
+        />
+        <span className="text-xs font-medium hidden lg:inline">
+          {current.label}
+        </span>
+        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          aria-label="Temas"
+          className="absolute right-0 top-full mt-2 z-50 w-44 rounded-xl border border-border bg-white shadow-xl py-1 overflow-hidden"
+        >
+          {THEMES.map((t) => {
+            const active = t.id === theme;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="option"
+                aria-selected={active}
+                onClick={() => {
+                  setTheme(t.id);
+                  setOpen(false);
+                }}
+                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left text-foreground hover:bg-muted transition-colors cursor-pointer"
+              >
+                <span
+                  className="w-4 h-4 rounded-full border border-black/15 shrink-0"
+                  style={{ background: t.color }}
+                />
+                <span className="flex-1 font-medium">{t.label}</span>
+                {active && <Check className="w-3.5 h-3.5 text-primary" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const API_BASE_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"));
 
@@ -131,6 +216,7 @@ export function Header({
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
+  const { theme, setTheme } = useTheme();
   const [defaultAddress, setDefaultAddress] = useState<CustomerAddress | null>(
     null,
   );
@@ -353,8 +439,8 @@ export function Header({
               <div
                 className="w-6 h-6 rounded-lg flex items-center justify-center flex-shrink-0 text-[13px] leading-none"
                 style={{
-                  background: cat.bg || "#F4F4F6",
-                  color: cat.color || "#6B7280",
+                  background: cat.bg || "var(--muted)",
+                  color: cat.color || "var(--muted-foreground)",
                 }}
               >
                 {icon}
@@ -426,14 +512,14 @@ export function Header({
               {!mobileMenuSeen && (
                 <span
                   className="absolute inset-0 rounded-full border-2 animate-ping"
-                  style={{ borderColor: "#FF4444" }}
+                  style={{ borderColor: "var(--accent)" }}
                 />
               )}
               <span
                 className={`absolute inset-0 rounded-full border-2 border-white ${
                   mobileMenuSeen ? "" : "animate-blink"
                 }`}
-                style={{ background: "#FF4444" }}
+                style={{ background: "var(--accent)" }}
               />
             </span>
           )}
@@ -483,8 +569,8 @@ export function Header({
                 style={
                   searchOpen
                     ? {
-                        boxShadow: "0 0 0 2px #FFF200",
-                        borderColor: "#FFF200",
+                        boxShadow: "0 0 0 2px var(--primary)",
+                        borderColor: "var(--primary)",
                         borderBottomLeftRadius: searchOpen ? "0" : "",
                         borderBottomRightRadius: searchOpen ? "0" : "",
                       }
@@ -632,7 +718,7 @@ export function Header({
                                     {p.badge && (
                                       <span
                                         className="text-xs font-bold px-1.5 py-0.5 rounded-full text-white"
-                                        style={{ background: "#FF4444" }}
+                                        style={{ background: "var(--accent)" }}
                                       >
                                         {p.badge}
                                       </span>
@@ -662,8 +748,8 @@ export function Header({
                                     onClick={() => onAddToCart(p)}
                                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold flex-shrink-0 transition-all hover:brightness-95 whitespace-nowrap"
                                     style={{
-                                      background: "#FFF200",
-                                      color: "#1A1A2E",
+                                      background: "var(--primary)",
+                                      color: "var(--foreground)",
                                     }}
                                   >
                                     <Plus className="w-3 h-3" />
@@ -746,7 +832,7 @@ export function Header({
                 {unreadNotifCount > 0 && (
                   <span
                     className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center"
-                    style={{ background: "#FF4444", color: "#fff" }}
+                    style={{ background: "var(--accent)", color: "#fff" }}
                   >
                     {unreadNotifCount}
                   </span>
@@ -775,7 +861,7 @@ export function Header({
             {ordersCount > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center"
-                style={{ background: "#FF4444", color: "#fff" }}
+                style={{ background: "var(--accent)", color: "#fff" }}
               >
                 {ordersCount}
               </span>
@@ -793,7 +879,7 @@ export function Header({
             {cartCount > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
+                style={{ background: "var(--primary)", color: "var(--foreground)" }}
               >
                 {cartCount}
               </span>
@@ -849,7 +935,7 @@ export function Header({
               {item === "Mi carrito" && cartCount > 0 && (
                 <span
                   className="w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center"
-                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  style={{ background: "var(--primary)", color: "var(--foreground)" }}
                 >
                   {cartCount}
                 </span>
@@ -857,7 +943,7 @@ export function Header({
               {item === "Pedidos" && ordersCount > 0 && (
                 <span
                   className="w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center"
-                  style={{ background: "#FF4444", color: "#fff" }}
+                  style={{ background: "var(--accent)", color: "#fff" }}
                 >
                   {ordersCount}
                 </span>
@@ -865,7 +951,7 @@ export function Header({
               {item === "Notificaciones" && unreadNotifCount > 0 && (
                 <span
                   className="w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center"
-                  style={{ background: "#FF4444", color: "#fff" }}
+                  style={{ background: "var(--accent)", color: "#fff" }}
                 >
                   {unreadNotifCount}
                 </span>
@@ -906,7 +992,7 @@ export function Header({
           <div className="relative" ref={categoriesRef}>
             <button
               className="flex items-center gap-2 px-4 py-3 text-sm font-semibold text-white transition-colors"
-              style={{ background: "#1A1A2E" }}
+              style={{ background: "var(--secondary)" }}
               onClick={() => setCategoriesOpen(!categoriesOpen)}
             >
               <Menu className="w-4 h-4" />
@@ -982,7 +1068,7 @@ export function Header({
                 if (item === "Catálogo") onOpenCatalog();
                 if (item === "Mi cuenta" && onAccount) onAccount();
               }}
-              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${(item === "Inicio" && currentView === "home") || (item === "Catálogo" && currentView === "catalog") || (item === "Mi cuenta" && currentView === "account") ? "bg-[#FFF200] text-[#1A1A2E] border-[#FFF200]" : "border-transparent text-foreground"} hover:border-[#FFF200] hover:text-[#1A1A2E]`}
+              className={`px-4 py-3 text-sm font-medium transition-colors border-b-2 ${(item === "Inicio" && currentView === "home") || (item === "Catálogo" && currentView === "catalog") || (item === "Mi cuenta" && currentView === "account") ? "bg-primary text-foreground border-primary" : "border-transparent text-foreground"} hover:border-primary hover:text-foreground`}
             >
               {item}
             </button>
@@ -1001,6 +1087,11 @@ export function Header({
             </span>
             <ChevronDown className="w-3 h-3" />
           </button>
+
+          {/* Cambio de tema, a la derecha de la dirección */}
+          <div className="ml-3">
+            <ThemeSwitcher theme={theme} setTheme={setTheme} />
+          </div>
         </div>
       </nav>
 

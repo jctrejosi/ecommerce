@@ -684,7 +684,7 @@ const INIT_COUPONS: _Coupon[] = [
     expiresAt: "31 ago 2025",
     used: false,
     category: "General",
-    color: "#FFF200",
+    color: "var(--primary)",
   },
   {
     id: "c2",
@@ -695,7 +695,7 @@ const INIT_COUPONS: _Coupon[] = [
     expiresAt: "15 ago 2025",
     used: false,
     category: "Domicilio",
-    color: "#1A1A2E",
+    color: "var(--foreground)",
   },
   {
     id: "c3",
@@ -717,7 +717,7 @@ const INIT_COUPONS: _Coupon[] = [
     expiresAt: "1 jun 2025",
     used: true,
     category: "General",
-    color: "#6B7280",
+    color: "var(--muted-foreground)",
   },
 ];
 
@@ -866,7 +866,7 @@ function StarRating({
         >
           <Star
             className="w-4 h-4"
-            fill={(hover || value) >= n ? "#FFF200" : "none"}
+            fill={(hover || value) >= n ? "var(--primary)" : "none"}
             stroke={(hover || value) >= n ? "#F5C518" : "#D1D5DB"}
           />
         </button>
@@ -884,7 +884,7 @@ function StatusBadge({ status }: { status: string }) {
     entregado: { label: "Entregado", bg: "#D4EDDA", color: "#155724" },
     cancelado: { label: "Cancelado", bg: "#F8D7DA", color: "#721C24" },
   };
-  const s = map[status] ?? { label: status, bg: "#F4F4F6", color: "#6B7280" };
+  const s = map[status] ?? { label: status, bg: "var(--muted)", color: "var(--muted-foreground)" };
   return (
     <span
       className="inline-flex items-center gap-1 text-xs font-bold px-2.5 py-1 rounded-full"
@@ -977,7 +977,7 @@ function EmptyState({
     <div className="flex flex-col items-center justify-center py-20 text-center">
       <div
         className="w-20 h-20 rounded-3xl flex items-center justify-center mb-5"
-        style={{ background: "#F4F4F6" }}
+        style={{ background: "var(--muted)" }}
       >
         {icon}
       </div>
@@ -992,7 +992,7 @@ function EmptyState({
         <button
           onClick={onCta}
           className="mt-6 px-6 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95 active:scale-95"
-          style={{ background: "#FFF200", color: "#1A1A2E" }}
+          style={{ background: "var(--primary)", color: "var(--foreground)" }}
         >
           {cta}
         </button>
@@ -1385,8 +1385,8 @@ export function UserAdminView({
           <div
             className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl flex-shrink-0"
             style={{
-              background: "#FFF200",
-              color: "#1A1A2E",
+              background: "var(--primary)",
+              color: "var(--foreground)",
               fontFamily: "'Bricolage Grotesque', sans-serif",
             }}
           >
@@ -1417,15 +1417,15 @@ export function UserAdminView({
                 key={item.id}
                 onClick={() => navigate(item.id)}
                 className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors relative ${idx < navItems.length - 1 ? "border-b border-border" : ""}`}
-                style={{ background: active ? "#1A1A2E" : "transparent" }}
+                style={{ background: active ? "var(--secondary)" : "transparent" }}
               >
                 <Icon
                   className="w-4 h-4 flex-shrink-0"
-                  style={{ color: active ? "#FFF200" : "#6B7280" }}
+                  style={{ color: active ? "var(--primary)" : "var(--muted-foreground)" }}
                 />
                 <span
                   className="text-sm font-medium flex-1 truncate"
-                  style={{ color: active ? "#FFF200" : "#374151" }}
+                  style={{ color: active ? "var(--primary)" : "#374151" }}
                 >
                   {item.label}
                 </span>
@@ -1433,8 +1433,8 @@ export function UserAdminView({
                   <span
                     className="text-[10px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1"
                     style={{
-                      background: active ? "#FFF200" : "#1A1A2E",
-                      color: active ? "#1A1A2E" : "#FFF200",
+                      background: active ? "var(--primary)" : "var(--secondary)",
+                      color: active ? "var(--foreground)" : "var(--primary)",
                     }}
                   >
                     {item.badge}
@@ -1500,7 +1500,7 @@ export function UserAdminView({
             style={{ boxShadow: "none" }}
             onFocus={(e) => {
               e.target.style.boxShadow = "0 0 0 2px #FFF200";
-              e.target.style.borderColor = "#FFF200";
+              e.target.style.borderColor = "var(--primary)";
             }}
             onBlur={(e) => {
               e.target.style.boxShadow = "none";
@@ -1521,8 +1521,8 @@ export function UserAdminView({
               className="flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all"
               style={
                 filter === f.id
-                  ? { background: "#1A1A2E", color: "#FFF200" }
-                  : { background: "#F4F4F6", color: "#6B7280" }
+                  ? { background: "var(--secondary)", color: "var(--primary)" }
+                  : { background: "var(--muted)", color: "var(--muted-foreground)" }
               }
             >
               {f.label}
@@ -1630,7 +1630,7 @@ export function UserAdminView({
                         }
                       }}
                       className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 text-center"
-                      style={{ background: "#FFF200", color: "#1A1A2E" }}
+                      style={{ background: "var(--primary)", color: "var(--foreground)" }}
                     >
                       Rastrear pedido
                     </button>
@@ -1644,7 +1644,7 @@ export function UserAdminView({
                         )
                       }
                       className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 text-center"
-                      style={{ background: "#FFF200", color: "#1A1A2E" }}
+                      style={{ background: "var(--primary)", color: "var(--foreground)" }}
                     >
                       Comprar de nuevo
                     </button>
@@ -1739,7 +1739,7 @@ export function UserAdminView({
                     style={{
                       background:
                         step.state === "done"
-                          ? "#1A1A2E"
+                          ? "var(--secondary)"
                           : step.state === "rejected"
                             ? "#EF4444"
                             : "#E5E7EB",
@@ -1760,14 +1760,14 @@ export function UserAdminView({
                       className="flex-1 h-0.5 mx-0"
                       style={{
                         background:
-                          step.state === "done" ? "#FFF200" : "#E5E7EB",
+                          step.state === "done" ? "var(--primary)" : "#E5E7EB",
                       }}
                     />
                   )}
                 </div>
                 <p
                   className="text-[10px] font-semibold text-center mt-1.5 px-0.5 leading-snug"
-                  style={{ color: "#1A1A2E" }}
+                  style={{ color: "var(--foreground)" }}
                 >
                   {step.label}
                 </p>
@@ -1869,8 +1869,8 @@ export function UserAdminView({
 
               {driver && (
                 <div className="mt-3 pt-3 border-t border-border flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-[#FFF200] shrink-0">
-                    <Truck className="w-5 h-5" style={{ color: "#1A1A2E" }} />
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary shrink-0">
+                    <Truck className="w-5 h-5" style={{ color: "var(--foreground)" }} />
                   </div>
                   <div className="min-w-0">
                     <p className="text-xs font-bold text-foreground truncate">
@@ -1895,7 +1895,7 @@ export function UserAdminView({
                 <button
                   onClick={() => onOpenTracking?.(order.id)}
                   className="mt-3 w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-opacity hover:opacity-90"
-                  style={{ background: "#1A1A2E", color: "#FFF200" }}
+                  style={{ background: "var(--secondary)", color: "var(--primary)" }}
                 >
                   <Navigation className="w-4 h-4" />
                   Ver mapa en vivo
@@ -1916,17 +1916,17 @@ export function UserAdminView({
                 className="flex flex-col items-center gap-2 py-4 px-3 rounded-xl border border-border hover:shadow-sm transition-all text-center"
                 style={
                   a.primary
-                    ? { background: "#FFF200", borderColor: "#FFF200" }
+                    ? { background: "var(--primary)", borderColor: "var(--primary)" }
                     : {}
                 }
               >
                 <Icon
                   className="w-5 h-5"
-                  style={{ color: a.primary ? "#1A1A2E" : "#6B7280" }}
+                  style={{ color: a.primary ? "var(--foreground)" : "var(--muted-foreground)" }}
                 />
                 <span
                   className="text-xs font-semibold leading-tight"
-                  style={{ color: a.primary ? "#1A1A2E" : "#374151" }}
+                  style={{ color: a.primary ? "var(--foreground)" : "#374151" }}
                 >
                   {a.label}
                 </span>
@@ -1985,13 +1985,13 @@ export function UserAdminView({
             <div className="relative flex flex-col items-center gap-3">
               <div
                 className="w-14 h-14 rounded-2xl flex items-center justify-center shadow-lg"
-                style={{ background: "#FFF200" }}
+                style={{ background: "var(--primary)" }}
               >
-                <Truck className="w-7 h-7" style={{ color: "#1A1A2E" }} />
+                <Truck className="w-7 h-7" style={{ color: "var(--foreground)" }} />
               </div>
               <div
                 className="px-4 py-2 rounded-xl text-sm font-bold shadow-md"
-                style={{ background: "#1A1A2E", color: "#FFF200" }}
+                style={{ background: "var(--secondary)", color: "var(--primary)" }}
               >
                 Domiciliario en camino
               </div>
@@ -2009,8 +2009,8 @@ export function UserAdminView({
             <div
               className="w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl flex-shrink-0"
               style={{
-                background: "#FFF200",
-                color: "#1A1A2E",
+                background: "var(--primary)",
+                color: "var(--foreground)",
                 fontFamily: "'Bricolage Grotesque', sans-serif",
               }}
             >
@@ -2061,8 +2061,8 @@ export function UserAdminView({
                   <div
                     className="w-7 h-7 rounded-full flex items-center justify-center border-2"
                     style={{
-                      background: step.done ? "#1A1A2E" : "white",
-                      borderColor: step.done ? "#1A1A2E" : "#E5E7EB",
+                      background: step.done ? "var(--secondary)" : "white",
+                      borderColor: step.done ? "var(--secondary)" : "#E5E7EB",
                     }}
                   >
                     {step.done ? (
@@ -2077,14 +2077,14 @@ export function UserAdminView({
                   {idx < TRACKING_STEPS.length - 1 && (
                     <div
                       className="w-0.5 h-6 mt-0.5"
-                      style={{ background: step.done ? "#FFF200" : "#E5E7EB" }}
+                      style={{ background: step.done ? "var(--primary)" : "#E5E7EB" }}
                     />
                   )}
                 </div>
                 <div className="pb-5">
                   <p
                     className="text-sm font-semibold"
-                    style={{ color: step.done ? "#1A1A2E" : "#9CA3AF" }}
+                    style={{ color: step.done ? "var(--foreground)" : "#9CA3AF" }}
                   >
                     {step.label}
                   </p>
@@ -2138,7 +2138,7 @@ export function UserAdminView({
             <button
               onClick={() => favorites.forEach((p) => onAdd(p))}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-95"
-              style={{ background: "#FFF200", color: "#1A1A2E" }}
+              style={{ background: "var(--primary)", color: "var(--foreground)" }}
             >
               <ShoppingCart className="w-3.5 h-3.5" />
               Agregar todo al carrito
@@ -2166,7 +2166,7 @@ export function UserAdminView({
                   className="w-full pl-9 pr-3 py-2 text-sm rounded-xl border border-border bg-white focus:outline-none"
                   onFocus={(e) => {
                     e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                    e.target.style.borderColor = "#FFF200";
+                    e.target.style.borderColor = "var(--primary)";
                   }}
                   onBlur={(e) => {
                     e.target.style.boxShadow = "none";
@@ -2185,8 +2185,8 @@ export function UserAdminView({
                     className="flex-shrink-0 px-3 py-2 rounded-xl text-xs font-semibold transition-all"
                     style={
                       favCategory === c
-                        ? { background: "#1A1A2E", color: "#FFF200" }
-                        : { background: "#F4F4F6", color: "#6B7280" }
+                        ? { background: "var(--secondary)", color: "var(--primary)" }
+                        : { background: "var(--muted)", color: "var(--muted-foreground)" }
                     }
                   >
                     {c}
@@ -2225,7 +2225,7 @@ export function UserAdminView({
                           className="absolute top-2 left-2 text-xs font-bold px-2 py-0.5 rounded-full text-white"
                           style={{
                             background:
-                              p.badge === "Nuevo" ? "#1A1A2E" : "#FF4444",
+                              p.badge === "Nuevo" ? "var(--secondary)" : "var(--accent)",
                           }}
                         >
                           {p.badge}
@@ -2275,7 +2275,7 @@ export function UserAdminView({
                       <button
                         onClick={() => onAdd(p)}
                         className="w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg font-semibold text-xs mt-1 transition-all hover:brightness-95"
-                        style={{ background: "#FFF200", color: "#1A1A2E" }}
+                        style={{ background: "var(--primary)", color: "var(--foreground)" }}
                       >
                         <ShoppingCart className="w-3 h-3" />
                         {qty === 0 ? "Agregar" : "Agregar uno más"}
@@ -2508,7 +2508,7 @@ export function UserAdminView({
               <button
                 type="submit"
                 className="px-4 py-2.5 rounded-xl text-sm font-bold flex-shrink-0"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
+                style={{ background: "var(--primary)", color: "var(--foreground)" }}
               >
                 Crear
               </button>
@@ -2541,7 +2541,7 @@ export function UserAdminView({
                       <button
                         type="submit"
                         className="text-xs font-bold px-2 rounded"
-                        style={{ background: "#FFF200", color: "#1A1A2E" }}
+                        style={{ background: "var(--primary)", color: "var(--foreground)" }}
                       >
                         ✓
                       </button>
@@ -2583,7 +2583,7 @@ export function UserAdminView({
                 <button
                   type="submit"
                   className="px-3 py-2 rounded-xl text-xs font-bold flex-shrink-0"
-                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  style={{ background: "var(--primary)", color: "var(--foreground)" }}
                 >
                   +
                 </button>
@@ -2716,7 +2716,7 @@ export function UserAdminView({
                         <button
                           onClick={() => addListToCart(selectedList)}
                           className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95"
-                          style={{ background: "#FFF200", color: "#1A1A2E" }}
+                          style={{ background: "var(--primary)", color: "var(--foreground)" }}
                         >
                           <ShoppingCart className="w-4 h-4" />
                           Agregar al carrito
@@ -2724,8 +2724,8 @@ export function UserAdminView({
                         {onReplaceCart && (
                           <button
                             onClick={() => replaceListToCart(selectedList)}
-                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm border-2 border-[#FFF200] transition-all hover:bg-[#FFF200]/10"
-                            style={{ color: "#1A1A2E" }}
+                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-bold text-sm border-2 border-primary transition-all hover:bg-primary/10"
+                            style={{ color: "var(--foreground)" }}
                           >
                             <RefreshCcw className="w-4 h-4" />
                             Reemplazar carrito
@@ -2739,7 +2739,7 @@ export function UserAdminView({
                   {showAddProduct && (
                     <div className="mt-4 border-t border-border pt-4">
                       <div className="relative">
-                        <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 bg-white focus-within:ring-2 focus-within:ring-[#FFF200] focus-within:border-transparent transition-all">
+                        <div className="flex items-center gap-2 border border-border rounded-xl px-3 py-2 bg-white focus-within:ring-2 focus-within:ring-primary focus-within:border-transparent transition-all">
                           <Search className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
                           <input
                             autoFocus
@@ -2890,7 +2890,7 @@ export function UserAdminView({
           <button
             onClick={() => setShowForm(true)}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-95"
-            style={{ background: "#FFF200", color: "#1A1A2E" }}
+            style={{ background: "var(--primary)", color: "var(--foreground)" }}
           >
             <Plus className="w-3.5 h-3.5" />
             Nueva dirección
@@ -2922,7 +2922,7 @@ export function UserAdminView({
                       {addr.isDefault && (
                         <span
                           className="text-[10px] font-black px-2 py-0.5 rounded-full"
-                          style={{ background: "#FFF200", color: "#1A1A2E" }}
+                          style={{ background: "var(--primary)", color: "var(--foreground)" }}
                         >
                           PREDETERMINADA
                         </span>
@@ -3005,7 +3005,7 @@ export function UserAdminView({
                       onClick={saveAddr}
                       disabled={saving}
                       className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 disabled:opacity-50"
-                      style={{ background: "#FFF200", color: "#1A1A2E" }}
+                      style={{ background: "var(--primary)", color: "var(--foreground)" }}
                     >
                       {saving ? "Guardando..." : "Guardar"}
                     </button>
@@ -3216,7 +3216,7 @@ export function UserAdminView({
           <button
             onClick={startAdd}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-95"
-            style={{ background: "#FFF200", color: "#1A1A2E" }}
+            style={{ background: "var(--primary)", color: "var(--foreground)" }}
           >
             <Plus className="w-3.5 h-3.5" />
             Agregar método
@@ -3255,7 +3255,7 @@ export function UserAdminView({
                       {pm.isDefault && (
                         <span
                           className="text-[10px] font-black px-2 py-0.5 rounded-full"
-                          style={{ background: "#FFF200", color: "#1A1A2E" }}
+                          style={{ background: "var(--primary)", color: "var(--foreground)" }}
                         >
                           PREDETERMINADA
                         </span>
@@ -3465,7 +3465,7 @@ export function UserAdminView({
                     onClick={saveMethod}
                     disabled={saving || availableTypes.length === 0}
                     className="flex-1 py-2 rounded-lg text-xs font-bold transition-all hover:brightness-95 disabled:opacity-50"
-                    style={{ background: "#FFF200", color: "#1A1A2E" }}
+                    style={{ background: "var(--primary)", color: "var(--foreground)" }}
                   >
                     {saving ? "Guardando..." : "Guardar"}
                   </button>
@@ -3678,7 +3678,7 @@ export function UserAdminView({
                           onAdd(item as unknown as Product);
                       }}
                       className="mt-1 flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-lg transition-all hover:brightness-95 whitespace-nowrap"
-                      style={{ background: "#FFF200", color: "#1A1A2E" }}
+                      style={{ background: "var(--primary)", color: "var(--foreground)" }}
                     >
                       <RefreshCcw className="w-2.5 h-2.5" />
                       Comprar de nuevo
@@ -3709,7 +3709,7 @@ export function UserAdminView({
       order: <Package className="w-4 h-4" style={{ color: "#004085" }} />,
       promo: <Tag className="w-4 h-4" style={{ color: "#856404" }} />,
       coupon: <Gift className="w-4 h-4" style={{ color: "#155724" }} />,
-      new: <Sparkles className="w-4 h-4" style={{ color: "#6B7280" }} />,
+      new: <Sparkles className="w-4 h-4" style={{ color: "var(--muted-foreground)" }} />,
       reco: <Star className="w-4 h-4" style={{ color: "#F5C518" }} />,
     };
     const typeBg: Record<AcctNotif["type"], string> = {
@@ -3781,7 +3781,7 @@ export function UserAdminView({
                     className="relative w-10 h-5 rounded-full transition-all flex-shrink-0"
                     style={{
                       background: prefs[key as keyof typeof prefs]
-                        ? "#FFF200"
+                        ? "var(--primary)"
                         : "#E5E7EB",
                     }}
                     onClick={() =>
@@ -3837,7 +3837,7 @@ export function UserAdminView({
                       {!n.read && (
                         <div
                           className="w-2 h-2 rounded-full flex-shrink-0 mt-1"
-                          style={{ background: "#1A1A2E" }}
+                          style={{ background: "var(--secondary)" }}
                         />
                       )}
                     </div>
@@ -4014,8 +4014,8 @@ export function UserAdminView({
                 <div
                   className="w-16 h-16 rounded-2xl flex items-center justify-center font-black text-2xl"
                   style={{
-                    background: "#FFF200",
-                    color: "#1A1A2E",
+                    background: "var(--primary)",
+                    color: "var(--foreground)",
                     fontFamily: "'Bricolage Grotesque', sans-serif",
                   }}
                 >
@@ -4023,7 +4023,7 @@ export function UserAdminView({
                 </div>
                 <button
                   className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full flex items-center justify-center border-2 border-white"
-                  style={{ background: "#1A1A2E" }}
+                  style={{ background: "var(--secondary)" }}
                 >
                   <Camera className="w-3 h-3 text-white" />
                 </button>
@@ -4065,7 +4065,7 @@ export function UserAdminView({
                       className="w-full pl-9 pr-3 py-2 text-sm border border-border rounded-xl focus:outline-none"
                       onFocus={(e) => {
                         e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                        e.target.style.borderColor = "#FFF200";
+                        e.target.style.borderColor = "var(--primary)";
                       }}
                       onBlur={(e) => {
                         e.target.style.boxShadow = "none";
@@ -4093,7 +4093,7 @@ export function UserAdminView({
                     className="w-full pl-9 pr-9 py-2 text-sm border border-border rounded-xl focus:outline-none"
                     onFocus={(e) => {
                       e.target.style.boxShadow = "0 0 0 2px #FFF200";
-                      e.target.style.borderColor = "#FFF200";
+                      e.target.style.borderColor = "var(--primary)";
                     }}
                     onBlur={(e) => {
                       e.target.style.boxShadow = "none";
@@ -4152,7 +4152,7 @@ export function UserAdminView({
                   </div>
                   <div
                     className="relative w-11 h-6 rounded-full transition-all flex-shrink-0"
-                    style={{ background: value ? "#FFF200" : "#E5E7EB" }}
+                    style={{ background: value ? "var(--primary)" : "#E5E7EB" }}
                     onClick={() => set((v: boolean) => !v)}
                   >
                     <div
@@ -4171,8 +4171,8 @@ export function UserAdminView({
             disabled={saving}
             className="w-full py-3.5 rounded-xl font-black text-sm transition-all hover:brightness-95 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer"
             style={{
-              background: saved ? "#D4EDDA" : "#FFF200",
-              color: saved ? "#155724" : "#1A1A2E",
+              background: saved ? "#D4EDDA" : "var(--primary)",
+              color: saved ? "#155724" : "var(--foreground)",
             }}
           >
             {saving ? (
@@ -4315,7 +4315,7 @@ export function UserAdminView({
               <button
                 onClick={() => setShowSavedModal(false)}
                 className="w-full py-2.5 rounded-xl text-sm font-bold transition-all hover:brightness-95"
-                style={{ background: "#FFF200", color: "#1A1A2E" }}
+                style={{ background: "var(--primary)", color: "var(--foreground)" }}
               >
                 Entendido
               </button>
@@ -4404,7 +4404,7 @@ export function UserAdminView({
               <div className="flex items-center gap-3 mb-4">
                 <div
                   className="w-12 h-12 rounded-2xl flex items-center justify-center font-black text-xl"
-                  style={{ background: "#FFF200", color: "#1A1A2E" }}
+                  style={{ background: "var(--primary)", color: "var(--foreground)" }}
                 >
                   C
                 </div>
@@ -4429,22 +4429,22 @@ export function UserAdminView({
                       key={item.id}
                       onClick={() => navigate(item.id)}
                       className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition-colors relative"
-                      style={{ background: active ? "#1A1A2E" : "transparent" }}
+                      style={{ background: active ? "var(--secondary)" : "transparent" }}
                     >
                       <Icon
                         className="w-4 h-4 flex-shrink-0"
-                        style={{ color: active ? "#FFF200" : "#6B7280" }}
+                        style={{ color: active ? "var(--primary)" : "var(--muted-foreground)" }}
                       />
                       <span
                         className="text-sm font-medium flex-1"
-                        style={{ color: active ? "#FFF200" : "#374151" }}
+                        style={{ color: active ? "var(--primary)" : "#374151" }}
                       >
                         {item.label}
                       </span>
                       {item.badge !== undefined && (
                         <span
                           className="text-[10px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1"
-                          style={{ background: "#FFF200", color: "#1A1A2E" }}
+                          style={{ background: "var(--primary)", color: "var(--foreground)" }}
                         >
                           {item.badge}
                         </span>

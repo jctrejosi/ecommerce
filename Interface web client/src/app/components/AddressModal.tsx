@@ -44,7 +44,7 @@ export function AddressModal({ open, onClose, customer, onLoginModal, onAddresse
           <MapPin className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <h3 className="font-bold text-lg mb-2">Inicia sesión</h3>
           <p className="text-sm text-muted-foreground mb-6">Debes iniciar sesión para administrar tus direcciones de entrega.</p>
-          <button onClick={() => { onClose(); onLoginModal("login"); }} className="w-full py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95" style={{ background: "#FFF200", color: "#1A1A2E" }}>Iniciar sesión</button>
+          <button onClick={() => { onClose(); onLoginModal("login"); }} className="w-full py-2.5 rounded-xl font-bold text-sm transition-all hover:brightness-95" style={{ background: "var(--primary)", color: "var(--foreground)" }}>Iniciar sesión</button>
         </div>
       </div>,
       document.body
@@ -127,7 +127,7 @@ export function AddressModal({ open, onClose, customer, onLoginModal, onAddresse
                 <input key={key} placeholder={placeholder + (required ? " *" : "")} value={(form as any)[key] ?? ""} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
                   className="w-full text-xs border border-border rounded-lg px-3 py-2.5 focus:outline-none" onFocus={e => e.target.style.boxShadow = "0 0 0 2px #FFF200"} onBlur={e => e.target.style.boxShadow = "none"} />
               ))}
-              <button onClick={handleSave} disabled={saving} className="w-full py-2.5 rounded-xl text-xs font-bold transition-all hover:brightness-95 disabled:opacity-50" style={{ background: "#FFF200", color: "#1A1A2E" }}>
+              <button onClick={handleSave} disabled={saving} className="w-full py-2.5 rounded-xl text-xs font-bold transition-all hover:brightness-95 disabled:opacity-50" style={{ background: "var(--primary)", color: "var(--foreground)" }}>
                 {saving ? "Guardando..." : editingId ? "Guardar cambios" : "Agregar dirección"}
               </button>
             </div>
@@ -138,7 +138,7 @@ export function AddressModal({ open, onClose, customer, onLoginModal, onAddresse
                   <MapPin className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
                   <p className="font-bold text-sm mb-1">Sin direcciones</p>
                   <p className="text-xs text-muted-foreground mb-4">Guarda tus direcciones para hacer pedidos más rápido.</p>
-                  <button onClick={openNew} className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-95" style={{ background: "#FFF200", color: "#1A1A2E" }}><Plus className="w-3 h-3 inline mr-1" /> Agregar dirección</button>
+                  <button onClick={openNew} className="px-4 py-2 rounded-xl text-xs font-bold transition-all hover:brightness-95" style={{ background: "var(--primary)", color: "var(--foreground)" }}><Plus className="w-3 h-3 inline mr-1" /> Agregar dirección</button>
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -149,7 +149,7 @@ export function AddressModal({ open, onClose, customer, onLoginModal, onAddresse
                           <span className="text-xl">{ICONS[i % ICONS.length]}</span>
                           <div>
                             <p className="font-bold text-sm text-foreground">{addr.alias || addr.addressLine1}</p>
-                            {addr.isDefault && <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "#FFF200", color: "#1A1A2E" }}>PREDETERMINADA</span>}
+                            {addr.isDefault && <span className="text-[10px] font-black px-2 py-0.5 rounded-full" style={{ background: "var(--primary)", color: "var(--foreground)" }}>PREDETERMINADA</span>}
                           </div>
                         </div>
                         <div className="flex gap-1">
