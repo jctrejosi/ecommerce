@@ -389,7 +389,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
             <path d="M18 6 6 18M6 6l12 12" />
           </svg>
         ) : (
-          <img src={logoBot} alt="Daisy" className="w-11 h-11 rounded-full object-cover" />
+          <img src={logoBot} alt="Daisy" className="w-full h-full rounded-full object-cover" />
         )}
       </button>
 

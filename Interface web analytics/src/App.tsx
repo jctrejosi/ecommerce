@@ -265,27 +265,40 @@ function Sidebar({
   current,
   onNavigate,
   collapsed,
+  storeLogo,
 }: {
   current: ViewId;
   onNavigate: (v: ViewId) => void;
   collapsed: boolean;
+  storeLogo?: string | null;
 }) {
   return (
     <aside
       className="flex flex-col h-full border-r border-white/[0.06] transition-all duration-300"
       style={{ background: "#0C0C0D", width: collapsed ? 56 : 240 }}
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/[0.06] shrink-0">
-        <img
-          src={sidebarLogo}
-          alt="Mercaldas"
-          className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-6 w-auto"}`}
-        />
+      {/* Logos + título */}
+      <div className="flex flex-col gap-3 px-4 py-5 border-b border-white/[0.06] shrink-0">
+        <div className={`flex items-center gap-3 ${collapsed ? "flex-col gap-2" : ""}`}>
+          <img
+            src={sidebarLogo}
+            alt="Mercaldas"
+            className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-6 w-auto"}`}
+          />
+          {storeLogo && (
+            <img
+              src={storeLogo}
+              alt="Tienda"
+              className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-6 w-auto"}`}
+            />
+          )}
+        </div>
         {!collapsed && (
           <div>
             <p className="text-white font-bold text-sm leading-tight">Mercaldas</p>
-            <p className="text-white/40 text-xs">Web Analytics</p>
+            <p className="text-base font-extrabold uppercase tracking-wide bg-linear-to-r from-amber-300 via-amber-400 to-orange-500 bg-clip-text text-transparent">
+              Web Analytics
+            </p>
           </div>
         )}
       </div>
@@ -493,6 +506,7 @@ export default function App() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
+  const [storeLogo, setStoreLogo] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -514,6 +528,15 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Logo de la tienda configurado en el admin (público: /landing/general).
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    fetch(`${base}/landing/general`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { url?: string } | null) => setStoreLogo(d?.url?.trim() || null))
+      .catch(() => setStoreLogo(null));
+  }, []);
+
   // El dashboard puede pedir navegar a secciones que no existen aquí
   // (pedidos, promociones...); solo navegamos a las vistas disponibles.
   const handleDashboardNavigate = useCallback(
@@ -525,7 +548,7 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} />
+      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} storeLogo={storeLogo} />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar

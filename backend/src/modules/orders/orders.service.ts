@@ -861,6 +861,7 @@ export class OrdersService {
 
     let driver: {
       name: string;
+      avatarUrl: string | null;
       vehicleType: string | null;
       vehiclePlate: string | null;
       location: { lat: number; lng: number } | null;
@@ -870,6 +871,7 @@ export class OrdersService {
       const [d] = await this.db
         .select({
           fullName: deliveryDrivers.fullName,
+          avatarUrl: deliveryDrivers.avatarUrl,
           vehicleType: deliveryDrivers.vehicleType,
           vehiclePlate: deliveryDrivers.vehiclePlate,
           currentLocation: deliveryDrivers.currentLocation,
@@ -881,6 +883,7 @@ export class OrdersService {
       if (d) {
         driver = {
           name: d.fullName,
+          avatarUrl: d.avatarUrl ?? null,
           vehicleType: d.vehicleType,
           vehiclePlate: d.vehiclePlate,
           location: this.parseDbPoint(d.currentLocation),

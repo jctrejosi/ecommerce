@@ -122,6 +122,15 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
     };
   }, [orderCode, load, loadRoute]);
 
+  // Bloquea el scroll del documento mientras el modal está abierto.
+  useEffect(() => {
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, []);
+
   const delivery = data?.deliveryStatus ? STATUS_TEXT[data.deliveryStatus] : null;
   const canShowMap =
     data != null &&
@@ -216,6 +225,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
                 <div className="h-72">
                   <LiveOrderMap
                     driver={data.driver?.location ?? null}
+                    driverAvatar={data.driver?.avatarUrl ?? null}
                     destination={data.destination?.location ?? null}
                     branch={data.branch?.location ?? null}
                     routePolyline={route?.polyline ?? null}
@@ -236,9 +246,17 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
               {/* Repartidor */}
               {data.driver && (
                 <div className="rounded-2xl border border-border p-4 flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl bg-[#FFF200] shrink-0">
-                    🛵
-                  </div>
+                  {data.driver.avatarUrl ? (
+                    <img
+                      src={data.driver.avatarUrl}
+                      alt={data.driver.name}
+                      className="w-11 h-11 rounded-2xl object-cover shrink-0"
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-2xl flex items-center justify-center text-xl bg-[#FFF200] shrink-0">
+                      🛵
+                    </div>
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-bold text-foreground truncate">
                       {data.driver.name}

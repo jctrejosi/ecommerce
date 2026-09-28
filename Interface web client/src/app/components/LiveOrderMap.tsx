@@ -12,6 +12,8 @@ export interface MapPoint {
 
 interface LiveOrderMapProps {
   driver?: MapPoint | null;
+  /** Foto de perfil del repartidor (se usa en el marcador si existe). */
+  driverAvatar?: string | null;
   destination?: MapPoint | null;
   branch?: MapPoint | null;
   /**
@@ -29,6 +31,7 @@ interface LiveOrderMapProps {
  */
 export function LiveOrderMap({
   driver,
+  driverAvatar,
   destination,
   branch,
   routePolyline,
@@ -145,7 +148,19 @@ export function LiveOrderMap({
       inner.style.boxSizing = "border-box";
       inner.style.border = "3px solid #FFF200";
       inner.style.animation = "deliveryBlink 1.4s ease-in-out infinite";
-      inner.textContent = "🛵";
+      inner.style.overflow = "hidden";
+      if (driverAvatar) {
+        const img = document.createElement("img");
+        img.src = driverAvatar;
+        img.alt = "Repartidor";
+        img.style.width = "100%";
+        img.style.height = "100%";
+        img.style.objectFit = "cover";
+        img.style.borderRadius = "9999px";
+        inner.appendChild(img);
+      } else {
+        inner.textContent = "🛵";
+      }
       el.appendChild(inner);
 
       markersRef.current.push(
@@ -239,7 +254,7 @@ export function LiveOrderMap({
       map.easeTo({ center: [destination.lng, destination.lat], zoom: Math.max(map.getZoom(), 14.5), duration: 500 });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [driver?.lat, driver?.lng, destination?.lat, destination?.lng, branch?.lat, branch?.lng, routePolyline, styleTick]);
+  }, [driver?.lat, driver?.lng, driverAvatar, destination?.lat, destination?.lng, branch?.lat, branch?.lng, routePolyline, styleTick]);
 
   return (
     <div className="relative h-full w-full overflow-hidden rounded-2xl">

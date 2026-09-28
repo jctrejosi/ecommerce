@@ -9,7 +9,7 @@ import {
   Clock,
   Search,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ordersService } from "../../services/orders.service";
 import type { Order } from "../types";
 
@@ -38,6 +38,16 @@ export function OrdersPanel({
   const [trackCode, setTrackCode] = useState("");
   const [trackLoading, setTrackLoading] = useState(false);
   const [trackError, setTrackError] = useState<string | null>(null);
+
+  // Bloquea el scroll del documento mientras el panel está abierto.
+  useEffect(() => {
+    if (!ordersOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [ordersOpen]);
 
   if (!ordersOpen) return null;
 

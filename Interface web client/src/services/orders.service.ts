@@ -310,6 +310,7 @@ export type OrderLiveTracking = {
   deliveryStatus: string | null;
   driver: {
     name: string;
+    avatarUrl: string | null;
     vehicleType: string | null;
     vehiclePlate: string | null;
     location: Point | null;
