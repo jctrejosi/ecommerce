@@ -27,6 +27,7 @@ const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
+const crypto = require("node:crypto");
 
 const ROOT = __dirname;
 const LOGS_DIR = path.join(ROOT, "logs");
@@ -37,6 +38,12 @@ const PICKING_MOBILE_DIR = path.join(ROOT, "Interface movil picking");
 const PICKING_MOBILE_PORT = 8082;
 const OSRM_DIR = path.join(ROOT, "delivery-routing");
 const OSRM_PORT = 5000;
+
+// BD principal (db/docker/docker-compose.yml) y respaldo versionado en db/backup.
+// El respaldo va troceado (ecommerce.dump.part-000, ...) para subirlo a GitHub.
+const DB_CONTAINER = "ecommerce_postgres";
+const DB_NAME = "ecommerce";
+const DB_BACKUP_DIR = path.join(ROOT, "db", "backup");
 
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
@@ -392,6 +399,119 @@ function startDatabase() {
     `${C.db}[db]${C.reset} 💡 Docker no está disponible: arranca el daemon (sudo systemctl start docker o sudo service docker start) y, si hace falta, añade tu usuario al grupo docker (sudo usermod -aG docker $USER) y reinicia sesión.`,
   );
   return false;
+}
+
+// ── Restauración del respaldo versionado (db/backup) ────────
+// Antes de la primera migración la BD local solo tiene las extensiones de
+// init.sql (PostGIS, citext, ...). Si no existe la tabla `products` se asume un
+// clon nuevo y se reensambla el respaldo (part-000, part-001, ...) para
+// restaurarlo con pg_restore. Si ya hay datos, no se toca nada.
+function dbIsInitialized() {
+  const r = spawnSync(
+    "docker",
+    [
+      "exec", DB_CONTAINER,
+      "psql", "-U", "postgres", "-d", DB_NAME,
+      "-tAc", "SELECT to_regclass('public.products') IS NOT NULL",
+    ],
+    { encoding: "utf8" },
+  );
+  if (r.status !== 0) return null;
+  return (r.stdout || "").trim() === "t";
+}
+
+function loadBackup() {
+  if (!fs.existsSync(DB_BACKUP_DIR)) return null;
+  const files = fs.readdirSync(DB_BACKUP_DIR);
+  const single = files.includes("ecommerce.dump");
+  const parts = files
+    .filter((f) => /^ecommerce\.dump\.part-\d+$/.test(f))
+    .sort();
+  if (!single && parts.length === 0) return null;
+  const names = single ? ["ecommerce.dump"] : parts;
+  const buffer = Buffer.concat(
+    names.map((n) => fs.readFileSync(path.join(DB_BACKUP_DIR, n))),
+  );
+  return { names, buffer };
+}
+
+function restoreDatabaseIfNeeded() {
+  const backup = loadBackup();
+  if (!backup) return;
+
+  const initialized = dbIsInitialized();
+  if (initialized === null) {
+    console.warn(
+      `${C.db}[db]${C.reset} ⚠️  No se pudo verificar el estado de la BD; se omite la restauración del respaldo.`,
+    );
+    return;
+  }
+  if (initialized) return; // ya tiene datos: no se sobrescribe
+
+  // Integridad: si existe el hash del volcado completo, se valida antes de restaurar.
+  const shaFile = path.join(DB_BACKUP_DIR, "ecommerce.dump.sha256");
+  if (fs.existsSync(shaFile)) {
+    const expected = fs.readFileSync(shaFile, "utf8").trim();
+    const actual = crypto.createHash("sha256").update(backup.buffer).digest("hex");
+    if (expected && expected !== actual) {
+      console.error(
+        `${C.db}[db]${C.reset} ✘ El respaldo no coincide con su hash (esperado ${expected.slice(0, 12)}…, obtenido ${actual.slice(0, 12)}…). Se omite la restauración.`,
+      );
+      return;
+    }
+  }
+
+  const mb = (backup.buffer.length / (1024 * 1024)).toFixed(1);
+  console.log(
+    `${C.db}[db]${C.reset} 📥 BD vacía: restaurando respaldo (${backup.names.length} archivo(s), ${mb} MB)...`,
+  );
+
+  // Se reensambla a un temporal y se copia al contenedor con `docker cp`,
+  // restaurando desde archivo (no por stdin): es la vía más portable entre
+  // Linux/macOS/Windows (evita tuberías binarias y sus problemas en Windows).
+  const relTmp = "logs/ecommerce_restore.dump";
+  const hostTmp = path.join(ROOT, "logs", "ecommerce_restore.dump");
+  const containerTmp = "/tmp/ecommerce_restore.dump";
+  const { fd } = openLog("db");
+  let status = 1;
+  try {
+    fs.writeFileSync(hostTmp, backup.buffer);
+    const cp = spawnSync(
+      "docker",
+      ["cp", relTmp, `${DB_CONTAINER}:${containerTmp}`],
+      { cwd: ROOT, stdio: ["ignore", fd, fd], timeout: 120000 },
+    );
+    if (cp.status === 0) {
+      const r = spawnSync(
+        "docker",
+        [
+          "exec", DB_CONTAINER,
+          "pg_restore", "-U", "postgres", "-d", DB_NAME,
+          "--clean", "--if-exists", "--no-owner", "--no-privileges",
+          containerTmp,
+        ],
+        { stdio: ["ignore", fd, fd], timeout: 600000 },
+      );
+      status = r.status;
+      // Limpieza del temporal dentro del contenedor (best-effort).
+      spawnSync("docker", ["exec", DB_CONTAINER, "rm", "-f", containerTmp], {
+        stdio: ["ignore", fd, fd],
+      });
+    } else {
+      status = cp.status;
+    }
+  } finally {
+    fs.closeSync(fd);
+    fs.rmSync(hostTmp, { force: true });
+  }
+
+  if (status === 0) {
+    console.log(`${C.db}[db]${C.reset} ✅ Respaldo restaurado`);
+  } else {
+    console.warn(
+      `${C.db}[db]${C.reset} ⚠️  La restauración del respaldo falló (código ${status}; detalle en logs/db.log).`,
+    );
+  }
 }
 
 /** PostgreSQL de ANALYTICS (campañas/segmentación, :5436) — db-campaigns/. */
@@ -998,10 +1118,14 @@ async function main() {
   if (wantDb) {
     startDatabase();
     const dbUp = await waitForPort(5432, 90000);
-    if (!dbUp)
+    if (!dbUp) {
       console.warn(
         `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
       );
+    } else {
+      // Clon nuevo (BD sin tabla `products`): monta el respaldo de db/backup.
+      restoreDatabaseIfNeeded();
+    }
   }
   if (wantCampaigns) {
     startDatabaseCampaigns();
