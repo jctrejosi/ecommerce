@@ -61,13 +61,21 @@ const NPM_DEPS = {
   install: [["npm", "install"]],
 };
 
-// Los fronts del ecommerce usan pnpm (pnpm-lock.yaml). Si pnpm no está
-// instalado se cae a npm: los scripts dev/build/preview existen igual.
-const PM = hasBin("pnpm") ? "pnpm" : "npm";
+// Gestores de paquetes para los fronts y las apps Expo. Se prefiere pnpm (los
+// fronts traen pnpm-lock.yaml); si no está instalado se cae a npm y, de última,
+// a yarn. `PM` es el preferido (para `run`/`exec`); `PM_INSTALLERS` es la lista
+// de candidatos que `ensureDeps`/`ensureExpoDeps` prueban en orden al instalar.
+// npm se asume presente (viene con Node), así que nunca queda fuera de la lista.
+// En Windows npm/pnpm/yarn son shims .cmd y Node exige `shell` para ejecutarlos.
+const PM_SHELL = process.platform === "win32";
+const PKG_MANAGERS = new Set(["npm", "pnpm", "yarn"]);
+const PM_CANDIDATES = ["pnpm", "npm", "yarn"].filter((pm) => pm === "npm" || hasBin(pm));
+const PM = PM_CANDIDATES[0];
+const PM_INSTALLERS = PM_CANDIDATES;
 const PNPM_DEPS = {
   marker: ["node_modules"],
   markerType: "dir",
-  install: [[PM, "install"]],
+  installers: PM_INSTALLERS,
 };
 const PYTHON_DEPS = {
   marker: [".venv", "bin", "python"],
@@ -79,7 +87,7 @@ const PYTHON_DEPS = {
 };
 
 function hasBin(cmd) {
-  const r = spawnSync(cmd, ["--version"], { stdio: "ignore" });
+  const r = spawnSync(cmd, ["--version"], { stdio: "ignore", shell: PM_SHELL });
   return r.status === 0;
 }
 
@@ -599,8 +607,33 @@ function ensureDeps(svc) {
   if (installed) return true;
 
   console.log(`${color}[${svc.name}]${C.reset} 📦 instalando dependencias...`);
+
+  // Candidatos a probar en orden (p. ej. pnpm → npm → yarn): gana el primero
+  // que instale bien. Esto cubre "pnpm no instalado" y "pnpm instalado pero roto".
+  if (svc.deps.installers) {
+    for (const pm of svc.deps.installers) {
+      console.log(`${color}[${svc.name}]${C.reset}    · ${pm} install`);
+      const r = spawnSync(pm, ["install"], { cwd, stdio: "inherit", shell: PM_SHELL });
+      if (r.status === 0) {
+        console.log(`${color}[${svc.name}]${C.reset} ✅ dependencias listas (${pm})`);
+        return true;
+      }
+      console.warn(
+        `${color}[${svc.name}]${C.reset} ⚠️  "${pm} install" falló; probando con el siguiente gestor...`,
+      );
+    }
+    console.error(
+      `${color}[${svc.name}]${C.reset} ✘ no se pudieron instalar las dependencias — se omite este servicio`,
+    );
+    return false;
+  }
+
   for (const step of svc.deps.install) {
-    const r = spawnSync(step[0], step.slice(1), { cwd, stdio: "inherit" });
+    const r = spawnSync(step[0], step.slice(1), {
+      cwd,
+      stdio: "inherit",
+      shell: PM_SHELL && PKG_MANAGERS.has(step[0]),
+    });
     if (r.status !== 0) {
       console.error(
         `${color}[${svc.name}]${C.reset} ✘ falló la instalación: ${step.join(" ")} — se omite este servicio`,
@@ -767,17 +800,24 @@ function printUrls(services, showDb, showCampaigns, showOsrm) {
 
 function ensureExpoDeps(dir, color, label) {
   if (dirHasContent(path.join(dir, "node_modules"))) return true;
-  console.log(`${color}[${label}]${C.reset} 📦 instalando dependencias (${PM})...`);
-  const r = spawnSync(PM, ["install"], {
-    cwd: dir,
-    stdio: "inherit",
-    timeout: 300000,
-  });
-  if (r.status !== 0) {
-    console.error(`${color}[${label}]${C.reset} ✘ falló la instalación de dependencias`);
-    return false;
+  console.log(
+    `${color}[${label}]${C.reset} 📦 instalando dependencias (${PM_INSTALLERS.join(" → ")})...`,
+  );
+  // Se prueban los gestores en orden (pnpm → npm → yarn) hasta que uno funcione.
+  for (const pm of PM_INSTALLERS) {
+    const r = spawnSync(pm, ["install"], {
+      cwd: dir,
+      stdio: "inherit",
+      timeout: 300000,
+      shell: PM_SHELL,
+    });
+    if (r.status === 0) return true;
+    console.warn(
+      `${color}[${label}]${C.reset} ⚠️  "${pm} install" falló; probando con el siguiente gestor...`,
+    );
   }
-  return true;
+  console.error(`${color}[${label}]${C.reset} ✘ falló la instalación de dependencias`);
+  return false;
 }
 
 /**
@@ -804,6 +844,7 @@ function startExpoAppForeground({ dir, port, color, label, title, hints = [], ex
     cwd: dir,
     stdio: "inherit",
     env: { ...process.env, EXPO_NO_TELEMETRY: "1" },
+    shell: PM_SHELL,
   });
   if (r.status !== 0) {
     console.warn(
