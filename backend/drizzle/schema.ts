@@ -2230,6 +2230,10 @@ export const shipments = pgTable(
     }),
     recipientName: varchar('recipient_name', { length: 200 }),
     recipientPhone: varchar('recipient_phone', { length: 50 }),
+    // Snapshot del volumen del pedido en cm³ (NULL = aún no calculado).
+    totalVolumeCm3: integer('total_volume_cm3'),
+    // true si algún ítem no tenía dimensiones y se usó el volumen de respaldo.
+    volumeEstimated: boolean('volume_estimated').default(false).notNull(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     shippingTaxRateId: bigint('shipping_tax_rate_id', { mode: 'number' }),
     shippingTaxAmount: numeric('shipping_tax_amount', {
@@ -2268,6 +2272,10 @@ export const shipments = pgTable(
     check(
       'shipments_shipping_tax_amount_check',
       sql`shipping_tax_amount >= (0)::numeric`,
+    ),
+    check(
+      'shipments_total_volume_cm3_check',
+      sql`(total_volume_cm3 IS NULL) OR (total_volume_cm3 >= 0)`,
     ),
   ],
 );
@@ -2530,6 +2538,8 @@ export const deliveryDrivers = pgTable(
     vehicleColor: varchar('vehicle_color', { length: 50 }),
     // Color con el que se pinta la ruta del repartidor en el mapa de flota.
     routeColor: varchar('route_color', { length: 9 }),
+    // Capacidad de carga del vehículo en cm³ (NULL = sin capacidad declarada).
+    cargoVolumeCm3: integer('cargo_volume_cm3'),
     isAvailable: boolean('is_available').default(true).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     // Token push del dispositivo (FCM/expo) — se registra desde la app.
@@ -2565,6 +2575,10 @@ export const deliveryDrivers = pgTable(
     index('idx_delivery_drivers_available').using(
       'btree',
       table.isAvailable.asc().nullsLast().op('bool_ops'),
+    ),
+    check(
+      'delivery_drivers_cargo_volume_cm3_check',
+      sql`(cargo_volume_cm3 IS NULL) OR (cargo_volume_cm3 > 0)`,
     ),
   ],
 );

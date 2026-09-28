@@ -1,3 +1,5 @@
+import type { DriverLoad } from '../types';
+
 /** Tiempo relativo corto ("hace 2 min", "hace 3 h", "hace 1 d"). */
 export function timeAgo(iso: string | null | undefined): string {
   if (!iso) return '—';
@@ -64,4 +66,29 @@ export function vehicleLabel(d: {
 }): string {
   const parts = [d.vehicleType, d.vehiclePlate].filter(Boolean) as string[];
   return parts.join(' · ') || 'Sin vehículo';
+}
+
+/**
+ * Volumen en cm³ → texto legible. Se muestra en litros (1 L = 1.000 cm³) y
+ * pasa a m³ a partir de 1.000 L para no leer cifras enormes.
+ */
+export function formatVolume(cm3: number | null | undefined): string {
+  if (cm3 == null) return '—';
+  const liters = cm3 / 1000;
+  if (liters >= 1000) {
+    const m3 = liters / 1000;
+    return `${m3.toLocaleString('es-CO', { maximumFractionDigits: 2 })} m³`;
+  }
+  return `${liters.toLocaleString('es-CO', { maximumFractionDigits: 0 })} L`;
+}
+
+/** Texto de ocupación del vehículo: "45 L / 120 L (2 pedidos)". */
+export function loadLabel(load: DriverLoad | null | undefined): string {
+  if (!load) return '—';
+  const used = formatVolume(load.usedCm3);
+  if (load.capacityCm3 == null) {
+    return load.orders ? `${used} · sin capacidad declarada` : 'Sin capacidad declarada';
+  }
+  const orders = load.orders === 1 ? '1 pedido' : `${load.orders} pedidos`;
+  return `${used} / ${formatVolume(load.capacityCm3)} · ${orders}`;
 }

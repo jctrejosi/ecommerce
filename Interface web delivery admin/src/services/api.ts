@@ -98,6 +98,8 @@ export interface CreateDriverPayload {
   vehicleBrand?: string;
   vehicleModel?: string;
   vehicleColor?: string;
+  /** Capacidad de carga del vehículo en cm³ (1 L = 1.000 cm³). */
+  cargoVolumeCm3?: number;
 }
 
 export interface UpdateDriverPayload {
@@ -116,6 +118,8 @@ export interface UpdateDriverPayload {
   isActive?: boolean;
   /** Color (#RRGGBB) de la ruta del repartidor en el mapa. */
   routeColor?: string;
+  /** Capacidad de carga en cm³; `null` la borra. */
+  cargoVolumeCm3?: number | null;
 }
 
 /** Ruta por calles (OSRM) para pintar en el mapa de flota. */

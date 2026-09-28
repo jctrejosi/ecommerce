@@ -22,6 +22,8 @@ interface FormState {
   vehicleBrand: string;
   vehicleModel: string;
   vehicleColor: string;
+  /** Capacidad de carga del vehículo, en litros (en la BD se guarda en cm³). */
+  cargoLiters: string;
 }
 
 const VEHICLE_TYPES = ['Motocicleta', 'Automóvil', 'Camioneta', 'Bicicleta'];
@@ -37,6 +39,7 @@ const EMPTY: FormState = {
   vehicleBrand: '',
   vehicleModel: '',
   vehicleColor: '',
+  cargoLiters: '',
 };
 
 const inputCls =
@@ -84,6 +87,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
         vehicleBrand: driver.vehicleBrand ?? '',
         vehicleModel: driver.vehicleModel ?? '',
         vehicleColor: driver.vehicleColor ?? '',
+        cargoLiters: driver.cargoVolumeCm3 ? String(driver.cargoVolumeCm3 / 1000) : '',
       });
       setIsAvailable(driver.isAvailable);
       setIsActive(driver.isActive);
@@ -99,6 +103,16 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
     if (busy) return;
     setBusy(true);
     setError(null);
+
+    // Capacidad: se escribe en litros y se guarda en cm³ (1 L = 1.000 cm³).
+    const cargoRaw = form.cargoLiters.trim().replace(',', '.');
+    if (cargoRaw && (!Number.isFinite(Number(cargoRaw)) || Number(cargoRaw) < 1)) {
+      setError('La capacidad debe ser un número mayor o igual a 1 (en litros).');
+      setBusy(false);
+      return;
+    }
+    const cargoVolumeCm3 = cargoRaw ? Math.round(Number(cargoRaw) * 1000) : null;
+
     try {
       if (mode === 'create') {
         const created = await api.createDriver({
@@ -112,6 +126,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
           vehicleBrand: form.vehicleBrand.trim() || undefined,
           vehicleModel: form.vehicleModel.trim() || undefined,
           vehicleColor: form.vehicleColor.trim() || undefined,
+          cargoVolumeCm3: cargoVolumeCm3 ?? undefined,
         });
         onSaved(created);
       } else if (driver) {
@@ -125,6 +140,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
           vehicleBrand: form.vehicleBrand.trim() || undefined,
           vehicleModel: form.vehicleModel.trim() || undefined,
           vehicleColor: form.vehicleColor.trim() || undefined,
+          cargoVolumeCm3,
           isAvailable,
           isActive,
         });
@@ -280,7 +296,22 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
                   placeholder="NMAX 2023"
                 />
               </Field>
+              <Field label="Capacidad (litros)">
+                <input
+                  className={inputCls}
+                  type="number"
+                  min={1}
+                  step={1}
+                  value={form.cargoLiters}
+                  onChange={(e) => set('cargoLiters', e.target.value)}
+                  placeholder="120"
+                />
+              </Field>
             </div>
+            <span className="mt-1.5 block text-[11px] text-slate-400">
+              Cuánto cabe en el vehículo. Se usa para validar que los pedidos
+              asignados no superen su capacidad; sin declararla, no se valida.
+            </span>
           </div>
 
           {mode === 'edit' && (

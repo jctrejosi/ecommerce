@@ -1,10 +1,13 @@
 import {
   IsBoolean,
   IsEmail,
+  IsInt,
   IsOptional,
   IsString,
   Matches,
+  Max,
   MaxLength,
+  Min,
   MinLength,
 } from 'class-validator';
 
@@ -67,6 +70,16 @@ export class CreateDriverDto {
   @IsString()
   @MaxLength(50)
   vehicleColor?: string;
+
+  /**
+   * Capacidad de carga del vehículo en cm³ (1 L = 1.000 cm³). Sin declarar, no
+   * se le puede validar el cupo al asignarle pedidos.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  @Max(100_000_000)
+  cargoVolumeCm3?: number;
 }
 
 /** DTO para actualizar un repartidor. Todos los campos son opcionales. */
@@ -142,6 +155,16 @@ export class UpdateDriverDto {
     message: 'routeColor debe ser un color hexadecimal (#RRGGBB).',
   })
   routeColor?: string;
+
+  /**
+   * Capacidad de carga del vehículo en cm³. `null` la borra (queda sin
+   * capacidad declarada); omitirla deja el valor actual.
+   */
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  @Max(100_000_000)
+  cargoVolumeCm3?: number | null;
 }
 
 export class ResetPasswordDto {

@@ -47,6 +47,10 @@ export interface FleetDriver {
   routeColor: string | null;
   /** Foto de perfil (Cloudinary); null si no tiene. */
   avatarUrl: string | null;
+  /** Capacidad de carga del vehículo en cm³ (null = sin declarar). */
+  cargoVolumeCm3: number | null;
+  /** Cupo comprometido: lo que ya lleva encima en pedidos activos. */
+  load?: DriverLoad | null;
   isAvailable: boolean;
   isActive: boolean;
   location: LatLng | null;
@@ -82,6 +86,25 @@ export interface FleetOrder {
   branchLocation: LatLng | null;
   totals: { value: number; currency: string };
   payment: { method: string; label: string };
+  /** Volumen del pedido en cm³ (null = aún no calculado). */
+  volume: { cm3: number | null; estimated: boolean };
+}
+
+/** Cupo comprometido del repartidor (volumen de sus pedidos activos). */
+export interface DriverLoad {
+  driverId: number;
+  /** Capacidad declarada del vehículo en cm³ (null = sin declarar). */
+  capacityCm3: number | null;
+  /** Volumen comprometido en pedidos activos. */
+  usedCm3: number;
+  /** Pedidos activos que consumen cupo. */
+  orders: number;
+  /** true si algún pedido activo tiene volumen estimado. */
+  estimated: boolean;
+  /** Ocupación 0..1 (null si no hay capacidad declarada). */
+  fill: number | null;
+  /** true si la carga supera la capacidad declarada. */
+  overloaded: boolean;
 }
 
 export interface AuthUser {

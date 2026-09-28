@@ -12,7 +12,7 @@ import {
 import type { DriverFilter, FleetDriver } from '../types';
 import { FILTER_OPTIONS, driverVisual, isDriverOnline, lastSignalAt } from '../lib/status';
 import { DRIVER_COLORS, driverColor } from '../lib/driverColors';
-import { formatDateTime, timeAgo, vehicleLabel } from '../lib/format';
+import { formatDateTime, loadLabel, timeAgo, vehicleLabel } from '../lib/format';
 import { AvailabilitySwitch, DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
 
 interface Props {
@@ -192,6 +192,35 @@ function DetailView({
           <div className="mt-2 flex items-center justify-between">
             <span className="text-xs text-slate-500">Disponibilidad</span>
             <AvailabilitySwitch driver={driver} onToggle={(_, v) => onToggleAvailable(v)} />
+          </div>
+          <div className="mt-2 border-t border-slate-200 pt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs text-slate-500">Ocupación</span>
+              <span
+                className={`text-right text-xs font-semibold ${
+                  driver.load?.overloaded ? 'text-rose-500' : 'text-slate-700'
+                }`}
+              >
+                {loadLabel(driver.load)}
+              </span>
+            </div>
+            {driver.load?.fill != null && (
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className={`h-full rounded-full ${
+                    driver.load.overloaded ? 'bg-rose-500' : 'bg-emerald-500'
+                  }`}
+                  style={{
+                    width: `${Math.min(100, Math.round(driver.load.fill * 100))}%`,
+                  }}
+                />
+              </div>
+            )}
+            {driver.load?.estimated && (
+              <p className="mt-1 text-[10px] text-amber-600">
+                Volumen aproximado: hay ítems sin medidas en el catálogo.
+              </p>
+            )}
           </div>
         </section>
 

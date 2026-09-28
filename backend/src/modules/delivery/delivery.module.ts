@@ -6,6 +6,7 @@ import { OrdersModule } from '../orders/orders.module';
 import { DeliveryAuthController } from './delivery-auth.controller';
 import { DeliveryAuthService } from './delivery-auth.service';
 import { DeliveryController } from './delivery.controller';
+import { DeliveryLoadService } from './delivery-load.service';
 import { DeliveryService } from './delivery.service';
 import { DeliveryGateway } from './delivery.gateway';
 import { DeliveryOrdersController } from './delivery-orders.controller';
@@ -25,6 +26,7 @@ import { SuperuserGuard } from './superuser.guard';
   ],
   providers: [
     DeliveryAuthService,
+    DeliveryLoadService,
     DeliveryService,
     DeliveryOrdersService,
     DeliveryAdminService,
@@ -32,6 +34,6 @@ import { SuperuserGuard } from './superuser.guard';
     DeliveryGateway,
     SuperuserGuard,
   ],
-  exports: [DeliveryOrdersService, DeliveryGateway],
+  exports: [DeliveryOrdersService, DeliveryLoadService, DeliveryGateway],
 })
 export class DeliveryModule {}

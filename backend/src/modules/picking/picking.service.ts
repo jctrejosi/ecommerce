@@ -9,6 +9,7 @@ import { DrizzleService } from '../../database/drizzle.service';
 import { PickingGateway } from './picking.gateway';
 import { OrdersGateway } from '../orders/orders.gateway';
 import { DeliveryOrdersService } from '../delivery/delivery-orders.service';
+import { DeliveryLoadService } from '../delivery/delivery-load.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
   orderItems,
@@ -59,6 +60,7 @@ export class PickingService {
     private readonly gateway: PickingGateway,
     private readonly ordersGateway: OrdersGateway,
     private readonly deliveryOrders: DeliveryOrdersService,
+    private readonly deliveryLoad: DeliveryLoadService,
     private readonly notifications: NotificationsService,
   ) {}
 
@@ -579,6 +581,10 @@ export class PickingService {
       pickerId: order.pickerId ?? undefined,
       deliveredAt: now,
     });
+
+    // Snapshot del volumen del pedido ANTES de ofrecerlo: así el cupo del
+    // vehículo y el panel de planificación ya tienen el dato sin recalcularlo.
+    await this.deliveryLoad.snapshotOrderLoad(id);
 
     // El pedido sale de picking → se ofrece a TODOS los repartidores activos
     // como "Nuevo" (una asignación ASSIGNED por repartidor).

@@ -15,6 +15,7 @@ import {
   users,
 } from '../../../drizzle/schema';
 import { parsePoint, DeliveryService } from './delivery.service';
+import { DeliveryLoadService } from './delivery-load.service';
 import { pickRouteColor } from './driver-colors';
 import type { CreateDriverDto, UpdateDriverDto } from './dto/admin-driver.dto';
 
@@ -33,6 +34,7 @@ interface DriverRow {
   vehicle_model: string | null;
   vehicle_color: string | null;
   route_color: string | null;
+  cargo_volume_cm3: number | null;
   is_available: boolean;
   is_active: boolean;
   current_location: string | null;
@@ -88,6 +90,9 @@ interface OrderRow {
   branch_address: string | null;
   branch_location: string | null;
   payment_method: string | null;
+  /** Snapshot del volumen del pedido en cm³ (null = aún no calculado). */
+  total_volume_cm3: number | null;
+  volume_estimated: boolean | null;
 }
 
 /**
@@ -99,6 +104,7 @@ SELECT
   d.id, d.full_name, d.phone, d.email,
   d.vehicle_type, d.vehicle_plate, d.vehicle_brand, d.vehicle_model, d.vehicle_color,
   d.route_color,
+  d.cargo_volume_cm3,
   d.is_available, d.is_active,
   d.current_location, d.last_location_at, d.last_seen_at, d.avatar_url, d.created_at,
   u.id AS auth_user_id, u.username, u.first_name, u.last_name,
@@ -127,6 +133,7 @@ export class DeliveryAdminService {
   constructor(
     private readonly drizzle: DrizzleService,
     private readonly delivery: DeliveryService,
+    private readonly loadService: DeliveryLoadService,
   ) {}
 
   private get db() {
@@ -146,6 +153,8 @@ export class DeliveryAdminService {
       vehicleModel: row.vehicle_model,
       vehicleColor: row.vehicle_color,
       routeColor: row.route_color,
+      // Capacidad declarada del vehículo en cm³ (null = sin declarar).
+      cargoVolumeCm3: row.cargo_volume_cm3,
       isAvailable: row.is_available,
       isActive: row.is_active,
       location: parsePoint(row.current_location),
@@ -184,7 +193,14 @@ export class DeliveryAdminService {
        WHERE d.deleted_at IS NULL
        ORDER BY d.id ASC`,
     );
-    return rows.map((r) => this.toDriver(r));
+    // Cupo comprometido de toda la flota en una sola consulta.
+    const loads = new Map(
+      (await this.loadService.getFleetLoad()).map((l) => [l.driverId, l]),
+    );
+    return rows.map((r) => {
+      const driver = this.toDriver(r);
+      return { ...driver, load: loads.get(driver.id) ?? null };
+    });
   }
 
   async getDriver(id: number) {
@@ -197,7 +213,8 @@ export class DeliveryAdminService {
     if (!rows.length) {
       throw new NotFoundException(`Repartidor ${id} no encontrado.`);
     }
-    return this.toDriver(rows[0]);
+    const driver = this.toDriver(rows[0]);
+    return { ...driver, load: await this.loadService.getDriverLoad(driver.id) };
   }
 
   /**
@@ -312,6 +329,7 @@ export class DeliveryAdminService {
           vehicleModel: dto.vehicleModel?.trim() || null,
           vehicleColor: dto.vehicleColor?.trim() || null,
           routeColor,
+          cargoVolumeCm3: dto.cargoVolumeCm3 ?? null,
           isAvailable: true,
           isActive: true,
         })
@@ -357,6 +375,9 @@ export class DeliveryAdminService {
       patch.vehicleColor = dto.vehicleColor.trim() || null;
     if (dto.routeColor !== undefined)
       patch.routeColor = dto.routeColor.trim().toUpperCase();
+    // `null` explícito borra la capacidad; omitirla no la toca.
+    if (dto.cargoVolumeCm3 !== undefined)
+      patch.cargoVolumeCm3 = dto.cargoVolumeCm3;
     if (dto.isAvailable !== undefined) patch.isAvailable = dto.isAvailable;
     if (dto.isActive !== undefined) patch.isActive = dto.isActive;
 
@@ -416,6 +437,7 @@ export class DeliveryAdminService {
          a.assigned_at, a.accepted_at, a.ready_for_pickup_at,
          a.picked_up_at, a.in_delivery_at, a.completed_at,
          s.order_id, s.address_line1, s.city, s.location AS destination,
+         s.total_volume_cm3, s.volume_estimated,
          o.reference_code, o.customer_name, o.customer_phone,
          o.grand_total, o.currency_code, o.notes,
          b.name AS branch_name, b.address AS branch_address, b.location AS branch_location,
@@ -456,6 +478,11 @@ export class DeliveryAdminService {
       branchName: r.branch_name,
       branchAddress: r.branch_address,
       branchLocation: parsePoint(r.branch_location),
+      // Volumen del pedido (cm³) y si es aproximado por falta de dimensiones.
+      volume: {
+        cm3: r.total_volume_cm3 ?? null,
+        estimated: Boolean(r.volume_estimated),
+      },
       totals: {
         value: Number(r.grand_total ?? 0),
         currency: r.currency_code ?? 'COP',

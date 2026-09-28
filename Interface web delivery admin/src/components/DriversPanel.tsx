@@ -2,7 +2,7 @@ import { MapPin, MessageCircle, Pencil, Plus, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { FleetDriver } from '../types';
 import { FILTER_OPTIONS, driverVisual, filterDrivers, isDriverOnline } from '../lib/status';
-import { vehicleLabel } from '../lib/format';
+import { loadLabel, vehicleLabel } from '../lib/format';
 import { DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
 import type { DriverFilter } from '../types';
 
@@ -87,7 +87,7 @@ export default function DriversPanel({
         <table className="w-full">
           <thead>
             <tr className="sticky top-0 border-b border-slate-100 bg-slate-50 text-left">
-              {['Repartidor', 'Contacto', 'Vehículo', 'Estado', 'Última señal', 'Acciones'].map(
+              {['Repartidor', 'Contacto', 'Vehículo', 'Ocupación', 'Estado', 'Última señal', 'Acciones'].map(
                 (h) => (
                   <th
                     key={h}
@@ -102,7 +102,7 @@ export default function DriversPanel({
           <tbody className="divide-y divide-slate-50">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-xs text-slate-400">
+                <td colSpan={7} className="p-8 text-center text-xs text-slate-400">
                   No hay repartidores que coincidan.
                 </td>
               </tr>
@@ -132,6 +132,27 @@ export default function DriversPanel({
                   </td>
                   <td className="px-4 py-3">
                     <p className="text-xs text-slate-700">{vehicleLabel(d)}</p>
+                  </td>
+                  <td className="px-4 py-3">
+                    <p
+                      className={`text-xs font-semibold ${
+                        d.load?.overloaded ? 'text-rose-500' : 'text-slate-700'
+                      }`}
+                    >
+                      {loadLabel(d.load)}
+                    </p>
+                    {d.load?.fill != null && (
+                      <div className="mt-1 h-1.5 w-24 overflow-hidden rounded-full bg-slate-200">
+                        <div
+                          className={`h-full rounded-full ${
+                            d.load.overloaded ? 'bg-rose-500' : 'bg-emerald-500'
+                          }`}
+                          style={{
+                            width: `${Math.min(100, Math.round(d.load.fill * 100))}%`,
+                          }}
+                        />
+                      </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge driver={d} />

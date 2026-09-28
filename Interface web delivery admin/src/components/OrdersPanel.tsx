@@ -2,7 +2,7 @@ import { LocateFixed, Search } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { AssignmentStatus, FleetOrder } from '../types';
 import { STATUS_META } from '../lib/status';
-import { formatDateTime, formatMoney } from '../lib/format';
+import { formatDateTime, formatMoney, formatVolume } from '../lib/format';
 
 interface Props {
   orders: FleetOrder[];
@@ -91,7 +91,7 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
         <table className="w-full">
           <thead>
             <tr className="sticky top-0 border-b border-slate-100 bg-slate-50 text-left">
-              {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Tiempos', 'Total', ''].map(
+              {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Tiempos', 'Total', 'Volumen', ''].map(
                 (h) => (
                   <th
                     key={h}
@@ -106,7 +106,7 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
           <tbody className="divide-y divide-slate-50">
             {rows.length === 0 && (
               <tr>
-                <td colSpan={9} className="p-8 text-center text-xs text-slate-400">
+                <td colSpan={10} className="p-8 text-center text-xs text-slate-400">
                   No hay pedidos activos con este filtro.
                 </td>
               </tr>
@@ -169,6 +169,16 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
                   </td>
                   <td className="px-4 py-3 text-xs font-bold text-slate-800">
                     {formatMoney(o.totals.value, o.totals.currency)}
+                  </td>
+                  <td className="px-4 py-3">
+                    <p className="text-xs font-semibold text-slate-700">
+                      {formatVolume(o.volume?.cm3)}
+                    </p>
+                    {o.volume?.estimated && (
+                      <p className="text-[10px] text-amber-600" title="Hay ítems sin medidas en el catálogo">
+                        aprox.
+                      </p>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <button
