@@ -12,7 +12,7 @@ import {
   HelpCircle,
   Command,
   LogOut,
-  Menu,
+  ChevronLeft,
   AlertTriangle,
   ShoppingCart,
   Zap,
@@ -268,42 +268,57 @@ function Sidebar({
   current,
   onNavigate,
   collapsed,
+  onToggleCollapse,
   storeLogo,
+  companyName,
 }: {
   current: ViewId;
   onNavigate: (v: ViewId) => void;
   collapsed: boolean;
+  onToggleCollapse: () => void;
   storeLogo?: string | null;
+  companyName: string;
 }) {
   return (
     <aside
-      className="flex flex-col h-full border-r border-white/[0.06] transition-all duration-300"
+      className="relative flex flex-col h-full border-r border-white/[0.06] transition-all duration-300"
       style={{ background: "var(--app-sidebar)", width: collapsed ? 56 : 240 }}
     >
-      {/* Logos + título */}
+      {/* Logo + título / empresa */}
       <div className="flex flex-col gap-3 px-4 py-5 border-b border-white/[0.06] shrink-0">
-        <div className={`flex items-center gap-3 ${collapsed ? "flex-col gap-2" : ""}`}>
-          <img
-            src={sidebarLogo}
-            alt="Mercaldas"
-            className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-6 w-auto"}`}
-          />
-          {storeLogo && (
+        {/* logo.png junto al título "Web Analytics" */}
+        <div className={`flex items-center gap-2.5 ${collapsed ? "justify-center" : ""}`}>
+          <a
+            href="https://dsi.com.co"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center shrink-0 hover:opacity-80 transition-opacity"
+          >
             <img
-              src={storeLogo}
-              alt="Tienda"
-              className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-6 w-auto"}`}
+              src={sidebarLogo}
+              alt="Mercaldas"
+              className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-7 w-auto"}`}
             />
+          </a>
+          {!collapsed && (
+            <p className="text-base font-extrabold uppercase tracking-wide text-amber-400">
+              Analytics
+            </p>
           )}
         </div>
-        {!collapsed && (
-          <div>
-            <p className="text-white font-bold text-sm leading-tight">Mercaldas</p>
-            <p className="text-base font-extrabold uppercase tracking-wide bg-linear-to-r from-amber-300 via-amber-400 to-orange-500 bg-clip-text text-transparent">
-              Web Analytics
-            </p>
-          </div>
-        )}
+        {/* Logo de la tienda (configurado en el admin) + "Empresa - Nombre" */}
+        <div className={`flex items-center gap-2 min-w-0 ${collapsed ? "justify-center" : ""}`}>
+          {storeLogo && !collapsed && (
+            <img
+              src={storeLogo}
+              alt="Empresa"
+              className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-7 w-auto"}`}
+            />
+          )}
+          {!collapsed && (
+            <p className="text-xs font-semibold text-white/70 truncate">{companyName}</p>
+          )}
+        </div>
       </div>
 
       {/* Nav */}
@@ -337,22 +352,14 @@ function Sidebar({
         ))}
       </nav>
 
-      {/* User */}
-      <div className="shrink-0 border-t border-white/[0.06] p-3">
-        <div
-          className={`flex items-center gap-2.5 rounded-lg p-2 hover:bg-white/[0.06] cursor-pointer transition-colors ${collapsed ? "justify-center" : ""}`}
-        >
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
-            <span className="text-xs font-bold text-white">JR</span>
-          </div>
-          {!collapsed && (
-            <div className="flex-1 min-w-0">
-              <p className="text-white/80 text-xs font-semibold truncate">Jorge Ramírez</p>
-              <p className="text-white/30 text-[10px] truncate">Administrador</p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Colapsar/expandir: pegado al borde derecho del sidebar (se mueve con él) */}
+      <button
+        onClick={onToggleCollapse}
+        title={collapsed ? "Expandir menú" : "Ocultar menú"}
+        className="absolute top-1/2 -translate-y-1/2 -right-3 z-20 w-6 h-6 flex items-center justify-center rounded-full border border-white/15 bg-(--app-sidebar) text-white/70 hover:text-white shadow-md transition-colors cursor-pointer"
+      >
+        {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+      </button>
     </aside>
   );
 }
@@ -360,14 +367,10 @@ function Sidebar({
 function TopBar({
   current,
   onOpenCommand,
-  collapsed,
-  onToggleCollapse,
   user,
 }: {
   current: ViewId;
   onOpenCommand: () => void;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
   user: UserProfile | null;
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
@@ -395,13 +398,6 @@ function TopBar({
 
   return (
     <header className="h-14 bg-white border-b border-gray-100 flex items-center gap-3 px-4 shrink-0 z-30">
-      <button
-        onClick={onToggleCollapse}
-        className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-      >
-        <Menu size={16} />
-      </button>
-
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-sm">
         <span className="text-gray-400">Mercaldas</span>
@@ -541,6 +537,7 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [storeLogo, setStoreLogo] = useState<string | null>(null);
+  const [companyName, setCompanyName] = useState<string>("Mercaldas");
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -571,6 +568,15 @@ export default function App() {
       .catch(() => setStoreLogo(null));
   }, []);
 
+  // Nombre de la empresa/tienda configurado en el admin (público: /admin/settings/public-info).
+  useEffect(() => {
+    const base = import.meta.env.VITE_API_URL || "http://localhost:3000";
+    fetch(`${base}/admin/settings/public-info`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { tradeName?: string } | null) => setCompanyName(d?.tradeName?.trim() || "Mercaldas"))
+      .catch(() => {});
+  }, []);
+
   // El dashboard puede pedir navegar a secciones que no existen aquí
   // (pedidos, promociones...); solo navegamos a las vistas disponibles.
   const handleDashboardNavigate = useCallback(
@@ -582,14 +588,19 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-(--app-bg)">
-      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} storeLogo={storeLogo} />
+      <Sidebar
+        current={view}
+        onNavigate={navigate}
+        collapsed={collapsed}
+        onToggleCollapse={() => setCollapsed((c) => !c)}
+        storeLogo={storeLogo}
+        companyName={companyName}
+      />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
           current={view}
           onOpenCommand={() => setCmdOpen(true)}
-          collapsed={collapsed}
-          onToggleCollapse={() => setCollapsed((c) => !c)}
           user={user}
         />
         <main className="flex-1 overflow-y-auto">
