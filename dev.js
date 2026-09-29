@@ -45,6 +45,12 @@ const DB_CONTAINER = "ecommerce_postgres";
 const DB_NAME = "ecommerce";
 const DB_BACKUP_DIR = path.join(ROOT, "db", "backup");
 
+// BD de analytics (db-campaigns/docker-compose.yml) y su respaldo en db-campaigns/backups.
+const CAMPAIGNS_DIR = path.join(ROOT, "db-campaigns");
+const CAMPAIGNS_CONTAINER = "analytics_postgres";
+const CAMPAIGNS_DB = "analytics";
+const CAMPAIGNS_BACKUP_DIR = path.join(CAMPAIGNS_DIR, "backups");
+
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
 const STOP = ARGS.includes("--stop");
@@ -52,6 +58,10 @@ const HELP = ARGS.includes("--help");
 // Las apps móviles (Expo) corren desacopladas por defecto: así la terminal queda
 // libre y se puede cerrar sin matar Metro. Con --fg se muestra el QR aquí mismo.
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
+// Restaura la copia de datos de analytics (db-campaigns) desde el respaldo
+// versionado y sale. Acepta también el alias mal escrito `--migration-campaings`.
+const MIGRATION_CAMPAIGNS =
+  ARGS.includes("--migration-campaigns") || ARGS.includes("--migration-campaings");
 
 // Dependencias por servicio: `marker` es lo que se comprueba para saber si ya
 // están instaladas; `install` son los comandos que las instalan si faltan.
@@ -210,7 +220,7 @@ const SERVICES = [
 
 // ── Selección por aplicativo (flags --x) ─────────────────────
 // Cada app declara sus dependencias; al pedirla se levanta también lo mínimo
-// para que funcione (p. ej. --analytics ⇒ backend + PostgreSQL de campañas).
+// para que funcione (p. ej. --analytics ⇒ backend + PostgreSQL de campañas + ia-service).
 const APP_ALIASES = {
   client: "webclient",
   webclient: "webclient",
@@ -235,7 +245,7 @@ const APP_DEPENDS = {
   backend: ["db"],
   webclient: ["backend"], // sirve la web del cliente (APK/WebView) y proxy del API
   admin: ["backend"],
-  analytics: ["backend", "db-campaigns"], // panel analytics + su BD de campañas
+  analytics: ["backend", "db-campaigns", "ia"], // panel analytics + BD de campañas + ia-service (contenido)
   picking: ["backend"],
   "picking-admin": ["backend"],
   "delivery-admin": ["backend"],
@@ -254,7 +264,19 @@ const NO_SELECTOR_FLAGS = new Set([
   "--all",
   "--fg",
   "--foreground",
+  "--migration-campaigns",
+  "--migration-campaings",
 ]);
+
+/** Flags `--x` no reconocidos. Si hay alguno, el launcher no ejecuta nada. */
+function unknownFlags() {
+  const valid = new Set(
+    [...NO_SELECTOR_FLAGS, ...Object.keys(APP_ALIASES).map((k) => `--${k}`)].map((f) =>
+      f.toLowerCase(),
+    ),
+  );
+  return ARGS.filter((a) => a.startsWith("--") && !valid.has(a.toLowerCase()));
+}
 
 /** null ⇒ levantar todo (comportamiento por defecto). */
 function resolveSelection() {
@@ -531,6 +553,139 @@ function restoreDatabaseIfNeeded() {
       `${C.db}[db]${C.reset} ⚠️  La restauración del respaldo falló (código ${status}; detalle en logs/db.log).`,
     );
   }
+}
+
+// ── Restauración de la copia de datos de analytics (db-campaigns/backups) ────
+// El respaldo va troceado (analytics_<fecha>.backup.part-000, ...) para subirlo a
+// GitHub; si no hay volcado completo se reensamblan las partes y se valida el
+// sha256 del volcado completo antes de restaurar.
+function loadCampaignsBackup() {
+  if (!fs.existsSync(CAMPAIGNS_BACKUP_DIR)) return null;
+  const files = fs.readdirSync(CAMPAIGNS_BACKUP_DIR);
+  const singles = files.filter((f) => /^analytics_.*\.backup$/.test(f)).sort();
+  const parts = files
+    .filter((f) => /^analytics_.*\.backup\.part-\d+$/.test(f))
+    .sort();
+  if (singles.length === 0 && parts.length === 0) return null;
+
+  let names;
+  let stem;
+  if (singles.length) {
+    // Más reciente por nombre (la fecha ISO ordena lexicográficamente).
+    const single = singles[singles.length - 1];
+    names = [single];
+    stem = single.replace(/\.backup$/, "");
+  } else {
+    names = parts;
+    stem = parts[0].replace(/\.backup\.part-\d+$/, "");
+  }
+  const buffer = Buffer.concat(
+    names.map((n) => fs.readFileSync(path.join(CAMPAIGNS_BACKUP_DIR, n))),
+  );
+  return {
+    names,
+    buffer,
+    shaFile: path.join(CAMPAIGNS_BACKUP_DIR, `${stem}.backup.sha256`),
+  };
+}
+
+/** Restaura la copia de datos de analytics. Sobrescribe la BD `analytics`. */
+function restoreCampaignsDatabase() {
+  const backup = loadCampaignsBackup();
+  if (!backup) {
+    console.warn(
+      `${C.db}[db-campaigns]${C.reset} ⚠️  No hay respaldo en db-campaigns/backups/ (nada que restaurar).`,
+    );
+    return false;
+  }
+
+  // Integridad: sha256 del volcado completo (reensamblado).
+  if (fs.existsSync(backup.shaFile)) {
+    const expected = fs.readFileSync(backup.shaFile, "utf8").trim().split(/\s+/)[0];
+    const actual = crypto.createHash("sha256").update(backup.buffer).digest("hex");
+    if (expected && expected !== actual) {
+      console.error(
+        `${C.db}[db-campaigns]${C.reset} ✘ El respaldo no coincide con su hash (esperado ${expected.slice(0, 12)}…, obtenido ${actual.slice(0, 12)}…). Se omite.`,
+      );
+      return false;
+    }
+  }
+
+  const mb = (backup.buffer.length / (1024 * 1024)).toFixed(1);
+  console.log(
+    `${C.db}[db-campaigns]${C.reset} 📥 Restaurando copia de datos (${backup.names.length} archivo(s), ${mb} MB)...`,
+  );
+
+  // Igual que el respaldo del ecommerce: se escribe a un temporal y se copia al
+  // contenedor con `docker cp` (evita tuberías binarias por stdin).
+  const relTmp = "logs/analytics_restore.dump";
+  const hostTmp = path.join(ROOT, "logs", "analytics_restore.dump");
+  const containerTmp = "/tmp/analytics_restore.dump";
+  const { fd } = openLog("db");
+  let status = 1;
+  try {
+    fs.writeFileSync(hostTmp, backup.buffer);
+    const cp = spawnSync(
+      "docker",
+      ["cp", relTmp, `${CAMPAIGNS_CONTAINER}:${containerTmp}`],
+      { cwd: ROOT, stdio: ["ignore", fd, fd], timeout: 300000 },
+    );
+    if (cp.status === 0) {
+      const r = spawnSync(
+        "docker",
+        [
+          "exec", CAMPAIGNS_CONTAINER,
+          "pg_restore", "-U", "postgres", "-d", CAMPAIGNS_DB,
+          "-j", "4", "--clean", "--if-exists", "--no-owner", "--no-privileges",
+          containerTmp,
+        ],
+        { stdio: ["ignore", fd, fd], timeout: 900000 },
+      );
+      status = r.status;
+      spawnSync("docker", ["exec", CAMPAIGNS_CONTAINER, "rm", "-f", containerTmp], {
+        stdio: ["ignore", fd, fd],
+      });
+    } else {
+      status = cp.status;
+    }
+  } finally {
+    fs.closeSync(fd);
+    fs.rmSync(hostTmp, { force: true });
+  }
+
+  if (status === 0) {
+    const chk = spawnSync(
+      "docker",
+      [
+        "exec", CAMPAIGNS_CONTAINER,
+        "psql", "-U", "postgres", "-d", CAMPAIGNS_DB, "-tAc",
+        "SELECT 'vw_rfm_clientes=' || count(*) FROM analytics.vw_rfm_clientes UNION ALL SELECT 'cliente_segmento=' || count(*) FROM analytics.cliente_segmento UNION ALL SELECT 'pos.venta_lineas=' || count(*) FROM pos.venta_lineas",
+      ],
+      { encoding: "utf8" },
+    );
+    const counts = (chk.stdout || "").trim().split("\n").filter(Boolean).join(" ");
+    console.log(`${C.db}[db-campaigns]${C.reset} ✅ Copia restaurada${counts ? " — " + counts : ""}`);
+    return true;
+  }
+  console.warn(
+    `${C.db}[db-campaigns]${C.reset} ⚠️  La restauración de la copia falló (código ${status}; detalle en logs/db.log).`,
+  );
+  return false;
+}
+
+/** `node dev.js --migration-campaigns`: levanta db-campaigns, restaura la copia y sale. */
+async function migrateCampaigns() {
+  console.log("🧪 Mercaldas — restaurar la copia de datos de analytics (db-campaigns)");
+  const started = startDatabaseCampaigns();
+  const up = started && (await waitForPort(5436, 90000));
+  if (!up) {
+    console.warn(
+      `${C.db}[db-campaigns]${C.reset} ⚠️  db-campaigns no responde en :5436; no se puede restaurar.`,
+    );
+    process.exit(1);
+  }
+  const ok = restoreCampaignsDatabase();
+  process.exit(ok ? 0 : 1);
 }
 
 /** PostgreSQL de ANALYTICS (campañas/segmentación, :5436) — db-campaigns/. */
@@ -1051,6 +1206,19 @@ function helpDeps(name) {
   return deps.length ? "requiere " + deps.join(" + ") : "";
 }
 
+/** Orden de los aplicativos en la ayuda y el resumen final. */
+const APP_ORDER = [
+  "webclient",
+  "admin",
+  "analytics",
+  "picking",
+  "picking-admin",
+  "delivery-admin",
+  "backend",
+  "bot",
+  "ia",
+];
+
 function printHelp() {
   const out = [];
   out.push("🧪 Mercaldas launcher — comandos implementados (node dev.js en la raíz)");
@@ -1060,21 +1228,12 @@ function printHelp() {
   out.push("  node dev.js <flags>             → solo los aplicativos pedidos (+ sus dependencias)");
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
   out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
+  out.push("  node dev.js --migration-campaigns → restaura la copia de datos de analytics (db-campaigns) y sale");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
   out.push("  node dev.js --help              → esta ayuda");
   out.push("");
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
-  const order = [
-    "webclient",
-    "admin",
-    "analytics",
-    "picking",
-    "picking-admin",
-    "delivery-admin",
-    "backend",
-    "bot",
-    "ia",
-  ];
+  const order = APP_ORDER;
   const rows = order.map((name) => {
     const svc = SERVICES.find((s) => s.name === name);
     return {
@@ -1122,19 +1281,60 @@ function printHelp() {
   out.push("");
   out.push("Notas: --client es alias de --web · logs en logs/<servicio>.log · PIDs en logs/.pids.json");
   out.push("       URL de red local (celular): se detecta sola; fuerza con LAN_IP=192.168.x.x");
+  out.push("       Un flag desconocido no ejecuta nada (aborta; usa --help para ver las opciones).");
   console.log(out.join("\n"));
 }
 
-// ── Main ────────────────────────────────────────────────────
+/** Resumen final tras levantar: todas las formas de invocar el lanzador. */
+function printCommands() {
+  const extraLabels = {
+    delivery: "App móvil delivery (Expo, :8081)",
+    "picking-mobile": "App móvil picking (Expo, :8082)",
+    osrm: "Motor de rutas OSRM (:5000)",
+  };
+  const rows = [["node dev.js", "levanta TODO (BDs + backend + webs + bot + IA + OSRM + delivery)"]];
+  for (const name of [...APP_ORDER, "delivery", "picking-mobile", "osrm"]) {
+    const svc = SERVICES.find((s) => s.name === name);
+    const label = APP_LABELS[name] ?? extraLabels[name] ?? name;
+    rows.push([`node dev.js --${name}`, `${label}${svc?.url ? ` (${svc.url})` : ""}`]);
+  }
+  rows.push(["node dev.js --all", "todo (explícito)"]);
+  rows.push(["node dev.js --prod", "modo producción (requiere builds previos)"]);
+  rows.push(["node dev.js --fg", "apps Expo con el QR en la terminal (bloquea)"]);
+  rows.push(["node dev.js --migration-campaigns", "restaura la copia de datos de analytics (db-campaigns) y sale"]);
+  rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
+  rows.push(["node dev.js --help", "esta ayuda"]);
+
+  const w = Math.max(...rows.map((r) => r[0].length));
+  console.log("Comandos útiles:");
+  for (const [cmd, desc] of rows) console.log(`  ${cmd.padEnd(w)}  → ${desc}`);
+  console.log("");
+  console.log("Bases de datos (docker compose stop):");
+  console.log("  cd db/docker            → PostgreSQL :5432");
+  console.log("  cd db-campaigns         → analytics :5436");
+  console.log("  cd delivery-routing     → OSRM :5000");
+}
+
+// ── Main ─────────────────────────────────────────────────────
 
 async function main() {
   if (HELP) {
     printHelp();
     return;
   }
+  // Flag desconocido ⇒ no se ejecuta nada (antes se interpretaba como "todo").
+  const unknown = unknownFlags();
+  if (unknown.length) {
+    console.error(`✘ Flag(s) desconocido(s): ${unknown.join(", ")} — no se levanta nada.`);
+    console.error("  Usa `node dev.js --help` para ver las opciones.");
+    process.exit(1);
+  }
   if (STOP) return stopAll();
 
   fs.mkdirSync(LOGS_DIR, { recursive: true });
+
+  // Tarea de mantenimiento: restaura la copia de datos de analytics y sale.
+  if (MIGRATION_CAMPAIGNS) return migrateCampaigns();
 
   const plan = resolveSelection(); // null ⇒ todo
   const wantDb = plan === null || plan.includes("db");
@@ -1276,12 +1476,7 @@ async function main() {
   }
 
   console.log("");
-  console.log("Comandos útiles:");
-  console.log(`  node dev.js --stop                  → detener los servicios levantados`);
-  console.log(`  node dev.js --fg                    → apps Expo con el QR en la terminal (bloquea)`);
-  console.log(`  node dev.js --prod                  → levantar en modo producción`);
-  console.log(`  node dev.js --help                  → mostrar ayuda`);
-  console.log(`  cd db/docker && docker compose stop → detener PostgreSQL (docker)`);
+  printCommands();
   if (!FG && (wantDelivery || wantPickingMobile))
     console.log(
       "\n💡 Metro corre desacoplado: puedes cerrar esta terminal. Para detenerlo todo: node dev.js --stop",

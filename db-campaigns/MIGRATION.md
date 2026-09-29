@@ -125,8 +125,9 @@ va **troceado en 8 partes de 45 MB** (para GitHub): se versionan las **partes**
 | `analytics_2026-09-29.backup.part-000` … `-007` | 45 MB × 7 + 31 MB |
 | `analytics_2026-09-29.backup.sha256` | `7adb0dff…3331` |
 
-Restaurar: `bash db-campaigns/restore.sh` (reensambla las partes si hace falta,
-verifica `sha256` y conteos). Inventario y comandos: `backups/README.md`.
+Restaurar: `bash db-campaigns/restore.sh` o **`node dev.js --migration-campaigns`**
+(ambos reensamblan las partes si hace falta, verifican `sha256` y conteos).
+Inventario y comandos: `backups/README.md`.
 
 DDL versionado: **`db-campaigns/schema.sql`** (`pg_dump --schema-only`, 40 KB) +
 estructura del legado por si hay que recrear la base vacía.

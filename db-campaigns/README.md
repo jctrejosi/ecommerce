@@ -68,6 +68,12 @@ bash db-campaigns/restore.sh backups/analytics_2026-09-29.backup
 El script verifica el `sha256`, restaura con `pg_restore` y comprueba los conteos.
 Si solo están las **partes** versionadas (clon nuevo), las **reensambla** primero.
 
+O desde el launcher (levanta `db-campaigns` y restaura la copia de una):
+
+```sh
+node dev.js --migration-campaigns     # usa el .backup o reensambla las partes; verifica y sale
+```
+
 **Volumen vacío (PC nuevo):**
 
 ```bash

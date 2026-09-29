@@ -775,7 +775,7 @@ function Step2({
             <Sparkles size={28} className="text-white" />
           </div>
         </div>
-        <p className="mt-6 text-lg font-bold text-gray-900">La IA está creando tu campaña…</p>
+        <p className="mt-6 text-lg font-bold text-gray-900">Espera un momento mientras se generan las recomendaciones para tu campaña</p>
         <p className="mt-2 text-sm text-gray-500">Analizando tono, público y canal</p>
       </div>
     );
