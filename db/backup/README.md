@@ -16,30 +16,48 @@ la BD **no tiene** la tabla `products` (clon nuevo, recién inicializado por
 `db/docker/init.sql`), se reensamblan las partes, se valida el `sha256` y se
 restauran con `pg_restore`. Si la BD ya tiene datos, **no se toca nada**.
 
-## Restaurar a mano
+## Restaurar en otro PC
 
-### Linux / macOS / Git Bash
+Lo más simple: copia el repo con `db/backup/` **completo** y ejecuta:
+
+- **Linux / macOS / Git Bash:** `bash db/backup/restore.sh`
+- **Windows (PowerShell):** `powershell -ExecutionPolicy Bypass -File .\db\backup\restore.ps1`
+
+Ambos reensamblan las partes, **verifican el `sha256`** y al terminar imprimen los
+conteos (`branches`, `products`, `prices`, `inventory`, `orders`) para confirmar
+que la restauración quedó completa. Si el `sha256` no coincide (p. ej. faltó una
+parte) **abortan sin tocar la BD**.
+
+También sirve `node dev.js`: al detectar la BD vacía reensambla, valida el `sha256`,
+restaura y verifica (Linux/macOS/Windows con Docker Desktop).
+
+> Importante: para que la restauración sea completa hacen falta **todas** las
+> partes (`ecommerce.dump.part-*`). Si se restaura un archivo incompleto (una sola
+> parte, orden incorrecto, descarga a medias) `pg_restore` crea el esquema pero
+> carga datos parciales — justo el síntoma de "solo aparece una sucursal". El
+> `sha256` está para detectar exactamente eso.
+
+### Manual (referencia)
+
+Linux / macOS / Git Bash:
 
 ```sh
-cat db/backup/ecommerce.dump.part-* | \
-  docker exec -i ecommerce_postgres \
-  pg_restore -U postgres -d ecommerce --clean --if-exists --no-owner --no-privileges
-```
-
-### Windows (PowerShell o CMD)
-
-En Windows conviene reensamblar a un archivo y copiarlo al contenedor (evita
-problemas de tuberías binarias):
-
-```powershell
-cmd /c copy /b db\backup\ecommerce.dump.part-* logs\ecommerce_restore.dump
-docker cp logs\ecommerce_restore.dump ecommerce_postgres:/tmp/ecommerce_restore.dump
+cat db/backup/ecommerce.dump.part-* > /tmp/ecommerce_restore.dump
+# comprobar sha256 (opcional pero recomendado):
+sha256sum /tmp/ecommerce_restore.dump | cut -d' ' -f1   # debe igualar ecommerce.dump.sha256
+docker cp /tmp/ecommerce_restore.dump ecommerce_postgres:/tmp/ecommerce_restore.dump
 docker exec ecommerce_postgres pg_restore -U postgres -d ecommerce --clean --if-exists --no-owner --no-privileges /tmp/ecommerce_restore.dump
 ```
 
-En la práctica no hace falta: `node dev.js` hace todo esto automáticamente
-(reensambla, verifica el `sha256`, copia y restaura) tanto en Linux/macOS como en
-Windows con Docker Desktop.
+Windows (PowerShell):
+
+```powershell
+$out = [System.IO.File]::Create("$PWD\ecommerce_restore.dump")
+Get-ChildItem db\backup\ecommerce.dump.part-* | Sort-Object Name | ForEach-Object { $b=[IO.File]::ReadAllBytes($_.FullName); $out.Write($b,0,$b.Length) }
+$out.Close()
+docker cp ecommerce_restore.dump ecommerce_postgres:/tmp/ecommerce_restore.dump
+docker exec ecommerce_postgres pg_restore -U postgres -d ecommerce --clean --if-exists --no-owner --no-privileges /tmp/ecommerce_restore.dump
+```
 
 ## Regenerar el respaldo
 

@@ -514,7 +514,18 @@ function restoreDatabaseIfNeeded() {
   }
 
   if (status === 0) {
-    console.log(`${C.db}[db]${C.reset} ✅ Respaldo restaurado`);
+    // Verificación: si las tablas clave quedaron vacías, algo salió mal.
+    const chk = spawnSync(
+      "docker",
+      [
+        "exec", DB_CONTAINER,
+        "psql", "-U", "postgres", "-d", DB_NAME, "-tAc",
+        "SELECT 'branches=' || count(*) FROM branches UNION ALL SELECT 'products=' || count(*) FROM products",
+      ],
+      { encoding: "utf8" },
+    );
+    const counts = (chk.stdout || "").trim().split("\n").filter(Boolean).join(" ");
+    console.log(`${C.db}[db]${C.reset} ✅ Respaldo restaurado${counts ? " — " + counts : ""}`);
   } else {
     console.warn(
       `${C.db}[db]${C.reset} ⚠️  La restauración del respaldo falló (código ${status}; detalle en logs/db.log).`,
