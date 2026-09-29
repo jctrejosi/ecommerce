@@ -6,7 +6,7 @@ import {
   Sparkles, Target, BarChart2, Calendar, MoreHorizontal,
   Palette, ShoppingBag, Pencil, Trash2, History, RotateCw,
   Filter, CheckSquare, SlidersHorizontal, MapPin, Wallet, ShieldCheck,
-  PawPrint, Upload, Maximize2,
+  PawPrint, Upload, Maximize2, Info, LayoutGrid, List,
 } from "lucide-react";
 import EmailEditor, {
   newBlock,
@@ -1039,6 +1039,12 @@ function Step2({
 }
 
 const EXPLAIN_SEEN_KEY = "mercaldas-analytics-explain-seen";
+// Modal "Lanza una campaña en 3 pasos": se abre solo la primera vez que se
+// entra a la pantalla de Campañas (queda marcado en localStorage).
+const HOW_IT_WORKS_SEEN_KEY = "mercaldas-analytics-howitworks-seen";
+// Preferencia de vista del listado de campañas: tarjetas (grid) o tabla.
+const CAMPAIGNS_VIEW_KEY = "mercaldas-analytics-campaigns-view";
+type CampaignsView = "grid" | "table";
 
 function AudienceStep({
   products,
@@ -4709,6 +4715,55 @@ function ConfirmModal({
   );
 }
 
+const HOW_IT_WORKS_STEPS = [
+  { n: "01", label: "Seleccionar Producto", sub: "El sistema detecta automáticamente el mejor público para ese producto.", icon: Target },
+  { n: "02", label: "Generar Campaña", sub: "Describe el tono y la IA crea 3 versiones: WhatsApp, Email y SMS.", icon: Sparkles },
+  { n: "03", label: "Enviar Ahora", sub: "Previsualiza, edita si quieres, y lanza con un solo clic.", icon: Send },
+];
+
+function HowItWorksModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm cursor-pointer" onClick={onClose} />
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+        <button
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center rounded-xl text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+        >
+          <X size={18} />
+        </button>
+        <div className="flex items-center gap-2 mb-1 pr-8">
+          <Sparkles size={18} className="text-amber-600 shrink-0" />
+          <h3 className="text-lg font-bold text-gray-900">Lanza una campaña completa en 3 pasos</h3>
+        </div>
+        <p className="text-sm text-gray-500 mb-5">Automatización de marketing omnicanal: del producto al envío sin salir de aquí.</p>
+        <div className="space-y-4">
+          {HOW_IT_WORKS_STEPS.map((s) => (
+            <div key={s.n} className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-xl bg-amber-400 flex items-center justify-center shrink-0">
+                <s.icon size={16} className="text-amber-900" />
+              </div>
+              <div>
+                <p className="text-sm font-bold text-gray-900">{s.n}. {s.label}</p>
+                <p className="text-xs text-gray-500 mt-0.5 leading-relaxed">{s.sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="flex justify-end mt-6">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+          >
+            Entendido
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const HISTORY_LABELS: Record<string, string> = {
   created: "Creación",
   updated: "Edición",
@@ -5011,38 +5066,14 @@ function CampaignCard({
         </div>
       </div>
 
-      {menu && (
-        <>
-          <div className="fixed inset-0 z-30 cursor-pointer" onClick={() => setMenu(false)} />
-          <div className="absolute right-3 top-12 z-40 w-44 bg-white rounded-xl border border-gray-100 shadow-xl py-1.5">
-            <button
-              onClick={() => { setMenu(false); onEdit(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <Pencil size={12} /> Editar
-            </button>
-            <button
-              onClick={() => { setMenu(false); onRelaunch(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <RotateCw size={12} /> Relanzar
-            </button>
-            <button
-              onClick={() => { setMenu(false); onHistory(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              <History size={12} /> Historial
-            </button>
-            <div className="my-1 border-t border-gray-100" />
-            <button
-              onClick={() => { setMenu(false); onDelete(); }}
-              className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
-            >
-              <Trash2 size={12} /> Eliminar
-            </button>
-          </div>
-        </>
-      )}
+      <CampaignActionMenu
+        menu={menu}
+        setMenu={setMenu}
+        onEdit={onEdit}
+        onRelaunch={onRelaunch}
+        onHistory={onHistory}
+        onDelete={onDelete}
+      />
 
       {/* Channels */}
       <div className="flex items-center gap-1.5 mb-4">
@@ -5120,6 +5151,243 @@ function CampaignCard({
   );
 }
 
+/* ─── Menú de acciones (tarjeta y fila) ─────────── */
+function CampaignActionMenu({
+  menu,
+  setMenu,
+  onEdit,
+  onRelaunch,
+  onHistory,
+  onDelete,
+  panelClassName = "right-3 top-12",
+}: {
+  menu: boolean;
+  setMenu: (v: boolean) => void;
+  onEdit: () => void;
+  onRelaunch: () => void;
+  onHistory: () => void;
+  onDelete: () => void;
+  panelClassName?: string;
+}) {
+  if (!menu) return null;
+  const close = (fn: () => void) => () => {
+    setMenu(false);
+    fn();
+  };
+  return (
+    <>
+      <div className="fixed inset-0 z-30 cursor-pointer" onClick={() => setMenu(false)} />
+      <div className={`absolute ${panelClassName} z-40 w-44 bg-white rounded-xl border border-gray-100 shadow-xl py-1.5`}>
+        <button
+          onClick={close(onEdit)}
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <Pencil size={12} /> Editar
+        </button>
+        <button
+          onClick={close(onRelaunch)}
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <RotateCw size={12} /> Relanzar
+        </button>
+        <button
+          onClick={close(onHistory)}
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          <History size={12} /> Historial
+        </button>
+        <div className="my-1 border-t border-gray-100" />
+        <button
+          onClick={close(onDelete)}
+          className="w-full flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+        >
+          <Trash2 size={12} /> Eliminar
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ─── Vista tabla (alternativa a las tarjetas) ──── */
+function CampaignRow({
+  c,
+  onViewClients,
+  onManualSeg,
+  onEdit,
+  onRelaunch,
+  onHistory,
+  onDelete,
+}: {
+  c: CampaignCardData;
+  onViewClients: () => void;
+  onManualSeg: () => void;
+  onEdit: () => void;
+  onRelaunch: () => void;
+  onHistory: () => void;
+  onDelete: () => void;
+}) {
+  const cfg = STATUS_CFG[c.status];
+  const openRate = c.sent > 0 ? Math.round((c.opens / c.sent) * 100) : 0;
+  const [menu, setMenu] = useState(false);
+  const td = "py-3.5 px-4 align-middle border-b border-gray-100";
+  const dash = <span className="text-xs text-gray-300">—</span>;
+  return (
+    <tr className="hover:bg-gray-50/70 transition-colors">
+      <td className={`${td} w-[32%]`}>
+        <p className="font-semibold text-sm text-gray-900 truncate max-w-[300px]">{c.name}</p>
+        <p className="text-xs text-gray-400 truncate max-w-[300px] mt-0.5">{c.product}</p>
+      </td>
+      <td className={`${td} hidden sm:table-cell`}>
+        <div className="flex items-center gap-1.5">
+          {c.channels.map((ch) => {
+            const cc = CHANNEL_CFG[ch as keyof typeof CHANNEL_CFG];
+            return (
+              <div key={ch} className={`w-5 h-5 rounded-md flex items-center justify-center ${cc.bg}`}>
+                <cc.icon size={11} className="text-white" />
+              </div>
+            );
+          })}
+        </div>
+      </td>
+      <td className={td}>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={onViewClients}
+            className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700 font-semibold transition-colors tabular-nums"
+            title="Ver clientes segmentados"
+          >
+            <Users size={12} /> {c.audience.toLocaleString()}
+          </button>
+          {c.audienceMode && c.audienceMode !== "auto" && (
+            <span
+              title="Origen del público actual"
+              className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full border ${
+                c.audienceMode === "manual"
+                  ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                  : "text-purple-700 bg-purple-50 border-purple-200"
+              }`}
+            >
+              {c.audienceMode === "manual" ? "Manual" : "Recom. + manual"}
+            </span>
+          )}
+        </div>
+      </td>
+      <td className={td}>
+        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full border ${cfg.bg} ${cfg.color} ${cfg.border}`}>
+          {cfg.label}
+        </span>
+      </td>
+      <td className={`${td} hidden md:table-cell text-right`}>
+        {c.sent > 0 ? (
+          <span className="text-sm font-semibold text-gray-800 tabular-nums">{c.sent.toLocaleString()}</span>
+        ) : (
+          dash
+        )}
+      </td>
+      <td className={`${td} hidden md:table-cell text-right`}>
+        {c.sent > 0 ? (
+          <div className="flex items-center justify-end gap-2">
+            <span className="text-sm font-semibold text-blue-700 tabular-nums">{c.opens.toLocaleString()}</span>
+            <span className="text-[10px] font-medium text-gray-400 tabular-nums w-8 text-right">{openRate}%</span>
+          </div>
+        ) : (
+          dash
+        )}
+      </td>
+      <td className={`${td} hidden lg:table-cell text-right`}>
+        {c.sent > 0 ? (
+          <span className="text-sm font-semibold text-green-700 tabular-nums">{c.conversions.toLocaleString()}</span>
+        ) : (
+          dash
+        )}
+      </td>
+      <td className={`${td} hidden lg:table-cell text-xs text-gray-400 whitespace-nowrap`}>
+        {c.date || "—"}
+      </td>
+      <td className={`${td} text-right`}>
+        <div className="relative inline-flex items-center gap-0.5">
+          <button
+            onClick={onManualSeg}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-amber-600 transition-colors"
+            title="Segmentar clientes manualmente"
+          >
+            <Filter size={14} />
+          </button>
+          <button
+            onClick={() => setMenu((m) => !m)}
+            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-colors"
+            title="Acciones"
+          >
+            <MoreHorizontal size={14} />
+          </button>
+          <CampaignActionMenu
+            menu={menu}
+            setMenu={setMenu}
+            onEdit={onEdit}
+            onRelaunch={onRelaunch}
+            onHistory={onHistory}
+            onDelete={onDelete}
+            panelClassName="right-0 top-9"
+          />
+        </div>
+      </td>
+    </tr>
+  );
+}
+
+function CampaignTable({
+  campaigns,
+  onViewClients,
+  onManualSeg,
+  onEdit,
+  onRelaunch,
+  onHistory,
+  onDelete,
+}: {
+  campaigns: CampaignCardData[];
+  onViewClients: (c: CampaignCardData) => void;
+  onManualSeg: (c: CampaignCardData) => void;
+  onEdit: (c: CampaignCardData) => void;
+  onRelaunch: (c: CampaignCardData) => void;
+  onHistory: (c: CampaignCardData) => void;
+  onDelete: (c: CampaignCardData) => void;
+}) {
+  const thBase = "text-[11px] font-bold text-gray-400 uppercase tracking-wider px-4 py-3 bg-gray-50 whitespace-nowrap border-b border-gray-100";
+  return (
+    <div className="bg-white rounded-2xl border border-gray-100">
+      <table className="w-full border-separate border-spacing-0">
+        <thead>
+          <tr>
+            <th className={`${thBase} text-left rounded-tl-2xl`}>Campaña</th>
+            <th className={`${thBase} text-left hidden sm:table-cell`}>Canales</th>
+            <th className={`${thBase} text-left`}>Público</th>
+            <th className={`${thBase} text-left`}>Estado</th>
+            <th className={`${thBase} text-right hidden md:table-cell`}>Enviados</th>
+            <th className={`${thBase} text-right hidden md:table-cell`}>Abiertos</th>
+            <th className={`${thBase} text-right hidden lg:table-cell`}>Conversiones</th>
+            <th className={`${thBase} text-left hidden lg:table-cell`}>Fecha</th>
+            <th className={`${thBase} text-right rounded-tr-2xl`}>Acciones</th>
+          </tr>
+        </thead>
+        <tbody className="[&>tr:last-child>td]:border-b-0">
+          {campaigns.map((c) => (
+            <CampaignRow
+              key={c.id}
+              c={c}
+              onViewClients={() => onViewClients(c)}
+              onManualSeg={() => onManualSeg(c)}
+              onEdit={() => onEdit(c)}
+              onRelaunch={() => onRelaunch(c)}
+              onHistory={() => onHistory(c)}
+              onDelete={() => onDelete(c)}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 /* ─── Main view ─────────────────────────────────── */
 export default function Campaigns() {
   const [wizardOpen, setWizardOpen] = useState(false);
@@ -5130,6 +5398,42 @@ export default function Campaigns() {
   const [search, setSearch] = useState("");
   const [clientsModal, setClientsModal] = useState<CampaignCardData | null>(null);
   const [manualSeg, setManualSeg] = useState<CampaignCardData | null>(null);
+
+  // Modal "cómo funciona" (3 pasos): se auto-abre la primera vez que se entra
+  // a la pantalla; luego solo desde el botón junto al título.
+  const [howItWorksOpen, setHowItWorksOpen] = useState(() => {
+    try {
+      return localStorage.getItem(HOW_IT_WORKS_SEEN_KEY) !== "1";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    if (!howItWorksOpen) return;
+    try {
+      localStorage.setItem(HOW_IT_WORKS_SEEN_KEY, "1");
+    } catch {
+      /* localStorage no disponible */
+    }
+  }, [howItWorksOpen]);
+
+  // Vista del listado: tarjetas (grid, actual) o tabla. Se recuerda en localStorage.
+  const [view, setView] = useState<CampaignsView>(() => {
+    try {
+      return localStorage.getItem(CAMPAIGNS_VIEW_KEY) === "table" ? "table" : "grid";
+    } catch {
+      return "grid";
+    }
+  });
+  const changeView = (v: CampaignsView) => {
+    setView(v);
+    try {
+      localStorage.setItem(CAMPAIGNS_VIEW_KEY, v);
+    } catch {
+      /* localStorage no disponible */
+    }
+  };
 
   // Acciones: editar / eliminar / relanzar / historial
   const [editing, setEditing] = useState<CampaignCardData | null>(null);
@@ -5219,7 +5523,17 @@ export default function Campaigns() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">Campañas</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold text-gray-900">Campañas</h1>
+              <button
+                onClick={() => setHowItWorksOpen(true)}
+                title="Cómo funciona"
+                aria-label="Cómo funciona"
+                className="w-7 h-7 flex items-center justify-center rounded-full text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+              >
+                <Info size={16} />
+              </button>
+            </div>
             <p className="text-sm text-gray-500 mt-0.5">Automatización de marketing omnicanal en 3 pasos</p>
           </div>
           <button
@@ -5248,31 +5562,6 @@ export default function Campaigns() {
           ))}
         </div>
 
-        {/* How it works banner */}
-        <div className="bg-gradient-to-r from-amber-50 to-amber-100/60 border border-amber-200 rounded-2xl p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles size={15} className="text-amber-600" />
-            <p className="text-sm font-bold text-amber-900">Lanza una campaña completa en 3 pasos</p>
-          </div>
-          <div className="grid grid-cols-3 gap-4">
-            {[
-              { n: "01", label: "Seleccionar Producto", sub: "El sistema detecta automáticamente el mejor público para ese producto.", icon: Target },
-              { n: "02", label: "Generar Campaña", sub: "Describe el tono y la IA crea 3 versiones: WhatsApp, Email y SMS.", icon: Sparkles },
-              { n: "03", label: "Enviar Ahora", sub: "Previsualiza, edita si quieres, y lanza con un solo clic.", icon: Send },
-            ].map((s) => (
-              <div key={s.n} className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-xl bg-amber-400 flex items-center justify-center shrink-0">
-                  <s.icon size={14} className="text-amber-900" />
-                </div>
-                <div>
-                  <p className="text-xs font-bold text-amber-900">{s.n}. {s.label}</p>
-                  <p className="text-xs text-amber-700 mt-0.5 leading-relaxed">{s.sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
         {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-56">
@@ -5295,6 +5584,24 @@ export default function Campaigns() {
               </button>
             ))}
           </div>
+          <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-xl p-1" role="group" aria-label="Vista del listado">
+            <button
+              onClick={() => changeView("grid")}
+              title="Vista de tarjetas"
+              aria-label="Vista de tarjetas"
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${view === "grid" ? "bg-amber-400 text-amber-900" : "text-gray-400 hover:text-gray-600"}`}
+            >
+              <LayoutGrid size={15} />
+            </button>
+            <button
+              onClick={() => changeView("table")}
+              title="Vista de tabla"
+              aria-label="Vista de tabla"
+              className={`w-8 h-8 flex items-center justify-center rounded-lg transition-colors ${view === "table" ? "bg-amber-400 text-amber-900" : "text-gray-400 hover:text-gray-600"}`}
+            >
+              <List size={15} />
+            </button>
+          </div>
         </div>
 
         {/* Campaign grid */}
@@ -5312,20 +5619,32 @@ export default function Campaigns() {
             </button>
           </div>
         ) : filtered.length > 0 ? (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filtered.map((c) => (
-              <CampaignCard
-                key={c.id}
-                c={c}
-                onViewClients={() => setClientsModal(c)}
-                onManualSeg={() => setManualSeg(c)}
-                onEdit={() => setEditing(c)}
-                onRelaunch={() => setRelaunching(c)}
-                onHistory={() => void handleOpenHistory(c)}
-                onDelete={() => setDeleting(c)}
-              />
-            ))}
-          </div>
+          view === "grid" ? (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map((c) => (
+                <CampaignCard
+                  key={c.id}
+                  c={c}
+                  onViewClients={() => setClientsModal(c)}
+                  onManualSeg={() => setManualSeg(c)}
+                  onEdit={() => setEditing(c)}
+                  onRelaunch={() => setRelaunching(c)}
+                  onHistory={() => void handleOpenHistory(c)}
+                  onDelete={() => setDeleting(c)}
+                />
+              ))}
+            </div>
+          ) : (
+            <CampaignTable
+              campaigns={filtered}
+              onViewClients={(c) => setClientsModal(c)}
+              onManualSeg={(c) => setManualSeg(c)}
+              onEdit={(c) => setEditing(c)}
+              onRelaunch={(c) => setRelaunching(c)}
+              onHistory={(c) => void handleOpenHistory(c)}
+              onDelete={(c) => setDeleting(c)}
+            />
+          )
         ) : (
           <div className="flex flex-col items-center justify-center py-20 text-center">
             <div className="w-16 h-16 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
@@ -5346,6 +5665,8 @@ export default function Campaigns() {
       {wizardOpen && (
         <CampaignWizard onClose={() => setWizardOpen(false)} onCreated={handleCreated} />
       )}
+
+      {howItWorksOpen && <HowItWorksModal onClose={() => setHowItWorksOpen(false)} />}
 
       {clientsModal && (
         <RecipientsModal
