@@ -18,6 +18,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
+import { EmailFullPreviewModal } from "./EmailFullPreview";
 
 /* ═══════════════════════════ Tipos ═══════════════════════════ */
 
@@ -125,11 +126,12 @@ export function newBlock(type: EmailBlockType): EmailBlock {
       return {
         id, type,
         props: {
+          // Todas las redes, vacías por defecto salvo las de Mercaldas.
           networks: {
+            ...Object.fromEntries(SOCIAL_NETWORKS.map((n) => [n.key, ""])),
             facebook: "https://facebook.com/mercaldas",
             instagram: "https://instagram.com/mercaldas",
             whatsapp: "https://wa.me/573000000000",
-            youtube: "",
           },
           iconColor: "#6B7280",
           iconSize: 22,
@@ -227,12 +229,72 @@ function YoutubeIcon({ size }: { size: number }) {
   );
 }
 
-const SOCIAL_ICONS: Record<string, (s: number) => React.ReactNode> = {
-  facebook: (s) => <FacebookIcon size={s} />,
-  instagram: (s) => <InstagramIcon size={s} />,
-  whatsapp: (s) => <WhatsappIcon size={s} />,
-  youtube: (s) => <YoutubeIcon size={s} />,
-};
+function TwitterXIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function TiktokIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12.525.02c1.31-.02 2.61-.01 3.91-.02.08 1.53.63 3.09 1.75 4.17 1.12 1.11 2.7 1.62 4.24 1.79v4.03c-1.44-.05-2.89-.35-4.2-.97-.57-.26-1.1-.59-1.62-.93-.01 2.92.01 5.84-.02 8.75-.08 1.4-.54 2.79-1.35 3.94-1.31 1.92-3.58 3.17-5.91 3.21-1.43.08-2.86-.31-4.08-1.03-2.02-1.19-3.44-3.37-3.65-5.71-.02-.5-.03-1-.01-1.49.18-1.9 1.12-3.72 2.58-4.96 1.66-1.44 3.98-2.13 6.15-1.72.02 1.48-.04 2.96-.04 4.44-.99-.32-2.15-.23-3.02.37-.63.41-1.11 1.04-1.36 1.75-.21.51-.15 1.07-.14 1.61.24 1.64 1.82 3.02 3.5 2.87 1.12-.01 2.19-.66 2.77-1.61.19-.33.4-.67.41-1.06.1-1.79.06-3.57.07-5.36.01-4.03-.01-8.05.02-12.07z" />
+    </svg>
+  );
+}
+
+function LinkedinIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 1 1 0-4.124 2.062 2.062 0 0 1 0 4.124zM7.119 20.452H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.225 0z" />
+    </svg>
+  );
+}
+
+function TelegramIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z" />
+    </svg>
+  );
+}
+
+function PinterestIcon({ size }: { size: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 0a12 12 0 0 0-4.373 23.178c-.098-.937-.187-2.377.039-3.4.204-.873 1.32-5.586 1.32-5.586s-.336-.673-.336-1.667c0-1.56.906-2.727 2.032-2.727.957 0 1.42.719 1.42 1.581 0 .963-.612 2.401-.928 3.735-.264 1.117.56 2.027 1.66 2.027 1.993 0 3.524-2.102 3.524-5.135 0-2.685-1.93-4.562-4.685-4.562-3.19 0-5.062 2.393-5.062 4.865 0 .963.371 1.998.834 2.56.091.111.105.208.078.32-.085.353-.274 1.117-.311 1.273-.049.206-.163.25-.376.15-1.403-.653-2.28-2.705-2.28-4.353 0-3.545 2.576-6.8 7.427-6.8 3.9 0 6.933 2.777 6.933 6.49 0 3.875-2.444 6.994-5.836 6.994-1.14 0-2.211-.592-2.577-1.292 0 0-.563 2.147-.699 2.674-.253.975-.937 2.198-1.396 2.943A12 12 0 1 0 12 0z" />
+    </svg>
+  );
+}
+
+/**
+ * Redes soportadas por el bloque "social".
+ *  - `icon`: ícono vectorial para la vista previa editable del diseñador.
+ *  - `glyph`: glifo de texto usado en el HTML del correo (los clientes de correo
+ *    no renderizan SVG de forma fiable, así que se usa un carácter).
+ */
+const SOCIAL_NETWORKS: {
+  key: string;
+  label: string;
+  icon: (s: number) => React.ReactNode;
+  glyph: string;
+}[] = [
+  { key: "facebook", label: "Facebook", icon: (s) => <FacebookIcon size={s} />, glyph: "f" },
+  { key: "instagram", label: "Instagram", icon: (s) => <InstagramIcon size={s} />, glyph: "📷" },
+  { key: "x", label: "X (Twitter)", icon: (s) => <TwitterXIcon size={s} />, glyph: "X" },
+  { key: "tiktok", label: "TikTok", icon: (s) => <TiktokIcon size={s} />, glyph: "♪" },
+  { key: "youtube", label: "YouTube", icon: (s) => <YoutubeIcon size={s} />, glyph: "▶" },
+  { key: "linkedin", label: "LinkedIn", icon: (s) => <LinkedinIcon size={s} />, glyph: "in" },
+  { key: "pinterest", label: "Pinterest", icon: (s) => <PinterestIcon size={s} />, glyph: "P" },
+  { key: "whatsapp", label: "WhatsApp", icon: (s) => <WhatsappIcon size={s} />, glyph: "✆" },
+  { key: "telegram", label: "Telegram", icon: (s) => <TelegramIcon size={s} />, glyph: "✈" },
+];
+
+const SOCIAL_ICONS: Record<string, (s: number) => React.ReactNode> = Object.fromEntries(
+  SOCIAL_NETWORKS.map((n) => [n.key, n.icon] as const),
+);
 
 const BLOCK_PALETTE: { type: EmailBlockType; label: string; icon: React.ElementType; hint: string }[] = [
   { type: "text", label: "Texto", icon: Type, hint: "Título o párrafo editable" },
@@ -306,12 +368,9 @@ export function blocksToHtml(blocks: EmailBlock[]): string {
         case "social": {
           const nets = Object.entries(b.props.networks ?? {}).filter(([, url]) => url);
           if (!nets.length) return cell("<div></div>");
-          const glyph: Record<string, string> = {
-            facebook: "f",
-            instagram: "📷",
-            whatsapp: "✆",
-            youtube: "▶",
-          };
+          const glyph: Record<string, string> = Object.fromEntries(
+            SOCIAL_NETWORKS.map((n) => [n.key, n.glyph] as const),
+          );
           const links = nets
             .map(
               ([k, url]) =>
@@ -345,7 +404,7 @@ export default function EmailEditor({
   const [selectedId, setSelectedId] = useState<string | null>(
     blocks[0]?.id ?? null,
   );
-  const [preview, setPreview] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [tagsOpen, setTagsOpen] = useState(false);
   const [htmlOpen, setHtmlOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -394,7 +453,7 @@ export default function EmailEditor({
 
   const beginResize = (e: React.PointerEvent, b: EmailBlock) => {
     const cfg = resizeConfig(b.type);
-    if (!cfg || preview) return;
+    if (!cfg || previewOpen) return;
     e.preventDefault();
     e.stopPropagation();
     const startVal =
@@ -551,7 +610,7 @@ export default function EmailEditor({
             }}
           >
             <span
-              contentEditable={!preview}
+              contentEditable={!previewOpen}
               suppressContentEditableWarning
               onClick={() => setSelectedId(b.id)}
               onBlur={(e) => updateBlock(b.id, { text: e.currentTarget.innerText })}
@@ -594,7 +653,7 @@ export default function EmailEditor({
                   <img src={c.src} alt="" className="w-full rounded-lg mb-2 object-cover h-24" />
                 )}
                 <div
-                  contentEditable={!preview}
+                  contentEditable={!previewOpen}
                   suppressContentEditableWarning
                   onBlur={(e) => {
                     const newItems = [...(b.props.items ?? [])];
@@ -667,10 +726,10 @@ export default function EmailEditor({
         <div className="flex-1" />
 
         <button
-          onClick={() => setPreview((p) => !p)}
-          className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors ${preview ? "bg-gray-900 text-white border-gray-900" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+          onClick={() => setPreviewOpen(true)}
+          className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
         >
-          {preview ? "Salir de vista previa" : "Vista previa"}
+          Vista previa
         </button>
         <button
           onClick={() => setHtmlOpen(true)}
@@ -751,7 +810,7 @@ export default function EmailEditor({
                 </div>
               )}
               {blocks.map((b, i) => {
-                const isSelected = selectedId === b.id && !preview;
+                const isSelected = selectedId === b.id && !previewOpen;
                 const resizeCfg = resizeConfig(b.type);
                 const showDropTop = dropTarget?.id === b.id && dropTarget.after === false;
                 const showDropBottom = dropTarget?.id === b.id && dropTarget.after === true;
@@ -789,7 +848,7 @@ export default function EmailEditor({
                     )}
 
                     {/* Mango de arrastre (reordenar) */}
-                    {!preview && (
+                    {!previewOpen && (
                       <div className="absolute -left-3 top-1/2 -translate-y-1/2 z-10 hidden group-hover:flex">
                         <div
                           draggable
@@ -806,7 +865,7 @@ export default function EmailEditor({
                       </div>
                     )}
 
-                    {!preview && (
+                    {!previewOpen && (
                       <div className="absolute -right-1 -top-1 z-10 hidden group-hover:flex gap-1">
                         <button
                           onClick={(e) => { e.stopPropagation(); duplicateBlock(b.id); }}
@@ -826,7 +885,7 @@ export default function EmailEditor({
                     )}
 
                     {/* Mango de redimensionado */}
-                    {!preview && isSelected && resizeCfg && (
+                    {!previewOpen && isSelected && resizeCfg && (
                       <div
                         onPointerDown={(e) => beginResize(e, b)}
                         className="absolute -right-2 -bottom-2 z-20 w-6 h-6 bg-white border border-amber-300 rounded-full flex items-center justify-center text-amber-600 shadow-sm cursor-nwse-resize hover:bg-amber-50"
@@ -885,6 +944,11 @@ export default function EmailEditor({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ══ Modal vista previa ══ */}
+      {previewOpen && (
+        <EmailFullPreviewModal html={blocksToHtml(blocks)} onClose={() => setPreviewOpen(false)} />
       )}
     </div>
   );
@@ -1187,12 +1251,12 @@ function PropertiesPanel({
           <Field label={`Tamaño (${p.iconSize ?? 22}px)`}>
             <input type="range" min={16} max={32} value={p.iconSize ?? 22} onChange={(e) => onChange({ iconSize: Number(e.target.value) })} className="w-full" />
           </Field>
-          {(["facebook", "instagram", "whatsapp", "youtube"] as const).map((k) => (
-            <Field key={k} label={k.charAt(0).toUpperCase() + k.slice(1)}>
+          {SOCIAL_NETWORKS.map(({ key, label }) => (
+            <Field key={key} label={label}>
               <input
                 placeholder="https://… (vacío = ocultar)"
-                value={p.networks?.[k] ?? ""}
-                onChange={(e) => onChange({ networks: { ...(p.networks ?? {}), [k]: e.target.value } })}
+                value={p.networks?.[key] ?? ""}
+                onChange={(e) => onChange({ networks: { ...(p.networks ?? {}), [key]: e.target.value } })}
                 className={inputCls}
               />
             </Field>

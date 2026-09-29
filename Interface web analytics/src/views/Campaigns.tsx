@@ -6,13 +6,14 @@ import {
   Sparkles, Target, BarChart2, Calendar, MoreHorizontal,
   Palette, ShoppingBag, Pencil, Trash2, History, RotateCw,
   Filter, CheckSquare, SlidersHorizontal, MapPin, Wallet, ShieldCheck,
-  PawPrint, Upload,
+  PawPrint, Upload, Maximize2,
 } from "lucide-react";
 import EmailEditor, {
   newBlock,
   defaultTemplate,
   type EmailBlock,
 } from "../components/EmailEditor";
+import { EmailHtmlPreview, EmailFullPreviewModal } from "../components/EmailFullPreview";
 import {
   campaignsService,
   type Campaign as ApiCampaign,
@@ -181,68 +182,16 @@ function WhatsAppPreview({ text, editable, onEdit }: { text: string; editable: b
   );
 }
 
-function EmailHtmlPreview({ html }: { html: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [content, setContent] = useState({ w: 600, h: 800 });
-  const [scale, setScale] = useState(1);
-
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const compute = () => {
-      const rect = el.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return;
-      const s = Math.min(rect.width / content.w, rect.height / content.h);
-      setScale(Math.min(s, 1));
-    };
-    compute();
-    const ro = new ResizeObserver(compute);
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [content]);
-
-  return (
-    <div ref={containerRef} className="w-full h-full overflow-hidden bg-gray-50">
-      <iframe
-        srcDoc={html}
-        title="Vista previa del correo"
-        sandbox="allow-same-origin"
-        scrolling="no"
-        onLoad={(e) => {
-          const frame = e.currentTarget as HTMLIFrameElement;
-          try {
-            const de = frame.contentDocument?.documentElement;
-            if (de) {
-              setContent({
-                w: Math.max(de.scrollWidth, 600),
-                h: Math.max(de.scrollHeight, 800),
-              });
-            }
-          } catch {
-            /* si no es accesible, queda con el tamaño por defecto */
-          }
-        }}
-        style={{
-          width: content.w,
-          height: content.h,
-          transform: `scale(${scale})`,
-          transformOrigin: "top left",
-          border: 0,
-          display: "block",
-          background: "#fff",
-        }}
-      />
-    </div>
-  );
-}
-
 function EmailPreview({ subject, body, editableBody, onEditSubject, onEditBody, html }: {
   subject: string; body: string; editableBody: boolean;
   onEditSubject: (s: string) => void; onEditBody: (b: string) => void;
   html?: string | null;
 }) {
+  // Con HTML del diseñador el correo define su propio alto (ocupa el ancho de la
+  // tarjeta); sin él se conserva el alto fijo del contenedor de la tarjeta.
+  const autoHeight = !!html;
   return (
-    <div className="flex flex-col h-full rounded-2xl overflow-hidden shadow-lg border border-gray-200 bg-white">
+    <div className={`flex flex-col rounded-2xl overflow-hidden shadow-lg border border-gray-200 bg-white ${autoHeight ? "" : "h-full"}`}>
       {/* Fake browser bar */}
       <div className="flex items-center gap-1.5 px-3 py-2 bg-gray-100 border-b border-gray-200">
         <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
@@ -267,9 +216,9 @@ function EmailPreview({ subject, body, editableBody, onEditSubject, onEditBody, 
         />
       </div>
       {/* Email body */}
-      <div className="flex-1 overflow-hidden">
+      <div className={autoHeight ? "" : "flex-1 overflow-hidden"}>
         {html ? (
-          <EmailHtmlPreview html={html} />
+          <EmailHtmlPreview html={html} variant="card" />
         ) : (
           <div className="h-full overflow-y-auto">
             {/* Fake banner */}
@@ -581,13 +530,13 @@ function Step1({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex justify-end">
+      <div className="shrink-0 px-6 py-2.5 border-t border-gray-200 bg-white flex justify-end">
         <button
           onClick={onNext}
           disabled={selectedProducts.length === 0 || !Object.values(channels).some(Boolean)}
           className="flex items-center gap-2 px-5 py-2.5 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Continuar <ArrowRight size={15} />
+          Siguiente <ArrowRight size={15} />
         </button>
       </div>
 
@@ -677,15 +626,20 @@ function ChannelSwitch({ active, onToggle }: { active: boolean; onToggle: () => 
       aria-checked={active}
       onClick={onToggle}
       title={active ? "Desactivar este canal" : "Activar este canal"}
-      className={`relative rounded-full transition-colors shrink-0 focus:outline-none focus:ring-2 focus:ring-amber-300 ${
-        active ? "bg-green-500" : "bg-gray-300"
-      }`}
-      style={{ width: 36, height: 20 }}
+      className="flex items-center gap-1.5 shrink-0 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300"
     >
       <span
-        className="absolute top-0.5 bg-white rounded-full shadow transition-transform"
-        style={{ width: 16, height: 16, left: 2, transform: active ? "translateX(16px)" : "none" }}
-      />
+        className={`relative rounded-full transition-colors ${active ? "bg-green-500" : "bg-gray-300"}`}
+        style={{ width: 36, height: 20 }}
+      >
+        <span
+          className="absolute top-0.5 bg-white rounded-full shadow transition-transform"
+          style={{ width: 16, height: 16, left: 2, transform: active ? "translateX(16px)" : "none" }}
+        />
+      </span>
+      <span className={`text-[10px] font-bold tracking-wide ${active ? "text-green-600" : "text-gray-400"}`}>
+        {active ? "Activo" : "Inactivo"}
+      </span>
     </button>
   );
 }
@@ -745,6 +699,7 @@ function Step2({
   reviewUpToDate?: boolean;
 }) {
   const activeChannelCount = Object.values(channels).filter(Boolean).length;
+  const [fullEmailOpen, setFullEmailOpen] = useState(false);
 
   // Módulos visibles: los activos + los desactivados que conservan contenido
   // (para poder reactivarlos con su switch sin perder el preview).
@@ -851,8 +806,8 @@ function Step2({
                 <CheckCircle size={14} className="text-white" />
               </div>
               <div>
-                <p className="text-sm font-bold text-gray-900">¡Campaña generada! Revisa y edita si quieres.</p>
-                <p className="text-xs text-gray-400">Haz clic en <strong>Editar</strong> en cualquier canal para modificar el texto.</p>
+                <p className="text-sm font-bold text-gray-900">Contenido generado para tus canales</p>
+                <p className="text-xs text-gray-400">La IA redactó un mensaje por canal. Revísalos y usa <strong>Editar texto</strong> o <strong>Editar imagen</strong> para ajustarlos antes de continuar.</p>
               </div>
               <button
                 onClick={onGenerate}
@@ -868,7 +823,7 @@ function Step2({
               <div className="flex items-center gap-2">
                 <Zap size={14} className="text-amber-500" />
                 <p className="text-xs font-bold text-gray-800">Envío prioritario</p>
-                <p className="text-[11px] text-gray-500">Cada cliente recibe 1 solo mensaje por este canal.</p>
+                <p className="text-[11px] text-gray-500">Si el cliente tiene varios canales autorizados, se priorizará sólo el que selecciones.</p>
               </div>
               <div className="flex gap-1.5">
                 {CHANNEL_ORDER.filter((k) => channels[k]).map((k) => {
@@ -897,7 +852,7 @@ function Step2({
               </div>
             </div>
 
-            <div className={`grid gap-4 ${gridCls}`}>
+            <div className={`grid gap-4 items-start ${gridCls}`}>
               {(channels.wa || content?.whatsapp) && (
                 <div className={`flex flex-col ${!channels.wa ? "opacity-45" : ""}`}>
                   <div className="flex items-center justify-between mb-2">
@@ -910,16 +865,16 @@ function Step2({
                         <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       {channels.wa && (
-                        <button onClick={() => onToggleEdit("wa")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableWa ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                        <button onClick={() => onToggleEdit("wa")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableWa ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}>
                           <Edit3 size={9} /> {editableWa ? "Listo" : "Editar"}
                         </button>
                       )}
                       <ChannelSwitch active={!!channels.wa} onToggle={() => onToggleChannel("wa")} />
                     </div>
                   </div>
-                  <div className="flex-1 h-80">
+                  <div className="h-80">
                     {content?.whatsapp ? (
                       <WhatsAppPreview text={content.whatsapp} editable={editableWa} onEdit={onEditWa} />
                     ) : (
@@ -943,21 +898,26 @@ function Step2({
                         <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       {channels.email && (
                         <>
                           <button onClick={onOpenDesigner} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">
-                            <Palette size={9} /> Diseñar
+                            <Palette size={9} /> Editar imagen
                           </button>
-                          <button onClick={() => onToggleEdit("email")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableEmail ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
-                            <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar"}
+                          <button onClick={() => onToggleEdit("email")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableEmail ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}>
+                            <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar texto"}
                           </button>
+                          {emailHtml && (
+                            <button onClick={() => setFullEmailOpen(true)} title="Ver correo completo" className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
+                              <Maximize2 size={9} /> Ver
+                            </button>
+                          )}
                         </>
                       )}
                       <ChannelSwitch active={!!channels.email} onToggle={() => onToggleChannel("email")} />
                     </div>
                   </div>
-                  <div className="flex-1 h-80">
+                  <div className={emailHtml ? "" : "h-80"}>
                     {content?.email.subject || content?.email.body ? (
                       <EmailPreview
                         subject={content.email.subject}
@@ -988,16 +948,16 @@ function Step2({
                         <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
                       {channels.sms && (
-                        <button onClick={() => onToggleEdit("sms")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableSms ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500 hover:bg-gray-200"}`}>
+                        <button onClick={() => onToggleEdit("sms")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableSms ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}>
                           <Edit3 size={9} /> {editableSms ? "Listo" : "Editar"}
                         </button>
                       )}
                       <ChannelSwitch active={!!channels.sms} onToggle={() => onToggleChannel("sms")} />
                     </div>
                   </div>
-                  <div className="flex-1 h-80">
+                  <div className="h-80">
                     {content?.sms ? (
                       <SmsPreview text={content.sms} editable={editableSms} onEdit={onEditSms} />
                     ) : (
@@ -1013,7 +973,7 @@ function Step2({
         )}
       </div>
 
-      <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between">
+      <div className="shrink-0 px-6 py-2.5 border-t border-gray-200 bg-white flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
           <ChevronLeft size={15} /> Atrás
         </button>
@@ -1035,6 +995,25 @@ function Step2({
           </button>
         )}
       </div>
+
+      {/* Modal: correo completo */}
+      {fullEmailOpen && emailHtml && (
+        <EmailFullPreviewModal
+          html={emailHtml}
+          onClose={() => setFullEmailOpen(false)}
+          actions={
+            <button
+              onClick={() => {
+                setFullEmailOpen(false);
+                onOpenDesigner();
+              }}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors"
+            >
+              <Palette size={12} /> Editar imagen
+            </button>
+          }
+        />
+      )}
     </div>
   );
 }
@@ -1086,6 +1065,8 @@ function AudienceStep({
   const [audTab, setAudTab] = useState<"seg" | "all">("seg");
   // Modal de filtros (lo abre el botón "Definir con filtros" del bloque manual).
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Aviso al intentar continuar en manual sin filtros aplicados.
+  const [noFiltersPrompt, setNoFiltersPrompt] = useState(false);
   // Total de clientes que cumplen los filtros manuales: lo reporta el
   // panel cada vez que puntúa y alimenta el contador.
   const [manualTotal, setManualTotal] = useState<number | null>(null);
@@ -1306,7 +1287,7 @@ function AudienceStep({
                       title="Abre los filtros para definir la segmentación manual"
                     >
                       <SlidersHorizontal size={12} />
-                      {manualF.hasFilters ? "Editar segmentación" : "Definir con filtros"}
+                      {manualF.hasFilters ? "Editar segmentación" : "Seleccione los clientes para la segmentación"}
                     </button>
                   </div>
 
@@ -1335,31 +1316,6 @@ function AudienceStep({
                   <div className="space-y-1.5 text-[11px]">
                     <label
                       className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer select-none transition-all ${
-                        !audMix
-                          ? "border-amber-400 bg-amber-50 shadow-sm"
-                          : "border-gray-200 bg-white hover:border-gray-300"
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        name="wizard-aud-mix"
-                        checked={!audMix}
-                        onChange={() => onAudMixChange(false)}
-                        className="accent-amber-500 w-3.5 h-3.5 shrink-0"
-                      />
-                      <span className="flex-1 min-w-0 text-gray-700">
-                        Reemplazar la recomendación por estos clientes
-                      </span>
-                      {manualTotal != null ? (
-                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
-                          {manualTotal.toLocaleString()} clientes
-                        </span>
-                      ) : (
-                        <span className="shrink-0 text-[10px] text-gray-400">Sin calcular</span>
-                      )}
-                    </label>
-                    <label
-                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer select-none transition-all ${
                         audMix
                           ? "border-amber-400 bg-amber-50 shadow-sm"
                           : "border-gray-200 bg-white hover:border-gray-300"
@@ -1384,6 +1340,31 @@ function AudienceStep({
                       {sumarTotal != null ? (
                         <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
                           {sumarTotal.toLocaleString()} clientes
+                        </span>
+                      ) : (
+                        <span className="shrink-0 text-[10px] text-gray-400">Sin calcular</span>
+                      )}
+                    </label>
+                    <label
+                      className={`flex items-center gap-2 rounded-xl border px-3 py-2 cursor-pointer select-none transition-all ${
+                        !audMix
+                          ? "border-amber-400 bg-amber-50 shadow-sm"
+                          : "border-gray-200 bg-white hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="wizard-aud-mix"
+                        checked={!audMix}
+                        onChange={() => onAudMixChange(false)}
+                        className="accent-amber-500 w-3.5 h-3.5 shrink-0"
+                      />
+                      <span className="flex-1 min-w-0 text-gray-700">
+                        Reemplazar la recomendación por estos clientes
+                      </span>
+                      {manualTotal != null ? (
+                        <span className="shrink-0 px-2 py-0.5 rounded-full bg-amber-400 text-amber-900 text-[10px] font-black whitespace-nowrap">
+                          {manualTotal.toLocaleString()} clientes
                         </span>
                       ) : (
                         <span className="shrink-0 text-[10px] text-gray-400">Sin calcular</span>
@@ -1426,18 +1407,72 @@ function AudienceStep({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between">
+      <div className="shrink-0 px-6 py-2.5 border-t border-gray-200 bg-white flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
           <ChevronLeft size={15} /> Atrás
         </button>
         <button
-          onClick={handleContinue}
+          onClick={() => {
+            if (audSource === "manual" && !manualF.hasFilters) setNoFiltersPrompt(true);
+            else handleContinue();
+          }}
           disabled={audSource === "auto" && segLoading}
           className="flex items-center gap-2 px-6 py-3 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Continuar a Revisión <ArrowRight size={15} />
+          Siguiente <ArrowRight size={15} />
         </button>
       </div>
+
+      {/* Aviso: en manual sin filtros, antes de continuar a revisión */}
+      {noFiltersPrompt && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50 backdrop-blur-sm cursor-pointer"
+            onClick={() => setNoFiltersPrompt(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <div className="flex items-start gap-3">
+              <span className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                <SlidersHorizontal size={18} />
+              </span>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Aún no has aplicado filtros</h3>
+                <p className="mt-1 text-sm text-gray-500">
+                  Elegiste segmentación manual pero no definiste filtros. Aplica filtros para elegir los clientes,
+                  o continúa sólo con los clientes recomendados por producto.
+                </p>
+              </div>
+            </div>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  setNoFiltersPrompt(false);
+                  setFiltersOpen(true);
+                }}
+                className="flex items-center justify-center gap-1.5 px-4 py-2.5 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors"
+              >
+                <SlidersHorizontal size={14} /> Aplicar filtros
+              </button>
+              <button
+                onClick={() => {
+                  setNoFiltersPrompt(false);
+                  onAudSourceChange("auto");
+                  onContinue({ count: seg?.total ?? null, label: "Recomendada por producto" });
+                }}
+                className="px-4 py-2.5 text-sm font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 rounded-xl transition-colors"
+              >
+                Continuar sólo con los recomendados
+              </button>
+              <button
+                onClick={() => setNoFiltersPrompt(false)}
+                className="px-4 py-2 text-xs text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Pantalla de carga de la segmentación (solo si el público elegido es la recomendada) ── */}
       {segLoading && audSource === "auto" && (
@@ -1602,7 +1637,7 @@ function ReviewStep({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 py-4 border-t border-gray-100 bg-white flex items-center justify-between">
+      <div className="shrink-0 px-6 py-2.5 border-t border-gray-200 bg-white flex items-center justify-between">
         <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
           <ChevronLeft size={15} /> Atrás
         </button>
@@ -1950,7 +1985,7 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
   // 'auto' → recomendación por producto · 'manual' → filtros manuales
   // (con audMix = sumar los manuales a la recomendación en lugar de reemplazar).
   const [audSource, setAudSource] = useState<"auto" | "manual">("auto");
-  const [audMix, setAudMix] = useState(false);
+  const [audMix, setAudMix] = useState(true);
   const manualF = useManualFilters();
   // Nº real de destinatarios que quedaron en cola (lo devuelve el backend al
   // lanzar; alimenta la vista de éxito de la revisión).
@@ -3270,22 +3305,39 @@ function RecipientsModal({
         {/* Toolbar: pestañas + búsqueda */}
         <div className="px-6 py-3 border-b border-gray-100 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
+            {!inline && (
+              <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 shrink-0">
+                <button
+                  onClick={() => setTab("seg")}
+                  title="Clientes recomendados según el producto seleccionado"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "seg" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Recomendados por producto
+                </button>
+                <button
+                  onClick={() => setTab("all")}
+                  title="Explora toda la base y segmenta manualmente por filtros"
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "all" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
+                >
+                  Segmentación manual
+                </button>
+              </div>
+            )}
+            {inline && (
               <button
-                onClick={() => setTab("seg")}
-                title="Clientes recomendados según el producto seleccionado"
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "seg" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
+                onClick={() => setFilterModalOpen(true)}
+                title="Abrir los filtros de segmentación"
+                className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold rounded-xl bg-amber-400 text-amber-900 hover:bg-amber-500 shadow-sm transition-colors shrink-0"
               >
-                Recomendados por producto
+                <SlidersHorizontal size={13} />
+                Filtrar clientes
+                {f.hasFilters && (
+                  <span className="px-1.5 py-0.5 rounded-full bg-white/70 text-amber-900 text-[10px] font-bold">
+                    {countActiveFilters(f.snapshot)}
+                  </span>
+                )}
               </button>
-              <button
-                onClick={() => setTab("all")}
-                title="Explora toda la base y segmenta manualmente por filtros"
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${tab === "all" ? "bg-white shadow-sm text-gray-800" : "text-gray-500 hover:text-gray-700"}`}
-              >
-                Segmentación manual
-              </button>
-            </div>
+            )}
             <div className="relative flex-1">
               <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
@@ -3296,7 +3348,8 @@ function RecipientsModal({
               />
             </div>
           </div>
-          {tab === "all" && (
+          {inline && tab === "all" && <ManualFilterChips f={f} />}
+          {tab === "all" && !inline && (
             <p className="text-[11px] text-gray-400 mt-2">
               {!f.hasFilters
                 ? "Aplica filtros (ubicación, género, edad, perfil de compra…) para segmentar manualmente."
@@ -3307,8 +3360,8 @@ function RecipientsModal({
           )}
         </div>
 
-        {/* Barra de filtros del tab "Todos los clientes" */}
-        {tab === "all" && (
+        {/* Barra de filtros del tab "Todos los clientes" (solo en el modal) */}
+        {tab === "all" && !inline && (
           <div className="px-6 py-2.5 border-b border-gray-100 shrink-0 flex items-center gap-2 flex-wrap">
             <button
               onClick={() => setFilterModalOpen(true)}
@@ -3528,15 +3581,11 @@ function RecipientsModal({
               </button>
             </div>
           ) : !f.hasFilters ? (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
+            <div className="flex flex-col items-center justify-center py-8 text-center">
               <div className="w-12 h-12 rounded-2xl bg-amber-50 flex items-center justify-center mb-3">
                 <Filter size={22} className="text-amber-500" />
               </div>
               <p className="text-sm font-semibold text-gray-700">Define la segmentación manual con filtros</p>
-              <p className="text-xs text-gray-400 mt-1 max-w-xs">
-                Aplica filtros de ubicación, demografía, perfil económico o de compra para ver cuántos clientes
-                cumplen esas características y usarlos como público.
-              </p>
               <button
                 onClick={() => setFilterModalOpen(true)}
                 className="mt-4 flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-amber-900 bg-amber-400 rounded-xl hover:bg-amber-500 transition-colors shadow-sm"
@@ -4090,6 +4139,103 @@ function ManualFiltersPanel({ f }: { f: ReturnType<typeof useManualFilters> }) {
         <RangeInputs label="Ticket promedio" min={v.minT} max={v.maxT} onMin={(x) => set("minT", x)} onMax={(x) => set("maxT", x)} step={1000} />
         <RangeInputs label="Categorías distintas" min={v.minC} max={v.maxC} onMin={(x) => set("minC", x)} onMax={(x) => set("maxC", x)} />
       </FilterSection>
+    </div>
+  );
+}
+
+/** Burbujas con los filtros manuales aplicados; cada una se puede quitar. */
+function ManualFilterChips({ f }: { f: ReturnType<typeof useManualFilters> }) {
+  const v = f.snapshot;
+  const set = f.set;
+  const chips: { key: string; label: string; onClear: () => void }[] = [];
+  const push = (key: string, label: string, onClear: () => void) => {
+    if (label) chips.push({ key, label, onClear });
+  };
+  const range = (min: string, max: string) => {
+    const a = min.trim();
+    const b = max.trim();
+    if (a && b) return `${a}–${b}`;
+    if (a) return `≥ ${a}`;
+    if (b) return `≤ ${b}`;
+    return "";
+  };
+
+  push("segment", v.segment ? `Segmento RFM: ${v.segment}` : "", () => set("segment", ""));
+  push("ciudades", v.ciudades.length ? `Ciudad: ${v.ciudades.join(", ")}` : "", () => set("ciudades", []));
+  push("barrios", v.barrios.length ? `Barrio: ${v.barrios.join(", ")}` : "", () => set("barrios", []));
+  push("direccion", v.direccion.trim() ? `Dirección: ${v.direccion.trim()}` : "", () => set("direccion", ""));
+  push("sexos", v.sexos.length ? `Sexo: ${v.sexos.join(", ")}` : "", () => set("sexos", []));
+  push("edad", range(v.minEdad, v.maxEdad) && `Edad: ${range(v.minEdad, v.maxEdad)}`, () => {
+    set("minEdad", "");
+    set("maxEdad", "");
+  });
+  push("estados", v.estadosCiviles.length ? `Estado civil: ${v.estadosCiviles.join(", ")}` : "", () => set("estadosCiviles", []));
+  push("hijos", range(v.minHijos, v.maxHijos) && `Hijos: ${range(v.minHijos, v.maxHijos)}`, () => {
+    set("minHijos", "");
+    set("maxHijos", "");
+  });
+  push("profesiones", v.profesiones.length ? `Profesión: ${v.profesiones.join(", ")}` : "", () => set("profesiones", []));
+  push("valor", range(v.minValor, v.maxValor) && `Valor histórico: ${range(v.minValor, v.maxValor)}`, () => {
+    set("minValor", "");
+    set("maxValor", "");
+  });
+  push("puntos", range(v.minPuntos, v.maxPuntos) && `Puntos: ${range(v.minPuntos, v.maxPuntos)}`, () => {
+    set("minPuntos", "");
+    set("maxPuntos", "");
+  });
+  push("frecuencia", range(v.minF, v.maxF) && `Frecuencia: ${range(v.minF, v.maxF)}`, () => {
+    set("minF", "");
+    set("maxF", "");
+  });
+  push("monetario", range(v.minM, v.maxM) && `Monetario: ${range(v.minM, v.maxM)}`, () => {
+    set("minM", "");
+    set("maxM", "");
+  });
+  push("ticket", range(v.minT, v.maxT) && `Ticket: ${range(v.minT, v.maxT)}`, () => {
+    set("minT", "");
+    set("maxT", "");
+  });
+  push("categorias", range(v.minC, v.maxC) && `Categorías: ${range(v.minC, v.maxC)}`, () => {
+    set("minC", "");
+    set("maxC", "");
+  });
+  push("clubs", v.clubs.length ? `Clubs: ${v.clubs.join(", ")}` : "", () => set("clubs", []));
+  push(
+    "consentimientos",
+    v.consentimientos.length ? `Consentimiento: ${v.consentimientos.join(", ")}` : "",
+    () => set("consentimientos", []),
+  );
+  push("mascota", v.tieneMascota ? "Con mascota" : "", () => set("tieneMascota", false));
+  push("carro", v.tieneCarro ? "Con carro" : "", () => set("tieneCarro", false));
+  push("empleado", v.esEmpleado ? "Es empleado" : "", () => set("esEmpleado", false));
+
+  if (!chips.length) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 mt-2.5">
+      {chips.map((c) => (
+        <span
+          key={c.key}
+          className="inline-flex items-center gap-1 pl-2.5 pr-1 py-1 rounded-full bg-amber-50 border border-amber-200 text-[11px] font-semibold text-amber-900"
+        >
+          {c.label}
+          <button
+            onClick={c.onClear}
+            title="Quitar filtro"
+            className="w-4 h-4 flex items-center justify-center rounded-full hover:bg-amber-200 text-amber-700 transition-colors cursor-pointer"
+          >
+            <X size={10} />
+          </button>
+        </span>
+      ))}
+      {chips.length > 1 && (
+        <button
+          onClick={() => f.reset()}
+          className="ml-1 text-[11px] font-semibold text-gray-400 hover:text-red-600 underline underline-offset-2 cursor-pointer"
+        >
+          Limpiar todo
+        </button>
+      )}
     </div>
   );
 }
