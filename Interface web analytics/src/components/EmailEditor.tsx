@@ -319,6 +319,15 @@ const INTERNAL_IMAGES = [
 export function blocksToHtml(blocks: EmailBlock[]): string {
   const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+  /** Solo permite esquemas seguros en enlaces/imágenes (evita `javascript:`, etc.). */
+  const safeUrl = (u: string | undefined, allowDataImage = false) => {
+    const v = (u ?? "").trim();
+    if (!v) return "";
+    if (/^(https?:|mailto:|tel:)/i.test(v) || v.startsWith("#") || v.startsWith("/")) return v;
+    if (allowDataImage && /^data:image\//i.test(v)) return v;
+    return "";
+  };
+
   const cell = (inner: string, extra = "") =>
     `<tr><td style="padding:12px 24px;${extra}">${inner}</td></tr>`;
 
@@ -334,12 +343,12 @@ export function blocksToHtml(blocks: EmailBlock[]): string {
         case "image": {
           if (!b.props.src) return cell("<div></div>");
           return cell(
-            `<a href="${esc(b.props.link ?? "")}" style="text-decoration:none;"><img src="${esc(b.props.src!)}" alt="${esc(b.props.alt ?? "")}" width="${Math.round(560 * (b.props.width ?? 100) / 100)}" style="max-width:100%;border-radius:${b.props.borderRadius ?? 8}px;border:${b.props.borderWidth ?? 0}px solid #E5E7EB;${b.props.shadow ? "box-shadow:0 4px 12px rgba(0,0,0,.08);" : ""}height:${b.props.height ? `${b.props.height}px` : "auto"};object-fit:cover;display:block;" /></a>`,
+            `<a href="${esc(safeUrl(b.props.link))}" style="text-decoration:none;"><img src="${esc(safeUrl(b.props.src, true))}" alt="${esc(b.props.alt ?? "")}" width="${Math.round(560 * (b.props.width ?? 100) / 100)}" style="max-width:100%;border-radius:${b.props.borderRadius ?? 8}px;border:${b.props.borderWidth ?? 0}px solid #E5E7EB;${b.props.shadow ? "box-shadow:0 4px 12px rgba(0,0,0,.08);" : ""}height:${b.props.height ? `${b.props.height}px` : "auto"};object-fit:cover;display:block;" /></a>`,
           );
         }
         case "button": {
           return cell(
-            `<div style="text-align:${b.props.align ?? "center"};"><a href="${esc(b.props.link ?? "#")}" style="display:inline-block;background:${b.props.bg ?? "#FBBF24"};color:${b.props.color ?? "#78350F"};font-size:14px;font-weight:700;padding:12px 28px;border-radius:${b.props.radius ?? 10}px;text-decoration:none;">${b.props.text ?? ""}</a></div>`,
+            `<div style="text-align:${b.props.align ?? "center"};"><a href="${esc(safeUrl(b.props.link) || "#")}" style="display:inline-block;background:${b.props.bg ?? "#FBBF24"};color:${b.props.color ?? "#78350F"};font-size:14px;font-weight:700;padding:12px 28px;border-radius:${b.props.radius ?? 10}px;text-decoration:none;">${b.props.text ?? ""}</a></div>`,
           );
         }
         case "divider": {
@@ -356,7 +365,7 @@ export function blocksToHtml(blocks: EmailBlock[]): string {
               (c) =>
                 `<td valign="top" style="padding:8px;text-align:center;">${
                   c.src
-                    ? `<img src="${esc(c.src)}" style="max-width:100%;border-radius:8px;display:block;margin:0 auto 8px;" />`
+                    ? `<img src="${esc(safeUrl(c.src, true))}" style="max-width:100%;border-radius:8px;display:block;margin:0 auto 8px;" />`
                     : ""
                 }<div style="font-size:13px;color:#374151;line-height:1.5;">${esc(c.text).replace(/\n/g, "<br/>")}</div></td>`,
             )
@@ -374,7 +383,7 @@ export function blocksToHtml(blocks: EmailBlock[]): string {
           const links = nets
             .map(
               ([k, url]) =>
-                `<a href="${esc(url)}" style="display:inline-block;width:34px;height:34px;line-height:34px;margin:0 4px;border-radius:50%;background:#F3F4F6;color:${b.props.iconColor ?? "#6B7280"};font-weight:700;text-decoration:none;text-align:center;">${glyph[k] ?? k}</a>`,
+                `<a href="${esc(safeUrl(url))}" style="display:inline-block;width:34px;height:34px;line-height:34px;margin:0 4px;border-radius:50%;background:#F3F4F6;color:${b.props.iconColor ?? "#6B7280"};font-weight:700;text-decoration:none;text-align:center;">${glyph[k] ?? k}</a>`,
             )
             .join("");
           return cell(`<div style="text-align:${b.props.align ?? "center"};">${links}</div>`);

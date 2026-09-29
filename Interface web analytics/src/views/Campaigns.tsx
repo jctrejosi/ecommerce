@@ -1038,6 +1038,8 @@ function Step2({
   );
 }
 
+const EXPLAIN_SEEN_KEY = "mercaldas-analytics-explain-seen";
+
 function AudienceStep({
   products,
   channels,
@@ -1087,6 +1089,27 @@ function AudienceStep({
   const [filtersOpen, setFiltersOpen] = useState(false);
   // Aviso al intentar continuar en manual sin filtros aplicados.
   const [noFiltersPrompt, setNoFiltersPrompt] = useState(false);
+  // Botón "¿Cómo se escogieron los clientes?": el borde animado se apaga la
+  // primera vez que se abre el modal (queda marcado en localStorage).
+  const [explainOpen, setExplainOpen] = useState(false);
+  const [explainSeen, setExplainSeen] = useState(() => {
+    try {
+      return localStorage.getItem(EXPLAIN_SEEN_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const openExplain = () => {
+    if (!explainSeen) {
+      setExplainSeen(true);
+      try {
+        localStorage.setItem(EXPLAIN_SEEN_KEY, "1");
+      } catch {
+        /* localStorage no disponible */
+      }
+    }
+    setExplainOpen(true);
+  };
   // Total de clientes que cumplen los filtros manuales: lo reporta el
   // panel cada vez que puntúa y alimenta el contador.
   const [manualTotal, setManualTotal] = useState<number | null>(null);
@@ -1223,9 +1246,20 @@ function AudienceStep({
       <div className="flex-1 overflow-y-auto p-6">
         <div className="max-w-5xl mx-auto">
           <h2 className="text-xl font-bold text-gray-900 mb-1">Público objetivo</h2>
-          <p className="text-sm text-gray-500 mb-5">
+          <p className="text-sm text-gray-500 mb-4">
             Elige quién recibirá la campaña: la recomendación por producto o una segmentación manual con filtros.
           </p>
+
+          {explainCtx && (
+            <button
+              onClick={openExplain}
+              title="¿Cómo se escogieron los clientes?"
+              className={`mb-5 inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-3.5 py-2 text-[11px] font-bold text-amber-950 shadow-sm transition-all hover:shadow-md hover:scale-105 active:scale-95 ${explainSeen ? "" : "animate-btn-shine"}`}
+            >
+              <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/85 text-[10px] font-black">?</span>
+              ¿Cómo se escogieron los clientes?
+            </button>
+          )}
 
           <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm mb-4">
             <div className="space-y-3">
@@ -1412,7 +1446,6 @@ function AudienceStep({
                   : `${products.map((p) => p.name).join(", ") || "Campaña nueva"} · define tu audiencia con filtros`
               }
               recipients={seg?.recipients}
-              explain={audTab === "seg" ? explainCtx : null}
               controlledTab={audTab}
               onTabChange={setAudTab}
               filtersHook={manualF}
@@ -1492,6 +1525,10 @@ function AudienceStep({
             </div>
           </div>
         </div>
+      )}
+
+      {explainOpen && explainCtx && (
+        <ExplainModal ctx={explainCtx} onClose={() => setExplainOpen(false)} />
       )}
 
       {/* ── Pantalla de carga de la segmentación (solo si el público elegido es la recomendada) ── */}
@@ -2885,7 +2922,6 @@ function RecipientsModal({
   subtitle,
   recipients: preset,
   campaignId,
-  explain,
   onClose,
   audienceMode,
   onAudienceChange,
@@ -2913,7 +2949,6 @@ function RecipientsModal({
     percentile?: number | null;
   }[];
   campaignId?: number;
-  explain?: ExplainContext | null;
   onClose?: () => void;
   audienceMode?: "auto" | "manual" | "mixed" | null;
   onAudienceChange?: (
@@ -2995,7 +3030,6 @@ function RecipientsModal({
   const [loading, setLoading] = useState(campaignId != null && preset == null);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [explainOpen, setExplainOpen] = useState(false);
 
   // Lazy-load: se renderizan bloques de PAGE filas; al llegar al final (scroll)
   // se cargan las siguientes. `visible` se reinicia al buscar.
@@ -3285,44 +3319,36 @@ function RecipientsModal({
         }`}
       >
         {/* Header */}
-        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-100 shrink-0">
-          <div className="min-w-0 pr-3">
-            <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Users size={18} className="text-amber-600" /> {title}
-              {explain && (
-                <button
-                  onClick={() => setExplainOpen(true)}
-                  title="¿Cómo se escogieron los clientes?"
-                  className="animate-soft-pulse group flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-orange-400 px-3 py-1.5 text-[11px] font-bold text-amber-950 shadow-sm transition-all hover:shadow-md hover:scale-105 active:scale-95"
-                >
-                  <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white/85 text-[10px] font-black">?</span>
-                  ¿Cómo se escogieron los clientes?
-                </button>
+        <div className="px-6 py-4 border-b border-gray-100 shrink-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0 pr-3">
+              <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                <Users size={18} className="text-amber-600" /> {title}
+              </h3>
+              {subtitle && <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitle}</p>}
+              {campaignId && mode && (
+                <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-gray-400">
+                  <span className="font-semibold">Segmentación actual:</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full font-bold ${
+                      mode === "auto"
+                        ? "bg-blue-50 text-blue-700 border border-blue-200"
+                        : mode === "manual"
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "bg-purple-50 text-purple-700 border border-purple-200"
+                    }`}
+                  >
+                    {AUD_LABEL[mode] ?? mode}
+                  </span>
+                </p>
               )}
-            </h3>
-            {subtitle && <p className="text-sm text-gray-500 mt-0.5 truncate">{subtitle}</p>}
-            {campaignId && mode && (
-              <p className="mt-1.5 inline-flex items-center gap-1.5 text-[11px] text-gray-400">
-                <span className="font-semibold">Segmentación actual:</span>
-                <span
-                  className={`px-2 py-0.5 rounded-full font-bold ${
-                    mode === "auto"
-                      ? "bg-blue-50 text-blue-700 border border-blue-200"
-                      : mode === "manual"
-                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                        : "bg-purple-50 text-purple-700 border border-purple-200"
-                  }`}
-                >
-                  {AUD_LABEL[mode] ?? mode}
-                </span>
-              </p>
+            </div>
+            {!inline && (
+              <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
+                <X size={16} />
+              </button>
             )}
           </div>
-          {!inline && (
-            <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500 transition-colors shrink-0">
-              <X size={16} />
-            </button>
-          )}
         </div>
 
         {/* Toolbar: pestañas + búsqueda */}
@@ -3683,10 +3709,6 @@ function RecipientsModal({
           )}
         </div>
       </div>
-
-      {explainOpen && explain && (
-        <ExplainModal ctx={explain} onClose={() => setExplainOpen(false)} />
-      )}
 
       {/* Modal de filtros de segmentación (tab "Todos los clientes") */}
       {filterModalOpen && (

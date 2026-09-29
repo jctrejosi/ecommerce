@@ -46,7 +46,6 @@ export function EmailHtmlPreview({ html, variant = "card" }: { html: string; var
         <iframe
           srcDoc={html}
           title="Vista previa del correo"
-          sandbox="allow-same-origin"
           scrolling="no"
           onLoad={(e) => {
             const frame = e.currentTarget as HTMLIFrameElement;

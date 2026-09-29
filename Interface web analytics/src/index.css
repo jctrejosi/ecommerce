@@ -30,6 +30,36 @@ code, kbd, .mono { font-family: 'JetBrains Mono', monospace; }
   animation: softPulse 2.4s ease-in-out infinite;
 }
 
+/* Brillo que barre el botón (efecto "shine") para llamar la atención. Se usa
+   en el botón "¿Cómo se escogieron los clientes?" y se apaga la primera vez
+   que se abre el modal. Necesita overflow oculto para no salirse. */
+@keyframes btnShine {
+  0%   { transform: translateX(-160%) skewX(-20deg); }
+  60%  { transform: translateX(260%) skewX(-20deg); }
+  100% { transform: translateX(260%) skewX(-20deg); }
+}
+.animate-btn-shine {
+  position: relative;
+  overflow: hidden;
+}
+.animate-btn-shine::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 45%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.75),
+    transparent
+  );
+  transform: translateX(-160%) skewX(-20deg);
+  animation: btnShine 3s ease-in-out infinite;
+  pointer-events: none;
+}
+
 /* ─────────────────────────────────────────────────────────────
    Temas de acento.
    Tailwind v4 compila las utilidades a `var(--color-amber-N)` (y
