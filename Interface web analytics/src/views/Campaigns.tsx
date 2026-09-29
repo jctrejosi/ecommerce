@@ -11,6 +11,7 @@ import {
 import EmailEditor, {
   newBlock,
   defaultTemplate,
+  blocksToHtml,
   type EmailBlock,
 } from "../components/EmailEditor";
 import { EmailHtmlPreview, EmailFullPreviewModal } from "../components/EmailFullPreview";
@@ -146,6 +147,21 @@ function buildEmailBlocks(product: Product, content: GeneratedContent): EmailBlo
     newBlock("social"),
     { ...newBlock("text"), props: { text: "El equipo de Mercaldas 💛<br/>Si no quieres recibir más correos, haz clic aquí.", fontSize: 12, color: "#9CA3AF", align: "center" } },
   ];
+}
+
+/**
+ * La IA arma los bloques del correo sin recibir la imagen real del producto, así
+ * que suele inventar la URL de la imagen (p. ej. `mercaldas.com/img/<slug>.jpg`,
+ * que ya no existe). Aquí forzamos la imagen real del producto (Cloudinary) para
+ * que el correo muestre siempre una imagen válida; si el producto no tiene
+ * imagen, se limpia la `src` para no dejar una imagen rota.
+ */
+function withRealProductImage(blocks: EmailBlock[], image: string | null | undefined): EmailBlock[] {
+  return blocks.map((b) =>
+    b.type === "image"
+      ? { ...b, props: { ...b.props, src: image ?? undefined } }
+      : b,
+  );
 }
 
 /* ─── Channel preview components ───────────────── */
@@ -861,16 +877,15 @@ function Step2({
                         <MessageCircle size={12} className="text-white" />
                       </div>
                       <span className="text-xs font-bold text-gray-700">WhatsApp</span>
-                      {!channels.wa && (
-                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
-                      )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {channels.wa && (
-                        <button onClick={() => onToggleEdit("wa")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableWa ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}>
-                          <Edit3 size={9} /> {editableWa ? "Listo" : "Editar"}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => onToggleEdit("wa")}
+                        disabled={!channels.wa}
+                        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${editableWa ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}
+                      >
+                        <Edit3 size={9} /> {editableWa ? "Listo" : "Editar"}
+                      </button>
                       <ChannelSwitch active={!!channels.wa} onToggle={() => onToggleChannel("wa")} />
                     </div>
                   </div>
@@ -894,25 +909,31 @@ function Step2({
                         <Mail size={12} className="text-white" />
                       </div>
                       <span className="text-xs font-bold text-gray-700">Email</span>
-                      {!channels.email && (
-                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
-                      )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {channels.email && (
-                        <>
-                          <button onClick={onOpenDesigner} className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors">
-                            <Palette size={9} /> Editar imagen
-                          </button>
-                          <button onClick={() => onToggleEdit("email")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableEmail ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}>
-                            <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar texto"}
-                          </button>
-                          {emailHtml && (
-                            <button onClick={() => setFullEmailOpen(true)} title="Ver correo completo" className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors">
-                              <Maximize2 size={9} /> Ver
-                            </button>
-                          )}
-                        </>
+                      <button
+                        onClick={onOpenDesigner}
+                        disabled={!channels.email}
+                        className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-amber-100 text-amber-700 hover:bg-amber-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Palette size={9} /> Editar imagen
+                      </button>
+                      <button
+                        onClick={() => onToggleEdit("email")}
+                        disabled={!channels.email}
+                        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${editableEmail ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}
+                      >
+                        <Edit3 size={9} /> {editableEmail ? "Listo" : "Editar texto"}
+                      </button>
+                      {emailHtml && (
+                        <button
+                          onClick={() => setFullEmailOpen(true)}
+                          disabled={!channels.email}
+                          title="Ver correo completo"
+                          className="flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg bg-emerald-100 text-emerald-700 hover:bg-emerald-200 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <Maximize2 size={9} /> Ver
+                        </button>
                       )}
                       <ChannelSwitch active={!!channels.email} onToggle={() => onToggleChannel("email")} />
                     </div>
@@ -944,16 +965,15 @@ function Step2({
                         <Smartphone size={12} className="text-white" />
                       </div>
                       <span className="text-xs font-bold text-gray-700">SMS</span>
-                      {!channels.sms && (
-                        <span className="text-[9px] font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full uppercase">Deshabilitado</span>
-                      )}
                     </div>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                      {channels.sms && (
-                        <button onClick={() => onToggleEdit("sms")} className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors ${editableSms ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}>
-                          <Edit3 size={9} /> {editableSms ? "Listo" : "Editar"}
-                        </button>
-                      )}
+                      <button
+                        onClick={() => onToggleEdit("sms")}
+                        disabled={!channels.sms}
+                        className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${editableSms ? "bg-violet-500 text-white hover:bg-violet-600" : "bg-violet-100 text-violet-700 hover:bg-violet-200"}`}
+                      >
+                        <Edit3 size={9} /> {editableSms ? "Listo" : "Editar"}
+                      </button>
                       <ChannelSwitch active={!!channels.sms} onToggle={() => onToggleChannel("sms")} />
                     </div>
                   </div>
@@ -2055,8 +2075,11 @@ function CampaignWizard({ onClose, onCreated }: { onClose: () => void; onCreated
         sms: res.sms ?? c?.sms ?? "",
       }));
       if (email?.bloques?.length) {
-        setEmailBlocks(email.bloques as unknown as EmailBlock[]);
-        setEmailHtml(email.html ?? null);
+        const blocks = withRealProductImage(email.bloques as unknown as EmailBlock[], primary.image);
+        setEmailBlocks(blocks);
+        // Reconstruye el HTML desde los bloques corregidos (así la preview y el
+        // correo guardado usan la imagen real, no la que inventó la IA).
+        setEmailHtml(blocksToHtml(blocks));
       }
       setGenerated(true);
     } catch (e) {
