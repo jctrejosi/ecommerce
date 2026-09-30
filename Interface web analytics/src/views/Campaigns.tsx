@@ -1412,6 +1412,9 @@ function AudienceStep({
   // Botón "¿Cómo se escogieron los clientes?": el borde animado se apaga la
   // primera vez que se abre el modal (queda marcado en localStorage).
   const [explainOpen, setExplainOpen] = useState(false);
+  // Botón "¿Cómo se escogieron los clientes?": parpadea al entrar al paso con
+  // la animación de brillo y se apaga la primera vez que se abre el modal
+  // (queda marcado en localStorage).
   const [explainSeen, setExplainSeen] = useState(() => {
     try {
       return localStorage.getItem(EXPLAIN_SEEN_KEY) === "1";
@@ -2018,34 +2021,36 @@ function ReviewStep({
         </div>
       </div>
 
-      <div className="shrink-0 px-6 py-2.5 border-t border-gray-200 bg-white flex items-center justify-between">
-        <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors">
+      <div className="shrink-0 px-6 py-2.5 border-t border-gray-200 bg-white flex items-center justify-between gap-3">
+        <button onClick={onBack} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-500 hover:text-gray-700 transition-colors shrink-0">
           <ChevronLeft size={15} /> Atrás
         </button>
         {sendError && (
-          <p className="flex-1 mx-4 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
+          <p className="flex-1 min-w-0 mx-4 text-xs font-semibold text-red-700 bg-red-50 border border-red-200 rounded-xl px-4 py-2">
             ⚠ {sendError}
           </p>
         )}
-        <button
-          onClick={onSaveDraft}
-          disabled={sending || savingDraft}
-          className="flex items-center gap-2 px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl transition-all mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {savingDraft ? (
-            <RefreshCw size={15} className="animate-spin" />
-          ) : (
-            <Save size={15} />
-          )}
-          {savingDraft ? "Guardando…" : "Guardar borrador"}
-        </button>
-        <button
-          onClick={onSend}
-          disabled={sending || savingDraft}
-          className="flex items-center gap-2.5 px-6 py-3 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          <Send size={15} /> {sending ? "Creando campaña…" : scheduled ? "Programar Campaña" : "Enviar Ahora"}
-        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={onSaveDraft}
+            disabled={sending || savingDraft}
+            className="flex items-center gap-2 px-4 py-3 text-sm font-bold text-gray-700 bg-white border border-gray-200 hover:bg-gray-50 hover:border-gray-300 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {savingDraft ? (
+              <RefreshCw size={15} className="animate-spin" />
+            ) : (
+              <Save size={15} />
+            )}
+            {savingDraft ? "Guardando…" : "Guardar borrador"}
+          </button>
+          <button
+            onClick={onSend}
+            disabled={sending || savingDraft}
+            className="flex items-center gap-2.5 px-6 py-3 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-all shadow-md hover:shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Send size={15} /> {sending ? "Creando campaña…" : scheduled ? "Programar Campaña" : "Enviar Ahora"}
+          </button>
+        </div>
       </div>
     </div>
   );
