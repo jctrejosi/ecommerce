@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
   TrendingUp, TrendingDown, ShoppingCart, Users, Package, Truck,
-  AlertTriangle, Zap, Eye, X, Loader2, ArrowUpRight, RefreshCw,
+  AlertTriangle, Zap, Eye, X, ArrowUpRight, RefreshCw,
   Megaphone, Mail,
 } from 'lucide-react';
 import {
@@ -188,10 +188,80 @@ function Modal({
   );
 }
 
-function LoadingSpinner({ size = 24 }: { size?: number }) {
+/* ─── Skeletons de carga (parpadeo) ─────────────────────────────────────── */
+
+function StatCardsSkeleton({
+  count = 4,
+  variant = 'primary',
+}: {
+  count?: number;
+  variant?: 'primary' | 'secondary';
+}) {
+  const items = Array.from({ length: count });
+  if (variant === 'secondary') {
+    return (
+      <>
+        {items.map((_, i) => (
+          <div key={i} className="bg-white rounded-2xl border border-gray-100 px-5 py-4 flex items-center gap-4 animate-pulse">
+            <div className="w-6 h-6 rounded-md bg-gray-200 shrink-0" />
+            <div className="space-y-2">
+              <div className="h-5 w-24 rounded bg-gray-200" />
+              <div className="h-3 w-32 rounded bg-gray-100" />
+            </div>
+          </div>
+        ))}
+      </>
+    );
+  }
   return (
-    <div className="flex justify-center py-12">
-      <Loader2 size={size} className="animate-spin text-amber-500" />
+    <>
+      {items.map((_, i) => (
+        <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 animate-pulse">
+          <div className="w-10 h-10 rounded-xl bg-gray-200 mb-4" />
+          <div className="h-7 w-24 rounded bg-gray-200 mb-2" />
+          <div className="h-4 w-32 rounded bg-gray-100" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function ChartSkeleton({ height = 220 }: { height?: number }) {
+  const bars = [45, 68, 52, 80, 58, 72, 48, 78, 62, 86, 55, 70];
+  return (
+    <div className="flex items-end gap-2 animate-pulse" style={{ height }}>
+      {bars.map((h, i) => (
+        <div key={i} className="flex-1 rounded-t bg-gray-200" style={{ height: `${h}%` }} />
+      ))}
+    </div>
+  );
+}
+
+function ListSkeleton({
+  rows = 5,
+  variant = 'panel',
+}: {
+  rows?: number;
+  variant?: 'panel' | 'card' | 'compact';
+}) {
+  const rowClass =
+    variant === 'card'
+      ? 'flex items-center gap-3 p-3 rounded-xl border border-gray-100'
+      : variant === 'compact'
+        ? 'flex items-center gap-3 p-2 rounded-lg'
+        : 'flex items-center gap-3 px-5 py-3';
+  return (
+    <div className={variant === 'panel' ? 'divide-y divide-gray-50 animate-pulse' : 'space-y-2 animate-pulse'}>
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className={rowClass}>
+          <div className="w-9 h-9 rounded-lg bg-gray-200 shrink-0" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="h-3.5 rounded bg-gray-200" style={{ width: `${50 + ((i * 9) % 30)}%` }} />
+            <div className="h-3 rounded bg-gray-100 w-2/5" />
+          </div>
+          <div className="h-3.5 w-14 rounded bg-gray-100 shrink-0" />
+        </div>
+      ))}
     </div>
   );
 }
@@ -250,6 +320,11 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
   const [deliveries, setDeliveries] = useState<DeliveryItem[]>([]);
   const [deliveriesLoading, setDeliveriesLoading] = useState(true);
 
+  // Contador para re-consultar los datos del dashboard sin recargar la página
+  // (recargar re-disparaba peticiones globales del App, como el logo de la tienda).
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+
   // Chart controls
   const [revenuePeriod, setRevenuePeriod] = useState<'7' | '30' | '90'>('7');
   const [chartMetric, setChartMetric] = useState<'revenue' | 'orders'>('revenue');
@@ -278,8 +353,11 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
     fetchJSON('/admin/dashboard/stats')
       .then(setStats)
       .catch(() => setStats(null))
-      .finally(() => setStatsLoading(false));
-  }, [fetchJSON]);
+      .finally(() => {
+        setStatsLoading(false);
+        setRefreshing(false);
+      });
+  }, [fetchJSON, refreshKey]);
 
   // Revenue by day
   useEffect(() => {
@@ -288,7 +366,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       .then(setRevenueData)
       .catch(() => setRevenueData([]))
       .finally(() => setRevenueLoading(false));
-  }, [fetchJSON, revenuePeriod]);
+  }, [fetchJSON, revenuePeriod, refreshKey]);
 
   // Sales breakdown
   useEffect(() => {
@@ -305,7 +383,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       .then(setBreakdownData)
       .catch(() => setBreakdownData([]))
       .finally(() => setBreakdownLoading(false));
-  }, [fetchJSON, breakdownKey, breakdownPeriod]);
+  }, [fetchJSON, breakdownKey, breakdownPeriod, refreshKey]);
 
   // Bulk data on mount
   useEffect(() => {
@@ -323,7 +401,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
         .catch(() => setter([]))
         .finally(() => loadingSetter(false));
     });
-  }, [fetchJSON]);
+  }, [fetchJSON, refreshKey]);
 
   // Today orders (modal)
   const loadTodayOrders = useCallback(async (status?: string) => {
@@ -425,10 +503,14 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
           </p>
         </div>
         <button
-          onClick={() => window.location.reload()}
-          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+          onClick={() => {
+            setRefreshing(true);
+            setRefreshKey((k) => k + 1);
+          }}
+          disabled={refreshing}
+          className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors disabled:opacity-60"
         >
-          <RefreshCw size={14} />
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
           Actualizar
         </button>
       </div>
@@ -456,7 +538,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       {/* ── Primary stat cards ─────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {statsLoading ? (
-          <div className="col-span-full"><LoadingSpinner /></div>
+          <StatCardsSkeleton count={4} />
         ) : (
           primaryCards.map((c) => (
             <button
@@ -479,7 +561,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       {/* ── Secondary stat cards ───────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-2 gap-4">
         {statsLoading ? (
-          <div className="col-span-full"><LoadingSpinner /></div>
+          <StatCardsSkeleton count={2} variant="secondary" />
         ) : (
           secondaryCards.map((c) => (
             <button
@@ -550,7 +632,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
             </div>
           </div>
           {revenueLoading ? (
-            <LoadingSpinner />
+            <ChartSkeleton height={220} />
           ) : chartData.length === 0 ? (
             <EmptyState icon={TrendingUp} message="Sin datos para este período" />
           ) : (
@@ -625,7 +707,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
             )}
           </div>
           {breakdownLoading ? (
-            <LoadingSpinner />
+            <ChartSkeleton height={220} />
           ) : breakdownChart.length === 0 ? (
             <EmptyState icon={TrendingUp} message="Sin datos de ventas" />
           ) : (
@@ -675,7 +757,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
           </div>
           <div className="divide-y divide-gray-50">
             {recentOrdersLoading ? (
-              <LoadingSpinner />
+              <ListSkeleton rows={5} variant="panel" />
             ) : recentOrders.length === 0 ? (
               <EmptyState icon={ShoppingCart} message="No hay pedidos recientes" />
             ) : (
@@ -727,7 +809,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
           </div>
           <div className="p-4 space-y-1.5 max-h-[320px] overflow-y-auto">
             {bannersLoading ? (
-              <LoadingSpinner />
+              <ListSkeleton rows={4} variant="compact" />
             ) : bannersPopups.length === 0 ? (
               <EmptyState icon={Eye} message="Sin banners ni popups activos" />
             ) : (
@@ -784,7 +866,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
             ))}
           </div>
           {todayOrdersLoading ? (
-            <LoadingSpinner />
+            <ListSkeleton rows={4} variant="card" />
           ) : todayOrders.length === 0 ? (
             <EmptyState icon={ShoppingCart} message={`No hay pedidos${orderStatusTab ? ` con estado "${orderStatusTab}"` : ''} hoy`} />
           ) : (
@@ -822,7 +904,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
               </h4>
             </div>
             {deliveriesLoading ? (
-              <LoadingSpinner />
+              <ListSkeleton rows={3} variant="compact" />
             ) : deliveries.length === 0 ? (
               <p className="text-xs text-gray-400 py-2">No hay entregas pendientes</p>
             ) : (
@@ -860,7 +942,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       {modal === 'customers' && (
         <Modal title="Clientes activos" onClose={closeModal}>
           {customersLoading ? (
-            <LoadingSpinner />
+            <ListSkeleton rows={5} variant="card" />
           ) : activeCustomers.length === 0 ? (
             <EmptyState icon={Users} message="No hay clientes activos" />
           ) : (
@@ -919,7 +1001,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
           {/* Low stock list */}
           <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Stock crítico ({lowStock.length})</h4>
           {lowStockLoading ? (
-            <LoadingSpinner />
+            <ListSkeleton rows={5} variant="card" />
           ) : lowStock.length === 0 ? (
             <EmptyState icon={Package} message="No hay productos con stock bajo" />
           ) : (
@@ -958,7 +1040,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       {modal === 'promotions' && (
         <Modal title="Promociones activas" onClose={closeModal}>
           {promotionsLoading ? (
-            <LoadingSpinner />
+            <ListSkeleton rows={4} variant="card" />
           ) : promotions.length === 0 ? (
             <EmptyState icon={Megaphone} message="No hay promociones activas" />
           ) : (
@@ -1008,7 +1090,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       {modal === 'banners' && (
         <Modal title="Banners & Popups" onClose={closeModal}>
           {bannersLoading ? (
-            <LoadingSpinner />
+            <ListSkeleton rows={4} variant="card" />
           ) : bannersPopups.length === 0 ? (
             <EmptyState icon={Eye} message="No hay banners ni popups activos" />
           ) : (
@@ -1049,7 +1131,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       {/* Order detail modal */}
       {modal === 'orderDetail' && selectedOrder && (
         <Modal title={`Factura — Pedido ${selectedOrder.referenceCode || selectedOrder.id}`} onClose={closeModal}>
-          {orderDetailLoading ? <LoadingSpinner /> : orderDetail ? (
+          {orderDetailLoading ? <ListSkeleton rows={6} variant="card" /> : orderDetail ? (
             <div className="space-y-6">
               {/* Header: cliente, fecha, estado */}
               <div className="flex items-start justify-between bg-gray-50 rounded-xl p-4">

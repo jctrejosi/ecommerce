@@ -302,6 +302,12 @@ export const campaignsService = {
       body: JSON.stringify(payload),
     }),
 
+  suggestName: (payload: { products?: { name?: string; price?: number }[]; prompt?: string }) =>
+    fetchJson<{ name: string }>("/admin/campaigns/suggest-name", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+
   generateRecipients: (
     id: number,
     limit = 500,

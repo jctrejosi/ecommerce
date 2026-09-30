@@ -445,3 +445,26 @@ export class ApplyAudienceDto {
   @IsString({ each: true })
   cedulas?: string[];
 }
+
+/** Producto para la sugerencia de nombre (nombre/precio ya resueltos por la UI). */
+export class SuggestNameProductDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
+  @IsOptional()
+  @IsNumber()
+  price?: number;
+}
+
+/** Pide a la IA un nombre corto para la campaña a partir de los productos. */
+export class SuggestNameDto {
+  @IsOptional()
+  @IsArray()
+  @Type(() => SuggestNameProductDto)
+  products?: SuggestNameProductDto[];
+
+  @IsOptional()
+  @IsString()
+  prompt?: string;
+}

@@ -9,9 +9,17 @@ Tres funciones de recomendación de contenido de campañas:
 Los handlers validan lo que escribe el modelo y lo guardan en ctx["payload"]
 para que /generate lo devuelva al backend.
 """
+import re
 import time
 
 TIPOS_BLOQUE_VALIDOS = {"text", "image", "button", "divider", "columns", "social"}
+
+# Los SMS con enlaces/URLs son rechazados por el proveedor (filtro anti-spam):
+# se detecta el patrón para que el modelo reescriba el mensaje sin el enlace.
+_URL_RE = re.compile(
+    r"(https?://|www\.|\b[a-z0-9-]+\.(?:com|co|net|org|shop|edu|gov|io|app)\b)",
+    re.IGNORECASE,
+)
 
 
 async def _payload(ctx: dict) -> dict:
@@ -174,6 +182,15 @@ async def recomendar_sms(args: dict, ctx: dict) -> dict:
                 "Acórtalo y vuelve a llamar la función."
             ),
         }
+    if _URL_RE.search(mensaje):
+        return {
+            "ok": False,
+            "mensaje": (
+                "Los SMS con enlaces/URLs son bloqueados por el proveedor. "
+                "Reescribe el mensaje SIN enlaces (p. ej. invita a buscar la "
+                "promo en la app o en la tienda) y vuelve a llamar la función."
+            ),
+        }
     (await _payload(ctx)).setdefault("sms", mensaje)
     return {
         "ok": True,
@@ -255,7 +272,8 @@ TOOLS = [
             "name": "recomendar_sms",
             "description": (
                 "Genera la recomendación del SMS de la campaña: máximo 160 caracteres, "
-                "directo, con el producto, precio/descuento y un enlace corto."
+                "directo, con el producto y el precio/descuento. SIN enlaces ni URLs "
+                "(el proveedor los bloquea)."
             ),
             "parameters": {
                 "type": "object",

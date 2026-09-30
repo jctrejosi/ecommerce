@@ -1638,6 +1638,52 @@ export class CampaignsService {
     return resp.json();
   }
 
+  /* ── Sugerencia de nombre de campaña con IA (/ia-service) ── */
+
+  async suggestName(dto: {
+    products?: { name?: string; price?: number }[];
+    prompt?: string;
+  }) {
+    const items = (dto.products ?? []).filter((p) => p && (p.name ?? '').trim());
+    const body = {
+      productos: items.map((p) => ({
+        nombre: (p.name ?? 'producto').trim(),
+        precio: p.price ?? null,
+      })),
+      prompt: dto.prompt ?? '',
+    };
+
+    const url = `${this.iaServiceUrl()}/suggest-name`;
+    let resp: Response;
+    try {
+      resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      this.logger.error(`No se pudo contactar ia-service en ${url}: ${e}`);
+      throw new BadRequestException(
+        'El servicio de IA de campañas (/ia-service) no está disponible',
+      );
+    }
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => '');
+      this.logger.error(`ia-service respondió ${resp.status}: ${text}`);
+      throw new BadRequestException(
+        'El servicio de IA no pudo sugerir el nombre de la campaña',
+      );
+    }
+    const data = (await resp.json().catch(() => ({}))) as { nombre?: unknown };
+    const name = typeof data?.nombre === 'string' ? data.nombre.trim() : '';
+    if (!name) {
+      throw new BadRequestException(
+        'El servicio de IA no devolvió un nombre para la campaña',
+      );
+    }
+    return { name };
+  }
+
   /* ── Interpretación IA de la segmentación (/ia-service) ── */
 
   async interpretSegment(dto: {

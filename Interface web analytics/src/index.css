@@ -22,6 +22,15 @@ code, kbd, .mono { font-family: 'JetBrains Mono', monospace; }
   to { opacity: 1; }
 }
 
+/* Entrada de la alerta flotante del envío de prueba (toast). */
+@keyframes alertPop {
+  from { opacity: 0; transform: translateY(-12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-alert-pop {
+  animation: alertPop 0.22s ease-out;
+}
+
 @keyframes softPulse {
   0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-amber-400) 50%, transparent); }
   50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--color-amber-400) 0%, transparent); }

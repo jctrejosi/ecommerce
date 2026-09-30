@@ -65,6 +65,13 @@ class InterpretRequest(BaseModel):
     promedio_uplift: float | None = None
 
 
+class SuggestNameRequest(BaseModel):
+    """Contexto de productos para sugerir un nombre de campaña."""
+
+    productos: list[Producto] = Field(default_factory=list)
+    prompt: str = ""
+
+
 @app.post("/interpret")
 async def interpret(req: InterpretRequest):
     """Explica con IA por qué se seleccionó ese público objetivo."""
@@ -115,3 +122,25 @@ async def generate(req: GenerateRequest):
         canales=canales,
     )
     return resultado
+
+
+@app.post("/suggest-name")
+async def suggest_name(req: SuggestNameRequest):
+    """Sugiere un nombre corto de campaña a partir de los productos."""
+    if not config.DEEPSEEK_API_KEY:
+        raise HTTPException(
+            status_code=503,
+            detail="DEEPSEEK_API_KEY no está configurada en el servicio ia-service",
+        )
+    try:
+        return await deepseek.sugerir_nombre(
+            productos=[p.model_dump() for p in req.productos],
+            prompt=req.prompt,
+        )
+    except HTTPException:
+        raise
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(
+            status_code=502,
+            detail=f"Error sugiriendo el nombre de la campaña: {e}",
+        )

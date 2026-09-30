@@ -24,7 +24,7 @@ REGLAS:
 4. Puedes usar variables de personalización: {{nombre}}, {{producto}}, {{precio}}, {{descuento}}, {{cupon}}.
 5. WhatsApp: mensaje corto y cálido (máximo ~300 caracteres), con emojis y CTA claro.
 6. Email: estructura profesional con bloques del diseñador (texto de encabezado, cuerpo, imagen del producto, botón CTA, divisor, redes sociales y pie). El asunto debe ser atractivo.
-7. SMS: máximo 160 caracteres, directo, con enlace corto.
+7. SMS: máximo 160 caracteres, directo y claro. NUNCA incluyas enlaces ni URLs (el proveedor de SMS los bloquea); invita a buscar la promo en la app o en la tienda.
 8. Adapta el tono indicado (urgente, joven, profesional, emocional, exclusivo, cercano).
 9. Si una llamada falla (resultado ok=false), corrige y vuelve a llamar la misma función.
 10. No menciones herramientas, funciones ni términos técnicos en el contenido.
@@ -260,3 +260,70 @@ async def interpretar_segmentacion(contexto: dict) -> dict:
     if not content.strip():
         return {"error": "El modelo no produjo una interpretación. Reintenta."}
     return {"explicacion": content.strip()}
+
+
+# ─── Sugerencia de nombre de campaña ─────────────────────────────────
+
+SYSTEM_PROMPT_NOMBRE = """Eres especialista en marketing de Mercaldas, un supermercado en línea.
+
+Debes proponer UN nombre corto y atractivo para una campaña, en español, a partir de los productos (y opcionalmente la intención del usuario).
+
+REGLAS:
+- Devuelve SOLO el nombre: sin comillas, sin explicaciones, sin punto final, sin prefijos como "Nombre:".
+- Máximo 60 caracteres.
+- Claro y comercial (ejemplo: "Semana del café Colcafé", "Combo desayuno saludable").
+- Puedes mencionar el producto principal o el beneficio de la campaña.
+- No inventes marcas ni productos que no aparezcan en la lista."""
+
+
+async def sugerir_nombre(productos: list[dict], prompt: str = "") -> dict:
+    """Propone un nombre corto de campaña a partir de los productos.
+
+    Devuelve `{"nombre": "..."}` o `{"error": "..."}`.
+    """
+    if not config.DEEPSEEK_API_KEY:
+        raise RuntimeError("DEEPSEEK_API_KEY no está configurada")
+
+    nombres = [
+        str(p.get("nombre"))
+        for p in (productos or [])
+        if p and p.get("nombre")
+    ]
+    user = "Productos de la campaña: " + (", ".join(nombres) if nombres else "no especificados")
+    if prompt.strip():
+        user += f"\nIntención del usuario: {prompt.strip()}"
+    user += "\nPropón el nombre de la campaña."
+
+    body: dict = {
+        "model": config.DEEPSEEK_MODEL,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT_NOMBRE},
+            {"role": "user", "content": user},
+        ],
+        "temperature": 0.8,
+        # Igual que en /interpret: el modelo puede razonar antes de responder.
+        "max_tokens": config.MAX_TOKENS,
+    }
+    try:
+        async with httpx.AsyncClient(
+            headers={
+                "Authorization": f"Bearer {config.DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json",
+            },
+            timeout=config.DEEPSEEK_TIMEOUT,
+        ) as client:
+            resp = await client.post(
+                f"{config.DEEPSEEK_API_URL}/chat/completions",
+                json=body,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        log.exception("sugerir_nombre: error llamando al modelo")
+        return {"error": f"No se pudo contactar el modelo de IA: {exc}"}
+
+    content = (data.get("choices") or [{}])[0].get("message", {}).get("content") or ""
+    nombre = content.strip().strip('"').strip()
+    if not nombre:
+        return {"error": "El modelo no produjo un nombre. Reintenta."}
+    return {"nombre": nombre[:80]}

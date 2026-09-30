@@ -23,6 +23,7 @@ import {
   InterpretSegmentDto,
   ManualAudienceDto,
   ScoreClientsDto,
+  SuggestNameDto,
   UpdateCampaignDto,
 } from './dto/campaign.dto';
 
@@ -55,6 +56,16 @@ export class CampaignsController {
   @ApiResponse({ status: 200, description: 'Contenido recomendado' })
   generate(@Body() dto: GenerateContentDto) {
     return this.campaignsService.generateContent(dto);
+  }
+
+  @Post('suggest-name')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Sugiere un nombre de campaña con IA a partir de los productos (vía /ia-service)',
+  })
+  @ApiResponse({ status: 200, description: 'Nombre sugerido' })
+  suggestName(@Body() dto: SuggestNameDto) {
+    return this.campaignsService.suggestName(dto);
   }
 
   @Sse('segment-preview')
