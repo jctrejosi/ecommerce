@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
-import { deliveryDrivers, driverChatMessages } from '../../../drizzle/schema';
+import { deliveryDrivers, driverChatMessages, users } from '../../../drizzle/schema';
 import { DeliveryGateway } from './delivery.gateway';
 import { PushService } from '../notifications/push.service';
 
@@ -32,6 +32,8 @@ export interface DriverConversation {
   driverId: number;
   fullName: string;
   phone: string;
+  /** Usuario de acceso del repartidor (el "código" que se ve en el panel). */
+  username: string | null;
   routeColor: string | null;
   isActive: boolean;
   unread: number;
@@ -163,10 +165,12 @@ export class DriverChatService {
         id: deliveryDrivers.id,
         fullName: deliveryDrivers.fullName,
         phone: deliveryDrivers.phone,
+        username: users.username,
         routeColor: deliveryDrivers.routeColor,
         isActive: deliveryDrivers.isActive,
       })
       .from(deliveryDrivers)
+      .leftJoin(users, eq(users.id, deliveryDrivers.authUserId))
       .where(isNull(deliveryDrivers.deletedAt))
       .orderBy(asc(deliveryDrivers.fullName));
 
@@ -208,6 +212,7 @@ export class DriverChatService {
           driverId: Number(d.id),
           fullName: d.fullName,
           phone: d.phone,
+          username: d.username ?? null,
           routeColor: d.routeColor,
           isActive: d.isActive,
           unread: unreadBy.get(Number(d.id)) ?? 0,

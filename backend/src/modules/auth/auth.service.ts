@@ -2,13 +2,15 @@ import {
   Injectable,
   UnauthorizedException,
   NotFoundException,
+  BadRequestException,
+  ConflictException,
   Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleService } from '../../database/drizzle.service';
 import { users, userRefreshTokens } from '../../../drizzle/schema';
-import { eq, and, or } from 'drizzle-orm';
+import { eq, and, or, ne } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import * as bcrypt from 'bcryptjs';
@@ -343,6 +345,86 @@ export class AuthService {
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
+  }
+
+  /**
+   * Actualiza el perfil del usuario autenticado (nombre, teléfono, email).
+   */
+  async updateProfile(
+    userId: number,
+    body: {
+      firstName?: string;
+      lastName?: string;
+      phone?: string;
+      email?: string;
+    },
+  ) {
+    const patch: Partial<typeof users.$inferInsert> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (body.firstName !== undefined) patch.firstName = body.firstName.trim();
+    if (body.lastName !== undefined) patch.lastName = body.lastName.trim();
+    if (body.phone !== undefined) patch.phone = body.phone.trim() || null;
+
+    if (body.email !== undefined) {
+      const email = body.email.trim().toLowerCase();
+      if (!email)
+        throw new BadRequestException('El email no puede estar vacío');
+      const [dup] = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(and(eq(users.email, email), ne(users.id, BigInt(userId))))
+        .limit(1);
+      if (dup) throw new ConflictException('Ese email ya está en uso');
+      patch.email = email;
+    }
+
+    await this.db
+      .update(users)
+      .set(patch)
+      .where(eq(users.id, BigInt(userId)));
+    return this.getProfile(userId);
+  }
+
+  /**
+   * Cambia la contraseña del usuario autenticado exigiendo la actual.
+   */
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ success: boolean }> {
+    const results = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.id, BigInt(userId)))
+      .limit(1);
+    if (!results.length) {
+      throw new NotFoundException(`Usuario con ID ${userId} no encontrado`);
+    }
+    const user = results[0];
+    if (!user.passwordHash) {
+      throw new BadRequestException(
+        'El usuario no tiene contraseña configurada',
+      );
+    }
+    const ok = await bcrypt.compare(currentPassword, user.passwordHash);
+    if (!ok)
+      throw new UnauthorizedException('La contraseña actual no es correcta');
+    if (!newPassword || newPassword.length < 8) {
+      throw new BadRequestException(
+        'La nueva contraseña debe tener al menos 8 caracteres',
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(newPassword, 10);
+    await this.db
+      .update(users)
+      .set({ passwordHash, updatedAt: new Date().toISOString() })
+      .where(eq(users.id, BigInt(userId)));
+
+    return { success: true };
   }
 
   /**

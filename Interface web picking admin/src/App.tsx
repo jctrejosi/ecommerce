@@ -7,7 +7,7 @@ import type {
   CategoryOrgProduct,
   CategoryOrgShelf,
 } from './types'
-import type { Branch, Category, ProductWithLocation, Shelf, ShelfRow, ShelfType } from './types'
+import type { Branch, Category, ProductWithLocation, Shelf, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
 import OrdersView from './OrdersView'
@@ -37,8 +37,7 @@ const emptyShelf = () => ({
   posX: 0,
   posY: 0,
   rotation: 0 as 0 | 90,
-  categoryId: null as number | null,
-  rows: [] as { rowNumber: number; label: string }[],
+  categoryIds: [] as number[],
 })
 
 // ─── App ──────────────────────────────────────────────────────────────────────
@@ -404,7 +403,6 @@ export default function App() {
                     ? {
                         ...p,
                         shelfId: loc ? loc.shelfId : null,
-                        rowNumber: loc ? loc.rowNumber : null,
                         shelfCode: loc ? shelves.find((s) => s.id === loc.shelfId)?.code ?? null : null,
                         shelfName: loc ? shelves.find((s) => s.id === loc.shelfId)?.name ?? null : null,
                       }
@@ -471,6 +469,7 @@ function ShelvesView({
 }) {
   const [editing, setEditing] = useState<Shelf | null>(null)
   const [creating, setCreating] = useState(false)
+  const [deleting, setDeleting] = useState<Shelf | null>(null)
 
   if (!branchId) {
     return <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
@@ -498,14 +497,11 @@ function ShelvesView({
   }
 
   async function handleDelete(shelf: Shelf) {
-    if (!confirm(`¿Eliminar la estantería ${shelf.code} (${shelf.name})? Se borran sus filas y ubicaciones.`)) return
-    try {
-      await api.deleteShelf(shelf.id)
-      notify('Estantería eliminada')
-      onChanged()
-    } catch (e) {
-      notify(e instanceof ApiError ? e.message : 'Error eliminando')
-    }
+    // Los errores los muestra el modal de confirmación para que el usuario
+    // no pierda el contexto de lo que estaba eliminando.
+    await api.deleteShelf(shelf.id)
+    notify('Estantería eliminada')
+    onChanged()
   }
 
   return (
@@ -536,17 +532,30 @@ function ShelvesView({
             <div className="p-4">
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <h3 className="font-extrabold text-lg leading-tight">
+                  <h3 className="font-extrabold text-lg leading-tight truncate">
                     <span className="text-white/40 font-bold mr-1.5">{s.code}</span>
                     {s.name}
                   </h3>
-                  <p className="text-white/40 text-xs font-medium mt-0.5">
-                    {s.type === 'wall' ? '🧱 Contra la pared' : '🏬 Isla central'} · {s.rows.length} fila(s) ·{' '}
-                    {s.productCount} producto(s)
+                  <p className="text-white/40 text-xs font-medium mt-1">
+                    {s.type === 'wall' ? '🧱 Contra la pared' : '🏬 Isla central'}
                   </p>
                   <p className="text-white/40 text-xs font-medium mt-0.5">
-                    {s.categoryName ? `🏷️ ${s.categoryName}` : 'Sin categoría'}
+                    📍 X {s.posX} · Y {s.posY} · {s.productCount} producto(s)
                   </p>
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {s.categories.length > 0 ? (
+                      s.categories.map((c) => (
+                        <span
+                          key={c.id}
+                          className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-white/60 text-[10px] font-semibold"
+                        >
+                          {c.name}
+                        </span>
+                      ))
+                    ) : (
+                      <span className="text-white/25 text-[11px] font-medium">Sin categorías</span>
+                    )}
+                  </div>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <button
@@ -559,7 +568,7 @@ function ShelvesView({
                     </svg>
                   </button>
                   <button
-                    onClick={() => handleDelete(s)}
+                    onClick={() => setDeleting(s)}
                     className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20"
                     title="Eliminar"
                   >
@@ -569,18 +578,6 @@ function ShelvesView({
                   </button>
                 </div>
               </div>
-              {s.rows.length > 0 && (
-                <div className="mt-3 space-y-1">
-                  {s.rows.map((r) => (
-                    <div key={r.id} className="flex items-center gap-2 text-xs">
-                      <span className="w-6 h-6 rounded-md flex items-center justify-center font-extrabold shrink-0" style={{ backgroundColor: s.color + '22', color: s.color }}>
-                        {r.rowNumber}
-                      </span>
-                      <span className="text-white/60 font-medium truncate">{r.label}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           </div>
         ))}
@@ -593,6 +590,14 @@ function ShelvesView({
           categories={categories}
           onClose={() => { setCreating(false); setEditing(null) }}
           onSave={handleSave}
+        />
+      )}
+
+      {deleting && (
+        <DeleteShelfModal
+          shelf={deleting}
+          onClose={() => setDeleting(null)}
+          onConfirm={() => handleDelete(deleting)}
         />
       )}
     </div>
@@ -622,34 +627,27 @@ function ShelfModal({
     posX: initial?.posX ?? 0,
     posY: initial?.posY ?? 0,
     rotation: (initial?.rotation ?? 0) as 0 | 90,
-    categoryId: (initial?.categoryId ?? null) as number | null,
-    rows: initial ? initial.rows.map((r) => ({ rowNumber: r.rowNumber, label: r.label })) : [{ rowNumber: 1, label: '' }],
+    categoryIds: (initial?.categories ?? []).map((c) => c.id),
   }))
+  const [catSearch, setCatSearch] = useState('')
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  function updateRow(idx: number, patch: Partial<{ rowNumber: number; label: string }>) {
+  function toggleCategory(id: number) {
     setForm((f) => ({
       ...f,
-      rows: f.rows.map((r, i) => (i === idx ? { ...r, ...patch } : r)),
+      categoryIds: f.categoryIds.includes(id)
+        ? f.categoryIds.filter((x) => x !== id)
+        : [...f.categoryIds, id],
     }))
   }
 
-  function addRow() {
-    setForm((f) => ({
-      ...f,
-      rows: [...f.rows, { rowNumber: f.rows.length + 1, label: '' }],
-    }))
-  }
-
-  function removeRow(idx: number) {
-    setForm((f) => ({
-      ...f,
-      rows: f.rows.filter((_, i) => i !== idx).map((r, i) => ({ ...r, rowNumber: i + 1 })),
-    }))
-  }
+  const catNorm = catSearch.trim().toLowerCase()
+  const filteredCategories = catNorm
+    ? categories.filter((c) => c.name.toLowerCase().includes(catNorm))
+    : categories
 
   const valid = form.code.trim().length > 0
 
@@ -718,25 +716,70 @@ function ShelfModal({
             </label>
           </div>
 
-          <label className="block">
-            <span className="text-white/40 text-xs font-semibold">Categoría</span>
-            <select
-              value={form.categoryId ?? ''}
-              onChange={(e) => set('categoryId', e.target.value === '' ? null : Number(e.target.value))}
-              className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
-            >
-              <option value="">Sin categoría</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {'\u00A0'.repeat(Math.max(0, c.level) * 2)}
-                  {c.name}
-                </option>
-              ))}
-            </select>
+          <div>
+            <span className="text-white/40 text-xs font-semibold">Categorías</span>
+            <input
+              value={catSearch}
+              onChange={(e) => setCatSearch(e.target.value)}
+              placeholder="Buscar categoría…"
+              className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+            />
+            {form.categoryIds.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {form.categoryIds.map((id) => {
+                  const c = categories.find((x) => x.id === id)
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => toggleCategory(id)}
+                      title="Quitar"
+                      className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-400/15 border border-amber-400/30 text-amber-300 text-[11px] font-bold"
+                    >
+                      {c?.name ?? `#${id}`}
+                      <span className="text-amber-300/70">×</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+            <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5 [scrollbar-gutter:stable]">
+              {filteredCategories.map((c) => {
+                const checked = form.categoryIds.includes(c.id)
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => toggleCategory(c.id)}
+                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-white/5 ${
+                      checked ? 'text-amber-300' : 'text-white/70'
+                    }`}
+                  >
+                    <span
+                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
+                        checked ? 'bg-amber-400 border-amber-400' : 'border-white/25'
+                      }`}
+                    >
+                      {checked ? (
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                          <path d="M5 13l4 4L19 7" stroke="#0C0C0D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                      ) : null}
+                    </span>
+                    <span style={{ paddingLeft: Math.max(0, c.level) * 12 }} className="truncate">
+                      {c.name}
+                    </span>
+                  </button>
+                )
+              })}
+              {filteredCategories.length === 0 && (
+                <p className="px-3 py-4 text-center text-white/30 text-xs">Sin resultados.</p>
+              )}
+            </div>
             <span className="text-white/25 text-[11px] font-medium mt-1 block">
-              Organiza la estantería por la categoría de sus productos.
+              Una estantería puede agrupar varias categorías.
             </span>
-          </label>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
@@ -776,35 +819,6 @@ function ShelfModal({
             </div>
           </div>
 
-          <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-white/40 text-xs font-semibold">Filas de la estantería</span>
-              <button onClick={addRow} className="text-xs font-extrabold text-amber-400">+ Añadir fila</button>
-            </div>
-            <div className="space-y-2">
-              {form.rows.map((r, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-xs font-extrabold shrink-0">
-                    {r.rowNumber}
-                  </span>
-                  <input
-                    value={r.label}
-                    onChange={(e) => updateRow(idx, { label: e.target.value })}
-                    placeholder={`Fila ${r.rowNumber}`}
-                    className="flex-1 bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
-                  />
-                  <button
-                    onClick={() => removeRow(idx)}
-                    className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0"
-                  >
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                      <path d="M18 6L6 18M6 6l12 12" stroke="#F87171" strokeWidth="2.5" strokeLinecap="round" />
-                    </svg>
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
 
         <div className="sticky bottom-0 bg-[#161618] border-t border-white/8 px-5 py-4 flex gap-3">
@@ -820,6 +834,101 @@ function ShelfModal({
             className="flex-1 py-3 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40"
           >
             {initial ? 'Guardar cambios' : 'Crear estantería'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal de confirmación para eliminar estantería ───────────────────────────
+
+/**
+ * Confirmación destructiva: exige teclear el nombre de la estantería para
+ * habilitar el botón, así se evita borrar por un clic accidental.
+ */
+function DeleteShelfModal({
+  shelf,
+  onClose,
+  onConfirm,
+}: {
+  shelf: Shelf
+  onClose: () => void
+  onConfirm: () => Promise<void>
+}) {
+  // Si la estantería no tiene nombre, se usa el código como texto a teclear.
+  const expected = shelf.name.trim() || shelf.code.trim()
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const matches = typed.trim().toLowerCase() === expected.toLowerCase()
+
+  async function confirm() {
+    if (!matches || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await onConfirm()
+      onClose()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'Error eliminando la estantería')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
+          <h2 className="font-extrabold text-lg text-red-400">Eliminar estantería</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center" title="Cerrar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-white/70 leading-relaxed">
+            Se eliminará la estantería{' '}
+            <span className="font-bold text-white">{shelf.code}</span>{' '}
+            <span className="font-bold text-white">{shelf.name}</span> y las ubicaciones de
+            productos que tenga asociadas. Esta acción no se puede deshacer.
+          </p>
+
+          <label className="block">
+            <span className="text-white/50 text-xs font-semibold">
+              Escribe <span className="font-bold text-amber-300">{expected}</span> para confirmar
+            </span>
+            <input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirm() }}
+              placeholder={expected}
+              className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-red-400"
+            />
+          </label>
+
+          {error && <p className="text-red-400 text-xs font-medium">{error}</p>}
+        </div>
+
+        <div className="border-t border-white/8 px-5 py-4 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirm}
+            disabled={!matches || busy}
+            className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-extrabold disabled:opacity-40"
+          >
+            {busy ? 'Eliminando…' : 'Eliminar'}
           </button>
         </div>
       </div>
@@ -855,15 +964,14 @@ function ProductsView({
   onlyUnassigned: boolean
   setOnlyUnassigned: (b: boolean) => void
   onSearch: () => void
-  onLocationChanged: (variantId: number, loc: { shelfId: number; rowNumber: number } | null) => void
+  onLocationChanged: (variantId: number, loc: { shelfId: number } | null) => void
   notify: (m: string) => void
 }) {
   const [visibleCount, setVisibleCount] = useState(INFINITE_STEP)
   const [bulkShelfId, setBulkShelfId] = useState<number | ''>('')
-  const [bulkRow, setBulkRow] = useState<number | ''>('')
   const [bulkBusy, setBulkBusy] = useState(false)
   // Borradores de ubicación por variante
-  const [drafts, setDrafts] = useState<Record<number, { shelfId: number; rowNumber: number }>>({})
+  const [drafts, setDrafts] = useState<Record<number, { shelfId: number }>>({})
   const [savingId, setSavingId] = useState<number | null>(null)
   // Listado local para refrescar tras una asignación masiva sin perder la búsqueda
   const [localProducts, setLocalProducts] = useState<ProductWithLocation[] | null>(null)
@@ -906,18 +1014,13 @@ function ProductsView({
     return () => obs.disconnect()
   }, [ordered.length, visible.length])
 
-  function rowsOf(shelfId: number | null | undefined): ShelfRow[] {
-    const s = shelves.find((x) => x.id === shelfId)
-    return s ? s.rows : []
-  }
-
   async function saveLocation(p: ProductWithLocation) {
     if (!branchId) return
     const draft = drafts[p.productVariantId]
     if (!draft) return
     setSavingId(p.productVariantId)
     try {
-      await api.setLocation(p.productVariantId, branchId, draft.shelfId, draft.rowNumber)
+      await api.setLocation(p.productVariantId, branchId, draft.shelfId)
       onLocationChanged(p.productVariantId, draft)
       setDrafts((d) => { const { [p.productVariantId]: _, ...rest } = d; return rest })
       notify('Ubicación guardada')
@@ -944,13 +1047,13 @@ function ProductsView({
   }
 
   async function doBulk(onlyUnassigned: boolean) {
-    if (!branchId || bulkShelfId === '' || bulkRow === '') {
-      notify('Selecciona estantería y fila para la asignación masiva')
+    if (!branchId || bulkShelfId === '') {
+      notify('Selecciona una estantería para la asignación masiva')
       return
     }
     setBulkBusy(true)
     try {
-      const r = await api.bulkAssign(branchId, Number(bulkShelfId), Number(bulkRow), onlyUnassigned)
+      const r = await api.bulkAssign(branchId, Number(bulkShelfId), onlyUnassigned)
       notify(`Asignados ${r.assigned} producto(s)${onlyUnassigned ? ' sin ubicación' : ''} de ${r.total}`)
       const list = await api.products(branchId, appliedSearch)
       setLocalProducts(list)
@@ -1000,23 +1103,12 @@ function ProductsView({
         <div className="flex flex-wrap gap-2 items-center">
           <select
             value={bulkShelfId}
-            onChange={(e) => { setBulkShelfId(e.target.value ? Number(e.target.value) : ''); setBulkRow('') }}
+            onChange={(e) => setBulkShelfId(e.target.value ? Number(e.target.value) : '')}
             className="bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
           >
             <option value="">Estantería…</option>
             {shelves.map((s) => (
               <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
-            ))}
-          </select>
-          <select
-            value={bulkRow}
-            onChange={(e) => setBulkRow(e.target.value ? Number(e.target.value) : '')}
-            disabled={bulkShelfId === ''}
-            className="bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400 disabled:opacity-40"
-          >
-            <option value="">Fila…</option>
-            {rowsOf(bulkShelfId === '' ? null : Number(bulkShelfId)).map((r) => (
-              <option key={r.id} value={r.rowNumber}>Fila {r.rowNumber} · {r.label}</option>
             ))}
           </select>
           <button
@@ -1052,9 +1144,7 @@ function ProductsView({
           const showAssignedHeader = !onlyUnassigned && unassignedCount > 0 && i === unassignedCount
           const draft = drafts[p.productVariantId]
           const shelfId = draft ? draft.shelfId : p.shelfId
-          const rowNumber = draft ? draft.rowNumber : p.rowNumber
           const dirty = !!draft
-          const shelfRows = rowsOf(shelfId)
           return (
             <Fragment key={p.productVariantId}>
               {showAssignedHeader && (
@@ -1077,8 +1167,7 @@ function ProductsView({
                     const sid = e.target.value ? Number(e.target.value) : null
                     setDrafts((d) => {
                       if (sid == null) return d
-                      const firstRow = rowsOf(sid)[0]
-                      return { ...d, [p.productVariantId]: { shelfId: sid, rowNumber: firstRow?.rowNumber ?? 1 } }
+                      return { ...d, [p.productVariantId]: { shelfId: sid } }
                     })
                   }}
                   className="bg-[#0C0C0D] border border-white/10 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-amber-400 max-w-[180px]"
@@ -1086,23 +1175,6 @@ function ProductsView({
                   <option value="">Sin estantería</option>
                   {shelves.map((s) => (
                     <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
-                  ))}
-                </select>
-                <select
-                  value={rowNumber ?? ''}
-                  onChange={(e) => {
-                    const rn = e.target.value ? Number(e.target.value) : 1
-                    setDrafts((d) => ({
-                      ...d,
-                      [p.productVariantId]: { shelfId: shelfId ?? shelves[0]?.id ?? 0, rowNumber: rn },
-                    }))
-                  }}
-                  disabled={shelfId == null}
-                  className="bg-[#0C0C0D] border border-white/10 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-amber-400 disabled:opacity-40 max-w-[160px]"
-                >
-                  <option value="">Fila…</option>
-                  {shelfRows.map((r) => (
-                    <option key={r.id} value={r.rowNumber}>Fila {r.rowNumber} · {r.label}</option>
                   ))}
                 </select>
                 {dirty ? (
@@ -1717,26 +1789,17 @@ function OrgProductRow({
   notify: (m: string) => void
 }) {
   const [shelfId, setShelfId] = useState<number | null>(product.shelfId)
-  const [rowNumber, setRowNumber] = useState<number | null>(product.rowNumber)
   const [busy, setBusy] = useState(false)
 
-  const selectedShelf = org.shelves.find((s) => s.id === shelfId) ?? null
-  const dirty =
-    shelfId !== product.shelfId ||
-    (shelfId !== null && rowNumber !== product.rowNumber)
+  const dirty = shelfId !== product.shelfId
 
   const save = async () => {
     setBusy(true)
     try {
       if (shelfId === null) {
         await api.removeLocation(product.productVariantId, branchId)
-      } else if (rowNumber !== null) {
-        await api.setLocation(
-          product.productVariantId,
-          branchId,
-          shelfId,
-          rowNumber,
-        )
+      } else {
+        await api.setLocation(product.productVariantId, branchId, shelfId)
       }
       notify('Ubicación actualizada')
       onMoved()
@@ -1756,16 +1819,12 @@ function OrgProductRow({
         </p>
       </td>
       <td className="py-2.5 pr-3 text-xs text-white/60">
-        {product.shelfCode ? `${product.shelfCode}${product.rowNumber ? ` · Fila ${product.rowNumber}` : ''}` : 'Sin ubicación'}
+        {product.shelfCode ? product.shelfCode : 'Sin ubicación'}
       </td>
       <td className="py-2.5 pr-2">
         <select
           value={shelfId ?? ''}
-          onChange={(e) => {
-            const v = e.target.value ? Number(e.target.value) : null
-            setShelfId(v)
-            if (v === null) setRowNumber(null)
-          }}
+          onChange={(e) => setShelfId(e.target.value ? Number(e.target.value) : null)}
           className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-amber-400 max-w-[160px]"
         >
           <option value="">— Sin ubicación —</option>
@@ -1775,25 +1834,11 @@ function OrgProductRow({
             </option>
           ))}
         </select>
-        {shelfId !== null && (
-          <select
-            value={rowNumber ?? ''}
-            onChange={(e) => setRowNumber(e.target.value ? Number(e.target.value) : null)}
-            className="ml-1 bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-amber-400"
-          >
-            <option value="">Fila…</option>
-            {(selectedShelf?.rows ?? []).map((r) => (
-              <option key={r.rowNumber} value={r.rowNumber}>
-                {r.rowNumber} · {r.label}
-              </option>
-            ))}
-          </select>
-        )}
       </td>
       <td className="py-2.5 text-right">
         <button
           onClick={() => void save()}
-          disabled={busy || !dirty || (shelfId !== null && rowNumber === null)}
+          disabled={busy || !dirty}
           className="text-xs font-bold text-amber-400 hover:underline disabled:opacity-30"
         >
           {busy ? '…' : 'Mover'}
@@ -1848,7 +1893,8 @@ function CategoriesView({
   const assignShelf = async () => {
     if (!selectedId || !assignShelfId) return
     try {
-      await api.updateShelf(assignShelfId, { categoryId: selectedId })
+      const ids = [...new Set([...categoryIdsOf(assignShelfId), selectedId])]
+      await api.updateShelf(assignShelfId, { categoryIds: ids })
       notify('Estantería asignada a la categoría')
       setAssignShelfId(null)
       onChanged()
@@ -1861,7 +1907,8 @@ function CategoriesView({
   const detachShelf = async (shelfId: number) => {
     if (!selectedId) return
     try {
-      await api.updateShelf(shelfId, { categoryId: null })
+      const ids = categoryIdsOf(shelfId).filter((id) => id !== selectedId)
+      await api.updateShelf(shelfId, { categoryIds: ids })
       notify('Estantería quitada de la categoría')
       onChanged()
       void loadOrg(selectedId)
@@ -1869,6 +1916,10 @@ function CategoriesView({
       notify(e instanceof ApiError ? e.message : 'No se pudo quitar la estantería')
     }
   }
+
+  /** Ids de las categorías de una estantería (según el listado cargado). */
+  const categoryIdsOf = (shelfId: number): number[] =>
+    shelves.find((s) => s.id === shelfId)?.categories.map((c) => c.id) ?? []
 
   const branchShelves = shelves.filter((s) => s.branchId === branchId)
 
@@ -1884,7 +1935,7 @@ function CategoriesView({
         />
         <div className="max-h-[70vh] overflow-y-auto flex flex-col gap-1.5 pr-1">
           {filtered.map((c) => {
-            const shelfCount = shelves.filter((s) => s.categoryId === c.id).length
+            const shelfCount = shelves.filter((s) => s.categories.some((x) => x.id === c.id)).length
             const active = c.id === selectedId
             return (
               <button
@@ -1968,7 +2019,7 @@ function CategoriesView({
                 >
                   <option value="">Asignar estantería de la sucursal…</option>
                   {branchShelves
-                    .filter((s) => s.categoryId !== org.category.id)
+                    .filter((s) => !s.categories.some((x) => x.id === org.category.id))
                     .map((s) => (
                       <option key={s.id} value={s.id}>
                         {s.code} · {s.name}

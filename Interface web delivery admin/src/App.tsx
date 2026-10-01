@@ -19,7 +19,6 @@ import type {
   DriverConversation,
   DriverFilter,
   FleetDriver,
-  FleetOrder,
 } from './types';
 import { api, ApiError, getToken, setToken } from './services/api';
 import {
@@ -73,7 +72,6 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('map');
 
   const [drivers, setDrivers] = useState<FleetDriver[]>([]);
-  const [orders, setOrders] = useState<FleetOrder[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [connected, setConnected] = useState(false);
@@ -128,12 +126,13 @@ export default function App() {
   }, []);
 
   // ── Carga de datos ──
+  // Los pedidos los carga la propia pestaña "Pedidos" (paginados, de a 20);
+  // aquí solo se refresca la flota. Los sockets avisan al panel vía `lastSync`.
   const refresh = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const [d, o] = await Promise.all([api.drivers(), api.orders()]);
+      const d = await api.drivers();
       setDrivers(d);
-      setOrders(o);
       setLastSync(new Date());
       setError(null);
     } catch (err) {
@@ -275,21 +274,8 @@ export default function App() {
     setToken(null);
     setUser(null);
     setDrivers([]);
-    setOrders([]);
     setSelectedId(null);
   }, []);
-
-  const toggleAvailable = useCallback(
-    (driver: FleetDriver, value: boolean) => {
-      setDrivers((prev) =>
-        prev.map((d) => (d.id === driver.id ? { ...d, isAvailable: value } : d)),
-      );
-      void api
-        .updateDriver(driver.id, { isAvailable: value })
-        .catch(() => scheduleRefresh());
-    },
-    [scheduleRefresh],
-  );
 
   const changeDriverColor = useCallback(
     (driver: FleetDriver, color: string) => {
@@ -370,20 +356,19 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       {/* ── Topbar ── */}
-      <header className="z-10 flex h-14 shrink-0 items-center gap-4 border-b border-slate-200 bg-white px-4">
-        <div className="flex items-center gap-2.5">
+      <header className="z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 bg-white px-4 py-2">
+        <div className="flex shrink-0 flex-col items-center justify-center gap-0.5">
           <img
             src={headerLogo}
             alt="Mercaldas"
-            className="h-9 w-auto shrink-0 object-contain"
+            className="h-6 w-auto shrink-0 object-contain"
           />
-          <div className="leading-tight">
-            <p className="text-sm font-bold text-slate-900">Delivery Admin</p>
-            <p className="text-[11px] text-slate-400">Seguimiento de flota</p>
-          </div>
+          <p className="whitespace-nowrap text-[11px] font-bold leading-none text-slate-900">
+            Delivery
+          </p>
         </div>
 
-        <nav className="ml-2 flex gap-1">
+        <nav className="ml-2 flex shrink-0 gap-1">
           {TABS.map((t) => {
             const Icon = t.icon;
             return (
@@ -404,18 +389,8 @@ export default function App() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2">
-          {/* chips de estado */}
-          <span className="hidden items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-bold text-emerald-700 lg:flex">
-            <Truck className="h-3 w-3" /> {stats.inDelivery} en entrega
-          </span>
-          <span className="hidden items-center gap-1.5 rounded-full bg-sky-50 px-2.5 py-1 text-[11px] font-bold text-sky-700 lg:flex">
-            <Package className="h-3 w-3" /> {stats.withOrder} con pedido
-          </span>
-          {stats.offline > 0 && (
-            <span className="hidden items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-bold text-slate-500 lg:flex">
-              <WifiOff className="h-3 w-3" /> {stats.offline} desconectados
-            </span>
-          )}
+          {/* Las cifras de la flota (entregas / pedidos / desconectados) se
+              movieron sobre el mapa, en la esquina superior derecha. */}
           <span
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
               connected ? 'bg-slate-100 text-slate-600' : 'bg-rose-50 text-rose-600'
@@ -500,50 +475,71 @@ export default function App() {
       )}
 
       {/* ── Contenido ── */}
-      {tab === 'map' && (
-        <main className="relative flex min-h-0 flex-1">
-          <div className="relative min-w-0 flex-1">
-            <FleetMap
-              ref={mapRef}
-              drivers={visibleDrivers}
-              hiddenIds={hiddenIds}
-              selectedId={selectedId}
-              onSelect={setSelectedId}
-            />
-
-            {/* Botón recentrar (Manizales) */}
-            <button
-              onClick={() => mapRef.current?.recenter()}
-              title="Centrar el mapa en Manizales"
-              className="absolute bottom-8 right-4 z-500 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-lg ring-1 ring-slate-200 transition hover:text-slate-900"
-            >
-              <LocateFixed className="h-4.5 w-4.5" />
-            </button>
-          </div>
-
-          <DriversSidebar
+      {/*
+        El mapa se queda MONTADO y solo se oculta al cambiar de pestaña: así no
+        se recrea la instancia de MapLibre, no se vuelve a resolver el estilo ni
+        se re-descargan los tiles (quedan en la caché HTTP del navegador). Los
+        marcadores y las rutas siguen actualizándose igual, porque llegan por
+        props desde el estado del panel.
+      */}
+      <main className={tab === 'map' ? 'relative flex min-h-0 flex-1' : 'hidden'}>
+        <div className="relative min-w-0 flex-1">
+          <FleetMap
+            ref={mapRef}
+            active={tab === 'map'}
             drivers={visibleDrivers}
-            filter={statusFilter}
-            onFilterChange={setStatusFilter}
-            search={search}
-            onSearchChange={setSearch}
+            hiddenIds={hiddenIds}
             selectedId={selectedId}
             onSelect={setSelectedId}
-            hiddenIds={hiddenIds}
-            onToggleHidden={(id) =>
-              setHiddenIds((prev) => {
-                const next = new Set(prev);
-                if (next.has(id)) next.delete(id);
-                else next.add(id);
-                return next;
-              })
-            }
-            onToggleAvailable={toggleAvailable}
-            onChangeColor={changeDriverColor}
-            onChat={openChat}
           />
-        </main>
-      )}
+
+          {/* Cifras de la flota sobre el mapa (esquina superior derecha).
+              `pointer-events-none` para no bloquear el arrastre del mapa. */}
+          <div className="pointer-events-none absolute right-4 top-4 z-500 flex max-w-[calc(100%-2rem)] flex-wrap justify-end gap-2">
+            <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-emerald-700 shadow-md ring-1 ring-emerald-100">
+              <Truck className="h-3 w-3" /> {stats.inDelivery} en entrega
+            </span>
+            <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-sky-700 shadow-md ring-1 ring-sky-100">
+              <Package className="h-3 w-3" /> {stats.withOrder} con pedido
+            </span>
+            {stats.offline > 0 && (
+              <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-slate-500 shadow-md ring-1 ring-slate-200">
+                <WifiOff className="h-3 w-3" /> {stats.offline} desconectados
+              </span>
+            )}
+          </div>
+
+          {/* Botón recentrar (Manizales) */}
+          <button
+            onClick={() => mapRef.current?.recenter()}
+            title="Centrar el mapa en Manizales"
+            className="absolute bottom-8 right-4 z-500 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-lg ring-1 ring-slate-200 transition hover:text-slate-900"
+          >
+            <LocateFixed className="h-4.5 w-4.5" />
+          </button>
+        </div>
+
+        <DriversSidebar
+          drivers={visibleDrivers}
+          filter={statusFilter}
+          onFilterChange={setStatusFilter}
+          search={search}
+          onSearchChange={setSearch}
+          selectedId={selectedId}
+          onSelect={setSelectedId}
+          hiddenIds={hiddenIds}
+          onToggleHidden={(id) =>
+            setHiddenIds((prev) => {
+              const next = new Set(prev);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            })
+          }
+          onChangeColor={changeDriverColor}
+          onChat={openChat}
+        />
+      </main>
 
       {tab === 'drivers' && (
         <main className="min-h-0 flex-1">
@@ -563,7 +559,7 @@ export default function App() {
 
       {tab === 'orders' && (
         <main className="min-h-0 flex-1">
-          <OrdersPanel orders={orders} onLocate={locateDriver} />
+          <OrdersPanel onLocate={locateDriver} reloadTick={lastSync?.getTime() ?? 0} />
         </main>
       )}
 

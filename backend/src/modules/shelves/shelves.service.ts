@@ -14,14 +14,9 @@ import {
   productLocations,
   productVariants,
   products,
-  shelfRows,
+  shelfCategories,
   shelves,
 } from '../../../drizzle/schema';
-
-export interface ShelfRowDto {
-  rowNumber: number;
-  label: string;
-}
 
 export interface CreateShelfDto {
   branchId: number;
@@ -34,8 +29,8 @@ export interface CreateShelfDto {
   posX?: number;
   posY?: number;
   rotation?: 0 | 90;
-  categoryId?: number | null;
-  rows?: ShelfRowDto[];
+  /** Categorías de la estantería (N:M). */
+  categoryIds?: number[];
 }
 
 export interface UpdateShelfDto {
@@ -48,15 +43,14 @@ export interface UpdateShelfDto {
   posX?: number;
   posY?: number;
   rotation?: 0 | 90;
-  categoryId?: number | null;
-  rows?: ShelfRowDto[];
+  /** Categorías de la estantería (N:M); si viene, reemplaza las actuales. */
+  categoryIds?: number[];
 }
 
 export interface SetLocationDto {
   productVariantId: number;
   branchId: number;
   shelfId: number;
-  rowNumber: number;
 }
 
 @Injectable()
@@ -185,6 +179,13 @@ export class ShelvesService {
     if (!row) throw new NotFoundException(`Categoría ${categoryId} no encontrada`);
   }
 
+  /** Valida que todas las categorías existan (asociación N:M de estanterías). */
+  private async assertCategories(categoryIds?: number[]) {
+    for (const id of [...new Set(categoryIds ?? [])]) {
+      await this.assertCategoryExists(Number(id));
+    }
+  }
+
   /** Categorías activas para asociar a las estanterías (selector del admin). */
   async categories() {
     const rows = await this.db
@@ -239,7 +240,7 @@ export class ShelvesService {
     if (!cat) throw new NotFoundException(`Categoría ${categoryId} no encontrada`);
     if (branchId) await this.assertBranchExists(branchId);
 
-    // Estanterías asignadas a la categoría (en la sucursal si viene).
+    // Estanterías que incluyen la categoría (en la sucursal si viene).
     const catShelves = await this.db
       .select({
         id: shelves.id,
@@ -249,32 +250,14 @@ export class ShelvesService {
         color: shelves.color,
       })
       .from(shelves)
+      .innerJoin(shelfCategories, eq(shelfCategories.shelfId, shelves.id))
       .where(
         and(
-          eq(shelves.categoryId, categoryId),
+          eq(shelfCategories.categoryId, categoryId),
           branchId ? eq(shelves.branchId, branchId) : undefined,
         ),
       )
       .orderBy(asc(shelves.code));
-
-    const shelfIds = catShelves.map((r) => Number(r.id));
-    const rowsByShelf = new Map<number, { rowNumber: number; label: string }[]>();
-    if (shelfIds.length > 0) {
-      const rr = await this.db
-        .select({
-          shelfId: shelfRows.shelfId,
-          rowNumber: shelfRows.rowNumber,
-          label: shelfRows.label,
-        })
-        .from(shelfRows)
-        .where(inArray(shelfRows.shelfId, shelfIds))
-        .orderBy(asc(shelfRows.rowNumber));
-      for (const row of rr) {
-        const sid = Number(row.shelfId);
-        if (!rowsByShelf.has(sid)) rowsByShelf.set(sid, []);
-        rowsByShelf.get(sid)!.push({ rowNumber: row.rowNumber, label: row.label });
-      }
-    }
     const counts = await this.productCountByShelf();
 
     // Productos de la categoría (variantes) con su ubicación en la sucursal.
@@ -288,7 +271,6 @@ export class ShelvesService {
             barcode: productVariants.barcode,
             stock: inventory.stock,
             shelfId: productLocations.shelfId,
-            rowNumber: productLocations.rowNumber,
             shelfCode: shelves.code,
             shelfName: shelves.name,
           })
@@ -332,7 +314,6 @@ export class ShelvesService {
         name: r.name,
         color: r.color,
         productCount: counts.get(Number(r.id)) ?? 0,
-        rows: rowsByShelf.get(Number(r.id)) ?? [],
       })),
       products: prodRows.map((r) => ({
         productVariantId: Number(r.productVariantId),
@@ -342,7 +323,6 @@ export class ShelvesService {
         barcode: r.barcode,
         stock: r.stock ?? 0,
         shelfId: r.shelfId != null ? Number(r.shelfId) : null,
-        rowNumber: r.rowNumber ?? null,
         shelfCode: r.shelfCode ?? null,
         shelfName: r.shelfName ?? null,
       })),
@@ -359,17 +339,39 @@ export class ShelvesService {
     return { id: Number(row.id), branchId: Number(row.branchId) };
   }
 
-  private async rowsOfShelf(shelfId: number) {
+  /** Categorías de varias estanterías (una sola query, sin N+1). */
+  private async categoriesByShelf(
+    shelfIds: number[],
+  ): Promise<Map<number, { id: number; name: string }[]>> {
+    const map = new Map<number, { id: number; name: string }[]>();
+    if (shelfIds.length === 0) return map;
     const rows = await this.db
-      .select({ id: shelfRows.id, rowNumber: shelfRows.rowNumber, label: shelfRows.label })
-      .from(shelfRows)
-      .where(eq(shelfRows.shelfId, shelfId))
-      .orderBy(asc(shelfRows.rowNumber));
-    return rows.map((r) => ({
-      id: Number(r.id),
-      rowNumber: r.rowNumber,
-      label: r.label,
-    }));
+      .select({
+        shelfId: shelfCategories.shelfId,
+        id: categories.id,
+        name: categories.name,
+      })
+      .from(shelfCategories)
+      .innerJoin(categories, eq(categories.id, shelfCategories.categoryId))
+      .where(inArray(shelfCategories.shelfId, shelfIds))
+      .orderBy(asc(categories.name));
+    for (const r of rows) {
+      const sid = Number(r.shelfId);
+      if (!map.has(sid)) map.set(sid, []);
+      map.get(sid)!.push({ id: Number(r.id), name: r.name });
+    }
+    return map;
+  }
+
+  /** Reemplaza las categorías de una estantería (N:M). */
+  private async replaceCategories(shelfId: number, categoryIds: number[]) {
+    const ids = [...new Set(categoryIds.map(Number).filter((n) => Number.isInteger(n) && n > 0))];
+    await this.db.delete(shelfCategories).where(eq(shelfCategories.shelfId, shelfId));
+    if (ids.length === 0) return;
+    await this.db
+      .insert(shelfCategories)
+      .values(ids.map((categoryId) => ({ shelfId, categoryId })))
+      .onConflictDoNothing();
   }
 
   private async productCountByShelf(): Promise<Map<number, number>> {
@@ -388,37 +390,17 @@ export class ShelvesService {
   async listShelves(branchId?: number) {
     if (branchId) await this.assertBranchExists(branchId);
     const rows = await this.db
-      .select({ ...getTableColumns(shelves), categoryName: categories.name })
+      .select(getTableColumns(shelves))
       .from(shelves)
-      .leftJoin(categories, eq(categories.id, shelves.categoryId))
       .where(branchId ? eq(shelves.branchId, branchId) : undefined)
       .orderBy(asc(shelves.code));
 
     const ids = rows.map((r) => Number(r.id));
-
-    // Batch de filas: UNA sola query para todas las estanterías (evita N+1 y
-    // agotar el pool del pooler de Supabase, límite ~15 sesiones).
-    const rowRows =
-      ids.length > 0
-        ? await this.db
-            .select({
-              id: shelfRows.id,
-              shelfId: shelfRows.shelfId,
-              rowNumber: shelfRows.rowNumber,
-              label: shelfRows.label,
-            })
-            .from(shelfRows)
-            .where(inArray(shelfRows.shelfId, ids))
-            .orderBy(asc(shelfRows.rowNumber))
-        : [];
-    const rowsByShelf = new Map<number, { id: number; rowNumber: number; label: string }[]>();
-    for (const rr of rowRows) {
-      const sid = Number(rr.shelfId);
-      if (!rowsByShelf.has(sid)) rowsByShelf.set(sid, []);
-      rowsByShelf.get(sid)!.push({ id: Number(rr.id), rowNumber: rr.rowNumber, label: rr.label });
-    }
-
+    // Categorías y conteo en batch (una query cada uno: evita N+1 y agotar el
+    // pool del pooler de Supabase).
+    const catsByShelf = await this.categoriesByShelf(ids);
     const counts = await this.productCountByShelf();
+
     return rows.map((r) => ({
       id: Number(r.id),
       branchId: Number(r.branchId),
@@ -431,16 +413,16 @@ export class ShelvesService {
       posX: r.posX,
       posY: r.posY,
       rotation: r.rotation,
-      categoryId: r.categoryId != null ? Number(r.categoryId) : null,
-      categoryName: r.categoryName ?? null,
+      categories: catsByShelf.get(Number(r.id)) ?? [],
       productCount: counts.get(Number(r.id)) ?? 0,
-      rows: rowsByShelf.get(Number(r.id)) ?? [],
+      // La app móvil todavía lee `rows`; las filas ya no existen.
+      rows: [] as { id: number; rowNumber: number; label: string }[],
     }));
   }
 
   async createShelf(dto: CreateShelfDto) {
     await this.assertBranchExists(dto.branchId);
-    if (dto.categoryId != null) await this.assertCategoryExists(dto.categoryId);
+    await this.assertCategories(dto.categoryIds);
     const code = (dto.code ?? '').trim().toUpperCase();
     if (!code) throw new BadRequestException('El código de la estantería es obligatorio');
     const [dup] = await this.db
@@ -463,20 +445,18 @@ export class ShelvesService {
         posX: dto.posX ?? 0,
         posY: dto.posY ?? 0,
         rotation: dto.rotation ?? 0,
-        categoryId: dto.categoryId ?? null,
       })
       .returning({ id: shelves.id });
 
     const shelfId = Number(row.id);
-    await this.replaceRows(shelfId, dto.rows ?? []);
+    await this.replaceCategories(shelfId, dto.categoryIds ?? []);
     return this.findOne(shelfId);
   }
 
   async findOne(id: number) {
     const [row] = await this.db
-      .select({ ...getTableColumns(shelves), categoryName: categories.name })
+      .select(getTableColumns(shelves))
       .from(shelves)
-      .leftJoin(categories, eq(categories.id, shelves.categoryId))
       .where(eq(shelves.id, BigInt(id)))
       .limit(1);
     if (!row) throw new NotFoundException(`Estantería ${id} no encontrada`);
@@ -484,6 +464,7 @@ export class ShelvesService {
       .select({ cnt: sql<number>`COUNT(*)::int` })
       .from(productLocations)
       .where(eq(productLocations.shelfId, id));
+    const cats = await this.categoriesByShelf([id]);
     return {
       id: Number(row.id),
       branchId: Number(row.branchId),
@@ -496,17 +477,15 @@ export class ShelvesService {
       posX: row.posX,
       posY: row.posY,
       rotation: row.rotation,
-      categoryId: row.categoryId != null ? Number(row.categoryId) : null,
-      categoryName: row.categoryName ?? null,
+      categories: cats.get(id) ?? [],
       productCount: cnt?.cnt ?? 0,
-      rows: await this.rowsOfShelf(id),
     };
   }
 
   async updateShelf(id: number, dto: UpdateShelfDto) {
     const shelf = await this.assertShelfExists(id);
 
-    if (dto.categoryId != null) await this.assertCategoryExists(dto.categoryId);
+    if (dto.categoryIds !== undefined) await this.assertCategories(dto.categoryIds);
 
     if (dto.code !== undefined) {
       const code = dto.code.trim().toUpperCase();
@@ -527,7 +506,7 @@ export class ShelvesService {
     }
 
     const data: Record<string, unknown> = {};
-    for (const key of ['code', 'name', 'type', 'color', 'width', 'height', 'posX', 'posY', 'rotation', 'categoryId'] as const) {
+    for (const key of ['code', 'name', 'type', 'color', 'width', 'height', 'posX', 'posY', 'rotation'] as const) {
       if (dto[key] !== undefined) data[key] = dto[key];
     }
     if (Object.keys(data).length > 0) {
@@ -537,22 +516,10 @@ export class ShelvesService {
         .where(eq(shelves.id, BigInt(id)));
     }
 
-    if (dto.rows !== undefined) {
-      await this.replaceRows(id, dto.rows);
+    if (dto.categoryIds !== undefined) {
+      await this.replaceCategories(id, dto.categoryIds);
     }
     return this.findOne(id);
-  }
-
-  private async replaceRows(shelfId: number, rows: ShelfRowDto[]) {
-    await this.db.delete(shelfRows).where(eq(shelfRows.shelfId, shelfId));
-    if (rows.length === 0) return;
-    await this.db.insert(shelfRows).values(
-      rows.map((r, i) => ({
-        shelfId,
-        rowNumber: r.rowNumber ?? i + 1,
-        label: String(r.label ?? '').trim().slice(0, 150) || `Fila ${i + 1}`,
-      })),
-    );
   }
 
   async deleteShelf(id: number) {
@@ -564,7 +531,7 @@ export class ShelvesService {
 
   // ── Ubicaciones de productos ───────────────────────────────────────────────
 
-  private async assertShelfRow(branchId: number, shelfId: number, rowNumber: number) {
+  private async assertShelfInBranch(branchId: number, shelfId: number) {
     const [shelf] = await this.db
       .select({ id: shelves.id, branchId: shelves.branchId })
       .from(shelves)
@@ -574,12 +541,6 @@ export class ShelvesService {
     if (Number(shelf.branchId) !== branchId) {
       throw new BadRequestException('La estantería no pertenece a esa sucursal');
     }
-    const [row] = await this.db
-      .select({ id: shelfRows.id })
-      .from(shelfRows)
-      .where(and(eq(shelfRows.shelfId, shelfId), eq(shelfRows.rowNumber, rowNumber)))
-      .limit(1);
-    if (!row) throw new BadRequestException(`La fila ${rowNumber} no existe en la estantería`);
   }
 
   /** Productos (todas las variantes) + stock en la sucursal + su ubicación. */
@@ -603,7 +564,6 @@ export class ShelvesService {
         barcode: productVariants.barcode,
         stock: inventory.stock,
         shelfId: productLocations.shelfId,
-        rowNumber: productLocations.rowNumber,
         shelfCode: shelves.code,
         shelfName: shelves.name,
       })
@@ -636,7 +596,6 @@ export class ShelvesService {
       barcode: r.barcode,
       stock: r.stock ?? 0,
       shelfId: r.shelfId != null ? Number(r.shelfId) : null,
-      rowNumber: r.rowNumber ?? null,
       shelfCode: r.shelfCode ?? null,
       shelfName: r.shelfName ?? null,
     }));
@@ -645,7 +604,7 @@ export class ShelvesService {
   /** Asignar (upsert) la ubicación de un producto en una sucursal. */
   async setLocation(dto: SetLocationDto) {
     await this.assertBranchExists(dto.branchId);
-    await this.assertShelfRow(dto.branchId, dto.shelfId, dto.rowNumber);
+    await this.assertShelfInBranch(dto.branchId, dto.shelfId);
 
     await this.db
       .insert(productLocations)
@@ -653,13 +612,11 @@ export class ShelvesService {
         productVariantId: dto.productVariantId,
         branchId: dto.branchId,
         shelfId: dto.shelfId,
-        rowNumber: dto.rowNumber,
       })
       .onConflictDoUpdate({
         target: [productLocations.productVariantId, productLocations.branchId],
         set: {
           shelfId: dto.shelfId,
-          rowNumber: dto.rowNumber,
           updatedAt: new Date().toISOString(),
         },
       });
@@ -690,7 +647,6 @@ export class ShelvesService {
       .select({
         productVariantId: productLocations.productVariantId,
         shelfId: productLocations.shelfId,
-        rowNumber: productLocations.rowNumber,
         shelfCode: shelves.code,
         shelfName: shelves.name,
         shelfColor: shelves.color,
@@ -706,7 +662,8 @@ export class ShelvesService {
     return rows.map((r) => ({
       productVariantId: Number(r.productVariantId),
       shelfId: Number(r.shelfId),
-      rowNumber: r.rowNumber,
+      // Ya no hay filas; se mantiene el campo por la app móvil.
+      rowNumber: null,
       shelfCode: r.shelfCode,
       shelfName: r.shelfName,
       shelfColor: r.shelfColor,
@@ -717,9 +674,9 @@ export class ShelvesService {
    * Asignar una ubicación a TODOS los productos con inventario en la sucursal.
    * Con `onlyUnassigned=true` respeta las ubicaciones ya existentes.
    */
-  async bulkAssign(branchId: number, shelfId: number, rowNumber: number, onlyUnassigned?: boolean) {
+  async bulkAssign(branchId: number, shelfId: number, onlyUnassigned?: boolean) {
     await this.assertBranchExists(branchId);
-    await this.assertShelfRow(branchId, shelfId, rowNumber);
+    await this.assertShelfInBranch(branchId, shelfId);
 
     // Por ahora: TODAS las variantes reciben ubicación en la sucursal.
     const variants = await this.db
@@ -745,7 +702,6 @@ export class ShelvesService {
               productVariantId: Number(v.productVariantId),
               branchId,
               shelfId,
-              rowNumber,
             })),
           )
           .onConflictDoNothing();
@@ -760,12 +716,11 @@ export class ShelvesService {
           productVariantId: Number(v.productVariantId),
           branchId,
           shelfId,
-          rowNumber,
         })),
       )
       .onConflictDoUpdate({
         target: [productLocations.productVariantId, productLocations.branchId],
-        set: { shelfId, rowNumber, updatedAt: new Date().toISOString() },
+        set: { shelfId, updatedAt: new Date().toISOString() },
       });
 
     return { assigned: variants.length, total: variants.length };

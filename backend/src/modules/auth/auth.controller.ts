@@ -2,12 +2,12 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Body,
   UseGuards,
   HttpCode,
   HttpStatus,
   Res,
-  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -17,17 +17,18 @@ import {
   ApiCookieAuth,
   ApiBearerAuth,
   ApiUnauthorizedResponse,
-  ApiBadRequestResponse,
   ApiNotFoundResponse,
 } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { Public } from '../../common/decorators/public.decorator';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import type { AuthenticatedUser } from './interfaces/request.interface';
-import type { Response, Request } from 'express';
+import type { Response } from 'express';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -244,6 +245,50 @@ export class AuthController {
   }
 
   /**
+   * Actualizar el perfil del usuario autenticado
+   * PATCH /auth/me
+   */
+  @UseGuards(JwtAuthGuard)
+  @Patch('me')
+  @ApiCookieAuth('access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Actualizar mi perfil',
+    description: 'Actualiza nombre, teléfono y email del usuario autenticado.',
+  })
+  async updateMyProfile(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateProfileDto,
+  ) {
+    return this.authService.updateProfile(user.sub, dto);
+  }
+
+  /**
+   * Cambiar la contraseña del usuario autenticado
+   * POST /auth/me/password
+   */
+  @UseGuards(JwtAuthGuard)
+  @Post('me/password')
+  @HttpCode(HttpStatus.OK)
+  @ApiCookieAuth('access_token')
+  @ApiBearerAuth('JWT-auth')
+  @ApiOperation({
+    summary: 'Cambiar mi contraseña',
+    description:
+      'Requiere la contraseña actual y una nueva (mínimo 8 caracteres).',
+  })
+  async changeMyPassword(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: ChangePasswordDto,
+  ) {
+    return this.authService.changePassword(
+      user.sub,
+      dto.currentPassword,
+      dto.newPassword,
+    );
+  }
+
+  /**
    * Cerrar sesión
    * POST /auth/logout
    */
@@ -298,7 +343,6 @@ export class AuthController {
     @CurrentUser() user: AuthenticatedUser,
     @Body() body?: { refreshToken?: string },
     @Res({ passthrough: true }) response?: Response,
-    @Req() request?: Request,
   ) {
     // Limpiar cookies
     if (response) {

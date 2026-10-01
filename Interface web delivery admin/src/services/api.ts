@@ -5,6 +5,7 @@ import type {
   FleetDriver,
   FleetOrder,
   LoginResponse,
+  OrderPage,
 } from '../types';
 
 /**
@@ -161,7 +162,29 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
 
-  orders: () => fetchJson<FleetOrder[]>('/delivery/admin/orders'),
+  /**
+   * Pedidos de la flota (todos los estados: entregados y cancelados incluidos),
+   * paginados de a 20 para la pestaña "Pedidos". `status` filtra y `q` busca.
+   */
+  orders: (
+    params: { limit?: number; offset?: number; status?: string; q?: string } = {},
+  ) => {
+    const search = new URLSearchParams();
+    if (params.limit != null) search.set('limit', String(params.limit));
+    if (params.offset != null) search.set('offset', String(params.offset));
+    if (params.status) search.set('status', params.status);
+    if (params.q) search.set('q', params.q);
+    const qs = search.toString();
+    return fetchJson<OrderPage>(`/delivery/admin/orders${qs ? `?${qs}` : ''}`, {
+      cache: 'no-store',
+    });
+  },
+
+  /** Historial de asignaciones cerradas de un repartidor. */
+  driverHistory: (driverId: number) =>
+    fetchJson<FleetOrder[]>(`/delivery/admin/drivers/${driverId}/history`, {
+      cache: 'no-store',
+    }),
 
   // ── Chat repartidor ↔ admin ─────────────────────────────────────────────────
 

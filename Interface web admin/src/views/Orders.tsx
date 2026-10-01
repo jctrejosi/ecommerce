@@ -516,14 +516,6 @@ export default function Orders() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1">
-              <button onClick={() => setMode("kanban")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === "kanban" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                <LayoutGrid size={14} /> Kanban
-              </button>
-              <button onClick={() => setMode("table")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === "table" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
-                <List size={14} /> Tabla
-              </button>
-            </div>
             <button
               disabled
               title="Exportación próximamente"
@@ -566,6 +558,18 @@ export default function Orders() {
               placeholder="Buscar pedido o cliente..."
               className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
             />
+          </div>
+
+          {/* Vista (kanban/tabla) */}
+          <div className="flex justify-end">
+            <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1">
+              <button onClick={() => setMode("kanban")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === "kanban" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                <LayoutGrid size={14} /> Kanban
+              </button>
+              <button onClick={() => setMode("table")} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all cursor-pointer ${mode === "table" ? "bg-amber-400 text-amber-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+                <List size={14} /> Tabla
+              </button>
+            </div>
           </div>
 
           {/* Filtros por estado (multiselección) */}

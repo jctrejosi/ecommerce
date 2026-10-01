@@ -54,10 +54,11 @@ async function main() {
         continue;
       }
 
-      // Reparte las categorías entre las estanterías (rotando por sucursal).
-      const category = categories.length
-        ? categories[(b * PER_BRANCH + i) % categories.length]
-        : null;
+      // Cada estantería agrupa 2 categorías (rotando por sucursal).
+      const catA = categories.length ? categories[(b * PER_BRANCH + i) % categories.length] : null;
+      const catB =
+        categories.length > 1 ? categories[(b * PER_BRANCH + i + 5) % categories.length] : null;
+      const categoryIds = [...new Set([catA?.id, catB?.id].filter((id) => id != null))];
       const color = COLORS[(b + i) % COLORS.length];
       const type = i % 2 === 0 ? 'center' : 'wall';
 
@@ -73,19 +74,12 @@ async function main() {
         posX: 4 + i * 7,
         posY: 4 + (b % 3) * 8,
         rotation: 0,
-        categoryId: category?.id ?? null,
-        rows: [
-          { rowNumber: 1, label: 'Fila 1 (arriba)' },
-          { rowNumber: 2, label: 'Fila 2 (centro)' },
-          { rowNumber: 3, label: 'Fila 3 (abajo)' },
-        ],
+        categoryIds,
       });
 
       if (ok) {
         created++;
-        console.log(
-          `  ok  ${code} · ${category ? category.name : 'sin categoría'} · ${type}`,
-        );
+        console.log(`  ok  ${code} · ${categoryIds.length} categoría(s) · ${type}`);
       } else {
         failed++;
         console.log(`  FALLA ${code} → HTTP ${status}: ${payload?.message ?? ''}`);

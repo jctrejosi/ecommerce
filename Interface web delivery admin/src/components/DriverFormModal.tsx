@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { KeyRound, Loader2, X } from 'lucide-react';
+import { AlertTriangle, KeyRound, Loader2, X } from 'lucide-react';
 import type { FleetDriver } from '../types';
 import { api, ApiError } from '../services/api';
 import { driverVisual } from '../lib/status';
@@ -73,6 +73,47 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  /**
+   * Cambio de "Cuenta activa" pendiente de confirmar. `null` = sin diálogo; si
+   * no es null, es el valor que quedaría (true = activar, false = desactivar).
+   * El check no se mueve hasta que se confirme escribiendo la palabra.
+   */
+  const [confirmActive, setConfirmActive] = useState<boolean | null>(null);
+  const [confirmText, setConfirmText] = useState('');
+
+  /** Palabra que hay que escribir para confirmar. */
+  const palabraClave = confirmActive ? 'activar' : 'desactivar';
+  /**
+   * Comparación EXACTA (normalizando mayúsculas y espacios), no `includes`:
+   * "desactivar" contiene "activar", así que un `includes` aceptaría la palabra
+   * equivocada al activar.
+   */
+  const confirmOk = confirmText.trim().toLowerCase() === palabraClave;
+
+  /** Confirmación del restablecimiento de contraseña (hay que repetirla). */
+  const [confirmReset, setConfirmReset] = useState(false);
+  const [resetConfirmText, setResetConfirmText] = useState('');
+
+  /** Solo vale si repite exactamente la misma contraseña escrita arriba. */
+  const resetOk =
+    confirmReset && newPassword.length >= 8 && resetConfirmText === newPassword;
+
+  function abrirConfirmacion(value: boolean) {
+    setConfirmText('');
+    setConfirmActive(value);
+    setConfirmReset(false);
+  }
+
+  function cerrarConfirmacion() {
+    setConfirmActive(null);
+    setConfirmText('');
+  }
+
+  function aplicarConfirmacion() {
+    if (confirmActive === null || !confirmOk) return;
+    setIsActive(confirmActive);
+    cerrarConfirmacion();
+  }
 
   useEffect(() => {
     if (driver) {
@@ -170,6 +211,32 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
     } finally {
       setBusy(false);
     }
+  }
+
+  /**
+   * El botón "Actualizar" no cambia la contraseña: abre la confirmación, donde
+   * hay que volver a escribirla para asegurar que no hubo un dedazo.
+   */
+  function abrirConfirmacionReset() {
+    if (!driver || newPassword.length < 8) {
+      setError('La nueva contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+    setError(null);
+    setResetConfirmText('');
+    setConfirmActive(null);
+    setConfirmReset(true);
+  }
+
+  function cerrarConfirmacionReset() {
+    setConfirmReset(false);
+    setResetConfirmText('');
+  }
+
+  async function confirmarResetPassword() {
+    if (!resetOk) return;
+    cerrarConfirmacionReset();
+    await handleResetPassword();
   }
 
   const valid =
@@ -330,7 +397,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
                 <input
                   type="checkbox"
                   checked={isActive}
-                  onChange={(e) => setIsActive(e.target.checked)}
+                  onChange={(e) => abrirConfirmacion(e.target.checked)}
                   className="h-4 w-4 accent-emerald-600"
                 />
               </label>
@@ -382,7 +449,8 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
                 autoComplete="off"
               />
               <button
-                onClick={handleResetPassword}
+                type="button"
+                onClick={abrirConfirmacionReset}
                 disabled={busy || newPassword.length < 8}
                 className="shrink-0 rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-amber-950 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -392,6 +460,162 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
           </div>
         )}
       </div>
+
+      {/* Confirmación de "Cuenta activa". Va fuera del panel (hermano) para que
+          el `overflow-y-auto` del panel no recorte el diálogo. */}
+      {confirmActive !== null && (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4"
+          onClick={cerrarConfirmacion}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                  confirmActive ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'
+                }`}
+              >
+                <AlertTriangle className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-slate-900">
+                  {confirmActive ? '¿Activar la cuenta?' : '¿Desactivar la cuenta?'}
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  {confirmActive
+                    ? 'El repartidor podrá volver a iniciar sesión y recibir pedidos en la app móvil.'
+                    : 'El repartidor no podrá iniciar sesión ni recibir pedidos en la app móvil hasta que la actives de nuevo.'}
+                </p>
+              </div>
+            </div>
+
+            <label className="mt-4 block text-xs font-semibold text-slate-600">
+              Escribe{' '}
+              <span className="font-bold text-slate-900">“{palabraClave}”</span> para
+              confirmar
+            </label>
+            <input
+              autoFocus
+              className={`${inputCls} mt-1`}
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  aplicarConfirmacion();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cerrarConfirmacion();
+                }
+              }}
+              placeholder={palabraClave}
+              autoComplete="off"
+              spellCheck={false}
+            />
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={cerrarConfirmacion}
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={aplicarConfirmacion}
+                disabled={!confirmOk}
+                className={`flex-1 rounded-xl px-4 py-2 text-sm font-bold text-white transition disabled:cursor-not-allowed disabled:opacity-50 ${
+                  confirmActive
+                    ? 'bg-emerald-600 hover:bg-emerald-700'
+                    : 'bg-rose-600 hover:bg-rose-700'
+                }`}
+              >
+                {confirmActive ? 'Activar' : 'Desactivar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmación del restablecimiento de contraseña: hay que repetirla
+          para descartar un dedazo. Igual que el de "Cuenta activa", va fuera
+          del panel porque su `overflow-y-auto` recortaría el diálogo. */}
+      {confirmReset && (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/60 p-4"
+          onClick={cerrarConfirmacionReset}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3">
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-amber-50 text-amber-600">
+                <KeyRound className="h-4 w-4" />
+              </span>
+              <div className="min-w-0">
+                <h3 className="text-base font-bold text-slate-900">
+                  ¿Restablecer la contraseña?
+                </h3>
+                <p className="mt-1 text-xs leading-relaxed text-slate-500">
+                  {driver?.fullName ?? 'El repartidor'} entrará a la app móvil con
+                  la contraseña nueva. Escríbela otra vez para confirmarla.
+                </p>
+              </div>
+            </div>
+
+            <label className="mt-4 block text-xs font-semibold text-slate-600">
+              Repite la nueva contraseña
+            </label>
+            <input
+              autoFocus
+              type="password"
+              className={`${inputCls} mt-1`}
+              value={resetConfirmText}
+              onChange={(e) => setResetConfirmText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  if (resetOk) void confirmarResetPassword();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  cerrarConfirmacionReset();
+                }
+              }}
+              placeholder="Repite la nueva contraseña"
+              autoComplete="off"
+              spellCheck={false}
+            />
+            {resetConfirmText.length > 0 && resetConfirmText !== newPassword && (
+              <p className="mt-1.5 text-[11px] font-semibold text-rose-600">
+                Las contraseñas no coinciden.
+              </p>
+            )}
+
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={cerrarConfirmacionReset}
+                className="flex-1 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmarResetPassword()}
+                disabled={!resetOk}
+                className="flex-1 rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Actualizar contraseña
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

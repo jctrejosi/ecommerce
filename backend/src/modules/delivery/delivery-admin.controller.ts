@@ -45,6 +45,12 @@ export class DeliveryAdminController {
     return this.admin.getDriver(Number(id));
   }
 
+  /** Historial de asignaciones cerradas del repartidor (más reciente primero). */
+  @Get('drivers/:id/history')
+  driverHistory(@Param('id') id: string) {
+    return this.admin.listDriverHistory(Number(id));
+  }
+
   /** Crea la cuenta de acceso + perfil de repartidor (loguea en la app móvil). */
   @Post('drivers')
   @HttpCode(HttpStatus.CREATED)
@@ -87,10 +93,20 @@ export class DeliveryAdminController {
     return this.chat.sendFromAdmin(Number(id), Number(userId), dto.body);
   }
 
-  /** Pedidos activos de toda la flota. */
+  /** Pedidos de la flota (todos los estados), paginados para la pestaña. */
   @Get('orders')
-  listOrders() {
-    return this.admin.listOrders();
+  listOrders(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+    @Query('status') status?: string,
+    @Query('q') q?: string,
+  ) {
+    return this.admin.listOrders({
+      limit: limit != null ? Number(limit) : undefined,
+      offset: offset != null ? Number(offset) : undefined,
+      status,
+      q,
+    });
   }
 
   /**

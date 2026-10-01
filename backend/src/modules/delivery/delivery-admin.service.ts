@@ -23,6 +23,48 @@ import type { CreateDriverDto, UpdateDriverDto } from './dto/admin-driver.dto';
 const ACTIVE_ASSIGNMENT_STATUSES =
   "'ASSIGNED','ACCEPTED','READY_FOR_PICKUP','PICKED_UP','IN_DELIVERY'";
 
+/** Tamaño de página por defecto de la pestaña "Pedidos" (lazyload). */
+const ORDERS_PAGE_SIZE = 20;
+/** Tope duro de la página (el panel pide lo ya cargado al refrescar en vivo). */
+const ORDERS_MAX_PAGE_SIZE = 200;
+
+/**
+ * Estados terminales: lo que ya no está en curso y forma parte del historial
+ * del repartidor. `FAILED` se incluye por filas antiguas (hoy se usa
+ * `FAILED_DELIVERY`).
+ */
+const HISTORY_ASSIGNMENT_STATUSES =
+  "'DELIVERED','FAILED','FAILED_DELIVERY','REJECTED','CANCELLED'";
+
+/**
+ * Consulta base de pedidos de la flota. La comparten el listado de pedidos
+ * activos y el historial por repartidor, para que devuelvan la misma forma.
+ */
+const ORDERS_SELECT = `
+SELECT
+  a.id AS assignment_id, a.driver_id,
+  d.full_name AS driver_name, d.vehicle_plate AS driver_plate,
+  d.is_available AS driver_available,
+  a.status::text AS status,
+  a.assigned_at, a.accepted_at, a.ready_for_pickup_at,
+  a.picked_up_at, a.in_delivery_at, a.completed_at,
+  s.order_id, s.address_line1, s.city, s.location AS destination,
+  s.total_volume_cm3, s.volume_estimated,
+  o.reference_code, o.customer_name, o.customer_phone,
+  o.grand_total, o.currency_code, o.notes,
+  b.name AS branch_name, b.address AS branch_address, b.location AS branch_location,
+  p.payment_method
+FROM delivery_assignments a
+JOIN delivery_drivers d ON d.id = a.driver_id
+JOIN shipments s ON s.id = a.shipment_id
+JOIN orders o ON o.id = s.order_id
+LEFT JOIN branches b ON b.id = o.branch_id
+LEFT JOIN LATERAL (
+  SELECT payment_method FROM payments WHERE order_id = o.id
+  ORDER BY created_at DESC LIMIT 1
+) p ON true
+`;
+
 interface DriverRow {
   id: string;
   full_name: string;
@@ -426,36 +468,93 @@ export class DeliveryAdminService {
     return { success: true };
   }
 
-  /** Pedidos activos de toda la flota (con repartidor asignado). */
-  async listOrders() {
-    const rows = await this.drizzle.execute<OrderRow>(
-      `SELECT
-         a.id AS assignment_id, a.driver_id,
-         d.full_name AS driver_name, d.vehicle_plate AS driver_plate,
-         d.is_available AS driver_available,
-         a.status::text AS status,
-         a.assigned_at, a.accepted_at, a.ready_for_pickup_at,
-         a.picked_up_at, a.in_delivery_at, a.completed_at,
-         s.order_id, s.address_line1, s.city, s.location AS destination,
-         s.total_volume_cm3, s.volume_estimated,
-         o.reference_code, o.customer_name, o.customer_phone,
-         o.grand_total, o.currency_code, o.notes,
-         b.name AS branch_name, b.address AS branch_address, b.location AS branch_location,
-         p.payment_method
-       FROM delivery_assignments a
-       JOIN delivery_drivers d ON d.id = a.driver_id
-       JOIN shipments s ON s.id = a.shipment_id
-       JOIN orders o ON o.id = s.order_id
-       LEFT JOIN branches b ON b.id = o.branch_id
-       LEFT JOIN LATERAL (
-         SELECT payment_method FROM payments WHERE order_id = o.id
-         ORDER BY created_at DESC LIMIT 1
-       ) p ON true
-       WHERE a.status::text IN (${ACTIVE_ASSIGNMENT_STATUSES})
-         AND d.deleted_at IS NULL
-       ORDER BY a.assigned_at DESC`,
+  /**
+   * Pedidos de la flota para la pestaña "Pedidos": todos los estados (activos
+   * e históricos: entregados, fallidos, cancelados…), paginados para cargar de
+   * a poco. `status` filtra por estado y `q` busca por código, repartidor,
+   * cliente o dirección.
+   */
+  async listOrders(opts: {
+    limit?: number;
+    offset?: number;
+    status?: string;
+    q?: string;
+  } = {}) {
+    const limit = Math.min(
+      Math.max(Number(opts.limit) || ORDERS_PAGE_SIZE, 1),
+      ORDERS_MAX_PAGE_SIZE,
     );
-    return rows.map((r) => ({
+    const offset = Math.max(Number(opts.offset) || 0, 0);
+
+    const conds: string[] = ['d.deleted_at IS NULL'];
+    const params: unknown[] = [];
+
+    const status = (opts.status ?? '').trim().toUpperCase();
+    if (status && status !== 'ALL') {
+      params.push(status);
+      conds.push(`a.status::text = $${params.length}`);
+    }
+
+    const q = (opts.q ?? '').trim();
+    if (q) {
+      // Escapa los comodines para que el texto del usuario se busque literal.
+      params.push(`%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`);
+      const p = `$${params.length}`;
+      conds.push(
+        `(o.reference_code ILIKE ${p} OR d.full_name ILIKE ${p} OR o.customer_name ILIKE ${p} OR s.address_line1 ILIKE ${p})`,
+      );
+    }
+
+    const where = conds.join(' AND ');
+
+    const [countRows, rows] = await Promise.all([
+      this.drizzle.execute<{ total: number }>(
+        `SELECT count(*)::int AS total
+         FROM delivery_assignments a
+         JOIN delivery_drivers d ON d.id = a.driver_id
+         JOIN shipments s ON s.id = a.shipment_id
+         JOIN orders o ON o.id = s.order_id
+         WHERE ${where}`,
+        params,
+      ),
+      this.drizzle.execute<OrderRow>(
+        `${ORDERS_SELECT}
+         WHERE ${where}
+         ORDER BY a.assigned_at DESC NULLS LAST, a.id DESC
+         LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+        [...params, limit, offset],
+      ),
+    ]);
+
+    const total = Number(countRows[0]?.total ?? 0);
+    return {
+      items: rows.map((r) => this.toOrder(r)),
+      total,
+      limit,
+      offset,
+      hasMore: offset + rows.length < total,
+    };
+  }
+
+  /**
+   * Historial de un repartidor: sus asignaciones ya cerradas (entregadas,
+   * fallidas, rechazadas o canceladas), de la más reciente a la más antigua.
+   */
+  async listDriverHistory(driverId: number, limit = 50) {
+    const rows = await this.drizzle.execute<OrderRow>(
+      `${ORDERS_SELECT}
+       WHERE a.driver_id = $1
+         AND a.status::text IN (${HISTORY_ASSIGNMENT_STATUSES})
+       ORDER BY a.completed_at DESC NULLS LAST, a.id DESC
+       LIMIT $2`,
+      [driverId, limit],
+    );
+    return rows.map((r) => this.toOrder(r));
+  }
+
+  /** Fila de pedido → objeto que consume el panel. */
+  private toOrder(r: OrderRow) {
+    return {
       assignmentId: Number(r.assignment_id),
       driverId: Number(r.driver_id),
       driverName: r.driver_name,
@@ -469,6 +568,7 @@ export class DeliveryAdminService {
       readyForPickupAt: r.ready_for_pickup_at,
       pickedUpAt: r.picked_up_at,
       inDeliveryAt: r.in_delivery_at,
+      completedAt: r.completed_at,
       customerName: r.customer_name,
       customerPhone: r.customer_phone,
       addressLine1: r.address_line1,
@@ -491,6 +591,6 @@ export class DeliveryAdminService {
         method: r.payment_method ?? 'CASH',
         label: r.payment_method === 'CASH' ? 'Contraentrega' : 'Pagado',
       },
-    }));
+    };
   }
 }

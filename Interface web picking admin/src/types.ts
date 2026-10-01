@@ -7,12 +7,6 @@ export interface Branch {
   city: string;
 }
 
-export interface ShelfRow {
-  id: number;
-  rowNumber: number;
-  label: string;
-}
-
 export type ShelfType = 'wall' | 'center';
 
 export interface Shelf {
@@ -27,10 +21,9 @@ export interface Shelf {
   posX: number;
   posY: number;
   rotation: 0 | 90;
-  categoryId: number | null;
-  categoryName: string | null;
+  /** Categorías de la estantería (N:M). */
+  categories: { id: number; name: string }[];
   productCount: number;
-  rows: ShelfRow[];
 }
 
 /** Categoría del catálogo (para asociar estanterías). */
@@ -50,7 +43,6 @@ export interface CategoryOrgShelf {
   name: string;
   color: string;
   productCount: number;
-  rows: { rowNumber: number; label: string }[];
 }
 
 /** Producto de una categoría con su ubicación. */
@@ -62,7 +54,6 @@ export interface CategoryOrgProduct {
   barcode: string | null;
   stock: number;
   shelfId: number | null;
-  rowNumber: number | null;
   shelfCode: string | null;
   shelfName: string | null;
 }
@@ -81,7 +72,6 @@ export interface ProductWithLocation {
   barcode: string | null;
   stock: number;
   shelfId: number | null;
-  rowNumber: number | null;
   shelfCode: string | null;
   shelfName: string | null;
 }

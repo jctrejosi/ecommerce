@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Loader2, MessagesSquare, Send, X } from 'lucide-react';
+import { ArrowLeft, Loader2, MessagesSquare, Search, Send, X } from 'lucide-react';
 import type { DriverChatMessage, DriverConversation } from '../types';
 import { api, ApiError } from '../services/api';
 import { driverColor } from '../lib/driverColors';
@@ -71,6 +71,7 @@ export default function DriverChatModal({
   onRefreshChats,
 }: Props) {
   const [activeId, setActiveId] = useState<number | null>(initialDriverId);
+  const [query, setQuery] = useState('');
   const [messages, setMessages] = useState<DriverChatMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [text, setText] = useState('');
@@ -82,6 +83,18 @@ export default function DriverChatModal({
     () => chats.find((c) => c.driverId === activeId) ?? null,
     [chats, activeId],
   );
+
+  /** Bandeja filtrada por nombre, usuario (código) o id del repartidor. */
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return chats;
+    return chats.filter(
+      (c) =>
+        c.fullName.toLowerCase().includes(q) ||
+        (c.username ?? '').toLowerCase().includes(q) ||
+        String(c.driverId) === q,
+    );
+  }, [chats, query]);
 
   const load = useCallback(async () => {
     if (activeId == null) return;
@@ -141,7 +154,7 @@ export default function DriverChatModal({
 
   return (
     <div
-      className="fixed inset-0 z-1000 flex items-center justify-center bg-slate-900/40 p-4"
+      className="fixed inset-0 z-1000 flex cursor-pointer items-center justify-center bg-slate-900/40 p-4"
       onClick={onClose}
     >
       <div
@@ -170,6 +183,7 @@ export default function DriverChatModal({
                   {active.fullName}
                 </p>
                 <p className="truncate text-[11px] text-slate-400">
+                  {active.username ? `@${active.username} · ` : ''}
                   {active.phone}
                   {active.isActive ? '' : ' · cuenta desactivada'}
                 </p>
@@ -206,49 +220,83 @@ export default function DriverChatModal({
 
         {/* ── Bandeja ── */}
         {!active && (
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {chats.length === 0 && (
-              <p className="p-8 text-center text-xs text-slate-400">
-                No hay repartidores registrados.
-              </p>
-            )}
-            {chats.map((c) => (
-              <button
-                key={c.driverId}
-                onClick={() => setActiveId(c.driverId)}
-                className="flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left transition-colors hover:bg-slate-50"
-              >
-                <ChatAvatar
-                  driverId={c.driverId}
-                  routeColor={c.routeColor}
-                  name={c.fullName}
-                  size={38}
+          <>
+            <div className="shrink-0 border-b border-slate-100 p-3">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Buscar por nombre o código…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-8 text-sm outline-none transition focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-100"
                 />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-slate-800">
-                      {c.fullName}
-                    </p>
-                    <span className="shrink-0 text-[10px] text-slate-400">
-                      {c.lastMessage ? timeAgo(c.lastMessage.createdAt) : ''}
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="truncate text-xs text-slate-400">
-                      {c.lastMessage
-                        ? `${c.lastMessage.senderType === 'admin' ? 'Tú: ' : ''}${c.lastMessage.body}`
-                        : 'Sin mensajes · inicia la conversación'}
-                    </p>
-                    {c.unread > 0 && (
-                      <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
-                        {c.unread}
+                {query && (
+                  <button
+                    onClick={() => setQuery('')}
+                    title="Limpiar búsqueda"
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto pb-2">
+              {chats.length === 0 && (
+                <p className="p-8 text-center text-xs text-slate-400">
+                  No hay repartidores registrados.
+                </p>
+              )}
+              {chats.length > 0 && visible.length === 0 && (
+                <p className="p-8 text-center text-xs text-slate-400">
+                  Ningún repartidor coincide con “{query}”.
+                </p>
+              )}
+              {visible.map((c) => (
+                <button
+                  key={c.driverId}
+                  onClick={() => setActiveId(c.driverId)}
+                  className="flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50"
+                >
+                  <ChatAvatar
+                    driverId={c.driverId}
+                    routeColor={c.routeColor}
+                    name={c.fullName}
+                    size={38}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="min-w-0 truncate text-sm font-semibold text-slate-800">
+                        {c.fullName}
+                        {c.username && (
+                          <span className="ml-1.5 text-[11px] font-normal text-slate-400">
+                            @{c.username}
+                          </span>
+                        )}
+                      </p>
+                      <span className="shrink-0 text-[10px] text-slate-400">
+                        {c.lastMessage ? timeAgo(c.lastMessage.createdAt) : ''}
                       </span>
-                    )}
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="truncate text-xs text-slate-400">
+                        {c.lastMessage
+                          ? `${c.lastMessage.senderType === 'admin' ? 'Tú: ' : ''}${c.lastMessage.body}`
+                          : 'Sin mensajes · inicia la conversación'}
+                      </p>
+                      {c.unread > 0 && (
+                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                          {c.unread}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-              </button>
-            ))}
-          </div>
+                </button>
+              ))}
+            </div>
+          </>
         )}
 
         {/* ── Conversación ── */}

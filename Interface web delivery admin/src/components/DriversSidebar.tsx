@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   ArrowLeft,
   Eye,
@@ -13,7 +14,8 @@ import type { DriverFilter, FleetDriver } from '../types';
 import { FILTER_OPTIONS, driverVisual, isDriverOnline, lastSignalAt } from '../lib/status';
 import { DRIVER_COLORS, driverColor } from '../lib/driverColors';
 import { formatDateTime, loadLabel, timeAgo, vehicleLabel } from '../lib/format';
-import { AvailabilitySwitch, DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
+import { DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
+import DriverHistoryPanel from './DriverHistoryPanel';
 
 interface Props {
   drivers: FleetDriver[]; // ya filtrados por el filtro de estado
@@ -25,7 +27,6 @@ interface Props {
   onSelect: (id: number | null) => void;
   hiddenIds: Set<number>;
   onToggleHidden: (id: number) => void;
-  onToggleAvailable: (driver: FleetDriver, value: boolean) => void;
   onChangeColor: (driver: FleetDriver, color: string) => void;
   /** Abre el chat del panel con el repartidor. */
   onChat: (driverId: number) => void;
@@ -40,7 +41,6 @@ function DriverRow({
   unread,
   onSelect,
   onToggleHidden,
-  onToggleAvailable,
   onChat,
 }: {
   driver: FleetDriver;
@@ -49,7 +49,6 @@ function DriverRow({
   unread: number;
   onSelect: () => void;
   onToggleHidden: () => void;
-  onToggleAvailable: (value: boolean) => void;
   onChat: () => void;
 }) {
   const offline = driver.isActive && !isDriverOnline(driver);
@@ -106,11 +105,6 @@ function DriverRow({
           </span>
         )}
       </button>
-
-      <AvailabilitySwitch
-        driver={driver}
-        onToggle={(_, v) => onToggleAvailable(v)}
-      />
     </div>
   );
 }
@@ -119,19 +113,21 @@ function DetailView({
   driver,
   unread,
   onBack,
-  onToggleAvailable,
   onChangeColor,
   onChat,
 }: {
   driver: FleetDriver;
   unread: number;
   onBack: () => void;
-  onToggleAvailable: (value: boolean) => void;
   onChangeColor: (color: string) => void;
   onChat: () => void;
 }) {
   const visual = driverVisual(driver);
   const a = driver.activeAssignment;
+  const [tab, setTab] = useState<'detalle' | 'historial'>('detalle');
+
+  // Al cambiar de repartidor se vuelve a la pestaña de detalle.
+  useEffect(() => setTab('detalle'), [driver.id]);
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
@@ -170,6 +166,32 @@ function DetailView({
         </div>
       </div>
 
+      <div className="flex gap-1 border-b border-slate-100 px-4">
+        {(
+          [
+            ['detalle', 'Detalle'],
+            ['historial', 'Historial'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`-mb-px border-b-2 px-3 py-2 text-xs font-bold transition-colors ${
+              tab === key
+                ? 'border-slate-900 text-slate-900'
+                : 'border-transparent text-slate-400 hover:text-slate-600'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'historial' ? (
+        <div className="p-4">
+          <DriverHistoryPanel driverId={driver.id} />
+        </div>
+      ) : (
       <div className="space-y-4 p-4">
         <section className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
           <div className="flex items-center justify-between">
@@ -188,10 +210,6 @@ function DetailView({
                 return signal ? timeAgo(signal) : 'Sin señal';
               })()}
             </span>
-          </div>
-          <div className="mt-2 flex items-center justify-between">
-            <span className="text-xs text-slate-500">Disponibilidad</span>
-            <AvailabilitySwitch driver={driver} onToggle={(_, v) => onToggleAvailable(v)} />
           </div>
           <div className="mt-2 border-t border-slate-200 pt-2">
             <div className="flex items-center justify-between gap-2">
@@ -292,6 +310,7 @@ function DetailView({
           </section>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -307,7 +326,6 @@ export default function DriversSidebar(props: Props) {
     onSelect,
     hiddenIds,
     onToggleHidden,
-    onToggleAvailable,
     onChangeColor,
     onChat,
     unreadOf,
@@ -358,7 +376,6 @@ export default function DriversSidebar(props: Props) {
           driver={selected}
           unread={unreadOf?.(selected.id) ?? 0}
           onBack={() => onSelect(null)}
-          onToggleAvailable={(v) => onToggleAvailable(selected, v)}
           onChangeColor={(color) => onChangeColor(selected, color)}
           onChat={() => onChat(selected.id)}
         />
@@ -378,7 +395,6 @@ export default function DriversSidebar(props: Props) {
               unread={unreadOf?.(d.id) ?? 0}
               onSelect={() => onSelect(d.id)}
               onToggleHidden={() => onToggleHidden(d.id)}
-              onToggleAvailable={(v) => onToggleAvailable(d, v)}
               onChat={() => onChat(d.id)}
             />
           ))}

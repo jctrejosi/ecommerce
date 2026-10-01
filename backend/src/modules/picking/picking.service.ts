@@ -265,7 +265,6 @@ export class PickingService {
         image: media.path,
         shelfCode: shelves.code,
         shelfName: shelves.name,
-        rowNumber: productLocations.rowNumber,
       })
       .from(orderItems)
       .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
@@ -317,7 +316,8 @@ export class PickingService {
         image: i.image ?? null,
         shelfCode: i.shelfCode ?? null,
         shelfName: i.shelfName ?? null,
-        rowNumber: i.rowNumber ?? null,
+        // Ya no hay filas; se mantiene el campo por la app móvil.
+        rowNumber: null,
         unitPriceGross: Number(i.unitPriceGross),
         total: Number(i.total),
       })),

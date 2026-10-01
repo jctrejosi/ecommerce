@@ -76,32 +76,3 @@ export function LastSeen({ driver }: { driver: FleetDriver }) {
     </span>
   );
 }
-
-/** Switch de disponibilidad (optimista + PATCH al backend). */
-export function AvailabilitySwitch({
-  driver,
-  onToggle,
-}: {
-  driver: FleetDriver;
-  onToggle: (driver: FleetDriver, value: boolean) => void;
-}) {
-  const disabled = !driver.isActive;
-  return (
-    <button
-      role="switch"
-      aria-checked={driver.isAvailable}
-      disabled={disabled}
-      onClick={() => onToggle(driver, !driver.isAvailable)}
-      title={disabled ? 'Activa la cuenta para cambiar disponibilidad' : 'Disponibilidad'}
-      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
-        disabled ? 'cursor-not-allowed bg-slate-200' : driver.isAvailable ? 'bg-emerald-500' : 'bg-slate-300'
-      }`}
-    >
-      <span
-        className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform ${
-          driver.isAvailable ? 'translate-x-4.5' : 'translate-x-0.5'
-        }`}
-      />
-    </button>
-  );
-}

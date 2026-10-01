@@ -167,15 +167,14 @@ export class ShelvesController {
     summary: 'Asignar ubicación a todos los productos con inventario de la sucursal',
   })
   bulkAssign(
-    @Body() dto: { branchId: number; shelfId: number; rowNumber: number; onlyUnassigned?: boolean },
+    @Body() dto: { branchId: number; shelfId: number; onlyUnassigned?: boolean },
   ) {
-    if (!dto?.branchId || !dto?.shelfId || !dto?.rowNumber) {
-      throw new BadRequestException('branchId, shelfId y rowNumber son obligatorios');
+    if (!dto?.branchId || !dto?.shelfId) {
+      throw new BadRequestException('branchId y shelfId son obligatorios');
     }
     return this.shelvesService.bulkAssign(
       Number(dto.branchId),
       Number(dto.shelfId),
-      Number(dto.rowNumber),
       dto.onlyUnassigned,
     );
   }

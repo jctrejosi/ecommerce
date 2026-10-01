@@ -11,7 +11,8 @@ export default function AppFooter() {
           rel="noopener noreferrer"
           className="flex items-center transition-opacity hover:opacity-80"
         >
-          <img src={logo} alt="Mercaldas" className="h-8 w-auto object-contain" />
+          {/* h-6 = 24px (25% menos que los 32px originales). */}
+          <img src={logo} alt="Mercaldas" className="h-6 w-auto object-contain" />
         </a>
         <p className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
           © 2026 Desarrollado por{' '}

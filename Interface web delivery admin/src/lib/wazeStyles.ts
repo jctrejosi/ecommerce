@@ -371,8 +371,6 @@ function rasterSpec(
   };
 }
 
-const ESRI_ATTR = 'Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ';
-
 /** Estilos remotos de OpenFreeMap (mismo proveedor que la app móvil). */
 const OFM = (id: string, name: string, maxZoom: number, swatch: string, dark = false) =>
   ({
@@ -395,7 +393,6 @@ export const MAP_STYLE_OPTIONS: MapStyleOption[] = [
   // Otras variantes modernas del mismo proveedor.
   OFM('bright', 'Bright', 19, 'linear-gradient(135deg,#dce9d6 0%,#f6f2e9 60%,#cfe3ef 100%)'),
   OFM('positron', 'Claro minimal', 19, 'linear-gradient(135deg,#f4f4f2 0%,#e7e6e1 100%)'),
-  OFM('dark', 'Oscuro', 19, 'linear-gradient(135deg,#2a2e36 0%,#1d2027 100%)', true),
   OFM('fiord', 'Fiord', 19, 'linear-gradient(135deg,#25303e 0%,#18212d 100%)', true),
   {
     id: 'waze',
@@ -418,31 +415,6 @@ export const MAP_STYLE_OPTIONS: MapStyleOption[] = [
     spec: rasterSpec('Estándar', [{ tiles: OSM_TILES, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }], 19),
     maxZoom: 19,
     swatch: 'linear-gradient(135deg,#b8d8a5 0%,#e6e9dd 55%,#f4f7f6 100%)',
-  },
-  {
-    id: 'light',
-    name: 'Claro',
-    // Fondo claro + calles oscuras (Transportation) + nombres (Boundaries & Places).
-    spec: rasterSpec('Claro', [
-      { tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}'], attribution: ESRI_ATTR },
-      { tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}'], attribution: ESRI_ATTR },
-      { tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}'], attribution: ESRI_ATTR },
-    ], 18),
-    maxZoom: 18,
-    swatch:
-      'linear-gradient(#454a50 0 0) 50% 35%/75% 2px no-repeat, linear-gradient(#454a50 0 0) 50% 60%/50% 2px no-repeat, #f2f1ee',
-  },
-  {
-    id: 'dark',
-    name: 'Oscuro',
-    spec: rasterSpec('Oscuro', [
-      { tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}'], attribution: ESRI_ATTR },
-      { tiles: ['https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}'], attribution: ESRI_ATTR },
-    ], 18),
-    maxZoom: 18,
-    dark: true,
-    swatch:
-      'linear-gradient(#c9ced6 0 0) 50% 35%/75% 2px no-repeat, linear-gradient(#c9ced6 0 0) 50% 60%/50% 2px no-repeat, #26292e',
   },
   {
     id: 'satellite',

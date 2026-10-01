@@ -75,6 +75,7 @@ export interface FleetOrder {
   readyForPickupAt: string | null;
   pickedUpAt: string | null;
   inDeliveryAt: string | null;
+  completedAt: string | null;
   customerName: string | null;
   customerPhone: string | null;
   addressLine1: string | null;
@@ -88,6 +89,16 @@ export interface FleetOrder {
   payment: { method: string; label: string };
   /** Volumen del pedido en cm³ (null = aún no calculado). */
   volume: { cm3: number | null; estimated: boolean };
+}
+
+/** Página de pedidos de la pestaña "Pedidos" (lazyload de 20 en 20). */
+export interface OrderPage {
+  items: FleetOrder[];
+  /** Total de pedidos que cumplen el filtro (no solo los cargados). */
+  total: number;
+  limit: number;
+  offset: number;
+  hasMore: boolean;
 }
 
 /** Cupo comprometido del repartidor (volumen de sus pedidos activos). */
@@ -148,6 +159,8 @@ export interface DriverConversation {
   driverId: number;
   fullName: string;
   phone: string;
+  /** Usuario de acceso del repartidor (el "código" que se ve en el panel). */
+  username: string | null;
   routeColor: string | null;
   isActive: boolean;
   unread: number;

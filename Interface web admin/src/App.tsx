@@ -67,6 +67,7 @@ import Branches from "./views/Branches";
 import Popups from "./views/Popups";
 import Login from "./views/Login";
 import AppFooter from "./components/AppFooter";
+import ProfileModal from "./components/ProfileModal";
 import Newsletter from "./views/Newsletter";
 
 export type ViewId =
@@ -563,6 +564,7 @@ function TopBar({
   onToggleCollapse,
   user,
   onLogout,
+  onUserUpdated,
 }: {
   current: ViewId;
   onOpenCommand: () => void;
@@ -570,9 +572,11 @@ function TopBar({
   onToggleCollapse: () => void;
   user: UserProfile | null;
   onLogout: () => void;
+  onUserUpdated: (u: UserProfile) => void;
 }) {
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     const handler = () => {
@@ -674,6 +678,12 @@ function TopBar({
                 ].map((item) => (
                   <button
                     key={item.label}
+                    onClick={() => {
+                      if (item.label === "Mi perfil") {
+                        setUserOpen(false);
+                        setProfileOpen(true);
+                      }
+                    }}
                     className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors"
                   >
                     <item.icon size={14} className="text-white/40" />
@@ -694,6 +704,14 @@ function TopBar({
           )}
         </div>
       </div>
+
+      {profileOpen && user && (
+        <ProfileModal
+          user={user}
+          onClose={() => setProfileOpen(false)}
+          onSaved={(u) => onUserUpdated(u)}
+        />
+      )}
     </header>
   );
 }
@@ -886,6 +904,7 @@ export default function App() {
           onToggleCollapse={() => setCollapsed((c) => !c)}
           user={user}
           onLogout={handleLogout}
+          onUserUpdated={setUser}
         />
         <main className="flex-1 overflow-y-auto">
           <ViewRenderer view={view} user={user} onNavigate={(v) => navigate(v as ViewId)} />

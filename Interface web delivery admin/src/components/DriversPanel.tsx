@@ -86,12 +86,18 @@ export default function DriversPanel({
       <div className="mx-5 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white">
         <table className="w-full">
           <thead>
-            <tr className="sticky top-0 border-b border-slate-100 bg-slate-50 text-left">
+            {/* Cabecera fija. Hacen falta las DOS cosas:
+                - `z-10` en el `<tr>` (el `sticky` crea contexto de apilado; sin
+                  z-index propio pierde por orden de árbol frente a los elementos
+                  posicionados de las filas, p. ej. el botón de chat),
+                - `relative z-10` en cada `th`, porque el `bg-white` del `th` es
+                  lo que realmente tapa lo que pasa por debajo. */}
+            <tr className="sticky top-0 z-10 border-b border-slate-100 text-left">
               {['Repartidor', 'Contacto', 'Vehículo', 'Ocupación', 'Estado', 'Última señal', 'Acciones'].map(
                 (h) => (
                   <th
                     key={h}
-                    className="whitespace-nowrap px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"
+                    className="relative z-10 whitespace-nowrap bg-white px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"
                   >
                     {h}
                   </th>
@@ -173,7 +179,7 @@ export default function DriversPanel({
                         }}
                         className="inline-flex items-center gap-2 rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
                       >
-                        <MapPin className="h-4 w-4" /> Ver en el mapa
+                        <MapPin className="h-4 w-4" /> Mapa
                       </button>
                       <button
                         title="Editar"

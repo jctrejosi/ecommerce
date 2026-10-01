@@ -1,13 +1,20 @@
-import { LocateFixed, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Loader2, LocateFixed, Search } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
 import type { AssignmentStatus, FleetOrder } from '../types';
+import { api, ApiError } from '../services/api';
 import { STATUS_META } from '../lib/status';
 import { formatDateTime, formatMoney, formatVolume } from '../lib/format';
 
 interface Props {
-  orders: FleetOrder[];
+  /** Sube con cada aviso en vivo (socket / refresco periódico) para recargar. */
+  reloadTick: number;
   onLocate: (driverId: number) => void;
 }
+
+/** Cuántos pedidos se cargan por página (lazyload). */
+const PAGE_SIZE = 20;
+/** Tope de la recarga en vivo: nunca se piden más de estos de golpe. */
+const MAX_REFRESH = 200;
 
 const ORDER_FILTERS: { key: AssignmentStatus | 'all'; label: string }[] = [
   { key: 'all', label: 'Todos' },
@@ -15,6 +22,8 @@ const ORDER_FILTERS: { key: AssignmentStatus | 'all'; label: string }[] = [
   { key: 'READY_FOR_PICKUP', label: 'Recogiendo' },
   { key: 'PICKED_UP', label: 'Recogidos' },
   { key: 'IN_DELIVERY', label: 'En entrega' },
+  { key: 'DELIVERED', label: 'Entregados' },
+  { key: 'CANCELLED', label: 'Cancelados' },
 ];
 
 /**
@@ -36,28 +45,107 @@ const TIMELINE: { label: string; key: TimelineKey }[] = [
   { label: 'En camino', key: 'inDeliveryAt' },
 ];
 
-export default function OrdersPanel({ orders, onLocate }: Props) {
+/**
+ * Pestaña "Pedidos": todos los pedidos de la flota (activos, entregados y
+ * cancelados) con lazyload de 20 en 20. El filtro y la búsqueda los resuelve el
+ * backend, así que aplican sobre el total y no solo sobre lo ya cargado.
+ */
+export default function OrdersPanel({ reloadTick, onLocate }: Props) {
+  const [orders, setOrders] = useState<FleetOrder[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<AssignmentStatus | 'all'>('all');
   const [search, setSearch] = useState('');
+  /** Texto de búsqueda ya debounced (lo que se manda al API). */
+  const [query, setQuery] = useState('');
+  const loadedRef = useRef(0);
+  const busyRef = useRef(false);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  const rows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return orders.filter((o) => {
-      if (filter !== 'all' && o.status !== filter) return false;
-      if (!q) return true;
-      return [o.referenceCode, o.driverName, o.customerName, o.addressLine1]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q));
-    });
-  }, [orders, filter, search]);
+  // Búsqueda con debounce: evita una consulta por tecla.
+  useEffect(() => {
+    const t = window.setTimeout(() => setQuery(search.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
+  useEffect(() => {
+    loadedRef.current = orders.length;
+  }, [orders]);
+
+  const load = useCallback(
+    async (mode: 'reset' | 'more' | 'refresh') => {
+      if (busyRef.current) return;
+      const known = loadedRef.current;
+      const first = mode !== 'more' && known === 0;
+      busyRef.current = true;
+      if (first) setLoading(true);
+      else setLoadingMore(true);
+      try {
+        // 'more' avanza de a una página; 'refresh' recarga lo que ya había.
+        const limit =
+          mode === 'more'
+            ? PAGE_SIZE
+            : mode === 'refresh'
+              ? Math.min(MAX_REFRESH, Math.max(PAGE_SIZE, known))
+              : PAGE_SIZE;
+        const offset = mode === 'more' ? known : 0;
+        const page = await api.orders({
+          limit,
+          offset,
+          status: filter === 'all' ? undefined : filter,
+          q: query || undefined,
+        });
+        setOrders((prev) => (mode === 'more' ? [...prev, ...page.items] : page.items));
+        setTotal(page.total);
+        setError(null);
+        // Filtro o búsqueda nuevos: la lista vuelve arriba (si no, el scroll al
+        // fondo dispararía el lazyload con la lista ya cambiada).
+        if (mode === 'reset' && scrollRef.current) scrollRef.current.scrollTop = 0;
+      } catch (err) {
+        setError(
+          err instanceof ApiError ? err.message : 'No se pudieron cargar los pedidos.',
+        );
+      } finally {
+        busyRef.current = false;
+        setLoading(false);
+        setLoadingMore(false);
+      }
+    },
+    [filter, query],
+  );
+
+  // Filtro o búsqueda nuevos: recarga desde cero.
+  useEffect(() => {
+    void load('reset');
+  }, [load]);
+
+  // Aviso en vivo (socket / refresco periódico): recarga lo cargado sin
+  // perder el scroll. `load` cambia con los filtros, por eso no va en deps.
+  useEffect(() => {
+    void load('refresh');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadTick]);
+
+  const hasMore = orders.length < total;
+  const vacio = !loading && orders.length === 0;
+
+  const handleScroll = (e: UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget;
+    if (!hasMore || busyRef.current) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 160) void load('more');
+  };
 
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between p-5 pb-3">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Pedidos activos</h1>
+          <h1 className="text-lg font-bold text-slate-900">Pedidos</h1>
           <p className="text-xs text-slate-400">
-            {orders.length} pedidos en curso en toda la flota
+            {loading && orders.length === 0
+              ? 'Cargando pedidos…'
+              : `Mostrando ${orders.length} de ${total} pedidos`}
           </p>
         </div>
         <div className="relative">
@@ -87,10 +175,20 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
         ))}
       </div>
 
-      <div className="mx-5 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white">
+      {error && (
+        <div className="mx-5 mb-3 rounded-xl bg-rose-50 px-3 py-2 text-xs font-semibold text-rose-600">
+          {error}
+        </div>
+      )}
+
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        className="mx-5 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white"
+      >
         <table className="w-full">
           <thead>
-            <tr className="sticky top-0 border-b border-slate-100 bg-slate-50 text-left">
+            <tr className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 text-left">
               {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Tiempos', 'Total', 'Volumen', ''].map(
                 (h) => (
                   <th
@@ -104,14 +202,21 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {rows.length === 0 && (
+            {loading && orders.length === 0 && (
               <tr>
                 <td colSpan={10} className="p-8 text-center text-xs text-slate-400">
-                  No hay pedidos activos con este filtro.
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" />
                 </td>
               </tr>
             )}
-            {rows.map((o) => {
+            {vacio && (
+              <tr>
+                <td colSpan={10} className="p-8 text-center text-xs text-slate-400">
+                  No hay pedidos con este filtro.
+                </td>
+              </tr>
+            )}
+            {orders.map((o) => {
               const meta = STATUS_META[o.status];
               return (
                 <tr key={o.assignmentId} className="transition-colors hover:bg-slate-50">
@@ -192,6 +297,20 @@ export default function OrdersPanel({ orders, onLocate }: Props) {
                 </tr>
               );
             })}
+            {orders.length > 0 && loadingMore && (
+              <tr>
+                <td colSpan={10} className="p-4 text-center text-xs text-slate-400">
+                  <Loader2 className="mx-auto h-4 w-4 animate-spin text-slate-300" />
+                </td>
+              </tr>
+            )}
+            {orders.length > 0 && !loadingMore && !hasMore && (
+              <tr>
+                <td colSpan={10} className="p-4 text-center text-xs text-slate-400">
+                  No hay más pedidos.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

@@ -12,7 +12,6 @@ import type {
   PickingOrderDetail,
   ProductWithLocation,
   Shelf,
-  ShelfRow,
   ShelfType,
 } from '../types';
 
@@ -169,8 +168,8 @@ export interface ShelfPayload {
   posX: number;
   posY: number;
   rotation: 0 | 90;
-  categoryId: number | null;
-  rows: { rowNumber: number; label: string }[];
+  /** Categorías asociadas (N:M). */
+  categoryIds: number[];
 }
 
 export const api = {
@@ -222,10 +221,10 @@ export const api = {
       `/picking-admin/products?branchId=${branchId}${search && search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`,
     ),
 
-  setLocation: (productVariantId: number, branchId: number, shelfId: number, rowNumber: number) =>
+  setLocation: (productVariantId: number, branchId: number, shelfId: number) =>
     fetchJson<{ success: boolean }>('/picking-admin/products/locations', {
       method: 'POST',
-      body: JSON.stringify({ productVariantId, branchId, shelfId, rowNumber }),
+      body: JSON.stringify({ productVariantId, branchId, shelfId }),
     }),
 
   removeLocation: (productVariantId: number, branchId: number) =>
@@ -234,10 +233,10 @@ export const api = {
       { method: 'DELETE' },
     ),
 
-  bulkAssign: (branchId: number, shelfId: number, rowNumber: number, onlyUnassigned?: boolean) =>
+  bulkAssign: (branchId: number, shelfId: number, onlyUnassigned?: boolean) =>
     fetchJson<BulkAssignResult>('/picking-admin/products/locations/bulk-assign', {
       method: 'POST',
-      body: JSON.stringify({ branchId, shelfId, rowNumber, onlyUnassigned }),
+      body: JSON.stringify({ branchId, shelfId, onlyUnassigned }),
     }),
 
   metrics: () => fetchJson<PickerSummary[]>('/picking-admin/metrics'),
@@ -319,5 +318,3 @@ export const api = {
       body: JSON.stringify({ password }),
     }),
 };
-
-export type { ShelfRow };

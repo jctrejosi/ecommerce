@@ -52,4 +52,28 @@ export const authService = {
       body: JSON.stringify({}),
     }).catch(() => {});
   },
+
+  /** Actualiza el perfil del usuario autenticado (nombre, teléfono, email). */
+  async updateProfile(data: {
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+    email?: string;
+  }): Promise<UserProfile> {
+    return fetchJson<UserProfile>(`${API_BASE_URL}/auth/me`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  /** Cambia la contraseña del usuario autenticado (exige la actual). */
+  async changePassword(
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<{ success: boolean }> {
+    return fetchJson<{ success: boolean }>(`${API_BASE_URL}/auth/me/password`, {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+  },
 };

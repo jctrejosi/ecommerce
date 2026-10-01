@@ -41,6 +41,9 @@ const SORT_OPTIONS = [
 const EMPTY_PRODUCTS: Product[] = [];
 const EMPTY_CATEGORIES: CatalogCategory[] = [];
 
+// Productos por página del scroll infinito.
+const PAGE_SIZE = 20;
+
 /**
  * Expande una selección de categorías a sí misma + todos sus descendientes.
  * El padre no tiene productos propios, así que sin esto el filtro por una
@@ -102,6 +105,10 @@ export function CatalogPage({
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Refs sincrónicos: evitan que varios disparos del observer avancen el offset
+  // dos veces (lo que saltaría una página completa).
+  const loadingMoreRef = useRef(false);
+  const hasMoreRef = useRef(true);
   const [searchInput, setSearchInput] = useState(catalogSearch);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -209,7 +216,6 @@ export function CatalogPage({
       .then(setBranches)
       .catch(() => {});
   }, []);
-  const PAGE_SIZE = 20;
 
   // El filtro por categoría debe incluir subcategorías: se expande el árbol
   // antes de consultar (las categorías ya vienen con su jerarquía).
@@ -221,6 +227,7 @@ export function CatalogPage({
     categories,
     products,
     loading: catalogLoading,
+    error: catalogError,
   } = useCatalog(
     {
       categoryIds: catalogSearch ? [] : queryCategoryIds,
@@ -258,6 +265,7 @@ export function CatalogPage({
     catalogSort,
     catalogSearch,
     catalogBrand,
+    catalogBranch,
     catalogProductType,
   ]);
 
@@ -287,14 +295,24 @@ export function CatalogPage({
       });
     }
     setHasMore(products.length === PAGE_SIZE);
-    setLoadingMore(false);
   }, [products, offset]);
 
-  const loadMore = () => {
-    if (!hasMore || loadingMore) return;
+  useEffect(() => {
+    hasMoreRef.current = hasMore;
+  }, [hasMore]);
+
+  // Libera el lock cuando llega una página nueva (o cuando la carga falla).
+  useEffect(() => {
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+  }, [products, catalogError]);
+
+  const loadMore = useCallback(() => {
+    if (loadingMoreRef.current || !hasMoreRef.current) return;
+    loadingMoreRef.current = true;
     setLoadingMore(true);
     setOffset((prev) => prev + PAGE_SIZE);
-  };
+  }, []);
 
   const categoriesByParentId = categories.reduce<
     Map<number | null, CatalogCategory[]>
@@ -1100,7 +1118,7 @@ export function CatalogPage({
             className="flex-1 overflow-y-auto"
             style={{ height: "calc(100vh - 220px)" }}
           >
-            {catalogLoading ? (
+            {catalogLoading && allProducts.length === 0 ? (
               <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
                 {Array.from({ length: PAGE_SIZE }).map((_, index) => (
                   <SkeletonCard key={index} />

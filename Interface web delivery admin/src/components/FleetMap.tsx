@@ -35,6 +35,12 @@ interface Props {
   hiddenIds: Set<number>;
   selectedId: number | null;
   onSelect: (id: number | null) => void;
+  /**
+   * La pestaña del mapa está visible. El panel mantiene el mapa montado aunque
+   * no lo esté (para no recrearlo ni volver a descargar los tiles al cambiar de
+   * pestaña); con `false` solo se recalcula el tamaño del lienzo al volver.
+   */
+  active?: boolean;
 }
 
 /** Enfoque del mapa: la operación de delivery es solo en Manizales. */
@@ -225,7 +231,7 @@ function detectWebGL(): boolean {
 }
 
 const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
-  { drivers, hiddenIds, selectedId, onSelect },
+  { drivers, hiddenIds, selectedId, onSelect, active = true },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -624,6 +630,19 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Al volver a la pestaña del mapa, el contenedor pasa de `display:none` a
+   * tener tamaño otra vez. MapLibre no detecta cambios de tamaño del contenedor
+   * (solo de la ventana), así que hay que avisarle o el lienzo queda a 0×0.
+   */
+  useEffect(() => {
+    if (!active) return;
+    const map = mapRef.current;
+    if (!map) return;
+    const raf = requestAnimationFrame(() => map.resize());
+    return () => cancelAnimationFrame(raf);
+  }, [active]);
 
   // ── Cambio de estilo (capa base) ──
   useEffect(() => {

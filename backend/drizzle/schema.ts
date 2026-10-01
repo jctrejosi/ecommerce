@@ -2080,8 +2080,6 @@ export const shelves = pgTable(
     posX: integer('pos_x').default(0).notNull(),
     posY: integer('pos_y').default(0).notNull(),
     rotation: integer().default(0).notNull(), // 0 | 90
-    // Categoría a la que pertenece la estantería (organización por categorías)
-    categoryId: bigint('category_id', { mode: 'number' }),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -2095,28 +2093,30 @@ export const shelves = pgTable(
       foreignColumns: [branches.id],
       name: 'shelves_branch_id_fkey',
     }).onDelete('cascade'),
-    foreignKey({
-      columns: [table.categoryId],
-      foreignColumns: [categories.id],
-      name: 'shelves_category_id_fkey',
-    }).onDelete('set null'),
   ],
 );
 
-export const shelfRows = pgTable(
-  'shelf_rows',
+// Categorías de cada estantería (N:M): una estantería agrupa varias categorías.
+export const shelfCategories = pgTable(
+  'shelf_categories',
   {
-    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
-    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     shelfId: bigint('shelf_id', { mode: 'number' }).notNull(),
-    rowNumber: integer('row_number').notNull(),
-    label: varchar({ length: 150 }).notNull(),
+    categoryId: bigint('category_id', { mode: 'number' }).notNull(),
   },
   (table) => [
+    primaryKey({
+      columns: [table.shelfId, table.categoryId],
+      name: 'shelf_categories_pkey',
+    }),
     foreignKey({
       columns: [table.shelfId],
       foreignColumns: [shelves.id],
-      name: 'shelf_rows_shelf_id_fkey',
+      name: 'shelf_categories_shelf_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.categoryId],
+      foreignColumns: [categories.id],
+      name: 'shelf_categories_category_id_fkey',
     }).onDelete('cascade'),
   ],
 );
@@ -2133,7 +2133,6 @@ export const productLocations = pgTable(
     branchId: bigint('branch_id', { mode: 'number' }).notNull(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
     shelfId: bigint('shelf_id', { mode: 'number' }).notNull(),
-    rowNumber: integer('row_number').notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
