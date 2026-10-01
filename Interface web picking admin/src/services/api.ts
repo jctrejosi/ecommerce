@@ -1,7 +1,7 @@
 // Cliente API del admin de picking — habla con el backend Nest (:3000)
 import type {
   Branch,
-  BulkAssignResult,
+  CatalogProduct,
   Category,
   CategoryOrganization,
   PickerChatConversation,
@@ -10,7 +10,6 @@ import type {
   PickerSummary,
   PickingAdminOrdersResponse,
   PickingOrderDetail,
-  ProductWithLocation,
   Shelf,
   ShelfType,
 } from '../types';
@@ -217,27 +216,9 @@ export const api = {
     }),
 
   products: (branchId: number, search?: string) =>
-    fetchJson<ProductWithLocation[]>(
+    fetchJson<CatalogProduct[]>(
       `/picking-admin/products?branchId=${branchId}${search && search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`,
     ),
-
-  setLocation: (productVariantId: number, branchId: number, shelfId: number) =>
-    fetchJson<{ success: boolean }>('/picking-admin/products/locations', {
-      method: 'POST',
-      body: JSON.stringify({ productVariantId, branchId, shelfId }),
-    }),
-
-  removeLocation: (productVariantId: number, branchId: number) =>
-    fetchJson<{ success: boolean }>(
-      `/picking-admin/products/locations/${productVariantId}?branchId=${branchId}`,
-      { method: 'DELETE' },
-    ),
-
-  bulkAssign: (branchId: number, shelfId: number, onlyUnassigned?: boolean) =>
-    fetchJson<BulkAssignResult>('/picking-admin/products/locations/bulk-assign', {
-      method: 'POST',
-      body: JSON.stringify({ branchId, shelfId, onlyUnassigned }),
-    }),
 
   metrics: () => fetchJson<PickerSummary[]>('/picking-admin/metrics'),
 

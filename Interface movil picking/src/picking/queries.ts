@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { pickingApi } from "@/api";
 import type { PickingOrder } from "@/api";
 
@@ -9,6 +9,7 @@ export const pickingKeys = {
   queue: () => ["picking", "queue"] as const,
   unreviewed: () => ["picking", "unreviewed"] as const,
   order: (id: number) => ["picking", "order", id] as const,
+  history: () => ["picking", "history"] as const,
   shelves: (branchId: number) => ["picking", "shelves", branchId] as const,
   locations: (branchId: number, variantIds: number[]) =>
     ["picking", "locations", branchId, variantIds.join(",")] as const,
@@ -40,6 +41,22 @@ export function useOrder(id: number | undefined) {
     queryKey: pickingKeys.order(id ?? 0),
     queryFn: () => pickingApi.detail(id!),
     enabled: id !== undefined && Number.isFinite(id),
+  });
+}
+
+/**
+ * Historial del picker paginado de 10: cada página pide el offset según lo ya
+ * cargado, para que la pantalla haga lazy load al llegar al final.
+ */
+export function useHistory() {
+  return useInfiniteQuery({
+    queryKey: pickingKeys.history(),
+    queryFn: ({ pageParam }) => pickingApi.history(pageParam),
+    initialPageParam: 0,
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage.hasMore) return undefined;
+      return allPages.reduce((n, page) => n + page.orders.length, 0);
+    },
   });
 }
 

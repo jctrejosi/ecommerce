@@ -26,6 +26,8 @@ export interface PickerChatMessage {
 export interface PickerConversation {
   pickerId: number;
   fullName: string;
+  /** Usuario de login del picker; el admin lo usa como "código" al buscar. */
+  username: string;
   email: string;
   isActive: boolean;
   unread: number;
@@ -154,6 +156,7 @@ export class PickerChatService {
         id: users.id,
         firstName: users.firstName,
         lastName: users.lastName,
+        username: users.username,
         email: users.email,
         isActive: users.isActive,
       })
@@ -199,6 +202,7 @@ export class PickerChatService {
           return {
             pickerId: Number(p.id),
             fullName: `${p.firstName ?? ''} ${p.lastName ?? ''}`.trim(),
+            username: p.username,
             email: p.email,
             isActive: p.isActive,
             unread: unreadBy.get(Number(p.id)) ?? 0,

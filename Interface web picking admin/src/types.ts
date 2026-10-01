@@ -45,7 +45,7 @@ export interface CategoryOrgShelf {
   productCount: number;
 }
 
-/** Producto de una categoría con su ubicación. */
+/** Producto de una categoría (la ubicación la determina la categoría). */
 export interface CategoryOrgProduct {
   productVariantId: number;
   productId: number;
@@ -53,9 +53,6 @@ export interface CategoryOrgProduct {
   sku: string | null;
   barcode: string | null;
   stock: number;
-  shelfId: number | null;
-  shelfCode: string | null;
-  shelfName: string | null;
 }
 
 export interface CategoryOrganization {
@@ -64,21 +61,22 @@ export interface CategoryOrganization {
   products: CategoryOrgProduct[];
 }
 
-export interface ProductWithLocation {
+/**
+ * Producto del catálogo tal como lo muestra la pestaña Productos (informativa).
+ *
+ * La ubicación no se asigna al producto: el producto pertenece a una categoría
+ * y la categoría es la que se asocia a estanterías. Por eso aquí se exponen las
+ * categorías del producto y las estanterías que se derivan de ellas.
+ */
+export interface CatalogProduct {
   productVariantId: number;
   productId: number;
   productName: string;
   sku: string | null;
   barcode: string | null;
   stock: number;
-  shelfId: number | null;
-  shelfCode: string | null;
-  shelfName: string | null;
-}
-
-export interface BulkAssignResult {
-  assigned: number;
-  total: number;
+  categories: { id: number; name: string }[];
+  shelves: { id: number; code: string; name: string; color: string }[];
 }
 
 // ── Métricas de pickers ──
@@ -212,6 +210,8 @@ export interface PickerChatMessage {
 export interface PickerChatConversation {
   pickerId: number;
   fullName: string;
+  /** Usuario de login del picker (se usa como "código" para buscarlo). */
+  username: string;
   email: string;
   isActive: boolean;
   unread: number;

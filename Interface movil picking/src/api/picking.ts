@@ -4,6 +4,7 @@ import type {
   LoginResponse,
   PickerChatMessage,
   PickerChatSummary,
+  PickingHistoryResponse,
   PickingLocation,
   PickingOrder,
   PickingShelf,
@@ -54,6 +55,10 @@ export const pickingApi = {
   unreviewedCount: () => get<{ count: number }>("/picking/orders/unreviewed-count"),
 
   detail: (id: number) => get<PickingOrder>(`/picking/orders/${id}`),
+
+  /** Historial del picker (pedidos cerrados en caja), paginado de 10. */
+  history: (offset = 0) =>
+    get<PickingHistoryResponse>("/picking/history", { offset }),
 
   markReviewed: (id: number) =>
     post<{ reviewed: boolean }>(`/picking/orders/${id}/reviewed`),

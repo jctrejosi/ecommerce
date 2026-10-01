@@ -4,7 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import { PickingGateway } from './picking.gateway';
 import { OrdersGateway } from '../orders/orders.gateway';
@@ -47,6 +47,18 @@ function isPickingTrigger(status: string): boolean {
 
 function isPickedDone(status: string): boolean {
   return (PICKED_DONE_STATUSES as readonly string[]).includes(status);
+}
+
+/**
+ * Normaliza un código escaneado para compararlo con el catálogo.
+ *
+ * Un mismo producto puede venir como UPC-A (12 dígitos) o EAN-13 (13, con un
+ * cero delante); el lector entrega una u otra según el símbolo impreso, así que
+ * se equiparan a EAN-13. También recorta espacios que algunos lectores añaden.
+ */
+function normalizeScannedCode(code: string): string {
+  const trimmed = code.trim();
+  return /^\d{12}$/.test(trimmed) ? `0${trimmed}` : trimmed;
 }
 
 type QueueTab = 'nuevo' | 'preparando' | 'completado' | 'todos';
@@ -222,6 +234,59 @@ export class PickingService {
         ),
       );
     return { count: row?.count ?? 0 };
+  }
+
+  /**
+   * Historial del picker: pedidos que alistó y cerró en caja (`completed_at`),
+   * del más reciente al más antiguo, paginado (lazy load de la app).
+   */
+  async history(pickerId: number, offset = 0, limit = 10) {
+    const where = and(
+      eq(orders.pickerId, pickerId),
+      isNotNull(orders.completedAt),
+    );
+
+    const [countRow] = await this.db
+      .select({ total: sql<number>`COUNT(*)::int` })
+      .from(orders)
+      .where(where);
+
+    const rows = await this.db
+      .select({
+        id: orders.id,
+        referenceCode: orders.referenceCode,
+        customerName: orders.customerName,
+        status: orders.status,
+        grandTotal: orders.grandTotal,
+        createdAt: orders.createdAt,
+        pickedAt: orders.pickedAt,
+        completedAt: orders.completedAt,
+        itemsCount: sql<number>`(SELECT COUNT(*)::int FROM order_items oi WHERE oi.order_id = ${orders.id})`,
+        totalPieces: sql<number>`(SELECT COALESCE(SUM(oi.quantity),0)::int FROM order_items oi WHERE oi.order_id = ${orders.id})`,
+      })
+      .from(orders)
+      .where(where)
+      .orderBy(desc(orders.completedAt), desc(orders.id))
+      .limit(limit)
+      .offset(offset);
+
+    const total = Number(countRow?.total ?? 0);
+    return {
+      orders: rows.map((r) => ({
+        id: Number(r.id),
+        referenceCode: r.referenceCode,
+        customerName: r.customerName ?? 'Cliente',
+        status: r.status,
+        grandTotal: Number(r.grandTotal),
+        createdAt: r.createdAt,
+        pickedAt: r.pickedAt,
+        completedAt: r.completedAt,
+        itemsCount: r.itemsCount,
+        totalPieces: r.totalPieces,
+      })),
+      total,
+      hasMore: offset + rows.length < total,
+    };
   }
 
   /** Detalle del pedido con items (barcode, PLU, cantidades alistadas). */
@@ -434,9 +499,12 @@ export class PickingService {
 
     const pending = items.filter((i) => i.pickedQty < i.quantity);
 
-    // Buscar coincidencia del código con un item pendiente (barcode o PLU)
+    // Buscar coincidencia del código con un item pendiente (barcode/INEAN o PLU).
+    // Se normalizan ambos lados (UPC-A ↔ EAN-13) para que el código leído por el
+    // lector coincida aunque el formato impreso difiera del almacenado.
+    const target = normalizeScannedCode(code);
     const matched = pending.find((i) =>
-      [i.barcode, i.plu].filter(Boolean).includes(code),
+      [i.barcode, i.plu].some((v) => v != null && normalizeScannedCode(v) === target),
     );
 
     if (!matched) {

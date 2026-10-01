@@ -1672,81 +1672,114 @@ export class CatalogService {
 
     const allowedCategoryBigIntIds = allowedCategoryIds.map((id) => BigInt(id));
 
-    // Búsqueda semántica + tolerante a errores.
-    //   1) Full-text (tsvector/tsquery, español + immutable_unaccent): insensible
-    //      a tildes/ñ, con stemming y palabras en cualquier orden.
+    // Búsqueda tolerante a errores y por palabras.
+    //   1) Full-text (tsvector/tsquery en español + immutable_unaccent):
+    //      insensible a tildes/ñ, con stemming y palabras en cualquier orden.
     //      immutable_unaccent() es un wrapper IMMUTABLE de unaccent() para poder
     //      indexarlo (unaccent() es STABLE y no indexa). Ver db/docker/init.sql.
-    //   2) Fuzzy por token (pg_trgm / strict_word_similarity): tolera tipeos,
-    //      incluso en frases ("celular samsng" → "Samsung Galaxy celular").
-    //      CADA token debe tener una palabra similar en nombre+descripción; los
-    //      tokens cortos (artículos/preposiciones) los maneja el full-text.
+    //   2) Fuzzy por palabra (pg_trgm / strict_word_similarity): tolera tipeos.
     //   3) Códigos (plu/barcode/externalId): lookup exacto por ILIKE.
-    const searchTokens = search?.split(/\s+/).filter(Boolean) ?? [];
-    const fuzzyTokens = searchTokens
+    //
+    // Semántica OR: basta con que coincida UNA palabra de la frase, así "ads
+    // asd" devuelve los productos que matcheen cualquiera de las dos (antes se
+    // exigían TODAS y las frases no encontraban nada).
+    //
+    // Costo: el tsvector se evalúa UNA sola vez por fila (los tsquery de cada
+    // palabra se combinan con `||`) y el orden ya NO vuelve a tocar el tsvector;
+    // usa señales baratas sobre el nombre. Cada referencia extra al tsvector
+    // multiplica el tiempo, porque es un seq scan de ~11k filas.
+    const searchTokens = Array.from(
+      new Set(search?.split(/\s+/).filter(Boolean) ?? []),
+    ).slice(0, 8);
+    // Normalizados (sin tildes, minúsculas) para full-text, difuso y nombre.
+    const normalizedTokens = searchTokens
       .map((t) =>
         t
           .normalize('NFD')
           .replace(/[\u0300-\u036f]/g, '')
           .toLowerCase(),
       )
-      .filter((t) => t.length >= 3);
+      .filter(Boolean);
+    const fuzzyTokens = normalizedTokens.filter((t) => t.length >= 3);
+    // Tokens sin comodines, para patrones LIKE.
+    const likeTokens = normalizedTokens
+      .map((t) => t.replace(/[%_\\]/g, ''))
+      .filter(Boolean);
 
     const searchDoc = search
       ? sql`to_tsvector('spanish'::regconfig, public.immutable_unaccent(${products.name} || ' ' || COALESCE(${products.description}, '')))`
       : undefined;
-    const searchQuery = search
-      ? sql`plainto_tsquery('spanish'::regconfig, public.immutable_unaccent(${search}))`
-      : undefined;
-    const fullText = sql`unaccent(lower(${products.name} || ' ' || COALESCE(${products.description}, '')))`;
+    const productName = sql`unaccent(lower(${products.name}))`;
 
-    // Coincidencia difusa: cada token debe tener una palabra similar en el texto.
-    // strict_word_similarity exige coincidencia con una palabra completa y separa
-    // mejor los tipeos reales (≥0.44) de los falsos positivos (≤0.22).
-    const fuzzyTokenMatches = fuzzyTokens.map(
+    // 1) Full-text por palabra: los tsquery se unen con OR (`||`) y se evalúan
+    //    contra un único tsvector. plainto_tsquery() por token es seguro ante
+    //    caracteres raros y descarta stopwords ('de', 'la', ...).
+    const tokenTsQueries = searchTokens.map(
       (token) =>
-        sql`strict_word_similarity(unaccent(lower(${token})), ${fullText}) > 0.35`,
+        sql`plainto_tsquery('spanish'::regconfig, public.immutable_unaccent(${token}))`,
     );
-    const fuzzyTokenScores = fuzzyTokens.map(
-      (token) =>
-        sql`strict_word_similarity(unaccent(lower(${token})), ${fullText})`,
-    );
-    const fuzzyCondition =
-      fuzzyTokenMatches.length > 0 ? and(...fuzzyTokenMatches) : undefined;
-    const fuzzyScore =
-      fuzzyTokenScores.length > 0
-        ? sql`((${sql.join(fuzzyTokenScores, sql` + `)}) / ${fuzzyTokenScores.length})`
+    const anyTokenFts =
+      searchDoc && tokenTsQueries.length > 0
+        ? sql`${searchDoc} @@ (${sql.join(tokenTsQueries, sql` || `)})`
         : undefined;
 
+    // 2) Difuso por palabra (tolera tipeos): basta con que coincida UNA.
+    // Se compara contra el NOMBRE (no la descripción): la similitud de trigramas
+    // sobre textos largos es lo más caro del seq scan. strict_word_similarity
+    // exige coincidencia con una palabra completa y separa mejor los tipeos
+    // reales (≥0.44) de los falsos positivos (≤0.22).
+    const fuzzyTokenMatches = fuzzyTokens
+      .slice(0, 5)
+      .map((token) => sql`strict_word_similarity(${token}, ${productName}) > 0.35`);
+    const anyTokenFuzzy =
+      fuzzyTokenMatches.length > 0 ? or(...fuzzyTokenMatches) : undefined;
+
+    // 3) Códigos (plu/barcode/externalId): lookup exacto por ILIKE.
     const codeMatch = search
       ? sql`(unaccent(${products.plu}) ILIKE unaccent(${`%${search}%`}) OR unaccent(${productVariants.barcode}) ILIKE unaccent(${`%${search}%`}) OR unaccent(${products.externalId}) ILIKE unaccent(${`%${search}%`}))`
       : undefined;
 
+    // El producto aparece si coincide alguna palabra (full-text o difuso) o un
+    // código.
     const searchCondition =
-      search && searchDoc && searchQuery && codeMatch
-        ? or(sql`${searchDoc} @@ ${searchQuery}`, fuzzyCondition, codeMatch)
+      search && codeMatch
+        ? or(anyTokenFts, anyTokenFuzzy, codeMatch)
         : undefined;
 
-    const searchOrder =
-      search && searchDoc && searchQuery && codeMatch
-        ? fuzzyCondition && fuzzyScore
-          ? sql`CASE
-                WHEN ${searchDoc} @@ ${searchQuery}
-                  THEN 3 + ts_rank(${searchDoc}, ${searchQuery})
-                WHEN ${fuzzyCondition}
-                  THEN 2 + ${fuzzyScore}
-                WHEN ${codeMatch}
-                  THEN 1
-                ELSE 0
-              END DESC, ${products.name} ASC`
-          : sql`CASE
-                WHEN ${searchDoc} @@ ${searchQuery}
-                  THEN 3 + ts_rank(${searchDoc}, ${searchQuery})
-                WHEN ${codeMatch}
-                  THEN 1
-                ELSE 0
-              END DESC, ${products.name} ASC`
-        : undefined;
+    // Relevancia (sin volver a tocar el tsvector): por cada palabra se premia,
+    // de mayor a menor, que inicie el nombre, que sea una palabra completa, que
+    // inicie una palabra y, por último, que aparezca en cualquier parte. A igual
+    // puntaje se ordena alfabéticamente (ver searchOrder).
+    const paddedName = sql`(' ' || ${productName} || ' ')`;
+    const rankTokens = likeTokens.slice(0, 4);
+    const relevanceParts = [
+      ...rankTokens.map(
+        (token) =>
+          sql`(CASE WHEN ${productName} ILIKE ${`${token}%`} THEN 0.8 ELSE 0 END)`,
+      ),
+      ...rankTokens.map(
+        (token) =>
+          sql`(CASE WHEN ${paddedName} ILIKE ${`% ${token} %`} THEN 1.0 ELSE 0 END)`,
+      ),
+      ...rankTokens.map(
+        (token) =>
+          sql`(CASE WHEN ${paddedName} ILIKE ${`% ${token}%`} THEN 0.4 ELSE 0 END)`,
+      ),
+      ...rankTokens.map(
+        (token) =>
+          sql`(CASE WHEN ${productName} ILIKE ${`%${token}%`} THEN 0.15 ELSE 0 END)`,
+      ),
+      sql`(CASE WHEN ${codeMatch} THEN 1.5 ELSE 0 END)`,
+      sql`(CASE WHEN ${products.featured} THEN 0.05 ELSE 0 END)`,
+    ];
+
+    const searchRelevance = search
+      ? sql`(${sql.join(relevanceParts, sql` + `)})`
+      : undefined;
+
+    const searchOrder = searchRelevance
+      ? sql`${searchRelevance} DESC, ${products.name} ASC, ${products.id} ASC`
+      : undefined;
 
     // Cuando se pide un conjunto explícito de productos (p. ej. un banner),
     // se preserva el orden elegido por el usuario y se ignoran los demás ordenes.
@@ -2803,22 +2836,25 @@ export class CatalogService {
   }
 
   private buildSort(sort: string | undefined): ReturnType<typeof asc>[] {
+    // El desempate por id mantiene la paginación estable cuando hay nombres o
+    // precios repetidos (sin él, un mismo producto puede aparecer en dos páginas).
+    const tieBreak = asc(products.id);
     switch (sort) {
       case 'precio-asc':
-        return [asc(productVariants.currentPrice), asc(products.name)];
+        return [asc(productVariants.currentPrice), asc(products.name), tieBreak];
       case 'precio-desc':
-        return [desc(productVariants.currentPrice), asc(products.name)];
+        return [desc(productVariants.currentPrice), asc(products.name), tieBreak];
       case 'descuento':
-        return [desc(productVariants.currentComparePrice), asc(products.name)];
+        return [desc(productVariants.currentComparePrice), asc(products.name), tieBreak];
       case 'nombre':
-        return [asc(products.name)];
+        return [asc(products.name), tieBreak];
       case 'nombre-desc':
-        return [desc(products.name)];
+        return [desc(products.name), tieBreak];
       case 'sku':
-        return [asc(productVariants.sku)];
+        return [asc(productVariants.sku), tieBreak];
       case 'relevancia':
       default:
-        return [desc(products.featured), asc(products.name)];
+        return [desc(products.featured), asc(products.name), tieBreak];
     }
   }
 

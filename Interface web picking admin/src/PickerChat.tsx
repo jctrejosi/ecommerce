@@ -266,6 +266,8 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
   const [chats, setChats] = useState<PickerChatConversation[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<{ id: number; name: string } | null>(null)
+  // Filtro de la bandeja: por nombre, usuario (código) o email.
+  const [query, setQuery] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -291,14 +293,28 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
     return onPickingEvent('picking:chat', () => void load())
   }, [open, load])
 
-  // Al cerrar se vuelve siempre a la lista.
+  // Al cerrar se vuelve siempre a la lista y se limpia el filtro.
   useEffect(() => {
-    if (!open) setSelected(null)
+    if (!open) {
+      setSelected(null)
+      setQuery('')
+    }
   }, [open])
 
   if (!open) return null
 
   const totalUnread = chats.reduce((n, c) => n + (c.unread ?? 0), 0)
+
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? chats.filter(
+        (c) =>
+          c.fullName.toLowerCase().includes(q) ||
+          c.username.toLowerCase().includes(q) ||
+          c.email.toLowerCase().includes(q) ||
+          String(c.pickerId).includes(q),
+      )
+    : chats
 
   return (
     <div
@@ -339,6 +355,16 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
               </button>
             </div>
 
+            <div className="px-4 sm:px-5 pb-3 shrink-0">
+              <input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar picker por nombre o código…"
+                autoComplete="off"
+                className="w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-amber-400/50"
+              />
+            </div>
+
             <div className="flex-1 overflow-y-auto p-2">
               {loading ? (
                 <p className="text-white/40 text-sm text-center py-10">Cargando…</p>
@@ -346,8 +372,12 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
                 <p className="text-white/30 text-sm text-center py-10">
                   Aún no hay pickers con conversación.
                 </p>
+              ) : filtered.length === 0 ? (
+                <p className="text-white/30 text-sm text-center py-10">
+                  Sin coincidencias para “{query.trim()}”.
+                </p>
               ) : (
-                chats.map((c) => {
+                filtered.map((c) => {
                   const unread = c.unread ?? 0
                   return (
                     <button
@@ -361,6 +391,7 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">
                           <span className="font-bold text-sm truncate">{c.fullName}</span>
+                          <span className="text-white/35 text-[11px] font-semibold shrink-0">@{c.username}</span>
                           {unread > 0 ? (
                             <span className="shrink-0 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center">
                               {unread > 9 ? '9+' : unread}

@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import { api, ApiError, resolveAssetUrl, setUnauthorizedHandler } from './services/api'
 import type { AuthUser, PickUser } from './services/api'
@@ -7,7 +7,7 @@ import type {
   CategoryOrgProduct,
   CategoryOrgShelf,
 } from './types'
-import type { Branch, Category, ProductWithLocation, Shelf, ShelfType } from './types'
+import type { Branch, CatalogProduct, Category, Shelf, ShelfType } from './types'
 import MapView from './MapView'
 import MetricsView from './MetricsView'
 import OrdersView from './OrdersView'
@@ -48,10 +48,9 @@ export default function App() {
   const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'orders' | 'metrics' | 'users' | 'schedule' | 'categories'>('shelves')
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [categories, setCategories] = useState<Category[]>([])
-  const [products, setProducts] = useState<ProductWithLocation[]>([])
+  const [products, setProducts] = useState<CatalogProduct[]>([])
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
-  const [onlyUnassigned, setOnlyUnassigned] = useState(false)
   const [loading, setLoading] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -386,31 +385,12 @@ export default function App() {
         ) : (
           <ProductsView
             branchId={branchId}
-            shelves={shelves}
             products={products}
             loading={loading}
             search={search}
             setSearch={setSearch}
             appliedSearch={appliedSearch}
-            setAppliedSearch={setAppliedSearch}
-            onlyUnassigned={onlyUnassigned}
-            setOnlyUnassigned={setOnlyUnassigned}
             onSearch={() => branchId && loadProducts(branchId, search)}
-            onLocationChanged={(variantId, loc) => {
-              setProducts((prev) =>
-                prev.map((p) =>
-                  p.productVariantId === variantId
-                    ? {
-                        ...p,
-                        shelfId: loc ? loc.shelfId : null,
-                        shelfCode: loc ? shelves.find((s) => s.id === loc.shelfId)?.code ?? null : null,
-                        shelfName: loc ? shelves.find((s) => s.id === loc.shelfId)?.name ?? null : null,
-                      }
-                    : p,
-                ),
-              )
-            }}
-            notify={notify}
           />
         )}
         </div>
@@ -940,129 +920,49 @@ function DeleteShelfModal({
 
 function ProductsView({
   branchId,
-  shelves,
   products,
   loading,
   search,
   setSearch,
   appliedSearch,
-  setAppliedSearch,
-  onlyUnassigned,
-  setOnlyUnassigned,
   onSearch,
-  onLocationChanged,
-  notify,
 }: {
   branchId: number | null
-  shelves: Shelf[]
-  products: ProductWithLocation[]
+  products: CatalogProduct[]
   loading: boolean
   search: string
   setSearch: (s: string) => void
   appliedSearch: string
-  setAppliedSearch: (s: string) => void
-  onlyUnassigned: boolean
-  setOnlyUnassigned: (b: boolean) => void
   onSearch: () => void
-  onLocationChanged: (variantId: number, loc: { shelfId: number } | null) => void
-  notify: (m: string) => void
 }) {
   const [visibleCount, setVisibleCount] = useState(INFINITE_STEP)
-  const [bulkShelfId, setBulkShelfId] = useState<number | ''>('')
-  const [bulkBusy, setBulkBusy] = useState(false)
-  // Borradores de ubicación por variante
-  const [drafts, setDrafts] = useState<Record<number, { shelfId: number }>>({})
-  const [savingId, setSavingId] = useState<number | null>(null)
-  // Listado local para refrescar tras una asignación masiva sin perder la búsqueda
-  const [localProducts, setLocalProducts] = useState<ProductWithLocation[] | null>(null)
-  const shownProducts = localProducts ?? products
   const sentinelRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    setLocalProducts(null)
     setVisibleCount(INFINITE_STEP)
   }, [branchId, appliedSearch])
 
-  useEffect(() => {
-    setVisibleCount(INFINITE_STEP)
-  }, [onlyUnassigned])
-
-  // Sin estantería primero, luego el resto (con separador)
-  const ordered = useMemo(() => {
-    const list = onlyUnassigned ? shownProducts.filter((p) => p.shelfId == null) : shownProducts
-    return [...list.filter((p) => p.shelfId == null), ...list.filter((p) => p.shelfId != null)]
-  }, [shownProducts, onlyUnassigned])
-  const unassignedCount = useMemo(
-    () => ordered.filter((p) => p.shelfId == null).length,
-    [ordered],
+  const visible = products.slice(0, visibleCount)
+  const withoutShelf = useMemo(
+    () => products.filter((p) => p.shelves.length === 0).length,
+    [products],
   )
-  const visible = ordered.slice(0, visibleCount)
 
   // Lazy load infinito: cuando el sentinel entra en pantalla, cargar más
   useEffect(() => {
     const el = sentinelRef.current
-    if (!el || visible.length >= ordered.length) return
+    if (!el || visible.length >= products.length) return
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries[0]?.isIntersecting) {
-          setVisibleCount((v) => Math.min(ordered.length, v + INFINITE_STEP))
+          setVisibleCount((v) => Math.min(products.length, v + INFINITE_STEP))
         }
       },
       { rootMargin: '400px' },
     )
     obs.observe(el)
     return () => obs.disconnect()
-  }, [ordered.length, visible.length])
-
-  async function saveLocation(p: ProductWithLocation) {
-    if (!branchId) return
-    const draft = drafts[p.productVariantId]
-    if (!draft) return
-    setSavingId(p.productVariantId)
-    try {
-      await api.setLocation(p.productVariantId, branchId, draft.shelfId)
-      onLocationChanged(p.productVariantId, draft)
-      setDrafts((d) => { const { [p.productVariantId]: _, ...rest } = d; return rest })
-      notify('Ubicación guardada')
-    } catch (e) {
-      notify(e instanceof ApiError ? e.message : 'Error guardando la ubicación')
-    } finally {
-      setSavingId(null)
-    }
-  }
-
-  async function removeLocation(p: ProductWithLocation) {
-    if (!branchId) return
-    setSavingId(p.productVariantId)
-    try {
-      await api.removeLocation(p.productVariantId, branchId)
-      onLocationChanged(p.productVariantId, null)
-      setDrafts((d) => { const { [p.productVariantId]: _, ...rest } = d; return rest })
-      notify('Ubicación quitada')
-    } catch (e) {
-      notify(e instanceof ApiError ? e.message : 'Error quitando la ubicación')
-    } finally {
-      setSavingId(null)
-    }
-  }
-
-  async function doBulk(onlyUnassigned: boolean) {
-    if (!branchId || bulkShelfId === '') {
-      notify('Selecciona una estantería para la asignación masiva')
-      return
-    }
-    setBulkBusy(true)
-    try {
-      const r = await api.bulkAssign(branchId, Number(bulkShelfId), onlyUnassigned)
-      notify(`Asignados ${r.assigned} producto(s)${onlyUnassigned ? ' sin ubicación' : ''} de ${r.total}`)
-      const list = await api.products(branchId, appliedSearch)
-      setLocalProducts(list)
-    } catch (e) {
-      notify(e instanceof ApiError ? e.message : 'Error en la asignación masiva')
-    } finally {
-      setBulkBusy(false)
-    }
-  }
+  }, [products.length, visible.length])
 
   if (!branchId) {
     return <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
@@ -1072,138 +972,81 @@ function ProductsView({
     <div className="flex flex-col" style={{ height: 'calc(100dvh - 210px)', minHeight: 320 }}>
       {/* Filtros y encabezados — fijos (no hacen scroll) */}
       <div className="shrink-0">
-        {/* Barra de búsqueda */}
         <div className="flex flex-wrap gap-3 items-center mb-4">
-        <div className="flex-1 min-w-[220px] flex gap-2">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && onSearch()}
-            placeholder="Buscar producto, SKU o código de barras…"
-            className="flex-1 bg-[#161618] border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-amber-400"
-          />
-          <button onClick={onSearch} className="px-4 py-2.5 rounded-xl bg-white/10 text-sm font-bold hover:bg-white/15">
-            Buscar
-          </button>
+          <div className="flex-1 min-w-[220px] flex gap-2">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && onSearch()}
+              placeholder="Buscar producto, SKU o código de barras…"
+              className="flex-1 bg-[#161618] border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-amber-400"
+            />
+            <button onClick={onSearch} className="px-4 py-2.5 rounded-xl bg-white/10 text-sm font-bold hover:bg-white/15">
+              Buscar
+            </button>
+          </div>
         </div>
-        <label className="flex items-center gap-2 text-sm text-white/50 font-medium cursor-pointer">
-          <input
-            type="checkbox"
-            checked={onlyUnassigned}
-            onChange={(e) => setOnlyUnassigned(e.target.checked)}
-            className="accent-amber-400 w-4 h-4"
-          />
-          Solo sin ubicación
-        </label>
-      </div>
 
-      {/* Asignación masiva */}
-      <div className="bg-[#161618] border border-white/10 rounded-2xl p-4 mb-5">
-        <p className="text-white/40 text-xs font-semibold mb-2">Asignación masiva — solo productos sin ubicación</p>
-        <div className="flex flex-wrap gap-2 items-center">
-          <select
-            value={bulkShelfId}
-            onChange={(e) => setBulkShelfId(e.target.value ? Number(e.target.value) : '')}
-            className="bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
-          >
-            <option value="">Estantería…</option>
-            {shelves.map((s) => (
-              <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
-            ))}
-          </select>
-          <button
-            onClick={() => doBulk(true)}
-            disabled={bulkBusy}
-            title="Asigna solo los productos que aún no tienen estantería (no toca los ya asignados)"
-            className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40"
-          >
-            {bulkBusy ? 'Asignando…' : 'Solo sin ubicación'}
-          </button>
-        </div>
-        <p className="w-full text-white/30 text-xs font-medium mt-2 leading-relaxed">
-          <span className="text-white/60 font-bold">Solo sin ubicación</span>: asigna únicamente los productos que
-          aún no tienen estantería (no toca los ya asignados).
+        <p className="text-white/40 text-xs font-medium mb-1">
+          {loading ? 'Cargando…' : `${products.length} producto(s)`}
+          {appliedSearch ? ` para “${appliedSearch}”` : ''}
         </p>
-      </div>
-
-      <p className="text-white/40 text-xs font-medium mb-3">
-        {loading ? 'Cargando…' : `${ordered.length} producto(s) · ${unassignedCount} sin estantería`}
-        {appliedSearch ? ` para “${appliedSearch}”` : ''}
-      </p>
+        <p className="text-white/30 text-[11px] font-medium mb-3 leading-relaxed">
+          Información de referencia: la ubicación de un producto es la de su categoría.
+          {withoutShelf > 0 ? ` ${withoutShelf} producto(s) sin estantería.` : ''}
+        </p>
       </div>
 
       {/* Lista — único elemento con scroll */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 pb-4">
-        {unassignedCount > 0 && (
-          <div className="flex items-center gap-3 pt-2 pb-1">
-            <span className="text-amber-400 text-xs font-extrabold uppercase tracking-wider">Sin estantería asignada ({unassignedCount})</span>
-            <div className="flex-1 h-px bg-white/10" />
-          </div>
-        )}
-        {visible.map((p, i) => {
-          const showAssignedHeader = !onlyUnassigned && unassignedCount > 0 && i === unassignedCount
-          const draft = drafts[p.productVariantId]
-          const shelfId = draft ? draft.shelfId : p.shelfId
-          const dirty = !!draft
-          return (
-            <Fragment key={p.productVariantId}>
-              {showAssignedHeader && (
-                <div className="flex items-center gap-3 pt-3 pb-1">
-                  <span className="text-white/40 text-xs font-extrabold uppercase tracking-wider">Con estantería asignada ({ordered.length - unassignedCount})</span>
-                  <div className="flex-1 h-px bg-white/10" />
-                </div>
+        {visible.map((p) => (
+          <div
+            key={p.productVariantId}
+            className="bg-[#161618] border border-white/10 rounded-xl px-4 py-3"
+          >
+            <p className="font-bold text-sm truncate">{p.productName}</p>
+            <p className="text-white/35 text-xs font-medium truncate">
+              SKU {p.sku ?? '—'} · {p.barcode ?? 'sin código'} · stock {p.stock}
+            </p>
+            <div className="flex flex-wrap items-center gap-1.5 mt-2">
+              {/* Categorías del producto */}
+              {p.categories.length > 0 ? (
+                p.categories.map((c) => (
+                  <span
+                    key={c.id}
+                    className="px-2 py-0.5 rounded-md bg-white/5 border border-white/10 text-white/60 text-[10px] font-semibold"
+                  >
+                    {c.name}
+                  </span>
+                ))
+              ) : (
+                <span className="text-white/25 text-[11px] font-medium">Sin categoría</span>
               )}
-              <div className="bg-[#161618] border border-white/10 rounded-xl px-4 py-3 flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1 basis-56">
-                  <p className="font-bold text-sm truncate">{p.productName}</p>
-                  <p className="text-white/35 text-xs font-medium truncate">
-                    SKU {p.sku ?? '—'} · {p.barcode ?? 'sin código'} · stock {p.stock}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                <select
-                  value={shelfId ?? ''}
-                  onChange={(e) => {
-                    const sid = e.target.value ? Number(e.target.value) : null
-                    setDrafts((d) => {
-                      if (sid == null) return d
-                      return { ...d, [p.productVariantId]: { shelfId: sid } }
-                    })
-                  }}
-                  className="bg-[#0C0C0D] border border-white/10 rounded-lg px-2.5 py-2 text-sm outline-none focus:border-amber-400 max-w-[180px]"
-                >
-                  <option value="">Sin estantería</option>
-                  {shelves.map((s) => (
-                    <option key={s.id} value={s.id}>{s.code} · {s.name}</option>
-                  ))}
-                </select>
-                {dirty ? (
-                  <button
-                    onClick={() => saveLocation(p)}
-                    disabled={savingId === p.productVariantId}
-                    className="px-3 py-2 rounded-lg bg-amber-400 text-[#0C0C0D] text-xs font-extrabold disabled:opacity-40"
+              {/* Estanterías derivadas de la categoría */}
+              <span className="mx-1 text-white/15">·</span>
+              {p.shelves.length > 0 ? (
+                p.shelves.map((s) => (
+                  <span
+                    key={s.id}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-400/10 border border-amber-400/30 text-amber-300 text-[10px] font-bold"
                   >
-                    Guardar
-                  </button>
-                ) : p.shelfId != null ? (
-                  <button
-                    onClick={() => removeLocation(p)}
-                    disabled={savingId === p.productVariantId}
-                    className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold disabled:opacity-40"
-                  >
-                    Quitar
-                  </button>
-                ) : null}
-                </div>
-              </div>
-            </Fragment>
-          )
-        })}
+                    <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                    {s.code} · {s.name}
+                  </span>
+                ))
+              ) : (
+                <span className="px-2 py-0.5 rounded-md bg-white/5 border border-dashed border-white/15 text-white/35 text-[10px] font-semibold">
+                  Sin estantería
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
         {visible.length === 0 && !loading && (
           <p className="text-white/30 text-sm text-center py-10">Sin resultados.</p>
         )}
         {/* Sentinel del lazy load infinito */}
-        {visible.length < ordered.length && (
+        {visible.length < products.length && (
           <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4">
             <div className="w-4 h-4 rounded-full border-2 border-white/15 border-t-amber-400 animate-spin" />
             <span className="text-white/30 text-xs font-semibold">Cargando más…</span>
@@ -1775,74 +1618,14 @@ function ScheduleView({
 
 // ─── Categorías: organizar estanterías y productos por categoría ─────────────
 
-function OrgProductRow({
-  product,
-  org,
-  branchId,
-  onMoved,
-  notify,
-}: {
-  product: CategoryOrgProduct
-  org: CategoryOrganization
-  branchId: number
-  onMoved: () => void
-  notify: (m: string) => void
-}) {
-  const [shelfId, setShelfId] = useState<number | null>(product.shelfId)
-  const [busy, setBusy] = useState(false)
-
-  const dirty = shelfId !== product.shelfId
-
-  const save = async () => {
-    setBusy(true)
-    try {
-      if (shelfId === null) {
-        await api.removeLocation(product.productVariantId, branchId)
-      } else {
-        await api.setLocation(product.productVariantId, branchId, shelfId)
-      }
-      notify('Ubicación actualizada')
-      onMoved()
-    } catch (e) {
-      notify(e instanceof ApiError ? e.message : 'No se pudo mover el producto')
-    } finally {
-      setBusy(false)
-    }
-  }
-
+function OrgProductRow({ product }: { product: CategoryOrgProduct }) {
   return (
     <tr className="border-t border-white/5">
       <td className="py-2.5 pr-3">
-        <p className="text-sm font-semibold truncate max-w-[220px]">{product.productName}</p>
+        <p className="text-sm font-semibold truncate max-w-[320px]">{product.productName}</p>
         <p className="text-white/35 text-[10px] font-medium">
-          SKU {product.sku ?? '—'} · stock {product.stock}
+          SKU {product.sku ?? '—'} · {product.barcode ?? 'sin código'} · stock {product.stock}
         </p>
-      </td>
-      <td className="py-2.5 pr-3 text-xs text-white/60">
-        {product.shelfCode ? product.shelfCode : 'Sin ubicación'}
-      </td>
-      <td className="py-2.5 pr-2">
-        <select
-          value={shelfId ?? ''}
-          onChange={(e) => setShelfId(e.target.value ? Number(e.target.value) : null)}
-          className="bg-white/5 border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-amber-400 max-w-[160px]"
-        >
-          <option value="">— Sin ubicación —</option>
-          {org.shelves.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.code} · {s.name}
-            </option>
-          ))}
-        </select>
-      </td>
-      <td className="py-2.5 text-right">
-        <button
-          onClick={() => void save()}
-          disabled={busy || !dirty}
-          className="text-xs font-bold text-amber-400 hover:underline disabled:opacity-30"
-        >
-          {busy ? '…' : 'Mover'}
-        </button>
       </td>
     </tr>
   )
@@ -2046,21 +1829,11 @@ function CategoriesView({
                   <thead>
                     <tr className="text-white/35 text-[10px] font-bold uppercase tracking-wider text-left border-b border-white/5 bg-white/5">
                       <th className="px-4 py-2.5">Producto</th>
-                      <th className="px-4 py-2.5">Ubicación actual</th>
-                      <th className="px-4 py-2.5">Mover a</th>
-                      <th className="px-4 py-2.5" />
                     </tr>
                   </thead>
                   <tbody>
                     {org.products.map((p) => (
-                      <OrgProductRow
-                        key={p.productVariantId}
-                        product={p}
-                        org={org}
-                        branchId={branchId}
-                        notify={notify}
-                        onMoved={() => void loadOrg(selectedId)}
-                      />
+                      <OrgProductRow key={p.productVariantId} product={p} />
                     ))}
                     {org.products.length === 0 && (
                       <tr>

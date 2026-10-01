@@ -24,11 +24,16 @@ let restoredOnce = false;
 /** Ventana en la que un aviso de pedido nuevo alcanza a mostrarse como toast. */
 const ALERT_TOAST_MS = 30_000;
 
+/** Pedidos que se renderizan por página (lazy load al llegar al final). */
+const PAGE_SIZE = 10;
+
 export default function OrderListScreen() {
   const router = useRouter();
   const [filter, setFilter] = useState<QueueFilter>("nuevo");
   const [showSettings, setShowSettings] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  // Cantidad de pedidos visibles de la pestaña actual (lazy load).
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
@@ -51,6 +56,17 @@ export default function OrderListScreen() {
       ),
     [orders, filter, user?.id],
   );
+
+  // Al cambiar de pestaña se vuelve a empezar por la primera página.
+  useEffect(() => {
+    setVisibleCount(PAGE_SIZE);
+  }, [filter]);
+
+  const visible = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount],
+  );
+  const hasMore = visibleCount < filtered.length;
 
   // Aviso de pedido nuevo: lo detecta el hook global de la app (allí suenan el
   // tono y la vibración, esté donde esté el picker) y aquí solo se muestra el
@@ -148,7 +164,12 @@ export default function OrderListScreen() {
         }
       />
 
-      <Screen scroll>
+      <Screen
+        scroll
+        onEndReached={() => {
+          if (hasMore) setVisibleCount((c) => c + PAGE_SIZE);
+        }}
+      >
         {/* Filtros (control segmentado, cabe en pantallas pequeñas) */}
         <View style={styles.tabs}>
           {QUEUE_FILTERS.map((t) => {
@@ -203,7 +224,7 @@ export default function OrderListScreen() {
             {isRefetching ? (
               <Text style={styles.refreshing}>Actualizando…</Text>
             ) : null}
-            {filtered.map((order) => (
+            {visible.map((order) => (
               <OrderCard
                 key={order.id}
                 order={order}
@@ -212,6 +233,11 @@ export default function OrderListScreen() {
                 marking={markReviewed.isPending && markReviewed.variables === order.id}
               />
             ))}
+            {hasMore ? (
+              <Text style={styles.moreHint}>
+                Mostrando {visible.length} de {filtered.length} · desliza para ver más
+              </Text>
+            ) : null}
           </>
         )}
       </Screen>
@@ -328,4 +354,11 @@ const styles = StyleSheet.create({
   mb: { marginBottom: spacing(4) },
   loader: { paddingVertical: spacing(12) },
   refreshing: { color: colors.textHint, fontSize: 11, fontWeight: "600", marginBottom: spacing(2) },
+  moreHint: {
+    color: colors.textHint,
+    fontSize: 11,
+    fontWeight: "600",
+    textAlign: "center",
+    paddingVertical: spacing(3),
+  },
 });

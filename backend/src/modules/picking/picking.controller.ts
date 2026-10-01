@@ -41,6 +41,15 @@ export class PickingController {
     return this.pickingService.unreviewedCount();
   }
 
+  /** Historial del picker autenticado (pedidos que alistó), paginado de 10. */
+  @Get('history')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Historial de pedidos alistados por el picker' })
+  async history(@CurrentUser('sub') userId: bigint, @Query('offset') offset?: string) {
+    const off = Math.max(0, Number(offset) || 0);
+    return this.pickingService.history(Number(userId), off, 10);
+  }
+
   @Get('orders/:id')
   @ApiOperation({ summary: 'Detalle de un pedido con sus items (barcode, PLU, cantidades)' })
   async detail(@Param('id', ParseIntPipe) id: number) {

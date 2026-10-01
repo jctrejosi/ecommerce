@@ -149,6 +149,16 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
           {/* Acciones sobre la cuenta */}
           <View style={styles.actions}>
             <Pressable
+              onPress={() => {
+                onClose();
+                router.push("/(main)/history");
+              }}
+              style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Ionicons name="time-outline" size={18} color={colors.textMuted} />
+              <Text style={styles.actionText}>Historial de pedidos</Text>
+            </Pressable>
+            <Pressable
               onPress={changeAvatar}
               disabled={uploading}
               style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}

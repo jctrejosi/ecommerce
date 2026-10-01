@@ -543,7 +543,14 @@ export class ShelvesService {
     }
   }
 
-  /** Productos (todas las variantes) + stock en la sucursal + su ubicación. */
+  /**
+   * Productos (todas las variantes) + stock en la sucursal, con sus categorías y
+   * las estanterías que se derivan de ellas.
+   *
+   * Los productos NO se ubican a mano: pertenecen a una categoría, y esa
+   * categoría es la que se asocia a las estanterías. La vista de Productos es
+   * informativa, así que aquí se resuelve esa relación.
+   */
   async listProducts(branchId: number, search?: string) {
     await this.assertBranchExists(branchId);
 
@@ -563,9 +570,6 @@ export class ShelvesService {
         sku: productVariants.sku,
         barcode: productVariants.barcode,
         stock: inventory.stock,
-        shelfId: productLocations.shelfId,
-        shelfCode: shelves.code,
-        shelfName: shelves.name,
       })
       .from(productVariants)
       .innerJoin(products, eq(products.id, productVariants.productId))
@@ -576,29 +580,89 @@ export class ShelvesService {
           eq(inventory.branchId, branchId),
         ),
       )
-      .leftJoin(
-        productLocations,
-        and(
-          eq(productLocations.productVariantId, productVariants.id),
-          eq(productLocations.branchId, branchId),
-        ),
-      )
-      .leftJoin(shelves, eq(shelves.id, productLocations.shelfId))
       .where(conditions.length > 0 ? and(...conditions) : undefined)
       .orderBy(asc(products.name))
       .limit(2000);
 
-    return rows.map((r) => ({
-      productVariantId: Number(r.productVariantId),
-      productId: Number(r.productId),
-      productName: r.productName,
-      sku: r.sku,
-      barcode: r.barcode,
-      stock: r.stock ?? 0,
-      shelfId: r.shelfId != null ? Number(r.shelfId) : null,
-      shelfCode: r.shelfCode ?? null,
-      shelfName: r.shelfName ?? null,
-    }));
+    const productIds = [...new Set(rows.map((r) => Number(r.productId)))];
+
+    // Categorías de cada producto (una sola query, sin N+1).
+    const catsByProduct = new Map<number, { id: number; name: string }[]>();
+    const categoryIds = new Set<number>();
+    if (productIds.length > 0) {
+      const catRows = await this.db
+        .select({
+          productId: productCategories.productId,
+          id: categories.id,
+          name: categories.name,
+        })
+        .from(productCategories)
+        .innerJoin(categories, eq(categories.id, productCategories.categoryId))
+        .where(inArray(productCategories.productId, productIds));
+      for (const c of catRows) {
+        const pid = Number(c.productId);
+        const list = catsByProduct.get(pid) ?? [];
+        list.push({ id: Number(c.id), name: c.name });
+        catsByProduct.set(pid, list);
+        categoryIds.add(Number(c.id));
+      }
+    }
+
+    // Estanterías por categoría, solo las de la sucursal activa.
+    const shelvesByCategory = new Map<
+      number,
+      { id: number; code: string; name: string; color: string }[]
+    >();
+    if (categoryIds.size > 0) {
+      const shRows = await this.db
+        .select({
+          categoryId: shelfCategories.categoryId,
+          id: shelves.id,
+          code: shelves.code,
+          name: shelves.name,
+          color: shelves.color,
+        })
+        .from(shelfCategories)
+        .innerJoin(shelves, eq(shelves.id, shelfCategories.shelfId))
+        .where(
+          and(
+            inArray(shelfCategories.categoryId, [...categoryIds]),
+            eq(shelves.branchId, branchId),
+          ),
+        )
+        .orderBy(asc(shelves.code));
+      for (const s of shRows) {
+        const cid = Number(s.categoryId);
+        const list = shelvesByCategory.get(cid) ?? [];
+        list.push({
+          id: Number(s.id),
+          code: s.code,
+          name: s.name,
+          color: s.color,
+        });
+        shelvesByCategory.set(cid, list);
+      }
+    }
+
+    return rows.map((r) => {
+      const pid = Number(r.productId);
+      const cats = catsByProduct.get(pid) ?? [];
+      // Estanterías derivadas: unión de las de sus categorías, sin repetir.
+      const shelfMap = new Map<number, { id: number; code: string; name: string; color: string }>();
+      for (const c of cats) {
+        for (const s of shelvesByCategory.get(c.id) ?? []) shelfMap.set(s.id, s);
+      }
+      return {
+        productVariantId: Number(r.productVariantId),
+        productId: pid,
+        productName: r.productName,
+        sku: r.sku,
+        barcode: r.barcode,
+        stock: r.stock ?? 0,
+        categories: cats,
+        shelves: [...shelfMap.values()],
+      };
+    });
   }
 
   /** Asignar (upsert) la ubicación de un producto en una sucursal. */

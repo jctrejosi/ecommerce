@@ -114,6 +114,27 @@ export interface PickerChatSummary {
   lastMessage: PickerChatMessage | null;
 }
 
+/** Pedido del historial del picker (ya cerrado en caja). */
+export interface PickingHistoryOrder {
+  id: number;
+  referenceCode: string;
+  customerName: string;
+  status: string;
+  grandTotal: number;
+  createdAt: string;
+  pickedAt: string | null;
+  completedAt: string | null;
+  itemsCount: number;
+  totalPieces: number;
+}
+
+/** Página del historial del picker (lazy load de 10). */
+export interface PickingHistoryResponse {
+  orders: PickingHistoryOrder[];
+  total: number;
+  hasMore: boolean;
+}
+
 /** Status que acepta `GET /picking/orders?status=`. */
 export type QueueFilter = "nuevo" | "preparando" | "completado";
 
