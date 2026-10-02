@@ -4,13 +4,15 @@ import { useAuthStore } from "@/auth/authStore";
 import { useNewOrderAlerts } from "@/notifications/newOrderAlerts";
 import { useAppBadge } from "@/notifications/badge";
 import { useNotificationRouting, usePushRegistration } from "@/notifications/register";
-import { colors } from "@/theme";
+import { makeStyles, useTheme } from "@/theme";
 
 /**
  * Área autenticada del picker. Si no hay sesión (logout manual, vencimiento por
  * fin de turno/inactividad o token rechazado con 401) se expulsa a /login.
  */
 export default function MainLayout() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const hydrated = useAuthStore((s) => s.hydrated);
   const user = useAuthStore((s) => s.user);
 
@@ -36,6 +38,7 @@ export default function MainLayout() {
  * pantalla del picker y no solo en la lista.
  */
 function AuthedArea() {
+  const { colors } = useTheme();
   useNewOrderAlerts();
   useAppBadge();
   // Push: registra el dispositivo y abre el destino al tocar una notificación.
@@ -53,11 +56,11 @@ function AuthedArea() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   loading: {
     flex: 1,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: colors.background,
   },
-});
+}));

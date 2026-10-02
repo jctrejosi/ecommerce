@@ -12,7 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { apiErrorMessage, pickingApi } from "@/api";
 import { resolveAssetUrl } from "@/api/apiConfig";
 import { useAuthStore } from "@/auth/authStore";
@@ -26,6 +26,8 @@ import { ErrorBox } from "@/ui/ErrorBox";
  * inactividad.
  */
 export default function LoginScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
@@ -162,7 +164,7 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   // space-between: logo de la tienda arriba, formulario en el centro y la marca
@@ -206,4 +208,4 @@ const styles = StyleSheet.create({
   },
   primaryDisabled: { opacity: 0.5 },
   primaryText: { color: colors.onAccent, fontSize: 15, fontWeight: "800" },
-});
+}));

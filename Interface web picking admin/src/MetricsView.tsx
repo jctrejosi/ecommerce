@@ -195,7 +195,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {data.map((p) => (
-          <div key={p.id} className="bg-[#161618] border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
+          <div key={p.id} className="bg-surface border border-white/10 rounded-2xl p-4 flex flex-col gap-3">
             {/* Nombre */}
             <div className="flex items-center gap-3">
               {/* Foto que sube el picker desde la app móvil; si no tiene, su inicial. */}
@@ -206,7 +206,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                   className="w-10 h-10 rounded-full object-cover shrink-0 bg-white/5"
                 />
               ) : (
-                <span className="w-10 h-10 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold shrink-0">
+                <span className="w-10 h-10 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold shrink-0">
                   {p.name[0]?.toUpperCase()}
                 </span>
               )}
@@ -243,7 +243,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                   <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
                 </svg>
                 {unreadOf(p.id) > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-[#0C0C0D] text-[10px] font-extrabold flex items-center justify-center">
+                  <span className="absolute -top-1.5 -right-1.5 min-w-4 h-4 px-1 rounded-full bg-amber-400 text-on-accent text-[10px] font-extrabold flex items-center justify-center">
                     {unreadOf(p.id) > 9 ? '9+' : unreadOf(p.id)}
                   </span>
                 )}
@@ -252,7 +252,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
 
             {/* Pedido actual */}
             {p.currentOrder ? (
-              <div className="bg-[#0C0C0D] border border-white/10 rounded-xl p-3">
+              <div className="bg-app border border-white/10 rounded-xl p-3">
                 <p className="text-white/35 text-[10px] font-bold uppercase tracking-wider mb-1">Alistando ahora</p>
                 <p className="font-extrabold text-sm">{p.currentOrder.referenceCode}</p>
                 <p className="text-white/45 text-xs font-medium truncate">{p.currentOrder.customerName}</p>
@@ -291,7 +291,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                 </button>
               </div>
             ) : (
-              <div className="bg-[#0C0C0D] border border-dashed border-white/10 rounded-xl p-3 text-center">
+              <div className="bg-app border border-dashed border-white/10 rounded-xl p-3 text-center">
                 <p className="text-white/30 text-xs font-medium">Sin pedido en curso</p>
               </div>
             )}
@@ -322,7 +322,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
       {history && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={() => setHistory(null)}>
           <div
-            className="w-full sm:max-w-3xl bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
+            className="w-full sm:max-w-3xl bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between shrink-0">
@@ -400,7 +400,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
           onClick={closeChat}
         >
           <div
-            className="w-full sm:max-w-lg bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
+            className="w-full sm:max-w-lg bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <ChatThread
@@ -417,7 +417,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
       {order && (
         <div className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={() => setOrder(null)}>
           <div
-            className="w-full sm:max-w-2xl bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
+            className="w-full sm:max-w-2xl bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between shrink-0">
@@ -441,8 +441,8 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
               ) : (
                 <>
                   {/* Picker asociado */}
-                  <div className="bg-[#0C0C0D] border border-white/10 rounded-xl p-3 mb-4 flex items-center gap-3">
-                    <span className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold">
+                  <div className="bg-app border border-white/10 rounded-xl p-3 mb-4 flex items-center gap-3">
+                    <span className="w-9 h-9 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold">
                       {order.pickerName?.[0]?.toUpperCase() ?? '?'}
                     </span>
                     <div className="min-w-0">
@@ -459,7 +459,7 @@ export default function MetricsView({ notify }: { notify: (m: string) => void })
                   </p>
                   <div className="space-y-2">
                     {order.items.map((it) => (
-                      <div key={it.id} className="bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
+                      <div key={it.id} className="bg-app border border-white/10 rounded-xl px-3 py-2.5 flex items-center gap-3">
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-bold truncate">{it.name}</p>
                           <p className="text-white/35 text-[10px] font-medium truncate">

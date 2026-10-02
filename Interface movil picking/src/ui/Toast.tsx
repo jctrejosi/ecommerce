@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Animated, StyleSheet, Text } from "react-native";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing } from "@/theme";
 
 interface ToastProps {
   message: string | null;
@@ -9,6 +9,7 @@ interface ToastProps {
 
 /** Aviso flotante que aparece arriba y desaparece solo. */
 export function Toast({ message, onHide }: ToastProps) {
+  const styles = useStyles();
   const translateY = useRef(new Animated.Value(-40)).current;
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -38,7 +39,7 @@ export function Toast({ message, onHide }: ToastProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   wrap: {
     position: "absolute",
     top: 8,
@@ -51,4 +52,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(3),
   },
   text: { color: colors.onAccent, fontSize: 13, fontWeight: "700" },
-});
+}));

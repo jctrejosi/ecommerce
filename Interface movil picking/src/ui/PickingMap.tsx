@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, StyleSheet, Text, View } from "react-native";
-import { colors, radius } from "@/theme";
+import { makeStyles, radius, useTheme } from "@/theme";
 import type { PickingShelf } from "@/api";
 
 const GRID_W = 14;
@@ -29,6 +29,7 @@ function BlinkBand({
   height: number;
   color: string;
 }) {
+  const styles = useStyles();
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -52,6 +53,8 @@ function BlinkBand({
 
 /** Mapa de bodega (solo lectura): dibuja las estanterías y resalta ubicaciones. */
 export function PickingMap({ shelves, active, others = [], width }: PickingMapProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const cellPx = width / GRID_W;
   const height = GRID_H * cellPx;
 
@@ -120,7 +123,7 @@ export function PickingMap({ shelves, active, others = [], width }: PickingMapPr
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   canvas: {
     backgroundColor: "#111113",
     borderRadius: radius.md,
@@ -143,4 +146,4 @@ const styles = StyleSheet.create({
   rowsArea: { flex: 1, position: "relative" },
   rowBand: { position: "absolute", left: 0, right: 0 },
   band: { position: "absolute", left: 0, right: 0 },
-});
+}));

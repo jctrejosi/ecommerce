@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing } from "@/theme";
 
 interface ErrorBoxProps {
   message: string;
@@ -7,6 +7,7 @@ interface ErrorBoxProps {
 }
 
 export function ErrorBox({ message, onRetry }: ErrorBoxProps) {
+  const styles = useStyles();
   return (
     <View style={styles.box}>
       <Text style={styles.text}>{message}</Text>
@@ -19,7 +20,7 @@ export function ErrorBox({ message, onRetry }: ErrorBoxProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   box: {
     flexDirection: "row",
     alignItems: "center",
@@ -33,4 +34,4 @@ const styles = StyleSheet.create({
   },
   text: { flex: 1, color: colors.dangerText, fontSize: 13, fontWeight: "600" },
   retry: { color: colors.dangerText, fontSize: 13, fontWeight: "800", textDecorationLine: "underline" },
-});
+}));

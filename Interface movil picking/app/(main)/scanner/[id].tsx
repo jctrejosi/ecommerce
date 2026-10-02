@@ -16,7 +16,7 @@ import {
   useCameraPermissions,
   type BarcodeScanningResult,
 } from "expo-camera";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import type { ScanResult } from "@/api";
 import { isItemDone } from "@/picking/status";
 import { useOrder, useScan } from "@/picking/queries";
@@ -41,6 +41,8 @@ const BARCODE_TYPES = [
 type ScanState = "idle" | "success" | "error";
 
 export default function ScannerScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; itemId?: string }>();
@@ -325,7 +327,7 @@ export default function ScannerScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: spacing(5) },
   rightBox: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
@@ -422,4 +424,4 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontSize: 14,
   },
-});
+}));

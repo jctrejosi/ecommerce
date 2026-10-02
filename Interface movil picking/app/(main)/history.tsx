@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { formatMoney, parseDate } from "@/lib/format";
 import { useHistory } from "@/picking/queries";
 import { Header } from "@/ui/Header";
@@ -37,6 +37,7 @@ function fmtDuration(from: string | null, to: string | null): string | null {
 }
 
 function HistoryRow({ order }: { order: PickingHistoryOrder }) {
+  const styles = useStyles();
   const duration = fmtDuration(order.pickedAt, order.completedAt);
   return (
     <View style={styles.card}>
@@ -63,6 +64,8 @@ function HistoryRow({ order }: { order: PickingHistoryOrder }) {
  * reciente al más antiguo, con lazy load de a 10 al llegar al final.
  */
 export default function HistoryScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const {
     data,
@@ -125,7 +128,7 @@ export default function HistoryScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   mb: { marginBottom: spacing(4) },
   loader: { paddingVertical: spacing(12) },
@@ -159,4 +162,4 @@ const styles = StyleSheet.create({
   customer: { color: colors.textMuted, fontSize: 14, fontWeight: "500", marginTop: spacing(2) },
   meta: { color: colors.textHint, fontSize: 12, fontWeight: "500", flexShrink: 1 },
   total: { color: colors.text, fontSize: 14, fontWeight: "700" },
-});
+}));

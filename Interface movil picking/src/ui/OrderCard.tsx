@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing } from "@/theme";
 import { formatMoney, formatTimeAgo, minutesAgo } from "@/lib/format";
 import { orderStatus } from "@/picking/status";
 import { StatusChip } from "./StatusChip";
@@ -16,6 +16,7 @@ interface OrderCardProps {
 }
 
 function PulseDot() {
+  const styles = useStyles();
   const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
@@ -33,6 +34,7 @@ function PulseDot() {
 }
 
 export function OrderCard({ order, onPress, onMarkReviewed, marking }: OrderCardProps) {
+  const styles = useStyles();
   const status = orderStatus(order);
   const isNew = status === "nuevo" && !order.reviewed;
 
@@ -87,7 +89,7 @@ export function OrderCard({ order, onPress, onMarkReviewed, marking }: OrderCard
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   card: {
     backgroundColor: colors.surface,
     borderRadius: radius.lg,
@@ -118,4 +120,4 @@ const styles = StyleSheet.create({
   total: { color: colors.text, fontSize: 14, fontWeight: "700" },
   meta: { color: colors.textHint, fontSize: 12, fontWeight: "500", marginTop: spacing(2) },
   reviewRow: { marginTop: spacing(3), alignItems: "flex-start" },
-});
+}));

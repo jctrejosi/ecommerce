@@ -170,7 +170,7 @@ export function ChatThread({
             </svg>
           </button>
         ) : null}
-        <span className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold shrink-0">
+        <span className="w-9 h-9 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold shrink-0">
           {name[0]?.toUpperCase() ?? '?'}
         </span>
         <div className="min-w-0">
@@ -204,14 +204,14 @@ export function ChatThread({
               <div
                 className={`max-w-[80%] rounded-2xl px-3 py-2 ${
                   m.senderType === 'admin'
-                    ? 'bg-amber-400 text-[#0C0C0D]'
+                    ? 'bg-amber-400 text-on-accent'
                     : 'bg-white/5 border border-white/10'
                 }`}
               >
                 <p className="text-sm font-medium whitespace-pre-wrap break-words">{m.body}</p>
                 <p
                   className={`text-[10px] font-bold mt-1 ${
-                    m.senderType === 'admin' ? 'text-[#0C0C0D]/60' : 'text-white/35'
+                    m.senderType === 'admin' ? 'text-on-accent/60' : 'text-white/35'
                   }`}
                 >
                   {fmtTime(m.createdAt)}
@@ -236,12 +236,12 @@ export function ChatThread({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           placeholder="Escribe un mensaje…"
-          className="flex-1 min-w-0 bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-amber-400/50"
+          className="flex-1 min-w-0 bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-amber-400/50"
         />
         <button
           type="submit"
           disabled={!draft.trim() || sending}
-          className="px-4 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40 shrink-0"
+          className="px-4 py-2.5 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40 shrink-0"
         >
           {sending ? 'Enviando…' : 'Enviar'}
         </button>
@@ -322,7 +322,7 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
       onClick={onClose}
     >
       <div
-        className="w-full sm:max-w-lg bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
+        className="w-full sm:max-w-lg bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[88dvh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {selected ? (
@@ -361,7 +361,7 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Buscar picker por nombre o código…"
                 autoComplete="off"
-                className="w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-amber-400/50"
+                className="w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-amber-400/50"
               />
             </div>
 

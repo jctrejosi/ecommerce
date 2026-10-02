@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { isItemDone, scannedCount } from "@/picking/status";
 import { useLocations, useOrder, useShelves } from "@/picking/queries";
 import { Header } from "@/ui/Header";
@@ -11,6 +11,8 @@ import { ErrorBox } from "@/ui/ErrorBox";
 import { PickingMap, type MapSpot } from "@/ui/PickingMap";
 
 export default function MapScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; itemId?: string }>();
@@ -137,7 +139,7 @@ export default function MapScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   content: { padding: spacing(4), gap: spacing(3) },
@@ -166,4 +168,4 @@ const styles = StyleSheet.create({
   footerInfo: { flex: 1, minWidth: 0 },
   footerLabel: { color: colors.textHint, fontSize: 11, fontWeight: "600", textTransform: "uppercase" },
   footerName: { color: colors.text, fontSize: 14, fontWeight: "700" },
-});
+}));

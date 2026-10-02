@@ -1,6 +1,6 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { isItemDone } from "@/picking/status";
 import { ProductImage } from "./ProductImage";
 import type { PickingItem } from "@/api";
@@ -11,6 +11,8 @@ interface ProductRowProps {
 }
 
 export function ProductRow({ item, onPress }: ProductRowProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const done = isItemDone(item);
   const hasLocation = !!item.shelfCode;
 
@@ -67,7 +69,7 @@ export function ProductRow({ item, onPress }: ProductRowProps) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "flex-start",
@@ -119,4 +121,4 @@ const styles = StyleSheet.create({
     borderColor: colors.borderStrong,
   },
   qty: { color: colors.textMuted, fontSize: 13, fontWeight: "800" },
-});
+}));

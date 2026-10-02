@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { QUEUE_FILTERS, pickingApi, type QueueFilter } from "@/api";
 import { useMarkReviewed, useQueue } from "@/picking/queries";
 import { usePickerChatSummary } from "@/api/picker-chat";
@@ -28,6 +28,8 @@ const ALERT_TOAST_MS = 30_000;
 const PAGE_SIZE = 10;
 
 export default function OrderListScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const [filter, setFilter] = useState<QueueFilter>("nuevo");
   const [showSettings, setShowSettings] = useState(false);
@@ -254,7 +256,7 @@ export default function OrderListScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   pickerBtn: {
     flexDirection: "row",
@@ -361,4 +363,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: spacing(3),
   },
-});
+}));

@@ -67,14 +67,14 @@ export function NotificationsBell({ enabled }: { enabled: boolean }) {
           />
         </svg>
         {unread > 0 ? (
-          <span className="absolute -top-0.5 -right-0.5 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-[#0C0C0D]">
+          <span className="absolute -top-0.5 -right-0.5 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-app">
             {unread > 9 ? '9+' : unread}
           </span>
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full mt-2 z-50 w-[320px] max-w-[80vw] rounded-2xl bg-[#141518] border border-white/10 shadow-2xl overflow-hidden">
+        <div className="absolute right-0 top-full mt-2 z-50 w-[320px] max-w-[80vw] rounded-2xl bg-surface-alt border border-white/10 shadow-2xl overflow-hidden">
           <div className="px-4 py-3 border-b border-white/10 flex items-center justify-between">
             <p className="text-sm font-extrabold text-white">Avisos de pedidos</p>
             <span className="text-[11px] font-bold text-white/40">

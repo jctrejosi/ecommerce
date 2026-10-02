@@ -7,7 +7,7 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { colors, spacing } from "@/theme";
+import { makeStyles, spacing } from "@/theme";
 
 interface ScreenProps {
   children: ReactNode;
@@ -27,6 +27,7 @@ export function Screen({
   onEndReached,
   endReachedThreshold = 240,
 }: ScreenProps) {
+  const styles = useStyles();
   const content = <View style={[styles.body, padded && styles.padded]}>{children}</View>;
 
   const handleScroll = useCallback(
@@ -58,9 +59,9 @@ export function Screen({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   scroll: { flexGrow: 1 },
   body: { flex: 1 },
   padded: { padding: spacing(4) },
-});
+}));

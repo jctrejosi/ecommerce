@@ -13,7 +13,7 @@ import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, THEME_OPTIONS, useTheme } from "@/theme";
 import { apiErrorMessage, pickingApi } from "@/api";
 import { useAuthStore } from "@/auth/authStore";
 
@@ -32,6 +32,8 @@ interface SettingsModalProps {
  * aquí no se muestra nada del servidor.
  */
 export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalProps) {
+  const styles = useStyles();
+  const { colors, preset, setPreset } = useTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const user = useAuthStore((s) => s.user);
@@ -148,6 +150,38 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
 
           {/* Acciones sobre la cuenta */}
           <View style={styles.actions}>
+            {/* Tema */}
+            <View style={styles.themeSection}>
+              <Text style={styles.themeLabel}>Tema</Text>
+              <View style={styles.themeChips}>
+                {THEME_OPTIONS.map((opt) => {
+                  const active = preset === opt.id;
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      onPress={() => setPreset(opt.id)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                      accessibilityLabel={`Tema ${opt.label}`}
+                      style={({ pressed }) => [
+                        styles.themeChip,
+                        active && styles.themeChipActive,
+                        pressed && { opacity: 0.85 },
+                      ]}
+                    >
+                      {/* Muestra de color del tema (como en el admin). */}
+                      <View style={[styles.themeSwatch, { backgroundColor: opt.swatch }]} />
+                      <Text style={[styles.themeChipText, active && styles.themeChipTextActive]}>
+                        {opt.label}
+                      </Text>
+                      <Text style={[styles.themeChipHint, active && styles.themeChipHintActive]}>
+                        {opt.hint}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
             <Pressable
               onPress={() => {
                 onClose();
@@ -204,7 +238,7 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.6)", justifyContent: "flex-end" },
   sheet: {
     backgroundColor: colors.surfaceAlt,
@@ -261,6 +295,39 @@ const styles = StyleSheet.create({
     marginTop: spacing(2),
   },
   badgeText: { color: "#FFB300", fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
+  themeSection: { gap: spacing(2) },
+  themeLabel: {
+    color: colors.textHint,
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    paddingHorizontal: spacing(1),
+  },
+  themeChips: { flexDirection: "row", flexWrap: "wrap", gap: spacing(2) },
+  themeChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: spacing(2),
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.pill,
+    paddingHorizontal: spacing(4),
+    paddingVertical: spacing(2.5),
+  },
+  themeChipActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  themeSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: colors.borderStrong,
+  },
+  themeChipText: { color: colors.textMuted, fontSize: 13, fontWeight: "800" },
+  themeChipTextActive: { color: colors.onAccent },
+  themeChipHint: { color: colors.textHint, fontSize: 10, fontWeight: "600" },
+  themeChipHintActive: { color: colors.onAccent, opacity: 0.7 },
   actions: { gap: spacing(2), marginTop: spacing(6) },
   actionBtn: {
     flexDirection: "row",
@@ -274,4 +341,4 @@ const styles = StyleSheet.create({
     paddingVertical: spacing(3),
   },
   actionText: { color: colors.textMuted, fontSize: 14, fontWeight: "700" },
-});
+}));

@@ -21,9 +21,19 @@ import { getApiUrl } from "@/api/apiConfig";
 import { connectPickingSocket, disconnectPickingSocket, connectOrderEvents, disconnectOrderEvents } from "@/socket";
 import { configureNewOrderSound } from "@/notifications/sound";
 import { configureNotifications, setPendingBadge } from "@/notifications/push";
-import { colors, spacing } from "@/theme";
+import { makeStyles, spacing, ThemeProvider, useTheme } from "@/theme";
 
 export default function RootLayout() {
+  return (
+    <ThemeProvider>
+      <RootContent />
+    </ThemeProvider>
+  );
+}
+
+function RootContent() {
+  const styles = useStyles();
+  const { colors, preset } = useTheme();
   const restore = useAuthStore((s) => s.restore);
   // El id (no el objeto) evita reconectar cuando solo se reafina el usuario.
   const userId = useAuthStore((s) => s.user?.id ?? null);
@@ -137,7 +147,7 @@ export default function RootLayout() {
         ) : (
           <ServerSearching />
         )}
-        <StatusBar style="light" />
+        <StatusBar style={preset === "light" ? "dark" : "light"} />
       </QueryClientProvider>
     </SafeAreaProvider>
   );
@@ -145,6 +155,8 @@ export default function RootLayout() {
 
 /** Pantalla mientras se busca el servidor al arrancar. */
 function ServerSearching() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View style={styles.splash}>
       <Image
@@ -164,6 +176,8 @@ function ServerSearching() {
 
 /** El arranque no encontró el backend; la app sigue buscándolo sola. */
 function ServerMissing() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View style={styles.splash}>
       <Ionicons name="cloud-offline-outline" size={44} color={colors.textHint} />
@@ -180,6 +194,8 @@ function ServerMissing() {
 
 /** Aviso no intrusivo cuando el servidor se pierde con la app ya abierta. */
 function ServerBanner({ status }: { status: "checking" | "missing" }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   // El banner va arriba del Stack, así que sin este inset el texto queda
   // debajo de la barra de estado (edge-to-edge).
   const insets = useSafeAreaInsets();
@@ -199,7 +215,7 @@ function ServerBanner({ status }: { status: "checking" | "missing" }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   splash: {
     flex: 1,
@@ -229,4 +245,4 @@ const styles = StyleSheet.create({
     borderBottomColor: colors.border,
   },
   bannerText: { flex: 1, color: colors.textMuted, fontSize: 12, fontWeight: "700" },
-});
+}));

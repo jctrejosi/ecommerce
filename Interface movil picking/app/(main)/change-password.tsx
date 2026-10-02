@@ -9,7 +9,7 @@ import {
   View,
 } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { apiErrorMessage, pickingApi } from "@/api";
 import { useKeyboardHeight } from "@/lib/keyboard";
 import { Header } from "@/ui/Header";
@@ -25,6 +25,8 @@ const MIN_LENGTH = 8;
  * cualquiera podría cambiarla desde la app abierta.
  */
 export default function ChangePasswordScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   // Con edge-to-edge Android ignora `adjustResize`: apartamos el formulario.
   const keyboardHeight = useKeyboardHeight();
@@ -133,7 +135,7 @@ export default function ChangePasswordScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   mb: { marginBottom: spacing(4) },
   label: { color: colors.textMuted, fontSize: 13, fontWeight: "700", marginBottom: spacing(1.5) },
@@ -158,4 +160,4 @@ const styles = StyleSheet.create({
   },
   primaryDisabled: { opacity: 0.5 },
   primaryText: { color: colors.onAccent, fontSize: 15, fontWeight: "800" },
-});
+}));

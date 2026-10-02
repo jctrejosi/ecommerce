@@ -2,12 +2,13 @@ import { StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing } from "@/theme";
 import { formatMoney } from "@/lib/format";
 import { useOrder } from "@/picking/queries";
 import { Button } from "@/ui/Button";
 
 export default function SuccessScreen() {
+  const styles = useStyles();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string }>();
@@ -53,6 +54,7 @@ export default function SuccessScreen() {
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  const styles = useStyles();
   return (
     <View style={styles.row}>
       <Text style={styles.rowLabel}>{label}</Text>
@@ -63,7 +65,7 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background, padding: spacing(5), justifyContent: "center" },
   hero: { alignItems: "center", gap: spacing(3), marginBottom: spacing(8) },
   check: {
@@ -88,4 +90,4 @@ const styles = StyleSheet.create({
   rowLabel: { color: colors.textFaint, fontSize: 13, fontWeight: "500" },
   rowValue: { color: colors.text, fontSize: 14, fontWeight: "700", flexShrink: 1 },
   cta: { marginTop: spacing(8) },
-});
+}));

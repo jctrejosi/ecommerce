@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 
 interface HeaderProps {
   title: string;
@@ -14,6 +14,8 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle, onBack, right, logo = false }: HeaderProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.header, { paddingTop: spacing(3) + insets.top }]}>
@@ -57,7 +59,7 @@ export function Header({ title, subtitle, onBack, right, logo = false }: HeaderP
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -96,4 +98,4 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
   title: { color: colors.text, fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
   subtitle: { color: colors.textFaint, fontSize: 12, fontWeight: "500", marginTop: 1 },
-});
+}));

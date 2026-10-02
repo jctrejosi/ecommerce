@@ -15,6 +15,7 @@ import { PickerChatDrawer } from './PickerChat'
 import { useChatAlerts } from './useChatAlerts'
 import { NotificationsBell } from './NotificationsBell'
 import { requestNotificationPermission } from './services/browserNotifications'
+import { getStoredTheme, setStoredTheme, THEME_PRESETS, type ThemePreset } from './theme'
 // Logo corporativo (DSI): lo comparten el header del panel y el pie de copyright.
 import logo from './assets/logo.png'
 // Marca de la app de picking: se conserva al pie de la pantalla de login.
@@ -59,6 +60,9 @@ export default function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Bandeja de chat del header (un hilo por picker).
   const [chatOpen, setChatOpen] = useState(false)
+  // Tema activo (preset) y su menú desplegable en las opciones del usuario.
+  const [theme, setTheme] = useState<ThemePreset>(() => getStoredTheme())
+  const [themeMenu, setThemeMenu] = useState(false)
   // Logo de la tienda configurado en el admin general (endpoint público).
   const [storeLogo, setStoreLogo] = useState<string | null>(null)
 
@@ -172,7 +176,7 @@ export default function App() {
 
   if (authState === 'checking') {
     return (
-      <div className="flex h-full items-center justify-center bg-[#0C0C0D] text-white/60 text-sm">
+      <div className="flex h-full items-center justify-center bg-app text-white/60 text-sm">
         Validando sesión…
       </div>
     )
@@ -190,10 +194,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-full flex-col overflow-hidden bg-[#0C0C0D] text-white">
+    <div className="flex h-full flex-col overflow-hidden bg-app text-white">
       {toast && (
         <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-slide-down">
-          <div className="bg-amber-400 text-[#0C0C0D] font-bold text-sm rounded-xl px-4 py-3 shadow-lg">
+          <div className="bg-amber-400 text-on-accent font-bold text-sm rounded-xl px-4 py-3 shadow-lg">
             {toast}
           </div>
         </div>
@@ -201,7 +205,7 @@ export default function App() {
 
       {/* Header. El `pr` reserva el ancho del scrollbar del contenido, para que
           el header quede en la misma columna que tabs y contenido. */}
-      <header className="sticky top-0 z-40 bg-[#0C0C0D]/90 backdrop-blur border-b border-white/8 pt-4 pb-3 pr-[var(--app-scrollbar)]">
+      <header className="sticky top-0 z-40 bg-app/90 backdrop-blur border-b border-white/8 pt-4 pb-3 pr-[var(--app-scrollbar)]">
         <div className="max-w-6xl mx-auto px-5 flex flex-col gap-3">
           {/* Fila superior: marca + usuario */}
           <div className="flex items-center gap-4">
@@ -245,14 +249,72 @@ export default function App() {
                   />
                 </svg>
                 {unread > 0 ? (
-                  <span className="absolute -top-0.5 -right-0.5 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-[#0C0C0D]">
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[19px] h-[19px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-app">
                     {unread > 9 ? '9+' : unread}
                   </span>
                 ) : null}
               </button>
 
+              {/* Opciones del usuario: tema + sesión. */}
+              <div className="flex items-center gap-2.5">
+              {/* Cambio de tema (preset) — opción del usuario. */}
+              <div className="relative">
+                <button
+                  onClick={() => setThemeMenu((v) => !v)}
+                  title="Cambiar tema"
+                  aria-label="Cambiar tema"
+                  className="shrink-0 w-11 h-11 rounded-full bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                    <path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H13a1 1 0 0 1 0-2h4a4 4 0 0 0 4-4A7 7 0 0 0 12 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                    <circle cx="7.5" cy="12" r="1.2" fill="currentColor" />
+                    <circle cx="10" cy="8" r="1.2" fill="currentColor" />
+                    <circle cx="14" cy="7.5" r="1.2" fill="currentColor" />
+                  </svg>
+                </button>
+                {themeMenu ? (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setThemeMenu(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-50 w-48 bg-surface border border-white/10 rounded-xl p-1.5 shadow-xl">
+                      <p className="px-2.5 py-1.5 text-white/40 text-[10px] font-bold uppercase tracking-wider">
+                        Tema
+                      </p>
+                      {THEME_PRESETS.map((p) => {
+                        const active = p.id === theme
+                        return (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              setStoredTheme(p.id)
+                              setTheme(p.id)
+                              setThemeMenu(false)
+                            }}
+                            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors ${
+                              active ? 'bg-amber-400 text-on-accent' : 'text-white/70 hover:bg-white/5'
+                            }`}
+                          >
+                            <span
+                              className="w-4 h-4 rounded-full border border-white/20"
+                              style={{ background: p.swatch }}
+                            />
+                            <span className="flex-1 text-left">{p.label}</span>
+                            <span
+                              className={`text-[10px] font-semibold ${
+                                active ? 'text-on-accent/70' : 'text-white/35'
+                              }`}
+                            >
+                              {p.hint}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </>
+                ) : null}
+              </div>
+
               <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-full pl-1 pr-3.5 py-1">
-                <span className="w-8 h-8 rounded-full bg-amber-400 text-[#0C0C0D] flex items-center justify-center font-extrabold text-sm">
+                <span className="w-8 h-8 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold text-sm">
                   {(authUser?.fullName ?? authUser?.username ?? '?').charAt(0).toUpperCase()}
                 </span>
                 <div className="leading-tight">
@@ -261,6 +323,7 @@ export default function App() {
                   </p>
                   <p className="text-white/40 text-[10px] font-semibold">Administrador</p>
                 </div>
+              </div>
               </div>
               <button
                 onClick={handleLogout}
@@ -284,7 +347,7 @@ export default function App() {
               onClick={() => setBranchId(null)}
               className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
                 branchId === null
-                  ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
+                  ? 'bg-amber-400 text-on-accent border-amber-400'
                   : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
               }`}
             >
@@ -296,7 +359,7 @@ export default function App() {
                 onClick={() => setBranchId(b.id)}
                 className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
                   branchId === b.id
-                    ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
+                    ? 'bg-amber-400 text-on-accent border-amber-400'
                     : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
                 }`}
               >
@@ -318,7 +381,7 @@ export default function App() {
                   key={t}
                   onClick={() => setTab(t)}
                   className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                    tab === t ? 'bg-white text-[#0C0C0D]' : 'bg-white/5 text-white/50 hover:text-white/80'
+                    tab === t ? 'bg-white text-app' : 'bg-white/5 text-white/50 hover:text-white/80'
                   }`}
                 >
                   {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'orders' ? 'Pedidos' : t === 'users' ? 'Usuarios' : t === 'schedule' ? 'Horarios' : 'Pickers'}
@@ -418,7 +481,7 @@ function CopyrightFooter() {
           <img src={logo} alt="Mercaldas" className="h-[26px] w-auto object-contain" />
         </a>
         <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
+          © 2026 Desarrollado por <span className="font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>DSI SA</span> · Todos los derechos reservados
         </p>
         <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
           Manizales, Caldas, Colombia
@@ -492,7 +555,7 @@ function ShelvesView({
         </p>
         <button
           onClick={() => { setEditing(null); setCreating(true) }}
-          className="px-4 py-2 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold hover:bg-amber-300 transition-colors"
+          className="px-4 py-2 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold hover:bg-amber-300 transition-colors"
         >
           + Nueva estantería
         </button>
@@ -507,7 +570,7 @@ function ShelvesView({
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {shelves.map((s) => (
-          <div key={s.id} className="bg-[#161618] border border-white/10 rounded-2xl overflow-hidden">
+          <div key={s.id} className="bg-surface border border-white/10 rounded-2xl overflow-hidden">
             <div className="h-1.5" style={{ backgroundColor: s.color }} />
             <div className="p-4">
               <div className="flex items-start justify-between gap-2">
@@ -549,11 +612,11 @@ function ShelvesView({
                   </button>
                   <button
                     onClick={() => setDeleting(s)}
-                    className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 flex items-center justify-center hover:bg-red-500/20"
+                    className="w-8 h-8 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 flex items-center justify-center hover:bg-red-500/20"
                     title="Eliminar"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" stroke="#F87171" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </button>
                 </div>
@@ -634,10 +697,10 @@ function ShelfModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
       <div
-        className="w-full sm:max-w-lg bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[92dvh] overflow-y-auto"
+        className="w-full sm:max-w-lg bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl max-h-[92dvh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="sticky top-0 bg-[#161618] px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
+        <div className="sticky top-0 bg-surface px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
           <h2 className="font-extrabold text-lg">
             {initial ? `Editar ${initial.code}` : 'Nueva estantería'}
             <span className="block text-white/40 text-xs font-medium">{branchName}</span>
@@ -657,7 +720,7 @@ function ShelfModal({
                 value={form.code}
                 onChange={(e) => set('code', e.target.value.toUpperCase())}
                 placeholder="A1"
-                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-amber-400"
+                className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm font-bold outline-none focus:border-amber-400"
               />
             </label>
             <label className="block">
@@ -666,7 +729,7 @@ function ShelfModal({
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
                 placeholder="Lácteos"
-                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+                className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
               />
             </label>
           </div>
@@ -677,7 +740,7 @@ function ShelfModal({
               <select
                 value={form.type}
                 onChange={(e) => set('type', e.target.value as ShelfType)}
-                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+                className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
               >
                 <option value="wall">🧱 Contra la pared</option>
                 <option value="center">🏬 Isla central</option>
@@ -688,7 +751,7 @@ function ShelfModal({
               <select
                 value={form.rotation}
                 onChange={(e) => set('rotation', Number(e.target.value) as 0 | 90)}
-                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+                className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
               >
                 <option value={0}>0° (horizontal)</option>
                 <option value={90}>90° (vertical)</option>
@@ -702,7 +765,7 @@ function ShelfModal({
               value={catSearch}
               onChange={(e) => setCatSearch(e.target.value)}
               placeholder="Buscar categoría…"
-              className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+              className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
             />
             {form.categoryIds.length > 0 && (
               <div className="flex flex-wrap gap-1.5 mt-2">
@@ -737,12 +800,12 @@ function ShelfModal({
                   >
                     <span
                       className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                        checked ? 'bg-amber-400 border-amber-400' : 'border-white/25'
+                        checked ? 'bg-amber-400 border-amber-400 text-on-accent' : 'border-white/25'
                       }`}
                     >
                       {checked ? (
                         <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                          <path d="M5 13l4 4L19 7" stroke="#0C0C0D" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+                          <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
                         </svg>
                       ) : null}
                     </span>
@@ -768,7 +831,7 @@ function ShelfModal({
                 type="number"
                 value={form.posX}
                 onChange={(e) => set('posX', Number(e.target.value) || 0)}
-                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+                className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
               />
             </label>
             <label className="block">
@@ -777,7 +840,7 @@ function ShelfModal({
                 type="number"
                 value={form.posY}
                 onChange={(e) => set('posY', Number(e.target.value) || 0)}
-                className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+                className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
               />
             </label>
           </div>
@@ -801,7 +864,7 @@ function ShelfModal({
 
         </div>
 
-        <div className="sticky bottom-0 bg-[#161618] border-t border-white/8 px-5 py-4 flex gap-3">
+        <div className="sticky bottom-0 bg-surface border-t border-white/8 px-5 py-4 flex gap-3">
           <button
             onClick={onClose}
             className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
@@ -811,7 +874,7 @@ function ShelfModal({
           <button
             onClick={() => valid && onSave(form)}
             disabled={!valid}
-            className="flex-1 py-3 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40"
+            className="flex-1 py-3 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40"
           >
             {initial ? 'Guardar cambios' : 'Crear estantería'}
           </button>
@@ -859,7 +922,7 @@ function DeleteShelfModal({
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
       <div
-        className="w-full sm:max-w-md bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl"
+        className="w-full sm:max-w-md bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
@@ -889,7 +952,7 @@ function DeleteShelfModal({
               onChange={(e) => setTyped(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') confirm() }}
               placeholder={expected}
-              className="mt-1 w-full bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-red-400"
+              className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-red-400"
             />
           </label>
 
@@ -909,6 +972,223 @@ function DeleteShelfModal({
             className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-extrabold disabled:opacity-40"
           >
             {busy ? 'Eliminando…' : 'Eliminar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal de confirmación para acciones sobre un usuario ─────────────────────
+
+type UserConfirmKind = 'active' | 'picker'
+
+/**
+ * Confirmación de acciones sensibles sobre un usuario (activar/desactivar y
+ * habilitar/quitar de picking). Como el borrado de estanterías, exige teclear
+ * el nombre para habilitar el botón, así se evita cambiar accesos por un clic
+ * accidental.
+ */
+function ConfirmUserModal({
+  user,
+  kind,
+  onClose,
+  onConfirm,
+}: {
+  user: PickUser
+  kind: UserConfirmKind
+  onClose: () => void
+  onConfirm: () => Promise<void>
+}) {
+  // Si el usuario no tiene nombre, se usa el usuario como texto a teclear.
+  const expected = user.name.trim() || user.username.trim()
+  const [typed, setTyped] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const matches = typed.trim().toLowerCase() === expected.toLowerCase()
+
+  // Desactivar o quitar de picking quitan acceso; activar/habilitar lo dan.
+  const destructive = kind === 'active' ? user.isActive : user.isPicker
+  const title =
+    kind === 'active'
+      ? user.isActive
+        ? 'Desactivar usuario'
+        : 'Activar usuario'
+      : user.isPicker
+        ? 'Quitar de picking'
+        : 'Habilitar picking'
+  const confirmLabel =
+    kind === 'active'
+      ? user.isActive
+        ? 'Desactivar'
+        : 'Activar'
+      : user.isPicker
+        ? 'Quitar de picking'
+        : 'Habilitar'
+  const message =
+    kind === 'active'
+      ? user.isActive
+        ? 'Se bloqueará el acceso al panel y a la app móvil de:'
+        : 'Se restablecerá el acceso al panel y a la app móvil de:'
+      : user.isPicker
+        ? 'Dejará de aparecer en el login de la app móvil y no podrá recibir pedidos:'
+        : 'Aparecerá en el login de la app móvil y podrá recibir pedidos:'
+
+  async function confirm() {
+    if (!matches || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await onConfirm()
+      onClose()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo actualizar el usuario')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
+          <h2 className={`font-extrabold text-lg ${destructive ? 'text-red-400' : 'text-amber-400'}`}>{title}</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center" title="Cerrar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-white/70 leading-relaxed">
+            {message} <span className="font-bold text-white">{user.name || user.username}</span>
+          </p>
+
+          <label className="block">
+            <span className="text-white/50 text-xs font-semibold">
+              Escribe <span className="font-bold text-amber-300">{expected}</span> para confirmar
+            </span>
+            <input
+              autoFocus
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirm() }}
+              placeholder={expected}
+              className={`mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none ${destructive ? 'focus:border-red-400' : 'focus:border-amber-400'}`}
+            />
+          </label>
+
+          {error && <p className="text-red-400 text-xs font-medium">{error}</p>}
+        </div>
+
+        <div className="border-t border-white/8 px-5 py-4 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirm}
+            disabled={!matches || busy}
+            className={`flex-1 py-3 rounded-xl text-sm font-extrabold disabled:opacity-40 ${
+              destructive ? 'bg-red-500 text-white' : 'bg-amber-400 text-on-accent'
+            }`}
+          >
+            {busy ? 'Guardando…' : confirmLabel}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Modal para cambiar la contraseña de un usuario ──────────────────────────
+
+/**
+ * Cambio de contraseña de un usuario desde un modal (antes era un input en
+ * línea dentro de la tarjeta). Exige mínimo 8 caracteres, como el backend.
+ */
+function ResetPasswordModal({
+  user,
+  onClose,
+  onConfirm,
+}: {
+  user: PickUser
+  onClose: () => void
+  onConfirm: (password: string) => Promise<void>
+}) {
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const tooShort = password.length < 8
+
+  async function confirm() {
+    if (tooShort || busy) return
+    setBusy(true)
+    setError(null)
+    try {
+      await onConfirm(password)
+      onClose()
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'No se pudo cambiar la contraseña')
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
+      <div
+        className="w-full sm:max-w-md bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
+          <h2 className="font-extrabold text-lg text-amber-400">Cambiar contraseña</h2>
+          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center" title="Cerrar">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          <p className="text-sm text-white/70 leading-relaxed">
+            Nueva contraseña para <span className="font-bold text-white">{user.name || user.username}</span>.
+          </p>
+
+          <label className="block">
+            <span className="text-white/50 text-xs font-semibold">Contraseña (mínimo 8 caracteres)</span>
+            <input
+              autoFocus
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') confirm() }}
+              placeholder="Nueva contraseña"
+              autoComplete="new-password"
+              className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+            />
+          </label>
+
+          {error && <p className="text-red-400 text-xs font-medium">{error}</p>}
+        </div>
+
+        <div className="border-t border-white/8 px-5 py-4 flex gap-3">
+          <button
+            onClick={onClose}
+            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={confirm}
+            disabled={tooShort || busy}
+            className="flex-1 py-3 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40"
+          >
+            {busy ? 'Guardando…' : 'Guardar contraseña'}
           </button>
         </div>
       </div>
@@ -979,7 +1259,7 @@ function ProductsView({
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && onSearch()}
               placeholder="Buscar producto, SKU o código de barras…"
-              className="flex-1 bg-[#161618] border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-amber-400"
+              className="flex-1 bg-surface border border-white/10 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-amber-400"
             />
             <button onClick={onSearch} className="px-4 py-2.5 rounded-xl bg-white/10 text-sm font-bold hover:bg-white/15">
               Buscar
@@ -1002,7 +1282,7 @@ function ProductsView({
         {visible.map((p) => (
           <div
             key={p.productVariantId}
-            className="bg-[#161618] border border-white/10 rounded-xl px-4 py-3"
+            className="bg-surface border border-white/10 rounded-xl px-4 py-3"
           >
             <p className="font-bold text-sm truncate">{p.productName}</p>
             <p className="text-white/35 text-xs font-medium truncate">
@@ -1118,7 +1398,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-[#0C0C0D]">
+    <div className="flex h-full flex-col bg-app">
       {/* En pantallas bajas el contenido scrollea y el pie queda visible. */}
       <div className="flex-1 flex items-center justify-center overflow-y-auto px-5">
         <div className="w-full max-w-sm flex flex-col items-center gap-6">
@@ -1136,7 +1416,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
               e.preventDefault()
               void doLogin()
             }}
-            className="w-full bg-[#141416] border border-white/10 rounded-2xl p-6 flex flex-col gap-4"
+            className="w-full bg-surface-alt border border-white/10 rounded-2xl p-6 flex flex-col gap-4"
           >
             <div className="text-center mb-1">
               <h1 className="text-2xl font-extrabold tracking-tight text-white">
@@ -1183,7 +1463,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
             <button
               type="submit"
               disabled={busy || !identifier || !password}
-              className="mt-1 bg-amber-400 text-[#0C0C0D] font-bold text-sm rounded-xl px-4 py-2.5 disabled:opacity-40 transition-all"
+              className="mt-1 bg-amber-400 text-on-accent font-bold text-sm rounded-xl px-4 py-2.5 disabled:opacity-40 transition-all"
             >
               {busy ? 'Ingresando…' : 'Ingresar'}
             </button>
@@ -1210,9 +1490,9 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
   const [showForm, setShowForm] = useState(false)
   const [form, setForm] = useState(emptyUserForm())
   const [saving, setSaving] = useState(false)
-  const [resetId, setResetId] = useState<number | null>(null)
-  const [resetPwd, setResetPwd] = useState('')
-  const [resetError, setResetError] = useState<string | null>(null)
+  const [reset, setReset] = useState<PickUser | null>(null)
+  // Acción sensible pendiente de confirmar (activar/desactivar o picking).
+  const [confirm, setConfirm] = useState<{ user: PickUser; kind: UserConfirmKind } | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -1250,40 +1530,23 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
     }
   }
 
-  const toggleActive = async (u: PickUser) => {
-    try {
-      await api.updateUser(u.id, { isActive: !u.isActive })
-      notify(u.isActive ? `${u.name} desactivado` : `${u.name} activado`)
-      load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo actualizar el usuario')
-    }
+  const applyToggle = async (u: PickUser, kind: UserConfirmKind) => {
+    await api.updateUser(u.id, kind === 'active' ? { isActive: !u.isActive } : { isPicker: !u.isPicker })
+    notify(
+      kind === 'active'
+        ? u.isActive
+          ? `${u.name} desactivado`
+          : `${u.name} activado`
+        : u.isPicker
+          ? `${u.name} ya no es picker`
+          : `${u.name} ahora es picker`,
+    )
+    load()
   }
 
-  const togglePicker = async (u: PickUser) => {
-    try {
-      await api.updateUser(u.id, { isPicker: !u.isPicker })
-      notify(u.isPicker ? `${u.name} ya no es picker` : `${u.name} ahora es picker`)
-      load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo actualizar el usuario')
-    }
-  }
-
-  const submitReset = async (u: PickUser) => {
-    if (resetPwd.length < 8) {
-      setResetError('La contraseña debe tener al menos 8 caracteres')
-      return
-    }
-    try {
-      await api.resetUserPassword(u.id, resetPwd)
-      notify(`Contraseña actualizada para ${u.name}`)
-      setResetId(null)
-      setResetPwd('')
-      setResetError(null)
-    } catch (err) {
-      setResetError(err instanceof ApiError ? err.message : 'No se pudo cambiar la contraseña')
-    }
+  const applyReset = async (u: PickUser, password: string) => {
+    await api.resetUserPassword(u.id, password)
+    notify(`Contraseña actualizada para ${u.name}`)
   }
 
   return (
@@ -1298,7 +1561,7 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
         </div>
         <button
           onClick={() => setShowForm(true)}
-          className="px-4 py-2 rounded-full text-sm font-bold bg-amber-400 text-[#0C0C0D]"
+          className="px-4 py-2 rounded-full text-sm font-bold bg-amber-400 text-on-accent"
         >
           Nuevo usuario
         </button>
@@ -1320,7 +1583,7 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
           <form
             onSubmit={create}
             onClick={(e) => e.stopPropagation()}
-            className="w-full sm:max-w-lg bg-[#161618] border border-white/10 rounded-t-3xl sm:rounded-2xl p-5 flex flex-col gap-4"
+            className="w-full sm:max-w-lg bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl p-5 flex flex-col gap-4"
           >
             <div className="flex items-center justify-between">
               <div>
@@ -1372,7 +1635,7 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
               <button
                 type="submit"
                 disabled={saving}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white text-[#0C0C0D] disabled:opacity-40"
+                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white text-app disabled:opacity-40"
               >
                 {saving ? 'Guardando…' : 'Crear usuario'}
               </button>
@@ -1386,7 +1649,7 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
       ) : (
         <div className="flex flex-col gap-2">
           {users.map((u) => (
-            <div key={u.id} className="bg-[#141416] border border-white/10 rounded-2xl p-3.5">
+            <div key={u.id} className="bg-surface-alt border border-white/10 rounded-2xl p-3.5">
               <div className="flex items-center gap-3">
                 {/* Foto que sube el picker desde la app móvil; si no tiene, su inicial. */}
                 {u.avatarUrl ? (
@@ -1396,7 +1659,7 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
                     className="w-9 h-9 rounded-full object-cover shrink-0 bg-white/5"
                   />
                 ) : (
-                  <div className="w-9 h-9 rounded-full bg-amber-400 text-[#0C0C0D] font-extrabold flex items-center justify-center text-sm shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-amber-400 text-on-accent font-extrabold flex items-center justify-center text-sm shrink-0">
                     {u.name.charAt(0).toUpperCase() || '?'}
                   </div>
                 )}
@@ -1422,23 +1685,19 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
 
               <div className="flex flex-wrap items-center gap-2 mt-3">
                 <button
-                  onClick={() => {
-                    setResetId(resetId === u.id ? null : u.id)
-                    setResetPwd('')
-                    setResetError(null)
-                  }}
+                  onClick={() => setReset(u)}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
                 >
-                  {resetId === u.id ? 'Cancelar' : 'Cambiar contraseña'}
+                  Cambiar contraseña
                 </button>
                 <button
-                  onClick={() => toggleActive(u)}
+                  onClick={() => setConfirm({ user: u, kind: 'active' })}
                   className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
                 >
                   {u.isActive ? 'Desactivar' : 'Activar'}
                 </button>
                 <button
-                  onClick={() => togglePicker(u)}
+                  onClick={() => setConfirm({ user: u, kind: 'picker' })}
                   className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
                     u.isPicker
                       ? 'bg-amber-400/15 border-amber-400/40 text-amber-400'
@@ -1448,32 +1707,29 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
                   {u.isPicker ? 'Quitar de picking' : 'Habilitar picking'}
                 </button>
               </div>
-
-              {resetId === u.id && (
-                <div className="flex flex-col sm:flex-row gap-2 mt-3">
-                  <input
-                    type="password"
-                    value={resetPwd}
-                    onChange={(e) => setResetPwd(e.target.value)}
-                    placeholder="Nueva contraseña"
-                    autoComplete="new-password"
-                    className="flex-1 bg-white/5 border border-white/10 rounded-xl px-3 py-2 text-sm text-white outline-none focus:border-amber-400"
-                  />
-                  <button
-                    onClick={() => submitReset(u)}
-                    className="px-4 py-2 rounded-xl text-xs font-bold bg-amber-400 text-[#0C0C0D]"
-                  >
-                    Guardar contraseña
-                  </button>
-                  {resetError && <p className="text-red-400 text-xs font-semibold self-center">{resetError}</p>}
-                </div>
-              )}
             </div>
           ))}
           {users.length === 0 && (
             <p className="text-white/30 text-sm text-center py-10">Aún no hay usuarios.</p>
           )}
         </div>
+      )}
+
+      {confirm && (
+        <ConfirmUserModal
+          user={confirm.user}
+          kind={confirm.kind}
+          onClose={() => setConfirm(null)}
+          onConfirm={() => applyToggle(confirm.user, confirm.kind)}
+        />
+      )}
+
+      {reset && (
+        <ResetPasswordModal
+          user={reset}
+          onClose={() => setReset(null)}
+          onConfirm={(password) => applyReset(reset, password)}
+        />
       )}
     </div>
   )
@@ -1576,7 +1832,7 @@ function ScheduleView({
             return (
               <div
                 key={d.key}
-                className="flex items-center gap-3 bg-[#141416] border border-white/10 rounded-xl px-4 py-2.5"
+                className="flex items-center gap-3 bg-surface-alt border border-white/10 rounded-xl px-4 py-2.5"
               >
                 <span className="w-24 text-sm font-bold text-white/80">{d.label}</span>
                 <input
@@ -1606,7 +1862,7 @@ function ScheduleView({
           <button
             onClick={() => void save()}
             disabled={saving}
-            className="mt-3 self-start px-5 py-2.5 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-bold disabled:opacity-40"
+            className="mt-3 self-start px-5 py-2.5 rounded-xl bg-amber-400 text-on-accent text-sm font-bold disabled:opacity-40"
           >
             {saving ? 'Guardando…' : 'Guardar horario'}
           </button>
@@ -1726,17 +1982,17 @@ function CategoriesView({
                 onClick={() => setSelectedId(c.id)}
                 className={`text-left px-3 py-2.5 rounded-xl border transition-all ${
                   active
-                    ? 'bg-amber-400 text-[#0C0C0D] border-amber-400'
+                    ? 'bg-amber-400 text-on-accent border-amber-400'
                     : 'bg-white/5 border-white/10 text-white/70 hover:text-white'
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-sm font-bold truncate">{c.name}</span>
-                  <span className={`text-[10px] font-extrabold ${active ? 'text-[#0C0C0D]/60' : 'text-white/40'}`}>
+                  <span className={`text-[10px] font-extrabold ${active ? 'text-on-accent/60' : 'text-white/40'}`}>
                     {c.productCount} prod
                   </span>
                 </div>
-                <span className={`text-[10px] font-semibold ${active ? 'text-[#0C0C0D]/60' : 'text-white/35'}`}>
+                <span className={`text-[10px] font-semibold ${active ? 'text-on-accent/60' : 'text-white/35'}`}>
                   {shelfCount} estantería(s) en esta sucursal
                 </span>
               </button>
@@ -1774,7 +2030,7 @@ function CategoriesView({
                 {org.shelves.map((s) => (
                   <div
                     key={s.id}
-                    className="flex items-center gap-2 bg-[#141416] border border-white/10 rounded-xl px-3 py-2"
+                    className="flex items-center gap-2 bg-surface-alt border border-white/10 rounded-xl px-3 py-2"
                   >
                     <span className="w-3 h-3 rounded-full" style={{ background: s.color }} />
                     <div>
@@ -1812,7 +2068,7 @@ function CategoriesView({
                 <button
                   onClick={() => void assignShelf()}
                   disabled={!assignShelfId}
-                  className="px-3 py-2 rounded-lg bg-amber-400 text-[#0C0C0D] text-xs font-bold disabled:opacity-40"
+                  className="px-3 py-2 rounded-lg bg-amber-400 text-on-accent text-xs font-bold disabled:opacity-40"
                 >
                   Asignar
                 </button>
@@ -1824,7 +2080,7 @@ function CategoriesView({
               <h3 className="text-white/35 text-[10px] font-bold uppercase tracking-wider mb-2">
                 Productos de la categoría ({org.products.length})
               </h3>
-              <div className="bg-[#141416] border border-white/10 rounded-2xl overflow-hidden">
+              <div className="bg-surface-alt border border-white/10 rounded-2xl overflow-hidden">
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="text-white/35 text-[10px] font-bold uppercase tracking-wider text-left border-b border-white/5 bg-white/5">

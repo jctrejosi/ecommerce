@@ -2,7 +2,12 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import { API_BASE_URL } from './services/api'
+import { initTheme } from './theme'
 import './index.css'
+
+// Aplica el tema guardado antes de montar, para evitar el destello del tema
+// por defecto en el primer render.
+initTheme()
 
 // Título de la pestaña: "<nombre de tienda> picking admin | DSI".
 // Usa la misma base del API que el resto del panel, así funciona igual en

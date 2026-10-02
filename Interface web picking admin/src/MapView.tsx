@@ -108,7 +108,7 @@ function DimInput({
       onKeyDown={(e) => {
         if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur()
       }}
-      className="mt-1 w-24 bg-[#0C0C0D] border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+      className="mt-1 w-24 bg-app border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
     />
   )
 }
@@ -350,7 +350,7 @@ export default function MapView({
           <button
             onClick={saveAll}
             disabled={saving}
-            className="px-4 py-2 rounded-xl bg-amber-400 text-[#0C0C0D] text-sm font-extrabold disabled:opacity-40"
+            className="px-4 py-2 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40"
           >
             {saving ? 'Guardando…' : 'Guardar mapa'}
           </button>
@@ -367,7 +367,7 @@ export default function MapView({
       <div
         id="map-canvas"
         ref={containerRef}
-        className="relative overflow-auto rounded-2xl border border-white/10 bg-[#111113]"
+        className="relative overflow-auto rounded-2xl border border-white/10 bg-surface-alt"
         style={{ height: 'calc(100dvh - 250px)', minHeight: 280 }}
         onPointerMove={onPointerMove}
         onPointerUp={endDrag}
@@ -436,17 +436,17 @@ export default function MapView({
                   <>
                     <div
                       onPointerDown={(e) => onResizeStart(e, s.id, 'e')}
-                      className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-6 rounded-sm bg-amber-400 border border-[#0C0C0D] cursor-ew-resize touch-none"
+                      className="absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-6 rounded-sm bg-amber-400 border border-app cursor-ew-resize touch-none"
                       style={{ zIndex: 20 }}
                     />
                     <div
                       onPointerDown={(e) => onResizeStart(e, s.id, 's')}
-                      className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-3 rounded-sm bg-amber-400 border border-[#0C0C0D] cursor-ns-resize touch-none"
+                      className="absolute -bottom-1.5 left-1/2 -translate-x-1/2 w-6 h-3 rounded-sm bg-amber-400 border border-app cursor-ns-resize touch-none"
                       style={{ zIndex: 20 }}
                     />
                     <div
                       onPointerDown={(e) => onResizeStart(e, s.id, 'se')}
-                      className="absolute -right-1.5 -bottom-1.5 w-3 h-3 rounded-sm bg-amber-400 border border-[#0C0C0D] cursor-nwse-resize touch-none"
+                      className="absolute -right-1.5 -bottom-1.5 w-3 h-3 rounded-sm bg-amber-400 border border-app cursor-nwse-resize touch-none"
                       style={{ zIndex: 20 }}
                     />
                   </>
@@ -459,7 +459,7 @@ export default function MapView({
 
       {/* Panel de la estantería seleccionada */}
       {selected ? (
-        <div className="mt-4 bg-[#161618] border border-white/10 rounded-2xl p-4">
+        <div className="mt-4 bg-surface border border-white/10 rounded-2xl p-4">
           <div className="flex items-center gap-2 mb-3">
             <span className="w-3 h-3 rounded-full" style={{ backgroundColor: selected.color }} />
             <span className="font-extrabold">{selected.code} · {selected.name}</span>

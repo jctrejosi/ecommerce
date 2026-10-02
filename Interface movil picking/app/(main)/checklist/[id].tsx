@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { isItemDone } from "@/picking/status";
 import { useCompleteOrder, useOrder } from "@/picking/queries";
 import { saveSession } from "@/picking/sessionStore";
@@ -12,6 +12,8 @@ import { Button } from "@/ui/Button";
 import { ErrorBox } from "@/ui/ErrorBox";
 
 export default function ChecklistScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
   const orderId = Number(params.id);
@@ -156,7 +158,7 @@ export default function ChecklistScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: spacing(5) },
   banner: {
@@ -228,4 +230,4 @@ const styles = StyleSheet.create({
   dialogText: { color: colors.textMuted, fontSize: 13, fontWeight: "500", textAlign: "center" },
   dialogActions: { flexDirection: "row", gap: spacing(3), marginTop: spacing(2) },
   dialogBtn: { flex: 1 },
-});
+}));

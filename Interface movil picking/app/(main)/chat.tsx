@@ -23,7 +23,7 @@ import { formatTime } from "@/lib/format";
 import { useKeyboardHeight } from "@/lib/keyboard";
 import { Header } from "@/ui/Header";
 import { ErrorBox } from "@/ui/ErrorBox";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 
 /**
  * Chat del picker con administración.
@@ -33,6 +33,8 @@ import { colors, radius, spacing } from "@/theme";
  * conserva entre sesiones.
  */
 export default function PickerChatScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
@@ -162,6 +164,7 @@ export default function PickerChatScreen() {
 }
 
 function Bubble({ msg }: { msg: PickerChatMessage }) {
+  const styles = useStyles();
   const mine = msg.senderType === "picker";
   return (
     <View style={[styles.bubbleRow, mine ? styles.rowMine : styles.rowTheirs]}>
@@ -176,7 +179,7 @@ function Bubble({ msg }: { msg: PickerChatMessage }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   flex: { flex: 1 },
   center: {
@@ -276,4 +279,4 @@ const styles = StyleSheet.create({
   },
   sendBtnDisabled: { opacity: 0.4 },
   sendBtnPressed: { transform: [{ scale: 0.92 }] },
-});
+}));

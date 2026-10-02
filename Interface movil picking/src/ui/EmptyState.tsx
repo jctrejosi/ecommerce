@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, spacing } from "@/theme";
+import { makeStyles, spacing, useTheme } from "@/theme";
 
 interface EmptyStateProps {
   title: string;
@@ -9,6 +9,8 @@ interface EmptyStateProps {
 }
 
 export function EmptyState({ title, message, icon = "cube-outline" }: EmptyStateProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   return (
     <View style={styles.wrap}>
       <View style={styles.iconBox}>
@@ -20,7 +22,7 @@ export function EmptyState({ title, message, icon = "cube-outline" }: EmptyState
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   wrap: { alignItems: "center", justifyContent: "center", paddingVertical: spacing(16), paddingHorizontal: spacing(6) },
   iconBox: {
     width: 80,
@@ -35,4 +37,4 @@ const styles = StyleSheet.create({
   },
   title: { color: colors.textMuted, fontSize: 16, fontWeight: "700", textAlign: "center" },
   message: { color: colors.textHint, fontSize: 13, fontWeight: "500", marginTop: spacing(1), textAlign: "center" },
-});
+}));

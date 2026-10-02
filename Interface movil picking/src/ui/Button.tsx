@@ -1,6 +1,6 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 
 export type ButtonVariant = "primary" | "secondary" | "success" | "danger" | "ghost";
 
@@ -15,14 +15,6 @@ interface ButtonProps {
   compact?: boolean;
 }
 
-const variants: Record<ButtonVariant, { bg: string; fg: string; border?: string; pressed: string }> = {
-  primary: { bg: colors.accent, fg: colors.onAccent, pressed: colors.accentDark },
-  secondary: { bg: colors.surface, fg: colors.text, border: colors.border, pressed: colors.surfaceAlt },
-  success: { bg: colors.success, fg: "#04120A", pressed: "#16A34A" },
-  danger: { bg: "rgba(239,68,68,0.15)", fg: colors.dangerText, border: "rgba(239,68,68,0.4)", pressed: "rgba(239,68,68,0.25)" },
-  ghost: { bg: "transparent", fg: colors.textMuted, pressed: colors.chip },
-};
-
 export function Button({
   label,
   onPress,
@@ -33,6 +25,15 @@ export function Button({
   fullWidth = true,
   compact = false,
 }: ButtonProps) {
+  const styles = useStyles();
+  const { colors } = useTheme();
+  const variants: Record<ButtonVariant, { bg: string; fg: string; border?: string; pressed: string }> = {
+    primary: { bg: colors.accent, fg: colors.onAccent, pressed: colors.accentDark },
+    secondary: { bg: colors.surface, fg: colors.text, border: colors.border, pressed: colors.surfaceAlt },
+    success: { bg: colors.success, fg: "#04120A", pressed: "#16A34A" },
+    danger: { bg: "rgba(239,68,68,0.15)", fg: colors.dangerText, border: "rgba(239,68,68,0.4)", pressed: "rgba(239,68,68,0.25)" },
+    ghost: { bg: "transparent", fg: colors.textMuted, pressed: colors.chip },
+  };
   const v = variants[variant];
   const blocked = disabled || loading;
 
@@ -64,7 +65,7 @@ export function Button({
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   button: {
     minHeight: 52,
     borderRadius: radius.lg,
@@ -77,4 +78,4 @@ const styles = StyleSheet.create({
   blocked: { opacity: 0.7 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   label: { fontSize: 15, fontWeight: "700" },
-});
+}));

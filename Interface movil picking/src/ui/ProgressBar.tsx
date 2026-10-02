@@ -1,8 +1,10 @@
 import { StyleSheet, View } from "react-native";
-import { colors } from "@/theme";
+import { makeStyles, useTheme } from "@/theme";
 
 /** Barra de progreso ámbar (0..1). */
 export function ProgressBar({ value }: { value: number }) {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const pct = Math.max(0, Math.min(1, value));
   return (
     <View style={styles.track}>
@@ -12,7 +14,7 @@ export function ProgressBar({ value }: { value: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   track: {
     flexDirection: "row",
     height: 8,
@@ -20,4 +22,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.chip,
     overflow: "hidden",
   },
-});
+}));

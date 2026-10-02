@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { colors, radius, spacing } from "@/theme";
+import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import { formatMoney } from "@/lib/format";
 import { isItemDone, scannedCount } from "@/picking/status";
 import { useClaimOrder, useOrder } from "@/picking/queries";
@@ -15,6 +15,8 @@ import { ProductRow } from "@/ui/ProductRow";
 import { ErrorBox } from "@/ui/ErrorBox";
 
 export default function OrderDetailScreen() {
+  const styles = useStyles();
+  const { colors } = useTheme();
   const router = useRouter();
   const params = useLocalSearchParams<{ id: string }>();
   const id = Number(params.id);
@@ -113,7 +115,7 @@ export default function OrderDetailScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const useStyles = makeStyles((colors) => StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.background },
   center: { flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: spacing(5) },
   total: { color: colors.text, fontSize: 15, fontWeight: "800" },
@@ -137,4 +139,4 @@ const styles = StyleSheet.create({
     marginBottom: spacing(3),
   },
   ctas: { gap: spacing(3), marginTop: spacing(4) },
-});
+}));

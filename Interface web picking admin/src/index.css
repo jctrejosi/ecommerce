@@ -1,6 +1,85 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 @import 'tailwindcss';
 
+/*
+ * Temas del panel de picking.
+ *
+ * Todo el color se resuelve con estas variables CSS y se cambia con
+ * `document.documentElement.dataset.theme = "<preset>"` (ver `src/theme.ts`).
+ * Para no tocar cientos de clases, se re-mapean los utilitarios que ya usa el
+ * panel en el bloque `@theme inline`:
+ *   - `white/NN` → tinta del tema (`--ink`), que en claro es oscura.
+ *   - `amber-400/300` → acento del preset.
+ *   - `red/green/emerald` → semánticos (peligro/éxito).
+ */
+:root,
+[data-theme='amber'] {
+  --ink: #ffffff;
+  --app: #0c0c0d;
+  --surface: #161618;
+  --surface-alt: #1c1c1e;
+  --accent: #fbbf24;
+  --accent-soft: #f59e0b;
+  --on-accent: #0c0c0d;
+  --danger: #ef4444;
+  --danger-text: #f87171;
+  --success: #22c55e;
+  --success-text: #4ade80;
+  --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+}
+
+[data-theme='blue'] {
+  --app: #0a0f1a;
+  --surface: #121826;
+  --surface-alt: #182031;
+  --accent: #3b82f6;
+  --accent-soft: #60a5fa;
+  --on-accent: #ffffff;
+}
+
+[data-theme='violet'] {
+  --app: #0c0a14;
+  --surface: #17131f;
+  --surface-alt: #1e1929;
+  --accent: #8b5cf6;
+  --accent-soft: #a78bfa;
+  --on-accent: #ffffff;
+}
+
+[data-theme='light'] {
+  --ink: #111827;
+  --app: #f4f5f7;
+  --surface: #ffffff;
+  --surface-alt: #eef0f3;
+  --accent: #f59e0b;
+  --accent-soft: #d97706;
+  --on-accent: #1f2937;
+  --danger: #dc2626;
+  --danger-text: #dc2626;
+  --success: #16a34a;
+  --success-text: #15803d;
+  --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+}
+
+/* Tokens semánticos expuestos a Tailwind. `inline` hace que las utilidades
+   referencien las variables, para que respondan al cambio de `data-theme`. */
+@theme inline {
+  --color-white: var(--ink);
+  --color-amber-400: var(--accent);
+  --color-amber-300: var(--accent-soft);
+  --color-red-500: var(--danger);
+  --color-red-400: var(--danger-text);
+  --color-red-300: var(--danger-text);
+  --color-green-500: var(--success);
+  --color-green-400: var(--success-text);
+  --color-emerald-400: var(--success-text);
+
+  --color-app: var(--app);
+  --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
+  --color-on-accent: var(--on-accent);
+}
+
 /* Tailwind v4 deja los botones con cursor:default; los devolvemos a pointer. */
 @layer base {
   button:not(:disabled),
@@ -16,7 +95,8 @@ body,
 #root {
   height: 100%;
   font-family: 'Plus Jakarta Sans', sans-serif;
-  background: #0c0c0d;
+  background: var(--app);
+  color: var(--ink);
 }
 
 :root {
@@ -37,7 +117,7 @@ body,
   height: var(--app-scrollbar);
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-track {

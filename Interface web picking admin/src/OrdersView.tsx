@@ -250,13 +250,13 @@ export default function OrdersView({
               onClick={() => setStatus(f.value)}
               className={`px-3.5 py-1.5 rounded-full text-xs font-bold border transition-all flex items-center gap-1.5 ${
                 active
-                  ? 'bg-white text-[#0C0C0D] border-white'
+                  ? 'bg-white text-app border-white'
                   : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
               }`}
             >
               {f.value && <span className={`w-1.5 h-1.5 rounded-full ${statusOf(f.value).dot}`} />}
               {f.label}
-              <span className={active ? 'text-[#0C0C0D]/50' : 'text-white/30'}>{n}</span>
+              <span className={active ? 'text-app/50' : 'text-white/30'}>{n}</span>
             </button>
           )
         })}
