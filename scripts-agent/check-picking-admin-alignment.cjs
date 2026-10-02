@@ -228,7 +228,6 @@ async function main() {
       'Pedidos',
       'Usuarios',
       'Horarios',
-      'Pickers',
     ];
     for (const label of labels) {
       const clicked = await evaluate(`(() => {

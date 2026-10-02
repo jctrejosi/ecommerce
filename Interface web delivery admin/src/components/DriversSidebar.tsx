@@ -13,8 +13,8 @@ import {
 import type { DriverFilter, FleetDriver } from '../types';
 import { FILTER_OPTIONS, driverVisual, isDriverOnline, lastSignalAt } from '../lib/status';
 import { DRIVER_COLORS, driverColor } from '../lib/driverColors';
-import { formatDateTime, loadLabel, timeAgo, vehicleLabel } from '../lib/format';
-import { DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
+import { loadLabel, timeAgo, vehicleLabel } from '../lib/format';
+import { ActiveOrderCard, DriverAvatar, LastSeen, StatusBadge } from './DriverBits';
 import DriverHistoryPanel from './DriverHistoryPanel';
 
 interface Props {
@@ -55,7 +55,7 @@ function DriverRow({
   return (
     <div
       className={`group flex cursor-pointer items-center gap-3 border-b border-line px-3 py-2.5 transition-colors ${
-        selected ? 'bg-amber-50' : 'hover:bg-surface-2'
+        selected ? 'bg-accent-soft' : 'hover:bg-surface-2'
       }`}
       onClick={onSelect}
     >
@@ -193,6 +193,15 @@ function DetailView({
         </div>
       ) : (
       <div className="space-y-4 p-4">
+        {a && (
+          <section>
+            <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-faint">
+              <ShoppingBag className="h-3.5 w-3.5" /> Pedido activo
+            </h4>
+            <ActiveOrderCard assignment={a} />
+          </section>
+        )}
+
         <section className="rounded-xl border border-line bg-surface-2 p-3 text-sm">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wide text-ink-faint">
@@ -282,33 +291,6 @@ function DetailView({
           </div>
         </section>
 
-        {a && (
-          <section>
-            <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-faint">
-              <ShoppingBag className="h-3.5 w-3.5" /> Pedido activo
-            </h4>
-            <div className="rounded-xl border border-line bg-surface p-3">
-              <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-ink-soft">
-                  {a.referenceCode ?? `#${a.orderId}`}
-                </span>
-                <StatusBadge driver={driver} />
-              </div>
-              <p className="mt-1.5 text-xs text-ink-soft">
-                Cliente: <strong>{a.customerName ?? '—'}</strong>
-              </p>
-              <p className="mt-0.5 text-xs text-ink-faint">
-                {[a.addressLine1, a.city].filter(Boolean).join(', ') || 'Sin dirección'}
-              </p>
-              <div className="mt-2 space-y-1 border-t border-line pt-2 text-[11px] text-ink-faint">
-                <p>Asignado: {formatDateTime(a.assignedAt)}</p>
-                {a.acceptedAt && <p>Aceptado: {formatDateTime(a.acceptedAt)}</p>}
-                {a.pickedUpAt && <p>Recogido: {formatDateTime(a.pickedUpAt)}</p>}
-                {a.inDeliveryAt && <p>En camino: {formatDateTime(a.inDeliveryAt)}</p>}
-              </div>
-            </div>
-          </section>
-        )}
       </div>
       )}
     </div>
@@ -351,7 +333,7 @@ export default function DriversSidebar(props: Props) {
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Buscar repartidor, placa, teléfono…"
-            className="w-full rounded-xl border border-line bg-surface-2 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded-xl border border-line bg-surface-2 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent-soft"
           />
         </div>
         <div className="mt-2.5 flex flex-wrap gap-1.5">

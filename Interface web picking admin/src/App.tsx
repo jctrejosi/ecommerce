@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { FormEvent, KeyboardEvent } from 'react'
 import { api, ApiError, resolveAssetUrl, setUnauthorizedHandler } from './services/api'
-import type { AuthUser, PickUser } from './services/api'
+import type { AuthUser } from './services/api'
 import type {
   CategoryOrganization,
   CategoryOrgProduct,
@@ -9,7 +9,8 @@ import type {
 } from './types'
 import type { Branch, CatalogProduct, Category, Shelf, ShelfType } from './types'
 import MapView from './MapView'
-import MetricsView from './MetricsView'
+import { useCategoryChangeConfirm, CategoryChangeConfirm } from './shelfCategories'
+import UsersView from './UsersView'
 import OrdersView from './OrdersView'
 import { PickerChatDrawer } from './PickerChat'
 import { useChatAlerts } from './useChatAlerts'
@@ -46,7 +47,7 @@ const emptyShelf = () => ({
 export default function App() {
   const [branches, setBranches] = useState<Branch[]>([])
   const [branchId, setBranchId] = useState<number | null>(null)
-  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'orders' | 'metrics' | 'users' | 'schedule' | 'categories'>('shelves')
+  const [tab, setTab] = useState<'shelves' | 'map' | 'products' | 'orders' | 'users' | 'schedule' | 'categories'>('shelves')
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<CatalogProduct[]>([])
@@ -376,7 +377,7 @@ export default function App() {
         <div className="shrink-0 pr-[var(--app-scrollbar)]">
           <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3">
             <div className="flex gap-2 flex-wrap">
-              {(['shelves', 'categories', 'map', 'products', 'orders', 'users', 'schedule', 'metrics'] as const).map((t) => (
+              {(['shelves', 'categories', 'map', 'products', 'orders', 'users', 'schedule'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -384,7 +385,7 @@ export default function App() {
                     tab === t ? 'bg-white text-app' : 'bg-white/5 text-white/50 hover:text-white/80'
                   }`}
                 >
-                  {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'orders' ? 'Pedidos' : t === 'users' ? 'Usuarios' : t === 'schedule' ? 'Horarios' : 'Pickers'}
+                  {t === 'shelves' ? 'Estanterías' : t === 'categories' ? 'Categorías' : t === 'map' ? 'Mapa' : t === 'products' ? 'Productos' : t === 'orders' ? 'Pedidos' : t === 'users' ? 'Usuarios' : 'Horarios'}
                 </button>
               ))}
             </div>
@@ -429,6 +430,7 @@ export default function App() {
             <MapView
               branchId={branchId}
               shelves={shelves}
+              categories={categories}
               onRefresh={() => {
                 if (branchId) api.shelves(branchId).then(setShelves).catch(() => undefined)
               }}
@@ -439,10 +441,8 @@ export default function App() {
           )
         ) : tab === 'orders' ? (
           <OrdersView branchId={branchId} branchName={branch?.name ?? ''} notify={notify} />
-        ) : tab === 'metrics' ? (
-          <MetricsView notify={notify} />
         ) : tab === 'users' ? (
-          <PickUsersView notify={notify} currentUserId={authUser?.id ?? null} />
+          <UsersView notify={notify} currentUserId={authUser?.id ?? null} />
         ) : tab === 'schedule' ? (
           <ScheduleView branchId={branchId} branches={branches} notify={notify} />
         ) : (
@@ -630,6 +630,7 @@ function ShelvesView({
         <ShelfModal
           branchName={branchName}
           initial={editing ?? null}
+          shelves={shelves}
           categories={categories}
           onClose={() => { setCreating(false); setEditing(null) }}
           onSave={handleSave}
@@ -652,12 +653,14 @@ function ShelvesView({
 function ShelfModal({
   branchName,
   initial,
+  shelves,
   categories,
   onClose,
   onSave,
 }: {
   branchName: string
   initial: Shelf | null
+  shelves: Shelf[]
   categories: Category[]
   onClose: () => void
   onSave: (data: ReturnType<typeof emptyShelf>) => void
@@ -678,14 +681,24 @@ function ShelfModal({
     setForm((f) => ({ ...f, [key]: value }))
   }
 
-  function toggleCategory(id: number) {
-    setForm((f) => ({
-      ...f,
-      categoryIds: f.categoryIds.includes(id)
-        ? f.categoryIds.filter((x) => x !== id)
-        : [...f.categoryIds, id],
-    }))
-  }
+  // Quitar una categoría ya guardada pide confirmación; añadir una que ya vive
+  // en otra estantería avisa de que se duplicará (está permitido).
+  const savedIds = (initial?.categories ?? []).map((c) => c.id)
+  const { pending, requestCategoryChange, confirm, cancel } = useCategoryChangeConfirm({
+    shelves,
+    shelfId: initial?.id ?? null,
+    savedIds,
+    isSelected: (id) => form.categoryIds.includes(id),
+    toggle: (id, next) =>
+      setForm((f) => ({
+        ...f,
+        categoryIds: next
+          ? f.categoryIds.includes(id)
+            ? f.categoryIds
+            : [...f.categoryIds, id]
+          : f.categoryIds.filter((x) => x !== id),
+      })),
+  })
 
   const catNorm = catSearch.trim().toLowerCase()
   const filteredCategories = catNorm
@@ -775,7 +788,7 @@ function ShelfModal({
                     <button
                       key={id}
                       type="button"
-                      onClick={() => toggleCategory(id)}
+                      onClick={() => requestCategoryChange(id, c?.name ?? `#${id}`)}
                       title="Quitar"
                       className="flex items-center gap-1 px-2 py-1 rounded-lg bg-amber-400/15 border border-amber-400/30 text-amber-300 text-[11px] font-bold"
                     >
@@ -793,7 +806,7 @@ function ShelfModal({
                   <button
                     key={c.id}
                     type="button"
-                    onClick={() => toggleCategory(c.id)}
+                    onClick={() => requestCategoryChange(c.id, c.name)}
                     className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-white/5 ${
                       checked ? 'text-amber-300' : 'text-white/70'
                     }`}
@@ -880,6 +893,8 @@ function ShelfModal({
           </button>
         </div>
       </div>
+
+      {pending && <CategoryChangeConfirm pending={pending} onConfirm={confirm} onCancel={cancel} />}
     </div>
   )
 }
@@ -972,223 +987,6 @@ function DeleteShelfModal({
             className="flex-1 py-3 rounded-xl bg-red-500 text-white text-sm font-extrabold disabled:opacity-40"
           >
             {busy ? 'Eliminando…' : 'Eliminar'}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Modal de confirmación para acciones sobre un usuario ─────────────────────
-
-type UserConfirmKind = 'active' | 'picker'
-
-/**
- * Confirmación de acciones sensibles sobre un usuario (activar/desactivar y
- * habilitar/quitar de picking). Como el borrado de estanterías, exige teclear
- * el nombre para habilitar el botón, así se evita cambiar accesos por un clic
- * accidental.
- */
-function ConfirmUserModal({
-  user,
-  kind,
-  onClose,
-  onConfirm,
-}: {
-  user: PickUser
-  kind: UserConfirmKind
-  onClose: () => void
-  onConfirm: () => Promise<void>
-}) {
-  // Si el usuario no tiene nombre, se usa el usuario como texto a teclear.
-  const expected = user.name.trim() || user.username.trim()
-  const [typed, setTyped] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const matches = typed.trim().toLowerCase() === expected.toLowerCase()
-
-  // Desactivar o quitar de picking quitan acceso; activar/habilitar lo dan.
-  const destructive = kind === 'active' ? user.isActive : user.isPicker
-  const title =
-    kind === 'active'
-      ? user.isActive
-        ? 'Desactivar usuario'
-        : 'Activar usuario'
-      : user.isPicker
-        ? 'Quitar de picking'
-        : 'Habilitar picking'
-  const confirmLabel =
-    kind === 'active'
-      ? user.isActive
-        ? 'Desactivar'
-        : 'Activar'
-      : user.isPicker
-        ? 'Quitar de picking'
-        : 'Habilitar'
-  const message =
-    kind === 'active'
-      ? user.isActive
-        ? 'Se bloqueará el acceso al panel y a la app móvil de:'
-        : 'Se restablecerá el acceso al panel y a la app móvil de:'
-      : user.isPicker
-        ? 'Dejará de aparecer en el login de la app móvil y no podrá recibir pedidos:'
-        : 'Aparecerá en el login de la app móvil y podrá recibir pedidos:'
-
-  async function confirm() {
-    if (!matches || busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      await onConfirm()
-      onClose()
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No se pudo actualizar el usuario')
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div
-        className="w-full sm:max-w-md bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
-          <h2 className={`font-extrabold text-lg ${destructive ? 'text-red-400' : 'text-amber-400'}`}>{title}</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center" title="Cerrar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          <p className="text-sm text-white/70 leading-relaxed">
-            {message} <span className="font-bold text-white">{user.name || user.username}</span>
-          </p>
-
-          <label className="block">
-            <span className="text-white/50 text-xs font-semibold">
-              Escribe <span className="font-bold text-amber-300">{expected}</span> para confirmar
-            </span>
-            <input
-              autoFocus
-              value={typed}
-              onChange={(e) => setTyped(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') confirm() }}
-              placeholder={expected}
-              className={`mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none ${destructive ? 'focus:border-red-400' : 'focus:border-amber-400'}`}
-            />
-          </label>
-
-          {error && <p className="text-red-400 text-xs font-medium">{error}</p>}
-        </div>
-
-        <div className="border-t border-white/8 px-5 py-4 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={confirm}
-            disabled={!matches || busy}
-            className={`flex-1 py-3 rounded-xl text-sm font-extrabold disabled:opacity-40 ${
-              destructive ? 'bg-red-500 text-white' : 'bg-amber-400 text-on-accent'
-            }`}
-          >
-            {busy ? 'Guardando…' : confirmLabel}
-          </button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// ─── Modal para cambiar la contraseña de un usuario ──────────────────────────
-
-/**
- * Cambio de contraseña de un usuario desde un modal (antes era un input en
- * línea dentro de la tarjeta). Exige mínimo 8 caracteres, como el backend.
- */
-function ResetPasswordModal({
-  user,
-  onClose,
-  onConfirm,
-}: {
-  user: PickUser
-  onClose: () => void
-  onConfirm: (password: string) => Promise<void>
-}) {
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const tooShort = password.length < 8
-
-  async function confirm() {
-    if (tooShort || busy) return
-    setBusy(true)
-    setError(null)
-    try {
-      await onConfirm(password)
-      onClose()
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No se pudo cambiar la contraseña')
-      setBusy(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
-      <div
-        className="w-full sm:max-w-md bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
-          <h2 className="font-extrabold text-lg text-amber-400">Cambiar contraseña</h2>
-          <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center" title="Cerrar">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        <div className="p-5 space-y-4">
-          <p className="text-sm text-white/70 leading-relaxed">
-            Nueva contraseña para <span className="font-bold text-white">{user.name || user.username}</span>.
-          </p>
-
-          <label className="block">
-            <span className="text-white/50 text-xs font-semibold">Contraseña (mínimo 8 caracteres)</span>
-            <input
-              autoFocus
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter') confirm() }}
-              placeholder="Nueva contraseña"
-              autoComplete="new-password"
-              className="mt-1 w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
-            />
-          </label>
-
-          {error && <p className="text-red-400 text-xs font-medium">{error}</p>}
-        </div>
-
-        <div className="border-t border-white/8 px-5 py-4 flex gap-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={confirm}
-            disabled={tooShort || busy}
-            className="flex-1 py-3 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40"
-          >
-            {busy ? 'Guardando…' : 'Guardar contraseña'}
           </button>
         </div>
       </div>
@@ -1475,285 +1273,6 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
       </div>
 
       <CopyrightFooter />
-    </div>
-  )
-}
-
-// ─── Usuarios de picking ──────────────────────────────────────────────────────
-
-const emptyUserForm = () => ({ fullName: '', username: '', email: '', phone: '', password: '' })
-
-function PickUsersView({ notify, currentUserId }: { notify: (msg: string) => void; currentUserId: number | null }) {
-  const [users, setUsers] = useState<PickUser[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [showForm, setShowForm] = useState(false)
-  const [form, setForm] = useState(emptyUserForm())
-  const [saving, setSaving] = useState(false)
-  const [reset, setReset] = useState<PickUser | null>(null)
-  // Acción sensible pendiente de confirmar (activar/desactivar o picking).
-  const [confirm, setConfirm] = useState<{ user: PickUser; kind: UserConfirmKind } | null>(null)
-
-  const load = useCallback(() => {
-    setLoading(true)
-    api
-      .users()
-      .then(setUsers)
-      .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar los usuarios'))
-      .finally(() => setLoading(false))
-  }, [])
-
-  useEffect(() => {
-    load()
-  }, [load])
-
-  const create = async (e: FormEvent) => {
-    e.preventDefault()
-    setSaving(true)
-    setError(null)
-    try {
-      await api.createUser({
-        fullName: form.fullName.trim(),
-        username: form.username.trim(),
-        email: form.email.trim(),
-        phone: form.phone.trim() || undefined,
-        password: form.password,
-      })
-      notify('Usuario creado')
-      setForm(emptyUserForm())
-      setShowForm(false)
-      load()
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'No se pudo crear el usuario')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // Un superusuario no puede desactivarse a sí mismo ni dejar el sistema sin
-  // ningún superusuario activo (el backend también lo rechaza).
-  const activeSuperusers = users.filter((u) => u.isSuperuser && u.isActive).length
-  const deactivateBlockedReason = (u: PickUser): string | null => {
-    if (!u.isActive) return null
-    if (u.isSuperuser && activeSuperusers <= 1) return 'Es el último superusuario activo'
-    if (currentUserId !== null && u.id === currentUserId) return 'Es tu propia cuenta'
-    return null
-  }
-
-  const applyToggle = async (u: PickUser, kind: UserConfirmKind) => {
-    await api.updateUser(u.id, kind === 'active' ? { isActive: !u.isActive } : { isPicker: !u.isPicker })
-    notify(
-      kind === 'active'
-        ? u.isActive
-          ? `${u.name} desactivado`
-          : `${u.name} activado`
-        : u.isPicker
-          ? `${u.name} ya no es picker`
-          : `${u.name} ahora es picker`,
-    )
-    load()
-  }
-
-  const applyReset = async (u: PickUser, password: string) => {
-    await api.resetUserPassword(u.id, password)
-    notify(`Contraseña actualizada para ${u.name}`)
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-extrabold text-white">Usuarios de picking</h2>
-          <p className="text-white/40 text-xs mt-0.5">
-            Solo las cuentas marcadas como <span className="text-amber-400 font-semibold">picker</span> aparecen en
-            el login de la app móvil. Un usuario nuevo se crea ya como picker.
-          </p>
-        </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="px-4 py-2 rounded-full text-sm font-bold bg-amber-400 text-on-accent"
-        >
-          Nuevo usuario
-        </button>
-      </div>
-
-      {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3 text-red-400 text-sm flex items-center gap-3">
-          <p className="flex-1">{error}</p>
-          <button onClick={() => setError(null)} className="font-extrabold underline">Cerrar</button>
-        </div>
-      )}
-
-      {/* Modal de nuevo usuario */}
-      {showForm && (
-        <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6"
-          onClick={() => setShowForm(false)}
-        >
-          <form
-            onSubmit={create}
-            onClick={(e) => e.stopPropagation()}
-            className="w-full sm:max-w-lg bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl p-5 flex flex-col gap-4"
-          >
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-extrabold text-lg text-white">Nuevo usuario</h3>
-                <p className="text-white/40 text-xs font-medium mt-0.5">
-                  Se crea como picker: podrá entrar a la app móvil de picking.
-                </p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center"
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </button>
-            </div>
-
-            {(
-              [
-                ['fullName', 'Nombre completo', 'text'],
-                ['username', 'Usuario', 'text'],
-                ['email', 'Email', 'email'],
-                ['phone', 'Teléfono (opcional)', 'text'],
-                ['password', 'Contraseña (mín. 8)', 'password'],
-              ] as const
-            ).map(([key, label, type]) => (
-              <label key={key} className="flex flex-col gap-1.5">
-                <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">{label}</span>
-                <input
-                  type={type}
-                  value={form[key]}
-                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
-                  autoComplete="off"
-                  className="bg-white/5 border border-white/10 rounded-xl px-3 py-2.5 text-sm text-white outline-none focus:border-amber-400"
-                />
-              </label>
-            ))}
-
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setShowForm(false)}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
-              >
-                Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="px-4 py-2.5 rounded-xl text-sm font-bold bg-white text-app disabled:opacity-40"
-              >
-                {saving ? 'Guardando…' : 'Crear usuario'}
-              </button>
-            </div>
-          </form>
-        </div>
-      )}
-
-      {loading ? (
-        <p className="text-white/40 text-sm py-8 text-center">Cargando usuarios…</p>
-      ) : (
-        <div className="flex flex-col gap-2">
-          {users.map((u) => (
-            <div key={u.id} className="bg-surface-alt border border-white/10 rounded-2xl p-3.5">
-              <div className="flex items-center gap-3">
-                {/* Foto que sube el picker desde la app móvil; si no tiene, su inicial. */}
-                {u.avatarUrl ? (
-                  <img
-                    src={u.avatarUrl}
-                    alt={u.name}
-                    className="w-9 h-9 rounded-full object-cover shrink-0 bg-white/5"
-                  />
-                ) : (
-                  <div className="w-9 h-9 rounded-full bg-amber-400 text-on-accent font-extrabold flex items-center justify-center text-sm shrink-0">
-                    {u.name.charAt(0).toUpperCase() || '?'}
-                  </div>
-                )}
-                <div className="min-w-0 flex-1">
-                  <p className="text-white text-sm font-bold truncate">{u.name}</p>
-                  <p className="text-white/40 text-xs truncate">
-                    @{u.username} · {u.email}
-                  </p>
-                </div>
-                {u.isPicker && (
-                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-amber-400/15 text-amber-400">
-                    Picker
-                  </span>
-                )}
-                <span
-                  className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase ${
-                    u.isActive ? 'bg-emerald-500/15 text-emerald-400' : 'bg-white/8 text-white/40'
-                  }`}
-                >
-                  {u.isActive ? 'Activo' : 'Inactivo'}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2 mt-3">
-                <button
-                  onClick={() => setReset(u)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
-                >
-                  Cambiar contraseña
-                </button>
-                <button
-                  onClick={() => setConfirm({ user: u, kind: 'active' })}
-                  disabled={deactivateBlockedReason(u) !== null}
-                  title={deactivateBlockedReason(u) ?? 'Desactivar o activar el acceso'}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {u.isActive ? 'Desactivar' : 'Activar'}
-                </button>
-                <button
-                  onClick={() => setConfirm({ user: u, kind: 'picker' })}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold border transition-all ${
-                    u.isPicker
-                      ? 'bg-amber-400/15 border-amber-400/40 text-amber-400'
-                      : 'bg-white/5 border-white/10 text-white/70 hover:text-white'
-                  }`}
-                >
-                  {u.isPicker ? 'Quitar de picking' : 'Habilitar picking'}
-                </button>
-              </div>
-
-              {deactivateBlockedReason(u) && (
-                <p className="text-white/40 text-[11px] font-semibold mt-2 flex items-center gap-1.5">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                    <path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  {deactivateBlockedReason(u) === 'Es tu propia cuenta'
-                    ? 'No puedes desactivar tu propia cuenta'
-                    : 'No puedes desactivar al último superusuario activo'}
-                </p>
-              )}
-            </div>
-          ))}
-          {users.length === 0 && (
-            <p className="text-white/30 text-sm text-center py-10">Aún no hay usuarios.</p>
-          )}
-        </div>
-      )}
-
-      {confirm && (
-        <ConfirmUserModal
-          user={confirm.user}
-          kind={confirm.kind}
-          onClose={() => setConfirm(null)}
-          onConfirm={() => applyToggle(confirm.user, confirm.kind)}
-        />
-      )}
-
-      {reset && (
-        <ResetPasswordModal
-          user={reset}
-          onClose={() => setReset(null)}
-          onConfirm={(password) => applyReset(reset, password)}
-        />
-      )}
     </div>
   )
 }

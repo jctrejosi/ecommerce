@@ -230,7 +230,7 @@ export default function DriverChatModal({
                   placeholder="Buscar por nombre o código…"
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full rounded-xl border border-line bg-surface-2 py-2 pl-9 pr-8 text-sm outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-100"
+                  className="w-full rounded-xl border border-line bg-surface-2 py-2 pl-9 pr-8 text-sm outline-none transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent-soft"
                 />
                 {query && (
                   <button
@@ -243,58 +243,65 @@ export default function DriverChatModal({
                 )}
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto pb-2">
-              {chats.length === 0 && (
-                <p className="p-8 text-center text-xs text-ink-faint">
-                  No hay repartidores registrados.
-                </p>
-              )}
-              {chats.length > 0 && visible.length === 0 && (
-                <p className="p-8 text-center text-xs text-ink-faint">
-                  Ningún repartidor coincide con “{query}”.
-                </p>
-              )}
-              {visible.map((c) => (
-                <button
-                  key={c.driverId}
-                  onClick={() => setActiveId(c.driverId)}
-                  className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-2"
-                >
-                  <ChatAvatar
-                    driverId={c.driverId}
-                    routeColor={c.routeColor}
-                    name={c.fullName}
-                    size={38}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-sm font-semibold text-ink">
-                        {c.fullName}
-                        {c.username && (
-                          <span className="ml-1.5 text-[11px] font-normal text-ink-faint">
-                            @{c.username}
+            <div className="relative min-h-0 flex-1">
+              <div className="h-full overflow-y-auto pb-6">
+                {chats.length === 0 && (
+                  <p className="p-8 text-center text-xs text-ink-faint">
+                    No hay repartidores registrados.
+                  </p>
+                )}
+                {chats.length > 0 && visible.length === 0 && (
+                  <p className="p-8 text-center text-xs text-ink-faint">
+                    Ningún repartidor coincide con “{query}”.
+                  </p>
+                )}
+                {visible.map((c) => (
+                  <button
+                    key={c.driverId}
+                    onClick={() => setActiveId(c.driverId)}
+                    className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-2"
+                  >
+                    <ChatAvatar
+                      driverId={c.driverId}
+                      routeColor={c.routeColor}
+                      name={c.fullName}
+                      size={38}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="min-w-0 truncate text-sm font-semibold text-ink">
+                          {c.fullName}
+                          {c.username && (
+                            <span className="ml-1.5 text-[11px] font-normal text-ink-faint">
+                              @{c.username}
+                            </span>
+                          )}
+                        </p>
+                        <span className="shrink-0 text-[10px] text-ink-faint">
+                          {c.lastMessage ? timeAgo(c.lastMessage.createdAt) : ''}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="truncate text-xs text-ink-faint">
+                          {c.lastMessage
+                            ? `${c.lastMessage.senderType === 'admin' ? 'Tú: ' : ''}${c.lastMessage.body}`
+                            : 'Sin mensajes · inicia la conversación'}
+                        </p>
+                        {c.unread > 0 && (
+                          <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
+                            {c.unread}
                           </span>
                         )}
-                      </p>
-                      <span className="shrink-0 text-[10px] text-ink-faint">
-                        {c.lastMessage ? timeAgo(c.lastMessage.createdAt) : ''}
-                      </span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-xs text-ink-faint">
-                        {c.lastMessage
-                          ? `${c.lastMessage.senderType === 'admin' ? 'Tú: ' : ''}${c.lastMessage.body}`
-                          : 'Sin mensajes · inicia la conversación'}
-                      </p>
-                      {c.unread > 0 && (
-                        <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-rose-500 px-1.5 text-[10px] font-bold text-white">
-                          {c.unread}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
+              {/* Difumina las filas contra el borde mientras la lista scrollea. */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 bottom-0 h-5 bg-[linear-gradient(to_top,var(--t-surface),transparent)]"
+              />
             </div>
           </>
         )}
@@ -354,13 +361,13 @@ export default function DriverChatModal({
                 rows={1}
                 maxLength={2000}
                 placeholder={`Escribe a ${active.fullName}…`}
-                className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-line px-3 py-2.5 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-line px-3 py-2.5 text-sm outline-none transition focus:border-accent focus:ring-2 focus:ring-accent-soft"
               />
               <button
                 onClick={() => void send()}
                 disabled={!text.trim() || sending}
                 title="Enviar (Enter)"
-                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-amber-400 px-4 text-sm font-bold text-amber-950 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex h-10 shrink-0 items-center gap-1.5 rounded-xl bg-accent px-4 text-sm font-bold text-on-accent transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {sending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

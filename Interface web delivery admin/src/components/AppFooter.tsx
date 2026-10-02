@@ -1,9 +1,10 @@
 import logo from '../assets/logo.png';
 
-// Footer institucional (DSI). Se usa tanto en el panel como en el login.
+// Footer institucional (DSI). Sigue el tema del panel (claro u oscuro); se usa
+// tanto en el panel como en la pantalla de login.
 export default function AppFooter() {
   return (
-    <footer className="shrink-0" style={{ background: '#111827' }}>
+    <footer className="app-footer shrink-0 border-t border-line">
       <div className="flex flex-col items-center justify-center gap-x-4 gap-y-1 px-3 py-2 text-center md:flex-row">
         <a
           href="https://dsi.com.co"
@@ -14,14 +15,11 @@ export default function AppFooter() {
           {/* h-[22px]: 10% menos que los 24px anteriores. */}
           <img src={logo} alt="Mercaldas" className="h-[22px] w-auto object-contain" />
         </a>
-        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.6)' }}>
-          © 2026 Desarrollado por{' '}
-          <span className="font-bold text-white/70">DSI SA</span> · Todos los
+        <p className="text-xs text-ink-soft">
+          © 2026 Desarrollado por <span className="font-bold text-ink">DSI SA</span> · Todos los
           derechos reservados
         </p>
-        <p className="text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
-          Manizales, Caldas, Colombia
-        </p>
+        <p className="text-xs text-ink-faint">Manizales, Caldas, Colombia</p>
       </div>
     </footer>
   );

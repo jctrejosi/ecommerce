@@ -50,24 +50,6 @@ const WAZE_LIGHT: Palette = {
   roadNameSizeBoost: 1,
 };
 
-const WAZE_DARK: Palette = {
-  bg: '#181a1f',
-  landuse: '#1f2228',
-  park: '#20281f',
-  water: '#202f40',
-  waterway: '#223849',
-  building: '#23262d',
-  roadMinor: ['#0c0e11', '#33373d'],
-  roadSecondary: ['#0a0c0e', '#3d424a'],
-  roadPrimary: ['#07090b', '#4a505a'],
-  roadHighway: ['#5c470f', '#f5c84c'],
-  roadPath: ['#0e1013', '#262a2f'],
-  label: '#e6e8ea',
-  labelHalo: '#181a1f',
-  place: '#c9ced4',
-  roadNameSizeBoost: 1.05,
-};
-
 /** Filtro clásico OMT: vías lineales que no sean ramp. */
 const lineFilter = (cls: string): FilterSpecification => [
   'all',
@@ -338,7 +320,6 @@ export interface MapStyleOption {
 }
 
 export const WAZE_LIGHT_SPEC = buildWazeSpec(WAZE_LIGHT, false);
-export const WAZE_DARK_SPEC = buildWazeSpec(WAZE_DARK, true);
 
 function rasterSpec(
   name: string,
@@ -400,14 +381,6 @@ export const MAP_STYLE_OPTIONS: MapStyleOption[] = [
     spec: WAZE_LIGHT_SPEC,
     swatch:
       'linear-gradient(#ffffff 0 0) 50% 35%/80% 2px no-repeat, linear-gradient(#ffffff 0 0) 50% 55%/60% 2px no-repeat, linear-gradient(#ffe9ad 0 0) 50% 45%/90% 3px no-repeat, #f2f3f4',
-  },
-  {
-    id: 'waze-dark',
-    name: 'Waze Oscuro',
-    spec: WAZE_DARK_SPEC,
-    dark: true,
-    swatch:
-      'linear-gradient(#3d424a 0 0) 50% 35%/80% 2px no-repeat, linear-gradient(#3d424a 0 0) 50% 55%/60% 2px no-repeat, linear-gradient(#f5c84c 0 0) 50% 45%/90% 3px no-repeat, #181a1f',
   },
   {
     id: 'standard',

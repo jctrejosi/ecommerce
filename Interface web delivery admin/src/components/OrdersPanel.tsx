@@ -154,7 +154,7 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar pedido, repartidor, cliente…"
-            className="w-72 rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-xs outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+            className="w-72 rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-accent-soft"
           />
         </div>
       </div>

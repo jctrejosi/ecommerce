@@ -1,4 +1,5 @@
 import type {
+  ActiveAssignment,
   AssignmentStatus,
   DriverFilter,
   FleetDriver,
@@ -78,6 +79,26 @@ export const ACTIVE_STATUSES: AssignmentStatus[] = [
   'PICKED_UP',
   'IN_DELIVERY',
 ];
+
+/** Hito del pedido activo al que corresponde cada estado. */
+export function assignmentMilestone(
+  a: ActiveAssignment,
+): { label: string; at: string | null } | null {
+  switch (a.status) {
+    case 'ASSIGNED':
+      return { label: 'Asignado', at: a.assignedAt };
+    case 'ACCEPTED':
+      return { label: 'Aceptado', at: a.acceptedAt };
+    case 'READY_FOR_PICKUP':
+      return { label: 'Recogiendo', at: a.acceptedAt };
+    case 'PICKED_UP':
+      return { label: 'Recogido', at: a.pickedUpAt };
+    case 'IN_DELIVERY':
+      return { label: 'En entrega desde', at: a.inDeliveryAt };
+    default:
+      return null;
+  }
+}
 
 export interface DriverVisual {
   color: string;

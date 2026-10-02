@@ -583,7 +583,7 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
             vectorTileErrors += 1;
             if (vectorTileErrors >= 6) {
               const current = styleOptionRef.current;
-              if (current.id === 'waze' || current.id === 'waze-dark') {
+              if (current.id === 'waze') {
                 console.warn(
                   '[delivery-admin:map] los tiles vectoriales no cargan — cambio a Estándar (raster)',
                 );
@@ -965,7 +965,7 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
               }}
               className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold transition-colors ${
                 styleOption.id === opt.id
-                  ? 'bg-amber-50 text-ink'
+                  ? 'bg-accent-soft text-ink'
                   : 'text-ink-soft hover:bg-surface-2'
               }`}
             >
@@ -975,7 +975,7 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
               />
               {opt.name}
               {styleOption.id === opt.id && (
-                <Check className="ml-auto h-3.5 w-3.5 text-amber-500" />
+                <Check className="ml-auto h-3.5 w-3.5 text-accent" />
               )}
             </button>
           ))}

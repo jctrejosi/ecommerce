@@ -6,8 +6,8 @@
     <title>Mercaldas delivery admin | DSI</title>
     <link rel="icon" type="image/png" href="/src/assets/delivery.png" />
     <script>
-      // Aplica el tema guardado antes de que cargue el bundle (evita el
-      // destello en claro cuando el tema elegido es oscuro).
+      // Aplica el tema y el acento guardados antes de que cargue el bundle
+      // (evita el destello en claro cuando el tema elegido es oscuro).
       try {
         var t = localStorage.getItem('delivery_admin_theme');
         if (t === 'dark') document.documentElement.dataset.theme = 'dark';
@@ -17,6 +17,8 @@
           ).matches
             ? 'dark'
             : 'light';
+        var a = localStorage.getItem('delivery_admin_accent');
+        if (a) document.documentElement.dataset.accent = a;
       } catch (e) {}
     </script>
   </head>

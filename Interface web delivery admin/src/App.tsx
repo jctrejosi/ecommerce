@@ -34,7 +34,7 @@ import {
   type FleetStatusEvent,
 } from './services/socket';
 import { filterDrivers, isDriverOnline } from './lib/status';
-import { useTheme, type Theme } from './lib/theme';
+import { useAccent, useTheme, type Accent, type Theme } from './lib/theme';
 import { initials } from './lib/format';
 import {
   notificationPermission,
@@ -63,11 +63,32 @@ const TABS: { key: Tab; label: string; icon: typeof Truck }[] = [
   { key: 'orders', label: 'Pedidos', icon: Package },
 ];
 
-/** Opciones del cambiador de temas del menú de usuario. */
-const THEMES: { key: Theme; label: string; icon: typeof Sun }[] = [
-  { key: 'light', label: 'Claro', icon: Sun },
-  { key: 'dark', label: 'Oscuro', icon: Moon },
-  { key: 'system', label: 'Sistema', icon: Monitor },
+/** Temas del menú de usuario: botón circular con el color de cada uno. */
+const THEMES: {
+  key: Theme;
+  label: string;
+  icon: typeof Sun;
+  bg: string;
+  fg: string;
+}[] = [
+  { key: 'light', label: 'Claro', icon: Sun, bg: '#ffffff', fg: '#0f172a' },
+  { key: 'dark', label: 'Oscuro', icon: Moon, bg: '#0f172a', fg: '#e2e8f0' },
+  {
+    key: 'system',
+    label: 'Sistema',
+    icon: Monitor,
+    bg: 'linear-gradient(135deg, #ffffff 50%, #0f172a 50%)',
+    fg: '#ffffff',
+  },
+];
+
+/** Colores de acento del menú de usuario (botones, focos y selección). */
+const ACCENTS: { key: Accent; label: string; color: string; on: string }[] = [
+  { key: 'ambar', label: 'Ámbar', color: '#fbbf24', on: '#451a03' },
+  { key: 'azul', label: 'Azul', color: '#60a5fa', on: '#0b1e46' },
+  { key: 'verde', label: 'Verde', color: '#34d399', on: '#022c22' },
+  { key: 'violeta', label: 'Violeta', color: '#a78bfa', on: '#2e1065' },
+  { key: 'rosa', label: 'Rosa', color: '#fb7185', on: '#4c0519' },
 ];
 
 /** Explicación (título del botón) según el estado de las notificaciones. */
@@ -86,6 +107,7 @@ export default function App() {
   /** Menú del usuario (avatar): cambiador de temas. */
   const [userMenu, setUserMenu] = useState(false);
   const [theme, setTheme] = useTheme();
+  const [accent, setAccent] = useAccent();
 
   const [drivers, setDrivers] = useState<FleetDriver[]>([]);
   const [loading, setLoading] = useState(false);
@@ -511,33 +533,70 @@ export default function App() {
                     <p className="truncate text-[11px] text-ink-faint">{user.email}</p>
                   </div>
                   <div className="p-2">
-                    <p className="px-2 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                    <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                       Tema
                     </p>
-                    {THEMES.map((t) => {
-                      const Icon = t.icon;
-                      const active = theme === t.key;
-                      return (
-                        <button
-                          key={t.key}
-                          onClick={() => {
-                            setTheme(t.key);
-                            setUserMenu(false);
-                          }}
-                          role="menuitemradio"
-                          aria-checked={active}
-                          className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold transition-colors ${
-                            active
-                              ? 'bg-surface-3 text-ink'
-                              : 'text-ink-soft hover:bg-surface-2'
-                          }`}
-                        >
-                          <Icon className="h-3.5 w-3.5" />
-                          {t.label}
-                          {active && <Check className="ml-auto h-3.5 w-3.5 text-amber-500" />}
-                        </button>
-                      );
-                    })}
+                    <div className="flex items-center gap-2 px-2 pb-1.5 pt-0.5">
+                      {THEMES.map((t) => {
+                        const Icon = t.icon;
+                        const active = theme === t.key;
+                        return (
+                          <button
+                            key={t.key}
+                            onClick={() => {
+                              setTheme(t.key);
+                              setUserMenu(false);
+                            }}
+                            title={t.label}
+                            aria-label={t.label}
+                            role="menuitemradio"
+                            aria-checked={active}
+                            className={`flex h-6 w-6 items-center justify-center rounded-full transition ${
+                              active
+                                ? 'ring-2 ring-ink'
+                                : 'ring-1 ring-line hover:ring-ink-faint'
+                            }`}
+                            style={{ background: t.bg }}
+                          >
+                            <Icon
+                              className="h-3.5 w-3.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.45)]"
+                              style={{ color: t.fg }}
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-2 px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                      Color
+                    </p>
+                    <div className="flex items-center gap-2 px-2 pb-1.5 pt-0.5">
+                      {ACCENTS.map((a) => {
+                        const active = accent === a.key;
+                        return (
+                          <button
+                            key={a.key}
+                            onClick={() => {
+                              setAccent(a.key);
+                              setUserMenu(false);
+                            }}
+                            title={a.label}
+                            aria-label={a.label}
+                            role="menuitemradio"
+                            aria-checked={active}
+                            className={`flex h-6 w-6 items-center justify-center rounded-full transition ${
+                              active
+                                ? 'ring-2 ring-ink'
+                                : 'ring-1 ring-line hover:ring-ink-faint'
+                            }`}
+                            style={{ background: a.color }}
+                          >
+                            {active && (
+                              <Check className="h-3.5 w-3.5" style={{ color: a.on }} />
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               </>
@@ -649,7 +708,13 @@ export default function App() {
       {modal && (
         <DriverFormModal
           mode={modal.mode}
-          driver={modal.mode === 'edit' ? modal.driver : null}
+          /* Se busca en la lista viva: el polling refresca el pedido activo
+             mientras el modal está abierto. */
+          driver={
+            modal.mode === 'edit'
+              ? (drivers.find((d) => d.id === modal.driver.id) ?? modal.driver)
+              : null
+          }
           onClose={() => setModal(null)}
           onSaved={handleSaved}
         />

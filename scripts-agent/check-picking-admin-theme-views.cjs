@@ -18,7 +18,7 @@ const bcrypt = requireFromBackend('bcryptjs');
 const PANEL_URL = process.env.PANEL_URL || 'http://127.0.0.1:8446/';
 const DEBUG_PORT = 9351;
 const ADMIN = { username: 'qa-views-admin', password: 'qa-views-1234' };
-const TABS = ['Estanterías', 'Categorías', 'Mapa', 'Productos', 'Pedidos', 'Usuarios', 'Horarios', 'Pickers'];
+const TABS = ['Estanterías', 'Categorías', 'Mapa', 'Productos', 'Pedidos', 'Usuarios', 'Horarios'];
 
 let checks = 0;
 let failures = 0;

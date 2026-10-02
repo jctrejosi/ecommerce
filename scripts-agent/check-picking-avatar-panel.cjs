@@ -199,7 +199,6 @@ async function main() {
 
     console.log('\n== La foto en el panel ==');
     await verificarFoto('Usuarios');
-    await verificarFoto('Pickers');
 
     mkdirSync('scripts-agent/.scratch', { recursive: true });
     // Vuelve a Usuarios para la captura.

@@ -23,6 +23,21 @@ const OUT = path.join(__dirname, '.scratch');
 
 const esperar = (ms) => new Promise((r) => setTimeout(r, ms));
 
+/** Convierte un color computado (rgb(...) o color(srgb ...)) a 0-255. */
+const canales = (color) => {
+  const s = String(color);
+  if (s.startsWith('color(')) {
+    return (s.match(/[\d.]+/g) ?? []).slice(0, 3).map((n) => Math.round(Number(n) * 255));
+  }
+  return (s.match(/\d+/g) ?? []).map(Number);
+};
+
+/** Un color de fondo claro (suma de canales alta). */
+const esClaro = (rgb) => {
+  const [r, g, b] = canales(rgb);
+  return r + g + b > 600;
+};
+
 async function esperarDevtools() {
   for (let i = 0; i < 60; i++) {
     try {
@@ -139,6 +154,8 @@ async function main() {
         tema: document.documentElement.dataset.theme ?? null,
         guardado: localStorage.getItem('delivery_admin_theme'),
         fondo: getComputedStyle(document.body).backgroundColor,
+        footer: getComputedStyle(document.querySelector('footer')).backgroundColor,
+        inkFaint: getComputedStyle(document.documentElement).getPropertyValue('--t-ink-faint').trim(),
       })`),
     );
     console.log(`[2] estado inicial: ${JSON.stringify(inicial)}`);
@@ -151,7 +168,7 @@ async function main() {
     const menu = JSON.parse(
       await evaluar(`(() => {
         const textos = [...document.querySelectorAll('[role="menuitemradio"]')].map((b) =>
-          b.textContent.trim());
+          b.getAttribute('aria-label') || b.textContent.trim());
         return JSON.stringify({ opciones: textos });
       })()`),
     );
@@ -161,7 +178,7 @@ async function main() {
     // Elegir Oscuro.
     await evaluar(`(() => {
       const b = [...document.querySelectorAll('[role="menuitemradio"]')].find(
-        (n) => n.textContent.trim() === 'Oscuro');
+        (n) => n.getAttribute('aria-label') === 'Oscuro');
       b?.click();
       return Boolean(b);
     })()`);
@@ -171,6 +188,7 @@ async function main() {
         tema: document.documentElement.dataset.theme ?? null,
         guardado: localStorage.getItem('delivery_admin_theme'),
         fondo: getComputedStyle(document.body).backgroundColor,
+        footer: getComputedStyle(document.querySelector('footer')).backgroundColor,
       })`),
     );
     console.log(`[5] tras elegir Oscuro: ${JSON.stringify(oscuro)}`);
@@ -244,7 +262,7 @@ async function main() {
     await esperar(500);
     await evaluar(`(() => {
       const b = [...document.querySelectorAll('[role="menuitemradio"]')].find(
-        (n) => n.textContent.trim() === 'Sistema');
+        (n) => n.getAttribute('aria-label') === 'Sistema');
       b?.click();
       return Boolean(b);
     })()`);
@@ -266,7 +284,7 @@ async function main() {
     await esperar(500);
     await evaluar(`(() => {
       const b = [...document.querySelectorAll('[role="menuitemradio"]')].find(
-        (n) => n.textContent.trim() === 'Claro');
+        (n) => n.getAttribute('aria-label') === 'Claro');
       b?.click();
       return Boolean(b);
     })()`);
@@ -279,21 +297,108 @@ async function main() {
     );
     console.log(`[8] de vuelta en claro: ${JSON.stringify(final)}`);
 
+    // ── Acentos de color ──
+    console.log('[9] probar los acentos de color');
+    await evaluar(`document.querySelector('button[title="Cuenta y tema"]').click(); true`);
+    await esperar(500);
+    const swatches = await evaluar(
+      `JSON.stringify([...document.querySelectorAll('[role="menuitemradio"][aria-label]')].map((b) => b.getAttribute('aria-label')))`,
+    );
+    console.log(`[10] swatches: ${swatches}`);
+
+    await evaluar(`(() => {
+      const b = document.querySelector('[role="menuitemradio"][aria-label="Azul"]');
+      b?.click();
+      return Boolean(b);
+    })()`);
+    await esperar(600);
+    // Medir el botón primario (bg-accent) en Repartidores.
+    await evaluar(`(() => {
+      const b = [...document.querySelectorAll('header nav button')].find(
+        (n) => n.textContent.trim() === 'Repartidores');
+      b?.click();
+      return Boolean(b);
+    })()`);
+    await esperar(1500);
+    const azul = JSON.parse(
+      await evaluar(`(() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          (n) => n.textContent.trim().includes('Nuevo repartidor'));
+        return JSON.stringify({
+          accent: document.documentElement.dataset.accent ?? null,
+          guardado: localStorage.getItem('delivery_admin_accent'),
+          boton: btn ? getComputedStyle(btn).backgroundColor : null,
+          footer: getComputedStyle(document.querySelector('footer')).backgroundColor,
+          fondo: getComputedStyle(document.body).backgroundColor,
+          inkFaint: getComputedStyle(document.documentElement).getPropertyValue('--t-ink-faint').trim(),
+        });
+      })()`),
+    );
+    console.log(`[11] con acento azul: ${JSON.stringify(azul)}`);
+    await captura('tema-acento-azul.png');
+
+    // Recargar: el acento debe persistir.
+    await enviar('Page.reload');
+    await esperarSelector('button[title="Cuenta y tema"]', 120);
+    await esperar(2500);
+    const azulRecargado = await evaluar(`document.documentElement.dataset.accent ?? null`);
+    console.log(`[12] acento tras recargar: ${azulRecargado}`);
+
+    // Volver a ámbar y al tema claro para dejar el panel como estaba.
+    await evaluar(`document.querySelector('button[title="Cuenta y tema"]').click(); true`);
+    await esperar(500);
+    await evaluar(`(() => {
+      const b = document.querySelector('[role="menuitemradio"][aria-label="Ámbar"]');
+      b?.click();
+      return Boolean(b);
+    })()`);
+    await esperar(600);
+
     // ── Assertions ──
     if (inicial.tema !== 'light') problemas.push(`el tema inicial debería ser claro (${inicial.tema})`);
-    if (inicial.fondo !== 'rgb(241, 245, 249)') problemas.push(`fondo inicial inesperado: ${inicial.fondo}`);
+    if (!esClaro(inicial.fondo)) problemas.push(`fondo inicial inesperado: ${inicial.fondo}`);
     const opciones = (menu.opciones ?? []).join('|');
     if (!/Claro/.test(opciones) || !/Oscuro/.test(opciones) || !/Sistema/.test(opciones)) {
       problemas.push(`faltan opciones de tema: ${opciones}`);
     }
     if (oscuro.tema !== 'dark') problemas.push('elegir Oscuro no aplicó data-theme=dark');
     if (oscuro.guardado !== 'dark') problemas.push('la preferencia no se guardó en localStorage');
-    if (oscuro.fondo !== 'rgb(11, 17, 32)') problemas.push(`fondo oscuro inesperado: ${oscuro.fondo}`);
+    if (esClaro(oscuro.fondo)) {
+      problemas.push(`fondo oscuro inesperado: ${oscuro.fondo}`);
+    }
+    if (esClaro(oscuro.footer)) {
+      problemas.push(`el footer en oscuro debería ser oscuro: ${oscuro.footer}`);
+    }
     if (recargado.tema !== 'dark') problemas.push('al recargar no se mantuvo el tema oscuro');
     if (sistemaDark !== 'dark') problemas.push(`Sistema con SO oscuro dio ${sistemaDark}`);
     if (sistemaLight !== 'light') problemas.push(`Sistema con SO claro dio ${sistemaLight}`);
     if (final.tema !== 'light') problemas.push('no se pudo volver al tema claro');
     if (final.guardado !== 'light') problemas.push(`la preferencia final no quedó en light (${final.guardado})`);
+
+    const listaSwatches = JSON.parse(swatches ?? '[]');
+    if (listaSwatches.length < 5) problemas.push(`se esperaban 5 colores de acento: ${swatches}`);
+    if (azul.accent !== 'azul') problemas.push('elegir Azul no aplicó data-accent=azul');
+    if (azul.guardado !== 'azul') problemas.push('el acento no se guardó en localStorage');
+    if (azul.boton !== 'rgb(96, 165, 250)') {
+      problemas.push(`el botón primario no tomó el acento azul: ${azul.boton}`);
+    }
+    if (!esClaro(azul.footer)) {
+      problemas.push(`el footer en claro debería ser claro: ${azul.footer}`);
+    }
+    // El color tiñe el tema entero: el fondo cambia y toma el matiz elegido.
+    if (azul.fondo === inicial.fondo) {
+      problemas.push(`el fondo no cambió al elegir azul (${azul.fondo})`);
+    } else {
+      const [r, , b] = canales(azul.fondo);
+      if (b <= r) problemas.push(`el fondo con azul no tiene matiz azul: ${azul.fondo}`);
+    }
+    if (inicial.inkFaint !== '#5c6b84') {
+      problemas.push(`--t-ink-faint en claro inesperado: ${inicial.inkFaint}`);
+    }
+    if (!esClaro(inicial.footer)) {
+      problemas.push(`el footer en claro debería ser claro: ${inicial.footer}`);
+    }
+    if (azulRecargado !== 'azul') problemas.push('el acento no persistió tras recargar');
 
     console.log(`\nerrores de consola: ${errores.length}${errores.length ? ` → ${errores.join(' | ')}` : ''}`);
     console.log(problemas.length ? `❌ ${problemas.join(' · ')}` : '✅ cambiador de temas OK');

@@ -7,7 +7,8 @@
  *   4. filtra por id del repartidor,
  *   5. sin coincidencias muestra el aviso,
  *   6. limpiar con la X restaura la lista completa,
- *   7. la lista no toca el borde inferior del modal (pb-2),
+ *   7. la lista tiene colchón inferior (pb-6) y degradado que difumina las
+ *      filas contra el borde mientras scrollea (sin corte a ras),
  *   8. click en una fila abre el hilo y la flecha vuelve a la lista.
  *
  * Uso: node scripts-agent/check-chat-modal-search.cjs [puerto]
@@ -108,7 +109,10 @@ async function main() {
     const HELPERS = `
       window.__c = {
         input: () => document.querySelector('input[placeholder^="Buscar por nombre"]'),
-        cont: () => window.__c.input().closest('div.shrink-0').nextElementSibling,
+        cont: () =>
+          window.__c.input()
+            .closest('div.rounded-2xl')
+            .querySelector('div.overflow-y-auto'),
         filas: () => [...window.__c.cont().querySelectorAll(':scope > button')],
         textos: () => window.__c.filas().map((b) => b.innerText.replace(/\\s+/g, ' ').trim()),
         escribir: (el, v) => {
@@ -241,10 +245,53 @@ async function main() {
     const volvio = JSON.parse(await evaluar(`JSON.stringify(window.__c.textos())`));
     console.log(`[11] tras volver: ${volvio.length} filas (filtro "juan" conservado)`);
 
+    // ── Fade inferior: las filas se difuminan contra el borde ──
+    const fade = JSON.parse(await evaluar(`JSON.stringify((() => {
+      const cont = window.__c.cont();
+      const ov = cont.parentElement.querySelector(':scope > div[aria-hidden="true"]');
+      const cs = ov ? getComputedStyle(ov) : null;
+      return {
+        hayOverlay: Boolean(ov),
+        pointerEvents: cs ? cs.pointerEvents : null,
+        gradiente: cs ? cs.backgroundImage.includes('linear-gradient') : false,
+        alto: ov ? Math.round(ov.getBoundingClientRect().height) : 0,
+      };
+    })())`));
+    console.log(`[12] fade inferior: ${JSON.stringify(fade)}`);
+
+    // ── Scroll real: captura a mitad y hueco al final ──
+    await evaluar(`window.__c.limpiar(); true`);
+    await esperar(500);
+    let hayScroll = JSON.parse(await evaluar(`(() => { const c = window.__c.cont(); return c.scrollHeight > c.clientHeight; })()`));
+    if (!hayScroll) {
+      // La ventana de prueba es alta: se encoge el modal para forzar el scroll.
+      await evaluar(`(() => { window.__c.input().closest('div.rounded-2xl').style.height = '240px'; return true; })()`);
+      await esperar(400);
+      hayScroll = JSON.parse(await evaluar(`(() => { const c = window.__c.cont(); return c.scrollHeight > c.clientHeight; })()`));
+    }
+    const scrollMid = JSON.parse(await evaluar(`(() => { const c = window.__c.cont(); c.scrollTop = Math.floor((c.scrollHeight - c.clientHeight) / 2); return Math.round(c.scrollTop); })()`));
+    const shotMid = await enviar('Page.captureScreenshot', { format: 'png' });
+    if (shotMid?.data) {
+      fs.writeFileSync(path.join(OUT, 'chat-lista-scroll-mid.png'), Buffer.from(shotMid.data, 'base64'));
+    }
+    await evaluar(`(() => { const c = window.__c.cont(); c.scrollTop = c.scrollHeight; return true; })()`);
+    await esperar(300);
+    const huecoFinal = JSON.parse(await evaluar(`(() => {
+      const cont = window.__c.cont();
+      const filas = window.__c.filas();
+      const u = filas[filas.length - 1];
+      return Math.round(cont.getBoundingClientRect().bottom - u.getBoundingClientRect().bottom);
+    })()`));
+    const shotFinal = await enviar('Page.captureScreenshot', { format: 'png' });
+    if (shotFinal?.data) {
+      fs.writeFileSync(path.join(OUT, 'chat-lista-scroll-final.png'), Buffer.from(shotFinal.data, 'base64'));
+    }
+    console.log(`[13] scroll: hay=${hayScroll} mid=${scrollMid}px huecoAlFinal=${huecoFinal}px`);
+
     // ── Assertions ──
     if (total.length < 2) problemas.push(`se esperaban varios repartidores, hay ${total.length}`);
-    if (medida.pb !== '8px') problemas.push(`la lista no tiene pb-2: ${medida.pb}`);
-    if (!medida.hayScroll && !(medida.huecoInferior >= 8)) {
+    if (medida.pb !== '24px') problemas.push(`la lista no tiene pb-6: ${medida.pb}`);
+    if (!medida.hayScroll && !(medida.huecoInferior >= 24)) {
       problemas.push(`la última fila toca el borde inferior (hueco ${medida.huecoInferior}px)`);
     }
     if (medida.dentroDelModal !== 0) problemas.push('la lista no llega al fondo del modal');
@@ -265,6 +312,12 @@ async function main() {
     if (cabecera !== 'con @juan') problemas.push(`la cabecera del hilo no muestra @juan (${cabecera})`);
     if (!volvio.length || !volvio.every((t) => /juan/i.test(t))) {
       problemas.push(`volver a la lista perdió el filtro: ${JSON.stringify(volvio)}`);
+    }
+    if (!fade.hayOverlay || fade.pointerEvents !== 'none' || !fade.gradiente) {
+      problemas.push(`falta el degradado inferior de la lista: ${JSON.stringify(fade)}`);
+    }
+    if (huecoFinal < 22) {
+      problemas.push(`la última fila no conserva colchón inferior al final del scroll (${huecoFinal}px)`);
     }
 
     console.log(`\nerrores de consola: ${errores.length}${errores.length ? ` → ${errores.join(' | ')}` : ''}`);

@@ -297,15 +297,15 @@ async function main() {
     );
     check('la bandeja se cierra', closed);
 
-    console.log('\n== Chat por picker en la pestaña Pickers ==');
+    console.log('\n== Chat por picker en la pestaña Usuarios ==');
     await evaluate(`(() => {
-      const b = [...document.querySelectorAll('main button')].find((x) => x.textContent.trim() === 'Pickers');
+      const b = [...document.querySelectorAll('main button')].find((x) => x.textContent.trim() === 'Usuarios');
       b?.click(); return !!b;
     })()`);
     // La pestaña carga las métricas: hay que esperar a que terminen.
     for (let i = 0; i < 60; i++) {
       const done = await evaluate(
-        `document.body.innerText.includes('Estado en vivo') && !document.body.innerText.includes('Actualizando…')`,
+        `document.body.innerText.includes('estado en vivo') && !document.body.innerText.includes('Actualizando…')`,
       );
       if (done) break;
       await sleep(300);

@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { AlertTriangle, KeyRound, Loader2, X } from 'lucide-react';
+import { AlertTriangle, KeyRound, Loader2, Package, X } from 'lucide-react';
 import type { FleetDriver } from '../types';
 import { api, ApiError } from '../services/api';
 import { driverVisual } from '../lib/status';
+import { ActiveOrderCard } from './DriverBits';
 
 interface Props {
   mode: 'create' | 'edit';
@@ -43,7 +44,7 @@ const EMPTY: FormState = {
 };
 
 const inputCls =
-  'w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-100';
+  'w-full rounded-xl border border-line bg-surface-2 px-3 py-2 text-sm outline-none transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent-soft';
 
 function Field({
   label,
@@ -246,6 +247,8 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
     form.phone.trim().length >= 6 &&
     (mode === 'edit' || form.password.length >= 8);
 
+  const assignment = mode === 'edit' ? driver?.activeAssignment ?? null : null;
+
   return (
     <div className="fixed inset-0 z-1000 flex items-center justify-center bg-overlay/50 p-4 backdrop-blur-sm">
       <div className="max-h-[92vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-surface shadow-2xl">
@@ -267,6 +270,15 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
             <X className="h-4 w-4" />
           </button>
         </div>
+
+        {assignment && (
+          <div className="border-b border-line px-5 py-3.5">
+            <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+              <Package className="h-3.5 w-3.5" /> Pedido activo
+            </p>
+            <ActiveOrderCard assignment={assignment} />
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4 p-5">
           <div className="grid grid-cols-2 gap-3">
@@ -452,7 +464,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
                 type="button"
                 onClick={abrirConfirmacionReset}
                 disabled={busy || newPassword.length < 8}
-                className="shrink-0 rounded-xl bg-amber-400 px-4 py-2 text-sm font-bold text-amber-950 transition hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-50"
+                className="shrink-0 rounded-xl bg-accent px-4 py-2 text-sm font-bold text-on-accent transition hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-50"
               >
                 Actualizar
               </button>

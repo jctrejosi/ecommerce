@@ -34,43 +34,92 @@
   --color-invert: var(--t-invert);
   --color-invert-ink: var(--t-invert-ink);
   --color-overlay: var(--t-overlay);
+  --color-accent: var(--t-accent);
+  --color-accent-strong: var(--t-accent-strong);
+  --color-accent-soft: var(--t-accent-soft);
+  --color-on-accent: var(--t-on-accent);
 }
 
-/* Tema claro (el de siempre). */
+/* Tema claro. Los colores estructurales se derivan del acento elegido: al
+   cambiar de color, cambia el tema entero (fondos, superficies, bordes…). */
 :root {
   color-scheme: light;
-  --t-page: #f1f5f9;
-  --t-surface: #ffffff;
-  --t-surface-2: #f8fafc;
-  --t-surface-3: #f1f5f9;
-  --t-line: #e2e8f0;
+  --t-page: color-mix(in srgb, var(--t-accent) 9%, #eef1f7);
+  --t-surface: color-mix(in srgb, var(--t-accent) 2%, #ffffff);
+  --t-surface-2: color-mix(in srgb, var(--t-accent) 6%, #f8fafc);
+  --t-surface-3: color-mix(in srgb, var(--t-accent) 9%, #f1f5f9);
+  --t-line: color-mix(in srgb, var(--t-accent) 18%, #e2e8f0);
   --t-ink: #0f172a;
-  --t-ink-soft: #475569;
-  --t-ink-faint: #94a3b8;
+  --t-ink-soft: #334155;
+  /* Antes #94a3b8: poco contraste sobre blanco. */
+  --t-ink-faint: #5c6b84;
   --t-invert: #0f172a;
   --t-invert-ink: #ffffff;
   --t-overlay: rgba(2, 6, 23, 0.6);
-  --t-scroll: #cbd5e1;
+  --t-scroll: color-mix(in srgb, var(--t-accent) 22%, #cbd5e1);
   /* Fondo del login: oscuro en ambos temas (identidad del acceso). */
-  --t-login-bg: #020617;
+  --t-login-bg: color-mix(in srgb, var(--t-accent) 10%, #020617);
+  --t-footer-bg: color-mix(in srgb, var(--t-accent) 5%, #ffffff);
+  /* Acento por defecto: ámbar. */
+  --t-accent: #fbbf24;
+  --t-accent-strong: #f59e0b;
+  --t-on-accent: #451a03;
+  --t-accent-soft: #fef3c7;
 }
 
-/* Tema oscuro. */
+/* ── Acentos de color (menú de usuario → Color) ─────────────────────────── */
+:root[data-accent='azul'] {
+  --t-accent: #60a5fa;
+  --t-accent-strong: #3b82f6;
+  --t-on-accent: #0b1e46;
+  --t-accent-soft: #dbeafe;
+}
+
+:root[data-accent='verde'] {
+  --t-accent: #34d399;
+  --t-accent-strong: #10b981;
+  --t-on-accent: #022c22;
+  --t-accent-soft: #d1fae5;
+}
+
+:root[data-accent='violeta'] {
+  --t-accent: #a78bfa;
+  --t-accent-strong: #8b5cf6;
+  --t-on-accent: #2e1065;
+  --t-accent-soft: #ede9fe;
+}
+
+:root[data-accent='rosa'] {
+  --t-accent: #fb7185;
+  --t-accent-strong: #f43f5e;
+  --t-on-accent: #4c0519;
+  --t-accent-soft: #ffe4e6;
+}
+
+/* Tema oscuro, también tintado con el acento elegido. */
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --t-page: #0b1120;
-  --t-surface: #111a2c;
-  --t-surface-2: #182338;
-  --t-surface-3: #22314b;
-  --t-line: #2c3b57;
+  --t-page: color-mix(in srgb, var(--t-accent) 8%, #0b1120);
+  --t-surface: color-mix(in srgb, var(--t-accent) 6%, #111a2c);
+  --t-surface-2: color-mix(in srgb, var(--t-accent) 8%, #182338);
+  --t-surface-3: color-mix(in srgb, var(--t-accent) 12%, #22314b);
+  --t-line: color-mix(in srgb, var(--t-accent) 16%, #2c3b57);
   --t-ink: #f1f5f9;
-  --t-ink-soft: #b6c2d6;
-  --t-ink-faint: #8fa0bb;
+  --t-ink-soft: #c3cee0;
+  --t-ink-faint: #94a3b8;
   --t-invert: #e2e8f0;
   --t-invert-ink: #0f172a;
   --t-overlay: rgba(2, 6, 23, 0.72);
-  --t-scroll: #3b4a68;
-  --t-login-bg: #0b1120;
+  --t-scroll: color-mix(in srgb, var(--t-accent) 20%, #3b4a68);
+  --t-login-bg: color-mix(in srgb, var(--t-accent) 8%, #020617);
+  --t-footer-bg: color-mix(in srgb, var(--t-accent) 7%, #0d1626);
+  /* El fondo suave de foco se mezcla con el acento elegido. */
+  --t-accent-soft: color-mix(in srgb, var(--t-accent) 24%, transparent);
+}
+
+/* Footer institucional: sigue el tema (claro u oscuro). */
+.app-footer {
+  background: var(--t-footer-bg);
 }
 
 /* Pantalla de login: fondo casi negro en claro; coherente con el tema en oscuro. */

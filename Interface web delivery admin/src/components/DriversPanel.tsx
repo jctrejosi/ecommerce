@@ -52,7 +52,7 @@ export default function DriversPanel({
         </div>
         <button
           onClick={onCreate}
-          className="flex items-center gap-1.5 rounded-xl bg-amber-400 px-3.5 py-2 text-sm font-bold text-amber-950 transition hover:bg-amber-500"
+          className="flex items-center gap-1.5 rounded-xl bg-accent px-3.5 py-2 text-sm font-bold text-on-accent transition hover:bg-accent-strong"
         >
           <Plus className="h-4 w-4" /> Nuevo repartidor
         </button>
@@ -65,7 +65,7 @@ export default function DriversPanel({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar…"
-            className="w-56 rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-xs outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+            className="w-56 rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-xs outline-none transition focus:border-accent focus:ring-2 focus:ring-accent-soft"
           />
         </div>
         {FILTER_OPTIONS.map((opt) => (

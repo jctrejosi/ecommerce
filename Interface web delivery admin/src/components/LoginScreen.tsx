@@ -79,7 +79,7 @@ export default function LoginScreen({ onLogin }: Props) {
                 autoFocus
                 autoComplete="username"
                 placeholder="admin@tienda.com"
-                className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-200"
+                className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent-soft"
               />
             </div>
           </label>
@@ -94,7 +94,7 @@ export default function LoginScreen({ onLogin }: Props) {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pl-9 pr-10 text-sm outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-200"
+                className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pl-9 pr-10 text-sm outline-none transition focus:border-accent focus:bg-surface focus:ring-2 focus:ring-accent-soft"
               />
               <button
                 type="button"

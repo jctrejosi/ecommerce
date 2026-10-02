@@ -155,16 +155,31 @@ async function main() {
     check('el modal tiene selector de Categorías', modal.hasCats, `hasCats=${modal.hasCats}`);
     check('el selector lista varias categorías', modal.catButtons > 1, `${modal.catButtons} categorías`);
 
-    // Elegir 2 categorías + código y crear.
-    const picked = await evaluate(`(() => {
-      const list = document.querySelector('div[class*="max-h-44"]');
-      const btns = [...list.querySelectorAll('button')];
-      btns[0].click(); btns[1].click();
+    // Elegir 2 categorías + código y crear. Alguna puede vivir ya en otra
+    // estantería, así que se confirma el aviso cuando aparezca.
+    const clickCategoryRow = async (idx) => {
+      await evaluate(`(() => {
+        const list = document.querySelector('div[class*="max-h-44"]');
+        const btns = [...list.querySelectorAll('button')];
+        btns[${idx}].click(); return true;
+      })()`);
+      await sleep(200);
+      await evaluate(`(() => {
+        const o = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/70'));
+        const b = o ? [...o.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Asignar igualmente') : null;
+        b?.click(); return !!b;
+      })()`);
+      await sleep(150);
+    };
+    await clickCategoryRow(0);
+    await clickCategoryRow(1);
+    await evaluate(`(() => {
       const codeInput = [...document.querySelectorAll('input')].find((i) => i.placeholder === 'A1');
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
       setter.call(codeInput, ${JSON.stringify(CODE)}); codeInput.dispatchEvent(new Event('input', { bubbles: true }));
-      return { selected: [...document.querySelectorAll('button')].filter((b) => b.textContent.trim().endsWith('×')).length };
+      return true;
     })()`);
+    const picked = { selected: await evaluate(`[...document.querySelectorAll('button')].filter((b) => b.textContent.trim().endsWith('×')).length`) };
     check('se pueden marcar varias categorías', picked.selected === 2, `${picked.selected} marcadas`);
 
     await evaluate(`(() => {

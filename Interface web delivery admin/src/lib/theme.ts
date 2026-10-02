@@ -12,19 +12,36 @@ import { useSyncExternalStore } from 'react';
  */
 export type Theme = 'light' | 'dark' | 'system';
 
-const STORAGE_KEY = 'delivery_admin_theme';
+/** Color de acento del panel (botones primarios, focos y selección). */
+export type Accent = 'ambar' | 'azul' | 'verde' | 'violeta' | 'rosa';
+
+const THEME_KEY = 'delivery_admin_theme';
+const ACCENT_KEY = 'delivery_admin_accent';
 
 const listeners = new Set<() => void>();
 
 /** Tema guardado; por defecto claro (como el panel de siempre). */
 export function getStoredTheme(): Theme {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(THEME_KEY);
     if (raw === 'light' || raw === 'dark' || raw === 'system') return raw;
   } catch {
     /* sin localStorage (modo privado) */
   }
   return 'light';
+}
+
+/** Acento guardado; por defecto ámbar. */
+export function getStoredAccent(): Accent {
+  try {
+    const raw = localStorage.getItem(ACCENT_KEY);
+    if (raw === 'ambar' || raw === 'azul' || raw === 'verde' || raw === 'violeta' || raw === 'rosa') {
+      return raw;
+    }
+  } catch {
+    /* sin localStorage */
+  }
+  return 'ambar';
 }
 
 function systemPrefersDark(): boolean {
@@ -37,18 +54,33 @@ export function resolveTheme(theme: Theme): 'light' | 'dark' {
   return theme;
 }
 
-function apply(theme: Theme): void {
+function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = resolveTheme(theme);
+}
+
+function applyAccent(accent: Accent): void {
+  document.documentElement.dataset.accent = accent;
 }
 
 /** Cambia y guarda el tema. */
 export function setTheme(theme: Theme): void {
   try {
-    localStorage.setItem(STORAGE_KEY, theme);
+    localStorage.setItem(THEME_KEY, theme);
   } catch {
     /* sin persistencia */
   }
-  apply(theme);
+  applyTheme(theme);
+  listeners.forEach((fn) => fn());
+}
+
+/** Cambia y guarda el acento. */
+export function setAccent(accent: Accent): void {
+  try {
+    localStorage.setItem(ACCENT_KEY, accent);
+  } catch {
+    /* sin persistencia */
+  }
+  applyAccent(accent);
   listeners.forEach((fn) => fn());
 }
 
@@ -63,15 +95,22 @@ export function useTheme(): [Theme, (t: Theme) => void] {
   return [theme, setTheme];
 }
 
+/** Hook: [acento elegido, cambiador]. */
+export function useAccent(): [Accent, (a: Accent) => void] {
+  const accent = useSyncExternalStore(subscribe, getStoredAccent);
+  return [accent, setAccent];
+}
+
 /**
- * Aplica el tema guardado al arrancar y sigue los cambios del sistema cuando
- * el modo elegido es `system`. Devuelve la limpieza del listener.
+ * Aplica el tema y el acento guardados al arrancar y sigue los cambios del
+ * sistema cuando el modo elegido es `system`. Devuelve la limpieza del listener.
  */
 export function initTheme(): () => void {
-  apply(getStoredTheme());
+  applyTheme(getStoredTheme());
+  applyAccent(getStoredAccent());
   const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
   const onChange = () => {
-    if (getStoredTheme() === 'system') apply('system');
+    if (getStoredTheme() === 'system') applyTheme('system');
   };
   mq?.addEventListener('change', onChange);
   return () => mq?.removeEventListener('change', onChange);

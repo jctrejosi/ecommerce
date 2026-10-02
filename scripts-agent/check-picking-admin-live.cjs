@@ -186,9 +186,9 @@ async function main() {
       await sleep(250);
     }
 
-    // Pestaña Pickers (la que escucha los eventos en vivo).
+    // Pestaña Usuarios (la que escucha los eventos en vivo).
     await evaluate(`(() => {
-      const b = [...document.querySelectorAll('main button')].find((x) => x.textContent.trim() === 'Pickers');
+      const b = [...document.querySelectorAll('main button')].find((x) => x.textContent.trim() === 'Usuarios');
       b?.click(); return !!b;
     })()`);
     for (let i = 0; i < 60; i++) {
