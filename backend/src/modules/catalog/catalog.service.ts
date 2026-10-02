@@ -2081,6 +2081,16 @@ export class CatalogService {
         ? { lengthMm: v.lengthMm, widthMm: v.widthMm, heightMm: v.heightMm }
         : null;
 
+    // Imágenes del producto: primero la portada, luego las secundarias.
+    const imageRows = await db
+      .select({ path: media.path, isCover: productImages.isCover })
+      .from(productImages)
+      .innerJoin(media, eq(media.id, productImages.mediaId))
+      .where(eq(productImages.productId, productId))
+      .orderBy(desc(productImages.isCover), asc(productImages.position));
+
+    const images = imageRows.map((row) => row.path).filter(Boolean);
+
     return {
       id: Number(p.id),
       externalId: p.externalId,
@@ -2090,8 +2100,8 @@ export class CatalogService {
       price: Number(v?.price ?? 0),
       originalPrice:
         v?.comparePrice != null ? Number(v.comparePrice) : undefined,
-      image: null as string | null,
-      images: [] as string[],
+      image: images[0] ?? null,
+      images,
       category: cat?.name ?? 'Sin categoría',
       categoryId: cat ? Number(cat.id) : 0,
       brandId: p.brandId ? Number(p.brandId) : null,

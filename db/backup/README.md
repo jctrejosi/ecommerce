@@ -77,6 +77,25 @@ rm db/backup/ecommerce.dump
 `dev.js` también acepta el volcado completo sin trocear si existe
 `db/backup/ecommerce.dump`.
 
+## Imágenes (no van en el dump)
+
+El volcado **no incluye archivos**: las fotos viven en disco y git las ignora
+(`db/.gitignore`).
+
+- `db/images_products/` — fotos del catálogo; se descomprimen de `db/JPG2.zip`
+  y se enlazan a los productos con:
+  `node scripts-agent/import-tid-images.mjs` (cruce por código de barras/PLU).
+- `db/images_static/` — espejo local de Cloudinary (marcas, categorías, banners,
+  avatares…), pruebas de entrega y subidas nuevas. Se regenera con:
+  `node scripts-agent/migrate-cloudinary-to-local.mjs` (requiere las credenciales
+  `CLOUDINARY_*` de `backend/.env.development.local`).
+
+El backend sirve esas carpetas en `/static/products/*` y `/static/media/*`, y en
+la BD las rutas quedan como `/static/...` (relativas al backend). Así funciona
+igual en local, LAN y móvil sin depender de Cloudinary. En desarrollo las
+subidas nuevas se guardan en disco; en producción el modo por defecto sigue
+siendo Cloudinary (`MEDIA_STORAGE=local|cloudinary` lo fuerza).
+
 ## Notas
 
 - La restauración de `dev.js` usa `docker cp` + `pg_restore` desde archivo, no

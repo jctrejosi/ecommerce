@@ -9,3 +9,8 @@
 
 # dumps de la réplica de analytics (grandes, no se versionan en git)
 /backups/analytics/
+
+# imágenes estáticas locales (grandes; los productos se regeneran desde JPG2.zip)
+/images_products/
+/images_static/
+/JPG2.zip

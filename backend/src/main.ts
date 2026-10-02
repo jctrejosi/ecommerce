@@ -13,6 +13,9 @@ import cookieParser from 'cookie-parser';
 import { CorsConfig, HelmetConfig } from './config';
 import { StatusGateway } from './modules/status/status.gateway';
 import { isLanOrigin } from './utils/origins';
+import { MediaUrlInterceptor } from './common/interceptors/media-url.interceptor';
+import { resolveMediaStaticRoot } from './utils/media-static';
+import * as path from 'path';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -90,7 +93,28 @@ async function bootstrap() {
   app.use(httpLoggerMiddleware());
   app.use(cookieParser());
 
-  // ✅ 5. Swagger (solo en desarrollo)
+  // ✅ 5. Estáticos locales: imágenes de productos (`db/images_products`) y
+  // media subida desde disco (`db/images_static`). Las rutas que guarda la BD
+  // son relativas (`/static/...`); el interceptor las vuelve absolutas para
+  // cada cliente, así funciona igual en local, LAN y móviles.
+  const staticRoot = resolveMediaStaticRoot();
+  app.use(
+    '/static/products',
+    express.static(path.join(staticRoot, 'images_products'), {
+      index: false,
+      maxAge: '7d',
+    }),
+  );
+  app.use(
+    '/static/media',
+    express.static(path.join(staticRoot, 'images_static'), {
+      index: false,
+      maxAge: '7d',
+    }),
+  );
+  app.useGlobalInterceptors(new MediaUrlInterceptor());
+
+  // ✅ 6. Swagger (solo en desarrollo)
   if (configService.get('app.nodeEnv') !== 'production') {
     const config = new DocumentBuilder()
       .setTitle('HelpDesk API')
