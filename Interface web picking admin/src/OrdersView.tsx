@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { api, ApiError } from './services/api'
+import type { ReactNode } from 'react'
+import { api, ApiError, resolveAssetUrl } from './services/api'
 import { onPickingEvent } from './services/pickingSocket'
 import { onOrderEvent } from './services/ordersSocket'
-import type { PickingAdminOrder, PickingAdminOrdersResponse, PickingOrderDetail } from './types'
+import type {
+  PickingAdminOrder,
+  PickingAdminOrdersResponse,
+  PickingOrderDelivery,
+  PickingOrderDetail,
+} from './types'
 
 // ─── Formato ──────────────────────────────────────────────────────────────────
 
@@ -68,6 +74,19 @@ const pickingMillis = (o: PickingAdminOrder, now: number): number | null => {
   if (Number.isNaN(start) || Number.isNaN(end)) return null
   return end - start
 }
+
+/** Igual que `pickingMillis` pero a partir del detalle del pedido. */
+const pickingMillisFromDetail = (d: PickingOrderDetail): number | null => {
+  if (!d.pickedAt) return null
+  const start = new Date(d.pickedAt).getTime()
+  const end = d.completedAt ? new Date(d.completedAt).getTime() : Date.now()
+  if (Number.isNaN(start) || Number.isNaN(end)) return null
+  return end - start
+}
+
+/** ¿El pedido trae dirección de entrega? Si no, se asume recogida en tienda. */
+const hasAddress = (d: PickingOrderDelivery): boolean =>
+  !!(d.line1 || d.line2 || d.city || d.zoneName || d.reference || d.instructions)
 
 // ─── Vista ────────────────────────────────────────────────────────────────────
 
@@ -168,11 +187,7 @@ export default function OrdersView({
     }
   }, [])
 
-  async function toggle(o: PickingAdminOrder) {
-    if (expanded === o.id) {
-      setExpanded(null)
-      return
-    }
+  async function openOrder(o: PickingAdminOrder) {
     setExpanded(o.id)
     setDetail(null)
     setDetailLoading(true)
@@ -180,6 +195,7 @@ export default function OrdersView({
       setDetail(await api.orderDetail(o.id))
     } catch (e) {
       notify(e instanceof ApiError ? e.message : 'Error cargando el detalle del pedido')
+      setExpanded(null)
     } finally {
       setDetailLoading(false)
     }
@@ -293,7 +309,6 @@ export default function OrdersView({
               <tbody>
                 {orders.map((o) => {
                   const st = statusOf(o.status)
-                  const open = expanded === o.id
                   const pct =
                     o.totalPieces > 0
                       ? Math.min(100, Math.round((o.scannedPieces / o.totalPieces) * 100))
@@ -304,10 +319,7 @@ export default function OrdersView({
                     <FragmentRow
                       key={o.id}
                       order={o}
-                      open={open}
-                      onToggle={() => void toggle(o)}
-                      detail={open ? detail : null}
-                      detailLoading={open && detailLoading}
+                      onOpen={() => void openOrder(o)}
                       status={st}
                       pct={pct}
                       ms={ms}
@@ -325,6 +337,18 @@ export default function OrdersView({
           )}
         </div>
       )}
+
+      {expanded !== null && (
+        <OrderDetailModal
+          order={orders.find((o) => o.id === expanded) ?? null}
+          detail={detail}
+          loading={detailLoading}
+          onClose={() => {
+            setExpanded(null)
+            setDetail(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -333,33 +357,24 @@ export default function OrdersView({
 
 function FragmentRow({
   order: o,
-  open,
-  onToggle,
-  detail,
-  detailLoading,
+  onOpen,
   status: st,
   pct,
   ms,
   running,
 }: {
   order: PickingAdminOrder
-  open: boolean
-  onToggle: () => void
-  detail: PickingOrderDetail | null
-  detailLoading: boolean
+  onOpen: () => void
   status: StatusStyle
   pct: number
   ms: number | null
   running: boolean
 }) {
   return (
-    <>
-      <tr
-        onClick={onToggle}
-        className={`border-t border-white/5 cursor-pointer transition-colors ${
-          open ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'
-        }`}
-      >
+    <tr
+      onClick={onOpen}
+      className="border-t border-white/5 cursor-pointer transition-colors hover:bg-white/[0.04]"
+    >
         <td className="px-4 py-3 align-top">
           <p className="font-extrabold tracking-tight">{o.referenceCode}</p>
           <p className="text-white/40 text-xs">{money(o.grandTotal)}</p>
@@ -413,61 +428,279 @@ function FragmentRow({
           </p>
         </td>
       </tr>
+  )
+}
 
-      {open && (
-        <tr className="border-t border-white/5 bg-black/20">
-          <td colSpan={6} className="px-4 py-4">
-            {detailLoading ? (
-              <p className="text-white/40 text-sm">Cargando items…</p>
-            ) : !detail ? (
-              <p className="text-white/40 text-sm">No se pudo cargar el detalle.</p>
-            ) : (
-              <div className="flex flex-col gap-2">
-                <p className="text-white/40 text-[11px] uppercase tracking-wider font-bold">
-                  Items del pedido {detail.referenceCode}
+// ─── Modal de detalle del pedido ──────────────────────────────────────────────
+
+/**
+ * Detalle completo del pedido: estado, cliente, entrega, pago, items
+ * alistados (con su ubicación sugerida) y la bitácora de estados.
+ */
+function OrderDetailModal({
+  order,
+  detail,
+  loading,
+  onClose,
+}: {
+  order: PickingAdminOrder | null
+  detail: PickingOrderDetail | null
+  loading: boolean
+  onClose: () => void
+}) {
+  // Esc cierra el modal.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const st = statusOf(detail?.status ?? order?.status ?? '')
+  const total = detail?.grandTotal ?? order?.grandTotal ?? 0
+
+  return (
+    <div
+      className="fixed inset-0 z-[60] flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-2xl max-h-[92dvh] bg-surface border border-white/10 rounded-t-3xl sm:rounded-2xl flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Encabezado */}
+        <div className="shrink-0 px-5 pt-4 pb-3 border-b border-white/8 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="font-extrabold text-lg truncate">
+              {detail?.referenceCode ?? order?.referenceCode ?? 'Pedido'}
+            </h2>
+            <div className="flex flex-wrap items-center gap-2 mt-1">
+              <span
+                className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${st.cls}`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${st.dot}`} />
+                {st.label}
+              </span>
+              <span className="text-white/40 text-xs font-medium">{money(total)}</span>
+              {detail && (
+                <span className="text-white/30 text-xs font-medium">
+                  {detail.itemsCount} {detail.itemsCount === 1 ? 'item' : 'items'} ·{' '}
+                  {detail.scannedPieces}/{detail.totalPieces} piezas
+                </span>
+              )}
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            title="Cerrar"
+            className="shrink-0 w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center text-white/60 hover:text-white"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Cuerpo scrolleable */}
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {loading ? (
+            <p className="text-white/40 text-sm py-10 text-center">Cargando detalle…</p>
+          ) : !detail ? (
+            <p className="text-white/40 text-sm py-10 text-center">No se pudo cargar el detalle.</p>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="grid sm:grid-cols-2 gap-3">
+                <DetailCard title="Cliente">
+                  <DetailField label="Nombre" value={detail.customerName} />
+                  <DetailField label="Teléfono" value={detail.customerPhone ?? '—'} />
+                  <DetailField label="Email" value={detail.customerEmail ?? '—'} />
+                </DetailCard>
+                <DetailCard title="Alistamiento">
+                  <DetailField label="Sucursal" value={detail.branchName ?? `#${detail.branchId}`} />
+                  <DetailField label="Picker" value={detail.pickerName?.trim() || 'Sin asignar'} />
+                  <DetailField label="Revisado" value={detail.reviewed ? 'Sí' : 'No'} />
+                  <DetailField label="Duración" value={fmtDuration(pickingMillisFromDetail(detail))} />
+                </DetailCard>
+              </div>
+
+              <DetailCard title="Entrega">
+                {hasAddress(detail.delivery) ? (
+                  <>
+                    {detail.delivery.zoneName && (
+                      <DetailField label="Zona" value={detail.delivery.zoneName} />
+                    )}
+                    <DetailField
+                      label="Dirección"
+                      value={
+                        [detail.delivery.line1, detail.delivery.line2].filter(Boolean).join(', ') || '—'
+                      }
+                    />
+                    <DetailField
+                      label="Ciudad"
+                      value={
+                        [detail.delivery.city, detail.delivery.state].filter(Boolean).join(', ') || '—'
+                      }
+                    />
+                    {detail.delivery.reference && (
+                      <DetailField label="Referencia" value={detail.delivery.reference} />
+                    )}
+                    {detail.delivery.instructions && (
+                      <DetailField label="Instrucciones" value={detail.delivery.instructions} />
+                    )}
+                  </>
+                ) : (
+                  <p className="text-white/35 text-sm">Sin dirección registrada (recogida en tienda).</p>
+                )}
+              </DetailCard>
+
+              <DetailCard title="Pago">
+                <AmountRow label="Subtotal" value={detail.subtotal} />
+                {detail.discountTotal > 0 && (
+                  <AmountRow label="Descuento" value={-detail.discountTotal} />
+                )}
+                {detail.taxTotal > 0 && <AmountRow label="Impuestos" value={detail.taxTotal} />}
+                {detail.shippingCost > 0 && <AmountRow label="Envío" value={detail.shippingCost} />}
+                {detail.shippingTax > 0 && (
+                  <AmountRow label="Impuesto de envío" value={detail.shippingTax} />
+                )}
+                <div className="flex items-center justify-between pt-1.5 mt-0.5 border-t border-white/10">
+                  <span className="font-bold">Total</span>
+                  <span className="font-extrabold text-amber-400">{money(detail.grandTotal)}</span>
+                </div>
+              </DetailCard>
+
+              {(detail.notes || detail.internalNotes) && (
+                <DetailCard title="Notas">
+                  {detail.notes && <DetailField label="Cliente" value={detail.notes} />}
+                  {detail.internalNotes && (
+                    <DetailField label="Interna" value={detail.internalNotes} />
+                  )}
+                </DetailCard>
+              )}
+
+              <div>
+                <p className="text-white/40 text-[11px] uppercase tracking-wider font-bold mb-2">
+                  Items del pedido ({detail.itemsCount})
                 </p>
                 <div className="grid gap-1.5">
                   {detail.items.map((it) => {
                     const done = it.pickedQty >= it.quantity
+                    const img = resolveAssetUrl(it.image)
                     return (
                       <div
                         key={it.id}
                         className="flex items-center gap-3 bg-white/5 border border-white/8 rounded-xl px-3 py-2"
                       >
-                        <span
-                          className={`w-5 h-5 shrink-0 rounded-full flex items-center justify-center text-[11px] font-extrabold ${
-                            done ? 'bg-teal-400/20 text-teal-400' : 'bg-white/10 text-white/40'
-                          }`}
-                        >
-                          {done ? '✓' : '·'}
-                        </span>
+                        {img ? (
+                          <img
+                            src={img}
+                            alt=""
+                            className="w-9 h-9 rounded-lg object-cover shrink-0 bg-white/5"
+                          />
+                        ) : (
+                          <span
+                            className={`w-6 h-6 shrink-0 rounded-full flex items-center justify-center text-[11px] font-extrabold ${
+                              done ? 'bg-teal-400/20 text-teal-400' : 'bg-white/10 text-white/40'
+                            }`}
+                          >
+                            {done ? '✓' : '·'}
+                          </span>
+                        )}
                         <div className="min-w-0 flex-1">
                           <p className="text-sm font-semibold truncate">{it.name}</p>
-                          <p className="text-white/40 text-xs">
+                          <p className="text-white/40 text-xs truncate">
                             {it.sku ? `SKU ${it.sku}` : ''}
                             {it.barcode ? ` · ${it.barcode}` : ''}
                             {it.plu ? ` · PLU ${it.plu}` : ''}
                           </p>
+                          {it.shelfCode && (
+                            <p className="text-amber-400/80 text-[11px] font-semibold mt-0.5">
+                              📍 Estantería {it.shelfCode}
+                              {it.shelfName ? ` · ${it.shelfName}` : ''}
+                            </p>
+                          )}
                         </div>
-                        <span
-                          className={`text-xs font-extrabold ${
-                            done ? 'text-teal-400' : 'text-amber-400'
-                          }`}
-                        >
-                          {it.pickedQty}/{it.quantity}
-                        </span>
+                        <div className="text-right shrink-0">
+                          <p
+                            className={`text-sm font-extrabold ${
+                              done ? 'text-teal-400' : 'text-amber-400'
+                            }`}
+                          >
+                            {it.pickedQty}/{it.quantity}
+                          </p>
+                          <p className="text-white/40 text-[11px] tabular-nums">{money(it.total)}</p>
+                        </div>
                       </div>
                     )
                   })}
                 </div>
-                {detail.notes && (
-                  <p className="text-white/40 text-xs">Nota del cliente: {detail.notes}</p>
-                )}
               </div>
-            )}
-          </td>
-        </tr>
-      )}
-    </>
+
+              <DetailCard title="Historial de estados">
+                <DetailField label="Creado" value={fmtTime(detail.createdAt)} />
+                {detail.timeline.length > 0 ? (
+                  <div className="flex flex-col gap-1.5 mt-1">
+                    {detail.timeline.map((ev, idx) => {
+                      const s = statusOf(ev.status)
+                      return (
+                        <div key={idx} className="flex items-center gap-2 text-xs">
+                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${s.dot}`} />
+                          <span className="font-bold text-white/70">{s.label}</span>
+                          {ev.pickerName && (
+                            <span className="text-white/40 truncate">· {ev.pickerName.trim()}</span>
+                          )}
+                          {ev.note && <span className="text-white/30 truncate">· {ev.note}</span>}
+                          <span className="ml-auto text-white/35 tabular-nums shrink-0">
+                            {fmtTime(ev.createdAt)}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <>
+                    {detail.pickedAt && <DetailField label="Tomado" value={fmtTime(detail.pickedAt)} />}
+                    {detail.completedAt && (
+                      <DetailField label="En caja" value={fmtTime(detail.completedAt)} />
+                    )}
+                    {detail.deliveredAt && (
+                      <DetailField label="Entregado" value={fmtTime(detail.deliveredAt)} />
+                    )}
+                  </>
+                )}
+              </DetailCard>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function DetailCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5">
+      <p className="text-white/40 text-[11px] uppercase tracking-wider font-bold mb-2">{title}</p>
+      <div className="flex flex-col gap-1.5">{children}</div>
+    </div>
+  )
+}
+
+function DetailField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2 text-sm">
+      <span className="text-white/40 text-xs font-semibold w-24 shrink-0 pt-0.5">{label}</span>
+      <span className="flex-1 min-w-0 break-words">{value}</span>
+    </div>
+  )
+}
+
+function AmountRow({ label, value }: { label: string; value: number }) {
+  return (
+    <div className="flex items-center justify-between text-sm">
+      <span className="text-white/50">{label}</span>
+      <span className="font-semibold tabular-nums">{money(value)}</span>
+    </div>
   )
 }

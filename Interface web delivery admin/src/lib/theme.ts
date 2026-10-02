@@ -13,7 +13,7 @@ import { useSyncExternalStore } from 'react';
 export type Theme = 'light' | 'dark' | 'system';
 
 /** Color de acento del panel (botones primarios, focos y selección). */
-export type Accent = 'ambar' | 'azul' | 'verde' | 'violeta' | 'rosa';
+export type Accent = 'ambar' | 'azul' | 'verde' | 'bosque' | 'violeta' | 'rosa';
 
 const THEME_KEY = 'delivery_admin_theme';
 const ACCENT_KEY = 'delivery_admin_accent';
@@ -35,7 +35,14 @@ export function getStoredTheme(): Theme {
 export function getStoredAccent(): Accent {
   try {
     const raw = localStorage.getItem(ACCENT_KEY);
-    if (raw === 'ambar' || raw === 'azul' || raw === 'verde' || raw === 'violeta' || raw === 'rosa') {
+    if (
+      raw === 'ambar' ||
+      raw === 'azul' ||
+      raw === 'verde' ||
+      raw === 'bosque' ||
+      raw === 'violeta' ||
+      raw === 'rosa'
+    ) {
       return raw;
     }
   } catch {

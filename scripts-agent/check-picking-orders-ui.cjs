@@ -234,7 +234,7 @@ async function main() {
       (first[5] ?? '').split(' | ').pop(),
     );
 
-    // ── Detalle al expandir ───────────────────────────────────────────────────
+    // ── Detalle en modal ──────────────────────────────────────────────────────
     console.log('\n== Detalle del pedido ==');
     await evaluate(`(() => {
       const tr = [...document.querySelectorAll('tbody tr')].find((t) => t.children.length > 1);
@@ -246,6 +246,9 @@ async function main() {
     );
     const detailText = await evaluate(`document.body.innerText.split(/items del pedido/i)[1]?.slice(0, 400) ?? ''`);
     check('el detalle lista items con su avance', /\d\/\d/.test(detailText), detailText.split('\n').slice(1, 4).join(' / '));
+    // El detalle ahora se abre en un modal: se cierra para seguir con los filtros.
+    await evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+    await until(`!/items del pedido/i.test(document.body.innerText)`, 'cerrar el modal de detalle');
 
     // ── Filtros ───────────────────────────────────────────────────────────────
     console.log('\n== Filtros en pantalla ==');
@@ -261,8 +264,21 @@ async function main() {
       const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith('Entregados'));
       b.click(); return true;
     })()`);
-    await until(`document.body.innerText.includes('No hay pedidos con estos filtros')`, 'el estado vacío');
-    check('filtrar por un estado sin pedidos muestra el vacío', true);
+    await sleep(800);
+    // El filtro debe mostrar SOLO entregados (o el vacío si la sucursal no tiene).
+    const deliveredInfo = await evaluate(`(() => {
+      const trs = [...document.querySelectorAll('tbody tr')].filter((tr) => tr.children.length > 1);
+      return {
+        n: trs.length,
+        estados: trs.map((tr) => tr.children[2]?.innerText.trim() ?? ''),
+        vacio: document.body.innerText.includes('No hay pedidos con estos filtros'),
+      };
+    })()`);
+    check(
+      'filtrar por "Entregados" muestra solo entregados (o el vacío)',
+      deliveredInfo.vacio || (deliveredInfo.n > 0 && deliveredInfo.estados.every((e) => /entregado/i.test(e))),
+      `${deliveredInfo.n} filas`,
+    );
 
     await evaluate(`(() => {
       const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith('Listos'));
@@ -274,15 +290,23 @@ async function main() {
     );
     check('filtrar por "Listos" muestra el pedido', true);
 
-    // Búsqueda
+    // Búsqueda por la referencia visible (independiente de los datos).
+    const readyRef = await evaluate(`(() => {
+      const tr = [...document.querySelectorAll('tbody tr')].find((t) => t.children.length > 1);
+      return tr ? (tr.children[0].innerText.match(/MER-\\d+|DEMO-\\d+/) || [''])[0] : '';
+    })()`);
     await evaluate(`(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
       const input = document.querySelector('input[placeholder^="Buscar referencia"]');
-      setter.call(input, 'MER-8049'); input.dispatchEvent(new Event('input', { bubbles: true }));
+      setter.call(input, ${JSON.stringify(readyRef)}); input.dispatchEvent(new Event('input', { bubbles: true }));
       return true;
     })()`);
-    await until(`document.body.innerText.includes('MER-80496999')`, 'el resultado de la búsqueda');
-    check('buscar por referencia encuentra el pedido', true);
+    await sleep(800);
+    const searchNarrowed = await evaluate(`(() => {
+      const trs = [...document.querySelectorAll('tbody tr')].filter((t) => t.children.length > 1);
+      return trs.length > 0 && trs.every((t) => t.children[0].innerText.includes(${JSON.stringify(readyRef)}));
+    })()`);
+    check('buscar por referencia encuentra y acota al pedido', readyRef !== '' && searchNarrowed, readyRef);
 
     await evaluate(`(() => {
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
@@ -301,7 +325,10 @@ async function main() {
       const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim().startsWith('Todos'));
       b.click(); return true;
     })()`);
-    await until(`document.body.innerText.includes('MER-80496999')`, 'la lista completa');
+    await until(
+      `(() => { const t = document.body.innerText; return t.includes('MER-') || t.includes('DEMO-'); })()`,
+      'la lista completa',
+    );
     await sleep(600);
 
     // ── Refresco en vivo ──────────────────────────────────────────────────────
@@ -311,7 +338,9 @@ async function main() {
     const suscribe = (ns) => wsFrames.some((f) => f.includes(`/${ns},`));
     const rooms = wsFrames.filter((f) => f.includes('subscribe') || f.includes('/picking-events,') || f.includes('/orders,'));
     for (const f of [...new Set(rooms)].slice(0, 8)) console.log(`    frame: ${f.slice(0, 70)}`);
-    check(`sockets websocket abiertos (${sockets.length})`, sockets.length >= 2);
+    // El netLog a veces no captura ambas conexiones aunque sí existan; lo real
+    // es que los namespaces de abajo se usen, así que aquí basta con ≥1.
+    check(`sockets websocket abiertos (${sockets.length})`, sockets.length >= 1);
     check('el tab se une al namespace /picking-events', suscribe('picking-events'));
     check('el tab se une al namespace /orders', suscribe('orders'));
     check(

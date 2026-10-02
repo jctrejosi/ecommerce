@@ -344,6 +344,40 @@ async function main() {
     const azulRecargado = await evaluar(`document.documentElement.dataset.accent ?? null`);
     console.log(`[12] acento tras recargar: ${azulRecargado}`);
 
+    // ── Acento verde bosque (adicional) ──
+    console.log('[13] probar el acento Verde bosque');
+    await evaluar(`(() => {
+      const b = [...document.querySelectorAll('header nav button')].find(
+        (n) => n.textContent.trim() === 'Repartidores');
+      b?.click();
+      return Boolean(b);
+    })()`);
+    await esperar(1200);
+    await evaluar(`document.querySelector('button[title="Cuenta y tema"]').click(); true`);
+    await esperar(500);
+    const bosque = JSON.parse(
+      await evaluar(`(() => {
+        const b = document.querySelector('[role="menuitemradio"][aria-label="Verde bosque"]');
+        b?.click();
+        return JSON.stringify({ habia: Boolean(b) });
+      })()`),
+    );
+    await esperar(900);
+    const bosqueMedicion = JSON.parse(
+      await evaluar(`(() => {
+        const btn = [...document.querySelectorAll('button')].find(
+          (n) => n.textContent.trim().includes('Nuevo repartidor'));
+        return JSON.stringify({
+          accent: document.documentElement.dataset.accent ?? null,
+          guardado: localStorage.getItem('delivery_admin_accent'),
+          boton: btn ? getComputedStyle(btn).backgroundColor : null,
+          fondo: getComputedStyle(document.body).backgroundColor,
+        });
+      })()`),
+    );
+    console.log(`[14] con Verde bosque: ${JSON.stringify({ ...bosque, ...bosqueMedicion })}`);
+    await captura('tema-acento-bosque.png');
+
     // Volver a ámbar y al tema claro para dejar el panel como estaba.
     await evaluar(`document.querySelector('button[title="Cuenta y tema"]').click(); true`);
     await esperar(500);
@@ -376,7 +410,8 @@ async function main() {
     if (final.guardado !== 'light') problemas.push(`la preferencia final no quedó en light (${final.guardado})`);
 
     const listaSwatches = JSON.parse(swatches ?? '[]');
-    if (listaSwatches.length < 5) problemas.push(`se esperaban 5 colores de acento: ${swatches}`);
+    if (listaSwatches.length < 6) problemas.push(`se esperaban 6 colores de acento: ${swatches}`);
+    if (!listaSwatches.includes('Verde bosque')) problemas.push('falta el swatch Verde bosque');
     if (azul.accent !== 'azul') problemas.push('elegir Azul no aplicó data-accent=azul');
     if (azul.guardado !== 'azul') problemas.push('el acento no se guardó en localStorage');
     if (azul.boton !== 'rgb(96, 165, 250)') {
@@ -399,6 +434,23 @@ async function main() {
       problemas.push(`el footer en claro debería ser claro: ${inicial.footer}`);
     }
     if (azulRecargado !== 'azul') problemas.push('el acento no persistió tras recargar');
+
+    if (!bosque.habia) problemas.push('no se encontró el swatch "Verde bosque"');
+    if (bosqueMedicion.accent !== 'bosque') {
+      problemas.push('elegir Verde bosque no aplicó data-accent=bosque');
+    }
+    if (bosqueMedicion.guardado !== 'bosque') problemas.push('el acento bosque no se guardó');
+    if (bosqueMedicion.boton !== 'rgb(34, 197, 94)') {
+      problemas.push(`el botón primario no tomó el verde bosque: ${bosqueMedicion.boton}`);
+    }
+    if (bosqueMedicion.fondo === azul.fondo) {
+      problemas.push('el fondo no cambió al elegir Verde bosque');
+    } else {
+      const [r, g, b] = canales(bosqueMedicion.fondo);
+      if (!(g > r && g > b)) {
+        problemas.push(`el fondo con bosque no tiene matiz verde: ${bosqueMedicion.fondo}`);
+      }
+    }
 
     console.log(`\nerrores de consola: ${errores.length}${errores.length ? ` → ${errores.join(' | ')}` : ''}`);
     console.log(problemas.length ? `❌ ${problemas.join(' · ')}` : '✅ cambiador de temas OK');

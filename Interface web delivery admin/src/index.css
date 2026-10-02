@@ -82,6 +82,13 @@
   --t-accent-soft: #d1fae5;
 }
 
+:root[data-accent='bosque'] {
+  --t-accent: #22c55e;
+  --t-accent-strong: #16a34a;
+  --t-on-accent: #052e16;
+  --t-accent-soft: #dcfce7;
+}
+
 :root[data-accent='violeta'] {
   --t-accent: #a78bfa;
   --t-accent-strong: #8b5cf6;

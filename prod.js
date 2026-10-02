@@ -4,10 +4,10 @@
  * de aplicación; solo las bases de datos y OSRM corren en Docker).
  *
  * Es la contraparte de `dev.js` para producción:
- *   - compila los artefactos (backend NestJS + los 6 fronts Vite) con `--build`
+ *   - compila los artefactos (backend NestJS + los 5 fronts Vite) con `--build`
  *   - sirve los fronts ya compilados con `vite preview` (estático, no dev server)
- *   - levanta backend, bot e ia-service en modo producción
- *   - mantiene las bases de datos (5432 / 5436) y OSRM (5000) vía Docker
+ *   - levanta backend y bot en modo producción
+ *   - mantiene la base de datos (5432) y OSRM (5000) vía Docker
  *
  * NO arranca las apps móviles (Expo): en producción se compilan a APK/IPA y
  * apuntan al backend por `EXPO_PUBLIC_API_URL`; aquí no se sirve un dev server.
@@ -88,12 +88,10 @@ const C = {
   backend: "\x1b[31m",
   web: "\x1b[32m",
   admin: "\x1b[34m",
-  analytics: "\x1b[96m",
   picking: "\x1b[95m",
   "picking-admin": "\x1b[91m",
   "delivery-admin": "\x1b[93m",
   bot: "\x1b[35m",
-  ia: "\x1b[33m",
   reset: "\x1b[0m",
 };
 
@@ -131,13 +129,6 @@ const SERVICES = [
     deps: PNPM_DEPS,
   },
   {
-    name: "analytics",
-    dir: "crm/interface web",
-    url: "http://localhost:8444",
-    build: [[PM, "run", "build"]],
-    deps: PNPM_DEPS,
-  },
-  {
     name: "picking",
     dir: "Interface web picking",
     url: "http://localhost:8445",
@@ -164,12 +155,6 @@ const SERVICES = [
     url: "http://localhost:8000",
     deps: PYTHON_DEPS,
   },
-  {
-    name: "ia",
-    dir: "crm/ia-service",
-    url: "http://localhost:8002",
-    deps: PYTHON_DEPS,
-  },
 ];
 
 const APP_ALIASES = {
@@ -177,12 +162,10 @@ const APP_ALIASES = {
   web: "web",
   backend: "backend",
   admin: "admin",
-  analytics: "analytics",
   picking: "picking",
   "picking-admin": "picking-admin",
   "delivery-admin": "delivery-admin",
   bot: "bot",
-  ia: "ia",
   osrm: "osrm",
 };
 
@@ -190,12 +173,10 @@ const APP_DEPENDS = {
   backend: ["db"],
   web: ["backend"],
   admin: ["backend"],
-  analytics: ["backend", "db-campaigns"],
   picking: ["backend"],
   "picking-admin": ["backend"],
   "delivery-admin": ["backend"],
   bot: ["backend"],
-  ia: ["backend"],
   osrm: [],
 };
 
@@ -210,6 +191,16 @@ const NO_SELECTOR_FLAGS = new Set([
   "--config",
 ]);
 
+/** Flags `--x` no reconocidos. Si hay alguno, el launcher no ejecuta nada. */
+function unknownFlags() {
+  const valid = new Set(
+    [...NO_SELECTOR_FLAGS, ...Object.keys(APP_ALIASES).map((k) => `--${k}`)].map((f) =>
+      f.toLowerCase(),
+    ),
+  );
+  return ARGS.filter((a) => a.startsWith("--") && !valid.has(a.toLowerCase()));
+}
+
 /** null ⇒ levantar todo (comportamiento por defecto). */
 function resolveSelection() {
   const requested = ARGS.filter((a) => a.startsWith("--") && !NO_SELECTOR_FLAGS.has(a))
@@ -222,7 +213,7 @@ function resolveSelection() {
   const seen = new Set();
   const add = (n) => {
     for (const dep of APP_DEPENDS[n] ?? []) {
-      if (dep === "db" || dep === "db-campaigns" || dep === "osrm") {
+      if (dep === "db" || dep === "osrm") {
         if (!seen.has(dep)) {
           seen.add(dep);
           out.push(dep);
@@ -242,7 +233,7 @@ function resolveSelection() {
 
 function selectionLabel(plan) {
   if (!plan) return "todo";
-  const apps = plan.filter((n) => n !== "db" && n !== "db-campaigns" && n !== "osrm");
+  const apps = plan.filter((n) => n !== "db" && n !== "osrm");
   return apps.length ? apps.join(" + ") : "solo bases de datos";
 }
 
@@ -355,33 +346,6 @@ function startDatabase() {
   return false;
 }
 
-function startDatabaseCampaigns() {
-  const dbDir = path.join(ROOT, "crm", "db");
-  console.log(`${C.db}[db-campaigns]${C.reset} 🗄️  PostgreSQL analytics (docker compose up -d) → logs/db.prod.log`);
-  const { fd } = openLog("db");
-  const run = (args) =>
-    spawnSync("docker", args, {
-      cwd: dbDir,
-      stdio: ["ignore", fd, fd],
-      timeout: 120000,
-    });
-
-  let r = run(["compose", "up", "-d", "--wait"]);
-  if (r.status === 0) {
-    fs.closeSync(fd);
-    console.log(`${C.db}[db-campaigns]${C.reset} ✅ PostgreSQL analytics listo (:5436)`);
-    return true;
-  }
-  r = run(["compose", "up", "-d"]);
-  fs.closeSync(fd);
-  if (r.status === 0) {
-    console.log(`${C.db}[db-campaigns]${C.reset} ✅ Contenedor arrancado. Esperando :5436...`);
-    return true;
-  }
-  console.warn(`${C.db}[db-campaigns]${C.reset} ⚠️  No se pudo levantar PostgreSQL analytics (logs/db.prod.log).`);
-  return false;
-}
-
 function startOsrm() {
   console.log(`${C.osrm}[osrm]${C.reset} 🗺️  OSRM Manizales (docker compose up -d) → logs/db.prod.log`);
   const { fd } = openLog("db");
@@ -485,7 +449,7 @@ function buildService(svc) {
     return runSteps(color, svc.name, cwd, svc.build, frontBuildEnv());
   }
 
-  return true; // bot / ia-service: Python, nada que compilar
+  return true; // bot: Python, nada que compilar
 }
 
 // ── Arranque de servicios ───────────────────────────────────
@@ -510,17 +474,16 @@ function resolveCmd(svc) {
     return ["node", entry];
   }
 
-  if (svc.name === "bot" || svc.name === "ia") {
+  if (svc.name === "bot") {
     const py = path.join(cwd, ".venv", "bin", "python");
     if (!fs.existsSync(py)) {
       console.warn(
-        `${C[svc.name]}[${svc.name}]${C.reset} ⚠️  ${svc.dir}/.venv no existe — ` +
+        `${C.bot}[bot]${C.reset} ⚠️  ${svc.dir}/.venv no existe — ` +
           `crealo con: python3 -m venv ${svc.dir}/.venv && ${svc.dir}/.venv/bin/pip install -r ${svc.dir}/requirements.txt`,
       );
       return null;
     }
-    const port = svc.name === "bot" ? "8000" : "8002";
-    return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", port];
+    return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
   }
 
   // Fronts: sirve el `dist` ya compilado en su puerto fijo (no el 4173 por defecto).
@@ -560,14 +523,13 @@ function startService(svc) {
 
 // ── Salida ─────────────────────────────────────────────────
 
-function printUrls(services, showDb, showCampaigns, showOsrm) {
+function printUrls(services, showDb, showOsrm) {
   console.log("\n━━━━━━━━━━━━━ Mercaldas (PRODUCCIÓN) — URLs ━━━━━━━━━━━━━");
   for (const svc of services) {
     if (!svc.url) continue;
     console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
   }
   if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
-  if (showCampaigns) console.log("  DB-CAMPAIGNS   → PostgreSQL localhost:5436 (docker, analytics)");
   if (showOsrm) console.log("  OSRM           → Rutas http://localhost:5000 (docker, Manizales)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   const started = services.map((s) => s.name).join(", ");
@@ -619,7 +581,6 @@ function stopAll() {
     /* noop */
   }
   console.log("\n💡 La BD (docker) sigue corriendo. Para detenerla: cd db/docker && docker compose stop");
-  console.log("   La BD de analytics: cd crm/db && docker compose stop");
   console.log("   OSRM (rutas): cd delivery-routing && docker compose stop");
 }
 
@@ -629,12 +590,10 @@ const APP_LABELS = {
   backend: "API backend (NestJS)",
   web: "Cliente web",
   admin: "Panel admin web",
-  analytics: "Panel analytics web",
   picking: "Picking web",
   "picking-admin": "Picking admin web",
   "delivery-admin": "Delivery admin web",
   bot: "Bot (Python)",
-  ia: "Servicio IA (Python)",
 };
 
 function selectorFlags(name) {
@@ -647,11 +606,7 @@ function selectorFlags(name) {
 
 function helpDeps(name) {
   const deps = (APP_DEPENDS[name] ?? []).map((d) =>
-    d === "db"
-      ? "PostgreSQL :5432"
-      : d === "db-campaigns"
-        ? "db-campaigns :5436"
-        : d,
+    d === "db" ? "PostgreSQL :5432" : d,
   );
   return deps.length ? "requiere " + deps.join(" + ") : "";
 }
@@ -661,7 +616,7 @@ function printHelp() {
   out.push("🚀 Mercaldas launcher de PRODUCCIÓN — node prod.js (en la raíz)");
   out.push("");
   out.push("USO");
-  out.push("  node prod.js --build              → compila TODO y levanta (backend + 6 fronts + bot + IA + BDs + OSRM)");
+  out.push("  node prod.js --build              → compila TODO y levanta (backend + 5 fronts + bot + BD + OSRM)");
   out.push("  node prod.js                       → levanta TODO usando los dist ya compilados");
   out.push("  node prod.js <flags>               → solo los aplicativos pedidos (+ sus dependencias)");
   out.push("  node prod.js --build <flags>       → compila y levanta solo lo pedido");
@@ -676,13 +631,11 @@ function printHelp() {
   const order = [
     "web",
     "admin",
-    "analytics",
     "picking",
     "picking-admin",
     "delivery-admin",
     "backend",
     "bot",
-    "ia",
   ];
   const rows = order.map((name) => {
     const svc = SERVICES.find((s) => s.name === name);
@@ -702,7 +655,6 @@ function printHelp() {
   out.push("");
   out.push("BASES DE DATOS Y RUTAS");
   out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
-  out.push("  db-campaigns (:5436) solo con --analytics o sin flags (todo).");
   out.push("  --osrm   Motor de rutas OSRM (:5000) — Manizales (sin apps).");
   out.push("");
   out.push("CONFIGURACIÓN (prod.config.json)");
@@ -718,7 +670,6 @@ function printHelp() {
   out.push("");
   out.push("EJEMPLOS");
   out.push("  node prod.js --build --delivery-admin   → compila delivery admin + backend + BD");
-  out.push("  node prod.js --build --analytics        → compila analytics + backend + BDs (incluye :5436)");
   out.push("  node prod.js --admin --picking          → levanta admin + picking (usa dist ya compilados)");
   out.push("");
   out.push("Notas: --client es alias de --web · logs en logs/<servicio>.prod.log · PIDs en logs/.pids.prod.json");
@@ -731,14 +682,13 @@ function printHelp() {
 const HOST_LABELS = {
   web: "client",
   admin: "admin",
-  analytics: "analytics",
   picking: "picking",
   "picking-admin": "picking-admin",
   "delivery-admin": "delivery-admin",
   api: "api",
   ml: "ml",
 };
-const FRONT_SERVICES = ["web", "admin", "analytics", "picking", "picking-admin", "delivery-admin"];
+const FRONT_SERVICES = ["web", "admin", "picking", "picking-admin", "delivery-admin"];
 
 let CONFIG = null;
 
@@ -839,7 +789,7 @@ function printDns() {
   const push = (host, target) => {
     if (host) rows.push({ host, target });
   };
-  push(cfg.hosts.api, "backend (3000) · bot (8000) · ia-service (8002)");
+  push(cfg.hosts.api, "backend (3000) · bot (8000)");
   push(cfg.hosts.ml, "Astaroth (ML)");
   for (const s of FRONT_SERVICES) push(cfg.hosts[s], s);
 
@@ -867,7 +817,7 @@ function printDns() {
   console.log("\n  2) Reenvío de puertos en el router:");
   console.log(`     TCP 80   → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}   (solo para emitir/renovar TLS)`);
   console.log(`     TCP 443  → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}`);
-  console.log("     NO reenvíes 5432, 5436 ni 5000: son internos (base de datos y rutas).");
+  console.log("     NO reenvíes 5432 ni 5000: son internos (base de datos y rutas).");
 
   console.log("\n  3) Mapa dominio → servicio interno (lo aplica el proxy Caddy):");
   for (const r of rows) {
@@ -894,7 +844,6 @@ function initConfig() {
     hosts: {
       web: "client.tudominio.com",
       admin: "admin.tudominio.com",
-      analytics: "analytics.tudominio.com",
       picking: "picking.tudominio.com",
       "picking-admin": "picking-admin.tudominio.com",
       "delivery-admin": "delivery-admin.tudominio.com",
@@ -913,6 +862,13 @@ async function main() {
     printHelp();
     return;
   }
+  // Flag desconocido ⇒ no se ejecuta nada (antes se interpretaba como "todo").
+  const unknown = unknownFlags();
+  if (unknown.length) {
+    console.error(`✘ Flag(s) desconocido(s): ${unknown.join(", ")} — no se levanta nada.`);
+    console.error("  Usa `node prod.js --help` para ver las opciones.");
+    process.exit(1);
+  }
   if (INIT_CONFIG) return initConfig();
 
   CONFIG = loadConfig();
@@ -923,12 +879,11 @@ async function main() {
 
   const plan = resolveSelection(); // null ⇒ todo
   const wantDb = plan === null || plan.includes("db");
-  const wantCampaigns = plan === null || plan.includes("db-campaigns");
   const wantOsrm = plan === null || plan.includes("osrm");
   const svcNames =
     plan === null
       ? SERVICES.map((s) => s.name)
-      : plan.filter((n) => n !== "db" && n !== "db-campaigns" && n !== "osrm");
+      : plan.filter((n) => n !== "db" && n !== "osrm");
   const services = SERVICES.filter((s) => svcNames.includes(s.name));
 
   console.log(
@@ -979,13 +934,7 @@ async function main() {
     if (!dbUp)
       console.warn(`${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`);
   }
-  if (wantCampaigns) {
-    startDatabaseCampaigns();
-    const dbCampaignsUp = await waitForPort(5436, 90000);
-    if (!dbCampaignsUp)
-      console.warn(`${C.db}[db-campaigns]${C.reset} ⚠️  PostgreSQL analytics no responde en :5436.`);
-  }
-  if (!wantDb && !wantCampaigns)
+  if (!wantDb)
     console.log(`${C.db}[db]${C.reset} 🚫 PostgreSQL no iniciado (esta selección no lo necesita).`);
 
   if (wantOsrm) {
@@ -1025,7 +974,7 @@ async function main() {
     }
   }
 
-  printUrls(services, wantDb, wantCampaigns, wantOsrm);
+  printUrls(services, wantDb, wantOsrm);
   printDns();
 }
 

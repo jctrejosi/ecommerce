@@ -11,12 +11,13 @@ queme su ventana de contexto** en tareas sobre grandes volúmenes de datos.
 - `Interface web admin/` — panel admin (React + Vite).
 - `bot/` — chatbot de compras (FastAPI + DeepSeek function calling).
 - `bot/` — chatbot de compras (FastAPI + DeepSeek function calling).
-- `crm/` — **panel CRM** (analytics + campañas), proyecto con backend propio:
-  `crm/interface web/` (React + Vite), `crm/backend/` (NestJS, :3100),
-  `crm/ia-service/` (FastAPI + DeepSeek), `crm/db/` (PostgreSQL analítica, :5436)
-  y `crm/dev.js` (lanzador propio). OJO: `crm/db` es la réplica de analytics
-  (schemas `pos`/`analytics`), NO guarda campañas; esas viven en la BD del
-  ecommerce.
+- **CRM (Analytics + Campañas)** — ya **no vive en este repo**: es un proyecto
+  hermano e independiente en `/home/jk/Proyectos/dsi/crm` (web :8444, backend
+  NestJS :3100, ia-service :8002, BDs propias: `crm` operativa :5437 y
+  `analytics` réplica de ML :5436; lanzador `node dev.js`). Para trabajar en él,
+  abre ese proyecto por separado. OJO: allí
+  `interface web/src/views/Campaigns.tsx` ronda las 5,6k líneas (misma regla de
+  no leerlo completo).
 - `db/` — scripts de datos y migraciones (`.mjs`).
 - Otras interfaces: `delivery`, `picking`, etc.
 
@@ -28,7 +29,7 @@ queme su ventana de contexto** en tareas sobre grandes volúmenes de datos.
    En especial, **prohibido** volcarlos al contexto:
    - `backend/drizzle/schema.ts` (~4,2k líneas, 148 KB)
    - `Interface web admin/src/imports/example.tsx` (~3,2k líneas, 161 KB)
-   - `crm/interface web/src/views/Campaigns.tsx` (~5,6k líneas, 240 KB)
+
    - `Interface web client/src/app/Views/AccountView/index.tsx` (~4,5k líneas, 162 KB)
    - `Interface web admin/src/views/Banners.tsx` (~4,2k líneas, 193 KB)
    - `db/backups/**` (volcados de BD; hay JSON de **2,4 MB en una sola línea**)

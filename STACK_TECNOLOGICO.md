@@ -30,8 +30,8 @@ NestJS**, un **bot de compras** y un **servicio de IA**, desplegados como un
 | **Windows (RDP)** | Vía `xfreerdp` + SMB | Leer el legado Advantage (driver ODBC solo existe en Windows) |
 | **Git** | `.gitignore` por paquete, `AGENTS.md` | Control de versiones y convenciones del monorepo |
 
-**Puertos de desarrollo:** backend NestJS `3000` · **CRM** (backend `3100`, web `8444`, ia-service `8002`, Postgres analytics `5436`) · bot `8001`, ia-service del ecommerce `8002`,
-OSRM `5000`, PostgreSQL `5432` (y `5436`), backends de apps `8081`/`8082`.
+**Puertos de desarrollo:** backend NestJS `3000` · **CRM (proyecto hermano `dsi/crm`)**: backend `3100`, web `8444`, ia-service `8002`, Postgres operativo `5437`, Postgres analytics `5436` · bot `8001`,
+OSRM `5000`, PostgreSQL `5432`, backends de apps `8081`/`8082`.
 
 Arranque: `node dev.js` (instala dependencias faltantes, levanta PostgreSQL +
 servicios + apps Expo en segundo plano y libera la terminal). Producción:
@@ -59,7 +59,7 @@ Todas son **React + Vite + TypeScript**, con **pnpm**.
 |---|---|---|
 | **Interface web client** (tienda) | React 18, MUI + Emotion, Radix UI (`@radix-ui/*`), react-router, axios, socket.io-client, recharts, maplibre-gl, react-hook-form, motion, sonner, embla-carousel | Tienda pública |
 | **Interface web admin** | React 19, Tailwind v4, recharts, `@hello-pangea/dnd` (drag & drop), lucide-react, socket.io-client | Panel de administración (catálogo, campañas, editor de correos) |
-| **Interface web analytics** (ahora `crm/interface web`) | React 19, Tailwind v4, recharts, lucide-react | Tablero de analítica y campañas del **CRM** (`crm/`, backend propio en `:3100`) |
+| **Interface web analytics** (mudada al proyecto hermano `dsi/crm/interface web`) | React 19, Tailwind v4, recharts, lucide-react | Tablero de analítica y campañas del **CRM** (`dsi/crm`, backend propio en `:3100`) |
 | **Interface web delivery admin** | React 19, Tailwind v4, maplibre-gl, socket.io-client | Mapa de flota y gestión de repartos |
 | **Interface web picking** | React 19, Tailwind v4, html5-qrcode | Picking con escaneo de QR en navegador |
 | **Interface web picking admin** | React 19, Tailwind v4, socket.io-client | Administración de picking |
@@ -120,7 +120,7 @@ Común: **React Native 0.86**, **Expo**, **TypeScript**, `expo-secure-store` /
 | Servicio | Stack | Para qué |
 |---|---|---|
 | **bot** | FastAPI + `asyncpg` + httpx + **DeepSeek (function calling)** | Chatbot de compras: busca productos, arma/consulta/modifica el carrito consultando la BD directamente. Tools: `buscar_productos`, `armar_carrito`, `agregar_al_carrito`, `ver_carrito`, `finalizar_compra`, etc. |
-| **ia-service** (ahora `crm/ia-service`) | FastAPI + httpx + **DeepSeek (function calling)** | Genera contenido de campañas (WhatsApp, email con bloques del diseñador, SMS). Lo consume el backend del CRM en `POST /admin/campaigns/generate` |
+| **ia-service** (mudado al proyecto hermano `dsi/crm/ia-service`) | FastAPI + httpx + **DeepSeek (function calling)** | Genera contenido de campañas (WhatsApp, email con bloques del diseñador, SMS). Lo consume el backend del CRM en `POST /admin/campaigns/generate` |
 
 ---
 

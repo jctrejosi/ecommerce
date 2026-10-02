@@ -12,6 +12,9 @@ import { DeliveryOrdersService } from '../delivery/delivery-orders.service';
 import { DeliveryLoadService } from '../delivery/delivery-load.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import {
+  branches,
+  customerAddresses,
+  deliveryZones,
   orderItems,
   orders,
   orderStatusHistory,
@@ -295,19 +298,44 @@ export class PickingService {
       .select({
         id: orders.id,
         referenceCode: orders.referenceCode,
+        status: orders.status,
         customerName: orders.customerName,
         customerPhone: orders.customerPhone,
-        status: orders.status,
+        customerEmail: orders.customerEmail,
+        currencyCode: orders.currencyCode,
+        subtotal: orders.subtotal,
+        discountTotal: orders.discountTotal,
+        taxTotal: orders.taxTotal,
+        shippingCost: orders.shippingCost,
+        shippingTax: orders.shippingTax,
         grandTotal: orders.grandTotal,
         notes: orders.notes,
+        internalNotes: orders.internalNotes,
         reviewedAt: orders.reviewedAt,
         createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+        pickedAt: orders.pickedAt,
+        completedAt: orders.completedAt,
+        // La entrega real la marca el repartidor en el historial de estados.
+        deliveredAt: sql<string | null>`(SELECT MAX(osh.created_at) FROM order_status_history osh WHERE osh.order_id = ${orders.id} AND osh.status = 'delivered')`,
         branchId: orders.branchId,
+        branchName: branches.name,
         pickerId: orders.pickerId,
         pickerName: sql<string>`concat(${users.firstName}, ' ', ${users.lastName})`,
+        zoneName: deliveryZones.name,
+        addressAlias: customerAddresses.alias,
+        addressLine1: customerAddresses.addressLine1,
+        addressLine2: customerAddresses.addressLine2,
+        addressCity: customerAddresses.city,
+        addressState: customerAddresses.state,
+        addressReference: customerAddresses.reference,
+        addressInstructions: customerAddresses.deliveryInstructions,
       })
       .from(orders)
       .leftJoin(users, eq(users.id, orders.pickerId))
+      .leftJoin(branches, eq(branches.id, orders.branchId))
+      .leftJoin(deliveryZones, eq(deliveryZones.id, orders.deliveryZoneId))
+      .leftJoin(customerAddresses, eq(customerAddresses.id, orders.customerAddressId))
       .where(eq(orders.id, BigInt(id)))
       .limit(1);
 
@@ -353,19 +381,57 @@ export class PickingService {
     const scanned = items.reduce((s, i) => s + i.pickedQty, 0);
     const pieces = items.reduce((s, i) => s + i.quantity, 0);
 
+    // Bitácora de estados (quién y cuándo movió el pedido).
+    const timeline = await this.db
+      .select({
+        status: orderStatusHistory.status,
+        oldStatus: orderStatusHistory.oldStatus,
+        note: orderStatusHistory.note,
+        pickerName: sql<string | null>`NULLIF(TRIM(CONCAT(${users.firstName}, ' ', ${users.lastName})), '')`,
+        createdAt: orderStatusHistory.createdAt,
+      })
+      .from(orderStatusHistory)
+      .leftJoin(users, eq(users.id, orderStatusHistory.pickerId))
+      .where(eq(orderStatusHistory.orderId, Number(id)))
+      .orderBy(asc(orderStatusHistory.createdAt));
+
     return {
       id: Number(order.id),
       referenceCode: order.referenceCode,
+      status: order.status,
       customerName: order.customerName ?? 'Cliente',
       customerPhone: order.customerPhone,
-      status: order.status,
+      customerEmail: order.customerEmail,
+      currencyCode: order.currencyCode,
+      subtotal: Number(order.subtotal),
+      discountTotal: Number(order.discountTotal),
+      taxTotal: Number(order.taxTotal),
+      shippingCost: Number(order.shippingCost),
+      shippingTax: Number(order.shippingTax),
       grandTotal: Number(order.grandTotal),
       notes: order.notes,
+      internalNotes: order.internalNotes,
       reviewed: order.reviewedAt !== null,
       createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      reviewedAt: order.reviewedAt,
+      pickedAt: order.pickedAt,
+      completedAt: order.completedAt,
+      deliveredAt: order.deliveredAt ?? null,
       branchId: Number(order.branchId),
+      branchName: order.branchName ?? null,
       pickerId: order.pickerId != null ? Number(order.pickerId) : null,
       pickerName: order.pickerName ?? null,
+      delivery: {
+        zoneName: order.zoneName ?? null,
+        alias: order.addressAlias ?? null,
+        line1: order.addressLine1 ?? null,
+        line2: order.addressLine2 ?? null,
+        city: order.addressCity ?? null,
+        state: order.addressState ?? null,
+        reference: order.addressReference ?? null,
+        instructions: order.addressInstructions ?? null,
+      },
       itemsCount: items.length,
       totalPieces: pieces,
       scannedPieces: scanned,
@@ -385,6 +451,13 @@ export class PickingService {
         rowNumber: null,
         unitPriceGross: Number(i.unitPriceGross),
         total: Number(i.total),
+      })),
+      timeline: timeline.map((t) => ({
+        status: t.status,
+        oldStatus: t.oldStatus,
+        note: t.note,
+        pickerName: t.pickerName ?? null,
+        createdAt: t.createdAt,
       })),
     };
   }

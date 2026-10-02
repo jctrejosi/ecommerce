@@ -87,6 +87,7 @@ const ACCENTS: { key: Accent; label: string; color: string; on: string }[] = [
   { key: 'ambar', label: 'Ámbar', color: '#fbbf24', on: '#451a03' },
   { key: 'azul', label: 'Azul', color: '#60a5fa', on: '#0b1e46' },
   { key: 'verde', label: 'Verde', color: '#34d399', on: '#022c22' },
+  { key: 'bosque', label: 'Verde bosque', color: '#22c55e', on: '#052e16' },
   { key: 'violeta', label: 'Violeta', color: '#a78bfa', on: '#2e1065' },
   { key: 'rosa', label: 'Rosa', color: '#fb7185', on: '#4c0519' },
 ];

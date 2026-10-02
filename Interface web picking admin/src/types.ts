@@ -136,27 +136,69 @@ export interface PickingOrderDetailItem {
   pickedQty: number;
   barcode: string | null;
   plu: string | null;
+  /** Imagen de portada del producto (`media.path`). */
+  image: string | null;
+  /** Estantería sugerida (derivada de la categoría del producto). */
+  shelfCode: string | null;
+  shelfName: string | null;
   unitPriceGross: number;
   total: number;
+}
+
+/** Evento del historial de estados de un pedido. */
+export interface PickingOrderStatusEvent {
+  status: string;
+  oldStatus: string | null;
+  note: string | null;
+  pickerName: string | null;
+  createdAt: string | null;
+}
+
+/** Datos de entrega congelados al crear el pedido. */
+export interface PickingOrderDelivery {
+  zoneName: string | null;
+  alias: string | null;
+  line1: string | null;
+  line2: string | null;
+  city: string | null;
+  state: string | null;
+  reference: string | null;
+  instructions: string | null;
 }
 
 export interface PickingOrderDetail {
   id: number;
   referenceCode: string;
+  status: string;
   customerName: string;
   customerPhone: string | null;
-  status: string;
+  customerEmail: string | null;
+  currencyCode: string;
+  subtotal: number;
+  discountTotal: number;
+  taxTotal: number;
+  shippingCost: number;
+  shippingTax: number;
   grandTotal: number;
   notes: string | null;
+  internalNotes: string | null;
   reviewed: boolean;
   createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+  pickedAt: string | null;
+  completedAt: string | null;
+  deliveredAt: string | null;
   branchId: number;
+  branchName: string | null;
   pickerId: number | null;
   pickerName: string | null;
+  delivery: PickingOrderDelivery;
   itemsCount: number;
   totalPieces: number;
   scannedPieces: number;
   items: PickingOrderDetailItem[];
+  timeline: PickingOrderStatusEvent[];
 }
 
 // ── Pedidos del panel (tab "Pedidos") ──
