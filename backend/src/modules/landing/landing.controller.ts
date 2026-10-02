@@ -76,8 +76,11 @@ export class AdminLandingController {
 
   @Put('general-logo')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Actualizar logo de la empresa' })
-  updateGeneralLogo(@Body() body: { url?: string; title?: string; favicon?: string }) {
+  @ApiOperation({ summary: 'Actualizar logo, título y temas del sitio' })
+  updateGeneralLogo(
+    @Body()
+    body: { url?: string; title?: string; favicon?: string; theme?: unknown },
+  ) {
     return this.landingService.updateGeneralLogo(body);
   }
 

@@ -1,0 +1,8 @@
+
+===== [ia] 2026-10-02T16:07:40.927Z =====
+INFO:     Will watch for changes in these directories: ['/home/jk/Proyectos/dsi/ecommerce/crm/ia-service']
+INFO:     Uvicorn running on http://0.0.0.0:8002 (Press CTRL+C to quit)
+INFO:     Started reloader process [255591] using WatchFiles
+INFO:     Started server process [255624]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.

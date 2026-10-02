@@ -1,5 +1,83 @@
 @import "tailwindcss";
 
+/*
+ * ── Temas del panel ─────────────────────────────────────────────────────────
+ *
+ * Mapeo de estilos: la interfaz usaba directamente la escala `slate` de
+ * Tailwind. Para poder cambiar de tema, esos colores estructurales se
+ * sustituyen por tokens semánticos:
+ *
+ *   bg-white                  → bg-surface      (tarjetas, paneles, topbar)
+ *   bg-slate-50               → bg-surface-2    (fondos suaves, hovers)
+ *   bg-slate-100              → bg-surface-3    (chips, hovers intensos)
+ *   bg-slate-200              → bg-line         (pistas, separadores)
+ *   text-slate-900 / 800      → text-ink
+ *   text-slate-700 / 600      → text-ink-soft
+ *   text-slate-500 / 400 / 300→ text-ink-faint
+ *   border-slate-* / divide-* → border-line / divide-line
+ *   ring-slate-200            → ring-line
+ *   bg-slate-900              → bg-invert       (+ text-invert-ink)
+ *   bg-slate-950/60           → bg-overlay      (fondo de los modales)
+ *
+ * Los colores semánticos (estados, alertas: amber/emerald/rose/sky…) y los
+ * pines del mapa NO cambian con el tema.
+ */
+@theme inline {
+  --color-page: var(--t-page);
+  --color-surface: var(--t-surface);
+  --color-surface-2: var(--t-surface-2);
+  --color-surface-3: var(--t-surface-3);
+  --color-line: var(--t-line);
+  --color-ink: var(--t-ink);
+  --color-ink-soft: var(--t-ink-soft);
+  --color-ink-faint: var(--t-ink-faint);
+  --color-invert: var(--t-invert);
+  --color-invert-ink: var(--t-invert-ink);
+  --color-overlay: var(--t-overlay);
+}
+
+/* Tema claro (el de siempre). */
+:root {
+  color-scheme: light;
+  --t-page: #f1f5f9;
+  --t-surface: #ffffff;
+  --t-surface-2: #f8fafc;
+  --t-surface-3: #f1f5f9;
+  --t-line: #e2e8f0;
+  --t-ink: #0f172a;
+  --t-ink-soft: #475569;
+  --t-ink-faint: #94a3b8;
+  --t-invert: #0f172a;
+  --t-invert-ink: #ffffff;
+  --t-overlay: rgba(2, 6, 23, 0.6);
+  --t-scroll: #cbd5e1;
+  /* Fondo del login: oscuro en ambos temas (identidad del acceso). */
+  --t-login-bg: #020617;
+}
+
+/* Tema oscuro. */
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --t-page: #0b1120;
+  --t-surface: #111a2c;
+  --t-surface-2: #182338;
+  --t-surface-3: #22314b;
+  --t-line: #2c3b57;
+  --t-ink: #f1f5f9;
+  --t-ink-soft: #b6c2d6;
+  --t-ink-faint: #8fa0bb;
+  --t-invert: #e2e8f0;
+  --t-invert-ink: #0f172a;
+  --t-overlay: rgba(2, 6, 23, 0.72);
+  --t-scroll: #3b4a68;
+  --t-login-bg: #0b1120;
+}
+
+/* Pantalla de login: fondo casi negro en claro; coherente con el tema en oscuro. */
+.login-bg {
+  background: var(--t-login-bg);
+}
+
 /* Tailwind v4 deja los botones con cursor:default; los devolvemos a pointer. */
 @layer base {
   button:not(:disabled),
@@ -18,8 +96,8 @@ body,
 
 body {
   margin: 0;
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--t-page);
+  color: var(--t-ink);
   font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -36,7 +114,8 @@ body {
   font-size: 10px;
 }
 
-/* Pines de repartidores (igual que el marcador del cliente) */
+/* Pines de repartidores (igual que el marcador del cliente). Se mantienen
+   blancos en ambos temas: son globos sobre el mapa, no superficie de la UI. */
 .ml-pin {
   position: relative;
   display: flex;
@@ -97,21 +176,21 @@ body {
   pointer-events: none;
 }
 
-/* Tooltip al pasar el cursor sobre el pin */
+/* Tooltip al pasar el cursor sobre el pin (sí sigue el tema). */
 .ml-tip {
   position: absolute;
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  background: #fff;
-  border: 1px solid #e2e8f0;
+  background: var(--t-surface);
+  border: 1px solid var(--t-line);
   border-radius: 10px;
   padding: 6px 10px;
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.16);
   white-space: nowrap;
   font-size: 12px;
   line-height: 1.35;
-  color: #0f172a;
+  color: var(--t-ink);
   pointer-events: none;
   visibility: hidden;
   opacity: 0;
@@ -125,7 +204,7 @@ body {
 }
 
 .ml-tip .muted {
-  color: #64748b;
+  color: var(--t-ink-soft);
 }
 
 .ml-pin:hover .ml-tip {
@@ -139,7 +218,7 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--t-scroll);
   border-radius: 8px;
 }
 

@@ -17,7 +17,8 @@ import {
   Bell,
   Phone,
   MessageCircle,
-  Check,
+  Sun,
+  Moon,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import storeLogo from "../../assets/logo.png";
@@ -30,88 +31,30 @@ import {
   customerAddressService,
 } from "../../services/customer-auth.service";
 import type { AppNotification } from "../../hooks/useNotifications";
-import { useTheme, THEMES, type Theme } from "../../hooks/useTheme";
+import { useTheme, type Theme, type ThemeConfig } from "../../hooks/useTheme";
 
 /**
- * Selector de tema: desplegable con un círculo del color de cada tema.
- * El tema activo se marca con un check.
+ * Alterna entre tema claro y oscuro. Los colores de cada tema se configuran
+ * desde el admin (/contenido/general) y llegan en `generalLogo.theme`.
  */
-function ThemeSwitcher({
+function ThemeToggle({
   theme,
-  setTheme,
+  onToggle,
 }: {
   theme: Theme;
-  setTheme: (t: Theme) => void;
+  onToggle: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, [open]);
-
-  const current = THEMES.find((t) => t.id === theme) ?? THEMES[0];
-
+  const isDark = theme === "oscuro";
   return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label="Cambiar tema"
-        title="Cambiar tema"
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full border border-border hover:bg-muted transition-colors cursor-pointer"
-      >
-        <span
-          className="w-4 h-4 rounded-full border border-black/15 shrink-0"
-          style={{ background: current.color }}
-        />
-        <span className="text-xs font-medium hidden lg:inline">
-          {current.label}
-        </span>
-        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />
-      </button>
-
-      {open && (
-        <div
-          role="listbox"
-          aria-label="Temas"
-          className="absolute right-0 top-full mt-2 z-50 w-44 rounded-xl border border-border bg-white shadow-xl py-1 overflow-hidden"
-        >
-          {THEMES.map((t) => {
-            const active = t.id === theme;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                role="option"
-                aria-selected={active}
-                onClick={() => {
-                  setTheme(t.id);
-                  setOpen(false);
-                }}
-                className="w-full flex items-center gap-2.5 px-3 py-2 text-xs text-left text-foreground hover:bg-muted transition-colors cursor-pointer"
-              >
-                <span
-                  className="w-4 h-4 rounded-full border border-black/15 shrink-0"
-                  style={{ background: t.color }}
-                />
-                <span className="flex-1 font-medium">{t.label}</span>
-                {active && <Check className="w-3.5 h-3.5 text-primary" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label={isDark ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+      title={isDark ? "Tema claro" : "Tema oscuro"}
+      className="flex items-center justify-center w-8 h-8 rounded-full border border-border text-foreground hover:bg-muted transition-colors cursor-pointer"
+    >
+      {isDark ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+    </button>
   );
 }
 
@@ -160,7 +103,7 @@ interface HeaderProps {
   onTrackOrder?: (code: string) => void;
   onNavigateNotifs: () => void;
   onAddressClick: () => void;
-  generalLogo?: { url?: string } | null;
+  generalLogo?: { url?: string; theme?: ThemeConfig | null } | null;
   fmt: (n: number) => string;
 }
 
@@ -216,7 +159,7 @@ export function Header({
   const [notifOpen, setNotifOpen] = useState(false);
   const notifRef = useRef<HTMLDivElement>(null);
   const [addressModalOpen, setAddressModalOpen] = useState(false);
-  const { theme, setTheme } = useTheme();
+  const { theme, toggleTheme } = useTheme(generalLogo?.theme);
   const [defaultAddress, setDefaultAddress] = useState<CustomerAddress | null>(
     null,
   );
@@ -1090,7 +1033,7 @@ export function Header({
 
           {/* Cambio de tema, a la derecha de la dirección */}
           <div className="ml-3">
-            <ThemeSwitcher theme={theme} setTheme={setTheme} />
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
           </div>
         </div>
       </nav>

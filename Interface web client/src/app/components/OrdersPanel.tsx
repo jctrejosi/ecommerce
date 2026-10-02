@@ -70,7 +70,7 @@ export function OrdersPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-[60] flex">
+    <div className="fixed inset-0 z-[95] flex">
       <div
         className="absolute inset-0 bg-black/40"
         onClick={() => {

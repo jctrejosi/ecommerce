@@ -39,8 +39,8 @@ export function DriverAvatar({
         </div>
       )}
       {offline && (
-        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-white">
-          <WifiOff className="h-3 w-3 text-slate-400" />
+        <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-surface">
+          <WifiOff className="h-3 w-3 text-ink-faint" />
         </span>
       )}
     </div>
@@ -69,7 +69,7 @@ export function LastSeen({ driver }: { driver: FleetDriver }) {
   const offline = driver.isActive && !isDriverOnline(driver);
   return (
     <span
-      className={`whitespace-nowrap text-xs ${offline ? 'font-semibold text-rose-500' : 'text-slate-400'}`}
+      className={`whitespace-nowrap text-xs ${offline ? 'font-semibold text-rose-500' : 'text-ink-faint'}`}
       title={signal ? new Date(signal).toLocaleString('es-CO') : 'Sin señal'}
     >
       {signal ? timeAgo(signal) : 'Sin señal'}

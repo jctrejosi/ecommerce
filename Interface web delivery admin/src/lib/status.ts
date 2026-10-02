@@ -112,7 +112,7 @@ export function driverVisual(d: FleetDriver): DriverVisual {
       color: '#94a3b8',
       label: 'Desactivado',
       action: 'Cuenta desactivada',
-      badge: 'bg-slate-100 text-slate-500',
+      badge: 'bg-surface-3 text-ink-faint',
     };
   }
   const offline = !isDriverOnline(d);
@@ -131,7 +131,7 @@ export function driverVisual(d: FleetDriver): DriverVisual {
       color: '#94a3b8',
       label: 'Desconectado',
       action: 'Sin señal de la app · desconectado',
-      badge: 'bg-slate-100 text-slate-500',
+      badge: 'bg-surface-3 text-ink-faint',
     };
   }
   if (d.isAvailable) {
@@ -146,7 +146,7 @@ export function driverVisual(d: FleetDriver): DriverVisual {
     color: '#64748b',
     label: 'No disponible',
     action: 'Marcado como no disponible',
-    badge: 'bg-slate-200 text-slate-600',
+    badge: 'bg-line text-ink-soft',
   };
 }
 

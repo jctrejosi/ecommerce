@@ -132,7 +132,7 @@ const SERVICES = [
   },
   {
     name: "analytics",
-    dir: "Interface web analytics",
+    dir: "crm/interface web",
     url: "http://localhost:8444",
     build: [[PM, "run", "build"]],
     deps: PNPM_DEPS,
@@ -166,7 +166,7 @@ const SERVICES = [
   },
   {
     name: "ia",
-    dir: "ia-service",
+    dir: "crm/ia-service",
     url: "http://localhost:8002",
     deps: PYTHON_DEPS,
   },
@@ -356,7 +356,7 @@ function startDatabase() {
 }
 
 function startDatabaseCampaigns() {
-  const dbDir = path.join(ROOT, "db-campaigns");
+  const dbDir = path.join(ROOT, "crm", "db");
   console.log(`${C.db}[db-campaigns]${C.reset} 🗄️  PostgreSQL analytics (docker compose up -d) → logs/db.prod.log`);
   const { fd } = openLog("db");
   const run = (args) =>
@@ -619,7 +619,7 @@ function stopAll() {
     /* noop */
   }
   console.log("\n💡 La BD (docker) sigue corriendo. Para detenerla: cd db/docker && docker compose stop");
-  console.log("   La BD de analytics: cd db-campaigns && docker compose stop");
+  console.log("   La BD de analytics: cd crm/db && docker compose stop");
   console.log("   OSRM (rutas): cd delivery-routing && docker compose stop");
 }
 

@@ -442,7 +442,7 @@ export default function App() {
         ) : tab === 'metrics' ? (
           <MetricsView notify={notify} />
         ) : tab === 'users' ? (
-          <PickUsersView notify={notify} />
+          <PickUsersView notify={notify} currentUserId={authUser?.id ?? null} />
         ) : tab === 'schedule' ? (
           <ScheduleView branchId={branchId} branches={branches} notify={notify} />
         ) : (
@@ -1483,7 +1483,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
 
 const emptyUserForm = () => ({ fullName: '', username: '', email: '', phone: '', password: '' })
 
-function PickUsersView({ notify }: { notify: (msg: string) => void }) {
+function PickUsersView({ notify, currentUserId }: { notify: (msg: string) => void; currentUserId: number | null }) {
   const [users, setUsers] = useState<PickUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -1528,6 +1528,16 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
     } finally {
       setSaving(false)
     }
+  }
+
+  // Un superusuario no puede desactivarse a sí mismo ni dejar el sistema sin
+  // ningún superusuario activo (el backend también lo rechaza).
+  const activeSuperusers = users.filter((u) => u.isSuperuser && u.isActive).length
+  const deactivateBlockedReason = (u: PickUser): string | null => {
+    if (!u.isActive) return null
+    if (u.isSuperuser && activeSuperusers <= 1) return 'Es el último superusuario activo'
+    if (currentUserId !== null && u.id === currentUserId) return 'Es tu propia cuenta'
+    return null
   }
 
   const applyToggle = async (u: PickUser, kind: UserConfirmKind) => {
@@ -1692,7 +1702,9 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
                 </button>
                 <button
                   onClick={() => setConfirm({ user: u, kind: 'active' })}
-                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white"
+                  disabled={deactivateBlockedReason(u) !== null}
+                  title={deactivateBlockedReason(u) ?? 'Desactivar o activar el acceso'}
+                  className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/5 border border-white/10 text-white/70 hover:text-white disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   {u.isActive ? 'Desactivar' : 'Activar'}
                 </button>
@@ -1707,6 +1719,17 @@ function PickUsersView({ notify }: { notify: (msg: string) => void }) {
                   {u.isPicker ? 'Quitar de picking' : 'Habilitar picking'}
                 </button>
               </div>
+
+              {deactivateBlockedReason(u) && (
+                <p className="text-white/40 text-[11px] font-semibold mt-2 flex items-center gap-1.5">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                    <path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {deactivateBlockedReason(u) === 'Es tu propia cuenta'
+                    ? 'No puedes desactivar tu propia cuenta'
+                    : 'No puedes desactivar al último superusuario activo'}
+                </p>
+              )}
             </div>
           ))}
           {users.length === 0 && (

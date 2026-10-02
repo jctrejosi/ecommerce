@@ -18,8 +18,10 @@
             var t = localStorage.getItem("mercaldas-theme");
             if (t === "light") t = "claro";
             if (t === "dark") t = "oscuro";
-            var valid = ["claro", "azul", "verde", "rojo", "morado", "oscuro"];
-            if (valid.indexOf(t) === -1) {
+            // Sólo hay tema claro y oscuro; los valores antiguos caen a claro y,
+            // si no hay preferencia guardada, se usa la del sistema.
+            if (t === "azul" || t === "verde" || t === "rojo" || t === "morado") t = "claro";
+            if (t !== "claro" && t !== "oscuro") {
               t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "oscuro" : "claro";
             }
             document.documentElement.dataset.theme = t;

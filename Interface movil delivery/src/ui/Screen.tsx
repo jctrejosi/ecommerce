@@ -1,5 +1,6 @@
 import { ReactNode, useState } from "react";
-import { Image, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useKeyboardHeight } from "@/lib/keyboard";
 import { colors, spacing } from "@/theme";
@@ -21,6 +22,12 @@ interface ScreenProps {
    */
   bottomInset?: boolean;
   /**
+   * Muestra una flecha para volver en el extremo izquierdo de la cabecera (en
+   * lugar del logo de la marca). El título sigue centrado porque el hueco mide
+   * lo mismo que el logo (62).
+   */
+  onBack?: () => void;
+  /**
    * Acción a la derecha del título (p. ej. el botón de chat). Ocupa el mismo
    * ancho que el logo para que el título siga centrado.
    */
@@ -41,6 +48,7 @@ export function Screen({
   scroll = true,
   padded = true,
   bottomInset = false,
+  onBack,
   headerRight,
   keyboardAware = false,
 }: ScreenProps) {
@@ -72,14 +80,26 @@ export function Screen({
     >
       {title ? (
         <View style={styles.headerBar}>
-          <View style={styles.brand}>
-            <Image
-              source={require("../../assets/delivery.png")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={styles.brandText}>Delivery</Text>
-          </View>
+          {onBack ? (
+            <Pressable
+              onPress={onBack}
+              hitSlop={10}
+              style={({ pressed }) => [styles.back, pressed && styles.backPressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Volver"
+            >
+              <Ionicons name="chevron-back" size={26} color={colors.text} />
+            </Pressable>
+          ) : (
+            <View style={styles.brand}>
+              <Image
+                source={require("../../assets/delivery.png")}
+                style={styles.logo}
+                resizeMode="contain"
+              />
+              <Text style={styles.brandText}>Delivery</Text>
+            </View>
+          )}
           <AutoFitTitle text={title} baseSize={titleSize} />
           <View style={styles.headerRight}>
             {headerRight ?? (
@@ -146,6 +166,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
   brand: { width: 62, alignItems: "center", justifyContent: "center" },
+  back: {
+    width: 62,
+    height: 34,
+    alignItems: "flex-start",
+    justifyContent: "center",
+  },
+  backPressed: { opacity: 0.6 },
   brandText: {
     fontSize: 8,
     fontWeight: "800",

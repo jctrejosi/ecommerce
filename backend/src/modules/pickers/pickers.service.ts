@@ -260,8 +260,15 @@ export class PickersService {
       isActive?: boolean;
       isPicker?: boolean;
     },
+    actingUserId?: number,
   ) {
-    await this.findRow(id);
+    const target = await this.findRow(id);
+
+    // Desactivar puede dejar el sistema sin administrador o bloquear al propio
+    // admin que lo intenta; ambas cosas se rechazan.
+    if (dto.isActive === false) {
+      await this.assertCanDeactivate(target, id, actingUserId);
+    }
 
     const email = dto.email?.trim().toLowerCase();
     const username = dto.username?.trim();
@@ -302,6 +309,40 @@ export class PickersService {
       .returning(this.pickerColumns);
 
     return this.toPicker(row);
+  }
+
+  /**
+   * Impide desactivar al último superusuario activo (dejaría el sistema sin
+   * administrador) y la propia cuenta del administrador que lo intenta.
+   */
+  private async assertCanDeactivate(
+    target: { isSuperuser: boolean },
+    id: number,
+    actingUserId?: number,
+  ) {
+    if (target.isSuperuser) {
+      const active = await this.db
+        .select({ id: users.id })
+        .from(users)
+        .where(
+          and(
+            eq(users.isSuperuser, true),
+            eq(users.isActive, true),
+            isNull(users.deletedAt),
+          ),
+        )
+        .limit(2);
+      if (active.length <= 1) {
+        throw new ConflictException(
+          'No puedes desactivar al último superusuario activo: el sistema se quedaría sin administrador.',
+        );
+      }
+    }
+    if (actingUserId !== undefined && actingUserId === id) {
+      throw new ConflictException(
+        'No puedes desactivar tu propia cuenta mientras estás conectado.',
+      );
+    }
   }
 
   /** Restablece la contraseña y desbloquea la cuenta. */

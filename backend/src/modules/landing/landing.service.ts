@@ -13,6 +13,11 @@ import {
   productVariants,
   settings,
 } from '../../../drizzle/schema';
+import {
+  mergeTheme,
+  sanitizeTheme,
+  type ThemeConfig,
+} from './theme.config';
 
 @Injectable()
 export class LandingService {
@@ -569,19 +574,26 @@ export class LandingService {
     return [];
   }
 
-  // ── General (logo y título del sitio) ──
+  // ── General (logo, título y tema del sitio) ──
 
-  async getGeneralLogo() {
+  /** Valor crudo guardado en `settings.general_logo` (personalizaciones). */
+  private async readGeneralSetting(): Promise<Record<string, any>> {
     const row = await this.db
       .select()
       .from(settings)
       .where(eq(settings.key, 'general_logo'))
       .limit(1);
-    const value = row.length ? (row[0].value as any) ?? {} : {};
+    return row.length ? ((row[0].value as any) ?? {}) : {};
+  }
+
+  async getGeneralLogo() {
+    const value = await this.readGeneralSetting();
     return {
       url: value.url ?? '',
       title: value.title ?? '',
       favicon: value.favicon ?? '',
+      // Paleta efectiva (por defecto + personalizaciones del admin).
+      theme: mergeTheme(sanitizeTheme(value.theme)),
     };
   }
 
@@ -589,12 +601,22 @@ export class LandingService {
     url?: string;
     title?: string;
     favicon?: string;
+    theme?: unknown;
   }) {
-    const current = await this.getGeneralLogo();
+    const current = await this.readGeneralSetting();
+    const currentTheme = sanitizeTheme(current.theme);
+    const incomingTheme =
+      body.theme !== undefined ? sanitizeTheme(body.theme) : {};
     const value = {
-      url: body.url !== undefined ? body.url : current.url,
-      title: body.title !== undefined ? body.title.trim() : current.title,
-      favicon: body.favicon !== undefined ? body.favicon : current.favicon,
+      url: body.url !== undefined ? body.url : (current.url ?? ''),
+      title:
+        body.title !== undefined
+          ? body.title.trim()
+          : (current.title ?? ''),
+      favicon: body.favicon !== undefined ? body.favicon : (current.favicon ?? ''),
+      // Se guardan sólo las personalizaciones. Un tema presente en el body
+      // reemplaza al guardado (enviarlo vacío lo devuelve a por defecto).
+      theme: { ...currentTheme, ...incomingTheme } as Partial<ThemeConfig>,
     };
     const row = await this.db
       .select()
@@ -612,7 +634,7 @@ export class LandingService {
         value: value as any,
         dataType: 'json',
         module: 'general',
-        description: 'Logo, favicon y título de la empresa',
+        description: 'Logo, favicon, título y temas (claro/oscuro) de la empresa',
         isPublic: true,
       } as any);
     }

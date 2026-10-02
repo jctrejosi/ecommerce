@@ -54,8 +54,8 @@ function DriverRow({
   const offline = driver.isActive && !isDriverOnline(driver);
   return (
     <div
-      className={`group flex cursor-pointer items-center gap-3 border-b border-slate-100 px-3 py-2.5 transition-colors ${
-        selected ? 'bg-amber-50' : 'hover:bg-slate-50'
+      className={`group flex cursor-pointer items-center gap-3 border-b border-line px-3 py-2.5 transition-colors ${
+        selected ? 'bg-amber-50' : 'hover:bg-surface-2'
       }`}
       onClick={onSelect}
     >
@@ -66,7 +66,7 @@ function DriverRow({
         }}
         title={hidden ? 'Mostrar en el mapa' : 'Ocultar del mapa'}
         className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition-colors ${
-          hidden ? 'bg-slate-100 text-slate-400 hover:text-slate-600' : 'bg-sky-100 text-sky-600 hover:bg-sky-200'
+          hidden ? 'bg-surface-3 text-ink-faint hover:text-ink-soft' : 'bg-sky-100 text-sky-600 hover:bg-sky-200'
         }`}
       >
         {hidden ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
@@ -76,10 +76,10 @@ function DriverRow({
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <p className="truncate text-sm font-semibold text-slate-800">{driver.fullName}</p>
+          <p className="truncate text-sm font-semibold text-ink">{driver.fullName}</p>
           {offline && <MapPinOff className="h-3 w-3 shrink-0 text-rose-400" />}
         </div>
-        <p className="truncate text-[11px] text-slate-400">
+        <p className="truncate text-[11px] text-ink-faint">
           {vehicleLabel(driver)}
           {driver.activeAssignment ? ` · ${driver.activeAssignment.referenceCode ?? ''}` : ''}
         </p>
@@ -96,7 +96,7 @@ function DriverRow({
           onChat();
         }}
         title={unread > 0 ? `Chat · ${unread} sin leer` : 'Chat con el repartidor'}
-        className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-700"
+        className="relative flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-surface-3 text-ink-faint transition-colors hover:bg-line hover:text-ink-soft"
       >
         <MessageCircle className="h-3.5 w-3.5" />
         {unread > 0 && (
@@ -131,10 +131,10 @@ function DetailView({
 
   return (
     <div className="flex flex-1 flex-col overflow-y-auto">
-      <div className="border-b border-slate-100 p-4">
+      <div className="border-b border-line p-4">
         <button
           onClick={onBack}
-          className="mb-3 flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-slate-800"
+          className="mb-3 flex items-center gap-1 text-xs font-semibold text-ink-faint hover:text-ink"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Volver a la flota
         </button>
@@ -142,8 +142,8 @@ function DetailView({
         <div className="flex items-start gap-3">
           <DriverAvatar driver={driver} size={48} />
           <div className="min-w-0 flex-1">
-            <h3 className="text-base font-bold text-slate-900">{driver.fullName}</h3>
-            <p className="text-xs text-slate-500">
+            <h3 className="text-base font-bold text-ink">{driver.fullName}</h3>
+            <p className="text-xs text-ink-faint">
               {driver.username ? `@${driver.username} · ` : ''}
               {vehicleLabel(driver)}
             </p>
@@ -152,7 +152,7 @@ function DetailView({
               <button
                 onClick={onChat}
                 title="Abrir chat con el repartidor"
-                className="relative inline-flex items-center gap-1.5 rounded-lg bg-slate-900 px-2.5 py-1 text-[11px] font-bold text-white transition hover:bg-slate-800"
+                className="relative inline-flex items-center gap-1.5 rounded-lg bg-invert px-2.5 py-1 text-[11px] font-bold text-invert-ink transition hover:bg-invert/90"
               >
                 <MessageCircle className="h-3.5 w-3.5" /> Chat
                 {unread > 0 && (
@@ -166,7 +166,7 @@ function DetailView({
         </div>
       </div>
 
-      <div className="flex gap-1 border-b border-slate-100 px-4">
+      <div className="flex gap-1 border-b border-line px-4">
         {(
           [
             ['detalle', 'Detalle'],
@@ -178,8 +178,8 @@ function DetailView({
             onClick={() => setTab(key)}
             className={`-mb-px border-b-2 px-3 py-2 text-xs font-bold transition-colors ${
               tab === key
-                ? 'border-slate-900 text-slate-900'
-                : 'border-transparent text-slate-400 hover:text-slate-600'
+                ? 'border-ink text-ink'
+                : 'border-transparent text-ink-faint hover:text-ink-soft'
             }`}
           >
             {label}
@@ -193,37 +193,37 @@ function DetailView({
         </div>
       ) : (
       <div className="space-y-4 p-4">
-        <section className="rounded-xl border border-slate-100 bg-slate-50 p-3 text-sm">
+        <section className="rounded-xl border border-line bg-surface-2 p-3 text-sm">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wide text-slate-400">
+            <span className="text-xs font-bold uppercase tracking-wide text-ink-faint">
               Estado actual
             </span>
             <span className="text-xs font-semibold" style={{ color: visual.color }}>
               {visual.action}
             </span>
           </div>
-          <div className="mt-2 flex items-center justify-between border-t border-slate-200 pt-2">
-            <span className="text-xs text-slate-500">Última señal</span>
-            <span className={`text-xs font-semibold ${driver.isActive && !isDriverOnline(driver) ? 'text-rose-500' : 'text-slate-700'}`}>
+          <div className="mt-2 flex items-center justify-between border-t border-line pt-2">
+            <span className="text-xs text-ink-faint">Última señal</span>
+            <span className={`text-xs font-semibold ${driver.isActive && !isDriverOnline(driver) ? 'text-rose-500' : 'text-ink-soft'}`}>
               {(() => {
                 const signal = lastSignalAt(driver);
                 return signal ? timeAgo(signal) : 'Sin señal';
               })()}
             </span>
           </div>
-          <div className="mt-2 border-t border-slate-200 pt-2">
+          <div className="mt-2 border-t border-line pt-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-slate-500">Ocupación</span>
+              <span className="text-xs text-ink-faint">Ocupación</span>
               <span
                 className={`text-right text-xs font-semibold ${
-                  driver.load?.overloaded ? 'text-rose-500' : 'text-slate-700'
+                  driver.load?.overloaded ? 'text-rose-500' : 'text-ink-soft'
                 }`}
               >
                 {loadLabel(driver.load)}
               </span>
             </div>
             {driver.load?.fill != null && (
-              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
+              <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-line">
                 <div
                   className={`h-full rounded-full ${
                     driver.load.overloaded ? 'bg-rose-500' : 'bg-emerald-500'
@@ -243,7 +243,7 @@ function DetailView({
         </section>
 
         <section>
-          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-faint">
             Color de la ruta en el mapa
           </h4>
           <div className="flex flex-wrap gap-2">
@@ -258,7 +258,7 @@ function DetailView({
                   onClick={() => onChangeColor(color)}
                   className={`h-7 w-7 rounded-full transition ${
                     active
-                      ? 'ring-2 ring-slate-900 ring-offset-2'
+                      ? 'ring-2 ring-ink ring-offset-2'
                       : 'ring-1 ring-black/10 hover:scale-110'
                   }`}
                   style={{ background: color }}
@@ -269,38 +269,38 @@ function DetailView({
         </section>
 
         <section className="text-sm">
-          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
+          <h4 className="mb-2 text-xs font-bold uppercase tracking-wide text-ink-faint">
             Contacto
           </h4>
-          <div className="space-y-1.5 text-slate-700">
+          <div className="space-y-1.5 text-ink-soft">
             <p className="flex items-center gap-2">
-              <Phone className="h-3.5 w-3.5 text-slate-400" /> {driver.phone}
+              <Phone className="h-3.5 w-3.5 text-ink-faint" /> {driver.phone}
             </p>
             <p className="flex items-center gap-2">
-              <UserRound className="h-3.5 w-3.5 text-slate-400" /> {driver.email ?? 'Sin email'}
+              <UserRound className="h-3.5 w-3.5 text-ink-faint" /> {driver.email ?? 'Sin email'}
             </p>
           </div>
         </section>
 
         {a && (
           <section>
-            <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-400">
+            <h4 className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-ink-faint">
               <ShoppingBag className="h-3.5 w-3.5" /> Pedido activo
             </h4>
-            <div className="rounded-xl border border-slate-100 bg-white p-3">
+            <div className="rounded-xl border border-line bg-surface p-3">
               <div className="flex items-center justify-between">
-                <span className="font-mono text-xs font-bold text-slate-700">
+                <span className="font-mono text-xs font-bold text-ink-soft">
                   {a.referenceCode ?? `#${a.orderId}`}
                 </span>
                 <StatusBadge driver={driver} />
               </div>
-              <p className="mt-1.5 text-xs text-slate-600">
+              <p className="mt-1.5 text-xs text-ink-soft">
                 Cliente: <strong>{a.customerName ?? '—'}</strong>
               </p>
-              <p className="mt-0.5 text-xs text-slate-500">
+              <p className="mt-0.5 text-xs text-ink-faint">
                 {[a.addressLine1, a.city].filter(Boolean).join(', ') || 'Sin dirección'}
               </p>
-              <div className="mt-2 space-y-1 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
+              <div className="mt-2 space-y-1 border-t border-line pt-2 text-[11px] text-ink-faint">
                 <p>Asignado: {formatDateTime(a.assignedAt)}</p>
                 {a.acceptedAt && <p>Aceptado: {formatDateTime(a.acceptedAt)}</p>}
                 {a.pickedUpAt && <p>Recogido: {formatDateTime(a.pickedUpAt)}</p>}
@@ -343,15 +343,15 @@ export default function DriversSidebar(props: Props) {
     : drivers;
 
   return (
-    <aside className="flex w-[360px] shrink-0 flex-col border-l border-slate-200 bg-white">
-      <div className="border-b border-slate-100 p-3">
+    <aside className="flex w-[360px] shrink-0 flex-col border-l border-line bg-surface">
+      <div className="border-b border-line p-3">
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
           <input
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Buscar repartidor, placa, teléfono…"
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-100"
+            className="w-full rounded-xl border border-line bg-surface-2 py-2 pl-9 pr-3 text-xs outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-100"
           />
         </div>
         <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -361,8 +361,8 @@ export default function DriversSidebar(props: Props) {
               onClick={() => onFilterChange(opt.key)}
               className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
                 filter === opt.key
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                  ? 'bg-invert text-invert-ink'
+                  : 'bg-surface-3 text-ink-faint hover:bg-line'
               }`}
             >
               {opt.label}
@@ -382,7 +382,7 @@ export default function DriversSidebar(props: Props) {
       ) : (
         <div className="flex-1 overflow-y-auto">
           {rows.length === 0 && (
-            <p className="p-6 text-center text-xs text-slate-400">
+            <p className="p-6 text-center text-xs text-ink-faint">
               No hay repartidores que coincidan con el filtro.
             </p>
           )}
@@ -398,7 +398,7 @@ export default function DriversSidebar(props: Props) {
               onChat={() => onChat(d.id)}
             />
           ))}
-          <p className="p-3 text-center text-[11px] text-slate-300">
+          <p className="p-3 text-center text-[11px] text-ink-faint">
             {rows.length} repartidor{rows.length === 1 ? '' : 'es'} en la vista
           </p>
         </div>

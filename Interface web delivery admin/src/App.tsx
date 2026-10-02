@@ -3,12 +3,17 @@ import {
   Bell,
   BellOff,
   BellRing,
+  Check,
+  ChevronDown,
   Loader2,
   LogOut,
   LocateFixed,
   MessageCircle,
+  Monitor,
+  Moon,
   Package,
   RefreshCw,
+  Sun,
   Truck,
   Users,
   Wifi,
@@ -29,6 +34,7 @@ import {
   type FleetStatusEvent,
 } from './services/socket';
 import { filterDrivers, isDriverOnline } from './lib/status';
+import { useTheme, type Theme } from './lib/theme';
 import { initials } from './lib/format';
 import {
   notificationPermission,
@@ -57,6 +63,13 @@ const TABS: { key: Tab; label: string; icon: typeof Truck }[] = [
   { key: 'orders', label: 'Pedidos', icon: Package },
 ];
 
+/** Opciones del cambiador de temas del menú de usuario. */
+const THEMES: { key: Theme; label: string; icon: typeof Sun }[] = [
+  { key: 'light', label: 'Claro', icon: Sun },
+  { key: 'dark', label: 'Oscuro', icon: Moon },
+  { key: 'system', label: 'Sistema', icon: Monitor },
+];
+
 /** Explicación (título del botón) según el estado de las notificaciones. */
 const NOTIF_HINTS: Record<NotificationPermissionState, string> = {
   granted: 'Notificaciones del navegador activadas · clic para probar',
@@ -70,6 +83,9 @@ export default function App() {
   const [booting, setBooting] = useState(() => Boolean(getToken()));
   const [user, setUser] = useState<AuthUser | null>(null);
   const [tab, setTab] = useState<Tab>('map');
+  /** Menú del usuario (avatar): cambiador de temas. */
+  const [userMenu, setUserMenu] = useState(false);
+  const [theme, setTheme] = useTheme();
 
   const [drivers, setDrivers] = useState<FleetDriver[]>([]);
   const [loading, setLoading] = useState(false);
@@ -271,6 +287,7 @@ export default function App() {
   }, []);
 
   const handleLogout = useCallback(() => {
+    setUserMenu(false);
     setToken(null);
     setUser(null);
     setDrivers([]);
@@ -343,8 +360,8 @@ export default function App() {
 
   if (booting) {
     return (
-      <div className="flex h-full items-center justify-center bg-slate-100">
-        <Loader2 className="h-6 w-6 animate-spin text-slate-400" />
+      <div className="flex h-full items-center justify-center bg-surface-3">
+        <Loader2 className="h-6 w-6 animate-spin text-ink-faint" />
       </div>
     );
   }
@@ -356,14 +373,15 @@ export default function App() {
   return (
     <div className="flex h-full flex-col">
       {/* ── Topbar ── */}
-      <header className="z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-slate-200 bg-white px-4 py-2">
-        <div className="flex shrink-0 flex-col items-center justify-center gap-0.5">
+      <header className="z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2">
+        {/* Marca: el logo ocupa el ancho del título (w-full sobre el texto) */}
+        <div className="flex shrink-0 flex-col items-center justify-center gap-1">
           <img
             src={headerLogo}
             alt="Mercaldas"
-            className="h-6 w-auto shrink-0 object-contain"
+            className="h-auto w-0 min-w-full object-contain"
           />
-          <p className="whitespace-nowrap text-[11px] font-bold leading-none text-slate-900">
+          <p className="whitespace-nowrap text-[11px] font-extrabold uppercase leading-none tracking-[0.16em] text-ink">
             Delivery
           </p>
         </div>
@@ -377,8 +395,8 @@ export default function App() {
                 onClick={() => setTab(t.key)}
                 className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-semibold transition-colors ${
                   tab === t.key
-                    ? 'bg-slate-900 text-white'
-                    : 'text-slate-500 hover:bg-slate-100'
+                    ? 'bg-invert text-invert-ink'
+                    : 'text-ink-faint hover:bg-surface-3'
                 }`}
               >
                 <Icon className="h-4 w-4" />
@@ -393,7 +411,7 @@ export default function App() {
               movieron sobre el mapa, en la esquina superior derecha. */}
           <span
             className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${
-              connected ? 'bg-slate-100 text-slate-600' : 'bg-rose-50 text-rose-600'
+              connected ? 'bg-surface-3 text-ink-soft' : 'bg-rose-50 text-rose-600'
             }`}
             title={connected ? 'Conectado en tiempo real' : 'Sin conexión en vivo · polling cada 30 s'}
           >
@@ -401,7 +419,7 @@ export default function App() {
             {connected ? 'En vivo' : 'Sin señal'}
           </span>
           {lastSync && (
-            <span className="hidden text-[11px] text-slate-400 sm:block">
+            <span className="hidden text-[11px] text-ink-faint sm:block">
               Sincronizado {lastSync.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
             </span>
           )}
@@ -409,7 +427,7 @@ export default function App() {
             onClick={() => void refresh()}
             disabled={loading}
             title="Actualizar ahora"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink-soft"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </button>
@@ -417,7 +435,7 @@ export default function App() {
           <button
             onClick={() => void handleNotificationsClick()}
             title={NOTIF_HINTS[notifPermission]}
-            className="relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="relative flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink-soft"
           >
             {notifPermission === 'granted' ? (
               <BellRing className="h-4 w-4 text-emerald-600" />
@@ -436,7 +454,7 @@ export default function App() {
           <button
             onClick={() => openChat(null)}
             title="Chat con repartidores"
-            className="relative flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="relative flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink-soft"
           >
             <MessageCircle className="h-4 w-4" />
             {unreadTotal > 0 && (
@@ -446,21 +464,84 @@ export default function App() {
             )}
           </button>
 
-          <div className="ml-1 flex items-center gap-2 border-l border-slate-200 pl-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-slate-900 text-xs font-bold text-white">
-              {initials(user.fullName || user.username)}
-            </div>
-            <div className="hidden leading-tight md:block">
-              <p className="text-xs font-semibold text-slate-800">{user.fullName || user.username}</p>
-              <p className="text-[10px] text-slate-400">Administrador</p>
-            </div>
+          <div className="relative ml-1 flex items-center gap-2 border-l border-line pl-3">
+            <button
+              onClick={() => setUserMenu((v) => !v)}
+              title="Cuenta y tema"
+              aria-haspopup="menu"
+              aria-expanded={userMenu}
+              className="flex items-center gap-2 rounded-xl px-1.5 py-1 text-left transition-colors hover:bg-surface-3"
+            >
+              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-invert text-xs font-bold text-invert-ink">
+                {initials(user.fullName || user.username)}
+              </div>
+              <div className="hidden leading-tight md:block">
+                <p className="text-xs font-semibold text-ink">
+                  {user.fullName || user.username}
+                </p>
+                <p className="text-[10px] text-ink-faint">Administrador</p>
+              </div>
+              <ChevronDown
+                className={`hidden h-3.5 w-3.5 text-ink-faint transition-transform md:block ${
+                  userMenu ? 'rotate-180' : ''
+                }`}
+              />
+            </button>
             <button
               onClick={handleLogout}
               title="Cerrar sesión"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-rose-50 hover:text-rose-600"
+              className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"
             >
               <LogOut className="h-4 w-4" />
             </button>
+
+            {/* Menú del usuario: temas del panel. */}
+            {userMenu && (
+              <>
+                <div
+                  className="fixed inset-0 z-20"
+                  onClick={() => setUserMenu(false)}
+                  aria-hidden
+                />
+                <div className="absolute right-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+                  <div className="border-b border-line px-4 py-3">
+                    <p className="truncate text-xs font-bold text-ink">
+                      {user.fullName || user.username}
+                    </p>
+                    <p className="truncate text-[11px] text-ink-faint">{user.email}</p>
+                  </div>
+                  <div className="p-2">
+                    <p className="px-2 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                      Tema
+                    </p>
+                    {THEMES.map((t) => {
+                      const Icon = t.icon;
+                      const active = theme === t.key;
+                      return (
+                        <button
+                          key={t.key}
+                          onClick={() => {
+                            setTheme(t.key);
+                            setUserMenu(false);
+                          }}
+                          role="menuitemradio"
+                          aria-checked={active}
+                          className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs font-semibold transition-colors ${
+                            active
+                              ? 'bg-surface-3 text-ink'
+                              : 'text-ink-soft hover:bg-surface-2'
+                          }`}
+                        >
+                          <Icon className="h-3.5 w-3.5" />
+                          {t.label}
+                          {active && <Check className="ml-auto h-3.5 w-3.5 text-amber-500" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -496,14 +577,14 @@ export default function App() {
           {/* Cifras de la flota sobre el mapa (esquina superior derecha).
               `pointer-events-none` para no bloquear el arrastre del mapa. */}
           <div className="pointer-events-none absolute right-4 top-4 z-500 flex max-w-[calc(100%-2rem)] flex-wrap justify-end gap-2">
-            <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-emerald-700 shadow-md ring-1 ring-emerald-100">
+            <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-surface/95 px-2.5 py-1 text-[11px] font-bold text-emerald-700 shadow-md ring-1 ring-emerald-100">
               <Truck className="h-3 w-3" /> {stats.inDelivery} en entrega
             </span>
-            <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-sky-700 shadow-md ring-1 ring-sky-100">
+            <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-surface/95 px-2.5 py-1 text-[11px] font-bold text-sky-700 shadow-md ring-1 ring-sky-100">
               <Package className="h-3 w-3" /> {stats.withOrder} con pedido
             </span>
             {stats.offline > 0 && (
-              <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold text-slate-500 shadow-md ring-1 ring-slate-200">
+              <span className="flex items-center gap-1.5 whitespace-nowrap rounded-full bg-surface/95 px-2.5 py-1 text-[11px] font-bold text-ink-faint shadow-md ring-1 ring-line">
                 <WifiOff className="h-3 w-3" /> {stats.offline} desconectados
               </span>
             )}
@@ -513,7 +594,7 @@ export default function App() {
           <button
             onClick={() => mapRef.current?.recenter()}
             title="Centrar el mapa en Manizales"
-            className="absolute bottom-8 right-4 z-500 flex h-10 w-10 items-center justify-center rounded-xl bg-white text-slate-600 shadow-lg ring-1 ring-slate-200 transition hover:text-slate-900"
+            className="absolute bottom-8 right-4 z-500 flex h-10 w-10 items-center justify-center rounded-xl bg-surface text-ink-soft shadow-lg ring-1 ring-line transition hover:text-ink"
           >
             <LocateFixed className="h-4.5 w-4.5" />
           </button>

@@ -12,6 +12,7 @@ import { useOrderSocket } from "../hooks/useOrderSocket";
 import { useCustomerOrderEvents } from "../hooks/useCustomerOrderEvents";
 import { useNotifications, isMobileDevice } from "../hooks/useNotifications";
 import { useBackendStatus } from "../hooks/useBackendStatus";
+import type { ThemeConfig } from "../hooks/useTheme";
 import { ChatbotWidget } from "../components/ChatbotWidget";
 import { OrderChatWidget } from "./components/OrderChatWidget";
 import type { BotCart } from "../services/chatbot.service";
@@ -255,6 +256,8 @@ export default function App() {
     url?: string;
     title?: string;
     favicon?: string;
+    /** Paletas claro/oscuro configuradas en el admin (/contenido/general). */
+    theme?: ThemeConfig | null;
   } | null>(null);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);

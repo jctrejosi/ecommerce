@@ -154,21 +154,21 @@ export default function DriverChatModal({
 
   return (
     <div
-      className="fixed inset-0 z-1000 flex cursor-pointer items-center justify-center bg-slate-900/40 p-4"
+      className="fixed inset-0 z-1000 flex cursor-pointer items-center justify-center bg-overlay p-4"
       onClick={onClose}
     >
       <div
-        className="flex h-[80vh] max-h-180 w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+        className="flex h-[80vh] max-h-180 w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-surface shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ── Cabecera ── */}
-        <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3">
           {active ? (
             <>
               <button
                 onClick={() => setActiveId(null)}
                 title="Volver a la lista"
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink-soft"
               >
                 <ArrowLeft className="h-4 w-4" />
               </button>
@@ -179,10 +179,10 @@ export default function DriverChatModal({
                 size={36}
               />
               <div className="min-w-0 flex-1 leading-tight">
-                <p className="truncate text-sm font-bold text-slate-900">
+                <p className="truncate text-sm font-bold text-ink">
                   {active.fullName}
                 </p>
-                <p className="truncate text-[11px] text-slate-400">
+                <p className="truncate text-[11px] text-ink-faint">
                   {active.username ? `@${active.username} · ` : ''}
                   {active.phone}
                   {active.isActive ? '' : ' · cuenta desactivada'}
@@ -195,8 +195,8 @@ export default function DriverChatModal({
                 <MessagesSquare className="h-4 w-4" />
               </span>
               <div className="flex-1 leading-tight">
-                <p className="text-sm font-bold text-slate-900">Chat con repartidores</p>
-                <p className="text-[11px] text-slate-400">
+                <p className="text-sm font-bold text-ink">Chat con repartidores</p>
+                <p className="text-[11px] text-ink-faint">
                   {chats.length} repartidor{chats.length === 1 ? '' : 'es'}
                   {totalUnread > 0 ? ` · ${totalUnread} sin leer` : ''}
                 </p>
@@ -206,7 +206,7 @@ export default function DriverChatModal({
           <button
             onClick={onClose}
             title="Cerrar"
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink-soft"
           >
             <X className="h-4 w-4" />
           </button>
@@ -221,22 +221,22 @@ export default function DriverChatModal({
         {/* ── Bandeja ── */}
         {!active && (
           <>
-            <div className="shrink-0 border-b border-slate-100 p-3">
+            <div className="shrink-0 border-b border-line p-3">
               <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
                 <input
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Buscar por nombre o código…"
                   autoComplete="off"
                   spellCheck={false}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-8 text-sm outline-none transition focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-100"
+                  className="w-full rounded-xl border border-line bg-surface-2 py-2 pl-9 pr-8 text-sm outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-100"
                 />
                 {query && (
                   <button
                     onClick={() => setQuery('')}
                     title="Limpiar búsqueda"
-                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                    className="absolute right-2 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink-soft"
                   >
                     <X className="h-3.5 w-3.5" />
                   </button>
@@ -245,12 +245,12 @@ export default function DriverChatModal({
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto pb-2">
               {chats.length === 0 && (
-                <p className="p-8 text-center text-xs text-slate-400">
+                <p className="p-8 text-center text-xs text-ink-faint">
                   No hay repartidores registrados.
                 </p>
               )}
               {chats.length > 0 && visible.length === 0 && (
-                <p className="p-8 text-center text-xs text-slate-400">
+                <p className="p-8 text-center text-xs text-ink-faint">
                   Ningún repartidor coincide con “{query}”.
                 </p>
               )}
@@ -258,7 +258,7 @@ export default function DriverChatModal({
                 <button
                   key={c.driverId}
                   onClick={() => setActiveId(c.driverId)}
-                  className="flex w-full items-center gap-3 border-b border-slate-50 px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-slate-50"
+                  className="flex w-full items-center gap-3 border-b border-line px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-surface-2"
                 >
                   <ChatAvatar
                     driverId={c.driverId}
@@ -268,20 +268,20 @@ export default function DriverChatModal({
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="min-w-0 truncate text-sm font-semibold text-slate-800">
+                      <p className="min-w-0 truncate text-sm font-semibold text-ink">
                         {c.fullName}
                         {c.username && (
-                          <span className="ml-1.5 text-[11px] font-normal text-slate-400">
+                          <span className="ml-1.5 text-[11px] font-normal text-ink-faint">
                             @{c.username}
                           </span>
                         )}
                       </p>
-                      <span className="shrink-0 text-[10px] text-slate-400">
+                      <span className="shrink-0 text-[10px] text-ink-faint">
                         {c.lastMessage ? timeAgo(c.lastMessage.createdAt) : ''}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <p className="truncate text-xs text-slate-400">
+                      <p className="truncate text-xs text-ink-faint">
                         {c.lastMessage
                           ? `${c.lastMessage.senderType === 'admin' ? 'Tú: ' : ''}${c.lastMessage.body}`
                           : 'Sin mensajes · inicia la conversación'}
@@ -302,14 +302,14 @@ export default function DriverChatModal({
         {/* ── Conversación ── */}
         {active && (
           <>
-            <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-slate-50 p-4">
+            <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto bg-surface-2 p-4">
               {loading && messages.length === 0 && (
                 <div className="flex justify-center py-6">
-                  <Loader2 className="h-5 w-5 animate-spin text-slate-300" />
+                  <Loader2 className="h-5 w-5 animate-spin text-ink-faint" />
                 </div>
               )}
               {!loading && messages.length === 0 && (
-                <p className="py-6 text-center text-xs text-slate-400">
+                <p className="py-6 text-center text-xs text-ink-faint">
                   Aún no hay mensajes con {active.fullName}.
                 </p>
               )}
@@ -323,14 +323,14 @@ export default function DriverChatModal({
                     <div
                       className={`max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
                         mine
-                          ? 'rounded-br-sm bg-slate-900 text-white'
-                          : 'rounded-bl-sm bg-white text-slate-800 ring-1 ring-slate-200'
+                          ? 'rounded-br-sm bg-invert text-invert-ink'
+                          : 'rounded-bl-sm bg-surface text-ink ring-1 ring-line'
                       }`}
                     >
                       <p className="whitespace-pre-wrap wrap-break-word">{m.body}</p>
                       <p
                         className={`mt-1 text-right text-[10px] ${
-                          mine ? 'text-white/50' : 'text-slate-400'
+                          mine ? 'text-invert-ink/50' : 'text-ink-faint'
                         }`}
                       >
                         {timeLabel(m.createdAt)}
@@ -341,7 +341,7 @@ export default function DriverChatModal({
               })}
             </div>
 
-            <div className="flex shrink-0 items-end gap-2 border-t border-slate-200 p-3">
+            <div className="flex shrink-0 items-end gap-2 border-t border-line p-3">
               <textarea
                 value={text}
                 onChange={(e) => setText(e.target.value)}
@@ -354,7 +354,7 @@ export default function DriverChatModal({
                 rows={1}
                 maxLength={2000}
                 placeholder={`Escribe a ${active.fullName}…`}
-                className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+                className="max-h-28 min-h-10 flex-1 resize-none rounded-xl border border-line px-3 py-2.5 text-sm outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
               />
               <button
                 onClick={() => void send()}

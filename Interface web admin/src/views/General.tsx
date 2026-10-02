@@ -4,6 +4,45 @@ import { Loader2 } from "lucide-react";
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+/** Tokens de color que se pueden personalizar en cada tema. */
+const THEME_TOKENS: { token: string; label: string }[] = [
+  { token: "--background", label: "Fondo de página" },
+  { token: "--foreground", label: "Texto principal" },
+  { token: "--card", label: "Tarjetas (fondo)" },
+  { token: "--card-foreground", label: "Tarjetas (texto)" },
+  { token: "--popover", label: "Popovers (fondo)" },
+  { token: "--popover-foreground", label: "Popovers (texto)" },
+  { token: "--primary", label: "Color de marca" },
+  { token: "--primary-foreground", label: "Texto sobre marca" },
+  { token: "--secondary", label: "Superficie oscura" },
+  { token: "--secondary-foreground", label: "Texto sobre superficie" },
+  { token: "--muted", label: "Fondo atenuado" },
+  { token: "--muted-foreground", label: "Texto atenuado" },
+  { token: "--accent", label: "Acento" },
+  { token: "--accent-foreground", label: "Texto sobre acento" },
+  { token: "--border", label: "Bordes" },
+  { token: "--ring", label: "Anillo de foco" },
+];
+
+const THEME_TABS = [
+  { id: "claro", label: "Claro" },
+  { id: "oscuro", label: "Oscuro" },
+] as const;
+
+type ThemeTab = (typeof THEME_TABS)[number]["id"];
+type ThemeState = Record<ThemeTab, Record<string, string>>;
+
+const EMPTY_THEME: ThemeState = { claro: {}, oscuro: {} };
+
+/** Normaliza lo que devuelve la API a las dos pestañas del editor. */
+function toThemeState(raw: unknown): ThemeState {
+  const source = (raw ?? {}) as Record<string, Record<string, string>>;
+  return {
+    claro: { ...(source.claro ?? {}) },
+    oscuro: { ...(source.oscuro ?? {}) },
+  };
+}
+
 export default function General() {
   const [logoUrl, setLogoUrl] = useState("");
   const [siteTitle, setSiteTitle] = useState("");
@@ -14,6 +53,8 @@ export default function General() {
   const [error, setError] = useState("");
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingFavicon, setUploadingFavicon] = useState(false);
+  const [theme, setTheme] = useState<ThemeState>(EMPTY_THEME);
+  const [themeTab, setThemeTab] = useState<ThemeTab>("claro");
   // Última versión persistida, para no guardar al cargar ni repetir guardados.
   const savedRef = useRef("");
 
@@ -27,10 +68,17 @@ export default function General() {
         const url = data.url ?? "";
         const title = data.title ?? "";
         const favicon = data.favicon ?? "";
+        const loadedTheme = toThemeState(data.theme);
         setLogoUrl(url);
         setSiteTitle(title);
         setFaviconUrl(favicon);
-        savedRef.current = JSON.stringify({ url, title, favicon });
+        setTheme(loadedTheme);
+        savedRef.current = JSON.stringify({
+          url,
+          title,
+          favicon,
+          theme: loadedTheme,
+        });
       }
     } catch (e) {
       console.error(e);
@@ -56,12 +104,44 @@ export default function General() {
     return data.url as string;
   };
 
+  const updateToken = (tab: ThemeTab, token: string, value: string) => {
+    setTheme((prev) => ({ ...prev, [tab]: { ...prev[tab], [token]: value } }));
+  };
+
+  /** Vuelve a los colores por defecto de un tema (envía la paleta vacía). */
+  const resetTheme = async (tab: ThemeTab) => {
+    setSaving(true);
+    setError("");
+    setSaved(false);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/landing/general-logo`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: logoUrl,
+          title: siteTitle,
+          favicon: faviconUrl,
+          theme: { [tab]: {} },
+        }),
+      });
+      if (!res.ok) throw new Error("Error al restablecer");
+      // El guardado deja los valores por defecto: se recargan para verlos.
+      await load();
+      setSaved(true);
+    } catch (e: any) {
+      setError(e.message || "Error al restablecer");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleSave = useCallback(async () => {
     setSaving(true);
     setError("");
     setSaved(false);
     try {
-      const body = { url: logoUrl, title: siteTitle, favicon: faviconUrl };
+      const body = { url: logoUrl, title: siteTitle, favicon: faviconUrl, theme };
       const res = await fetch(`${API_BASE_URL}/admin/landing/general-logo`, {
         method: "PUT",
         credentials: "include",
@@ -76,7 +156,7 @@ export default function General() {
     } finally {
       setSaving(false);
     }
-  }, [logoUrl, siteTitle, faviconUrl]);
+  }, [logoUrl, siteTitle, faviconUrl, theme]);
 
   // Autoguardado: cualquier cambio de título, logo o favicon se persiste solo.
   useEffect(() => {
@@ -85,13 +165,14 @@ export default function General() {
       url: logoUrl,
       title: siteTitle,
       favicon: faviconUrl,
+      theme,
     });
     if (snap === savedRef.current) return;
     const t = setTimeout(() => {
       void handleSave();
     }, 800);
     return () => clearTimeout(t);
-  }, [logoUrl, siteTitle, faviconUrl, loading, handleSave]);
+  }, [logoUrl, siteTitle, faviconUrl, theme, loading, handleSave]);
 
   const onPickFile = async (file: File, kind: "logo" | "favicon") => {
     const setBusy = kind === "logo" ? setUploadingLogo : setUploadingFavicon;
@@ -296,6 +377,82 @@ export default function General() {
             Recomendado: imagen cuadrada (por ejemplo 192×192) con fondo transparente.
           </p>
         </div>
+      </div>
+
+      <div className="bg-white rounded-2xl border border-gray-100 p-6 max-w-xl space-y-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="font-semibold text-sm text-gray-900">
+              Temas (claro y oscuro)
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Colores del cliente. El cliente sólo alterna entre claro y oscuro;
+              aquí se definen los colores de cada uno.
+            </p>
+          </div>
+          <Status />
+        </div>
+
+        <div className="flex items-center justify-between gap-3">
+          <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-0.5">
+            {THEME_TABS.map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setThemeTab(tab.id)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  themeTab === tab.id
+                    ? "bg-white shadow-sm text-gray-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={() => void resetTheme(themeTab)}
+            className="text-xs font-medium text-gray-500 hover:text-red-600 transition-colors"
+          >
+            Restablecer {themeTab}
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          {THEME_TOKENS.map(({ token, label }) => {
+            const value = theme[themeTab][token] ?? "";
+            const hex = /^#[0-9a-fA-F]{6}$/.test(value) ? value : null;
+            return (
+              <div key={token} className="flex items-center gap-3">
+                <label className="w-40 shrink-0 text-xs text-gray-600">
+                  {label}
+                </label>
+                <input
+                  type="color"
+                  value={hex ?? "#ffffff"}
+                  disabled={!hex}
+                  onChange={(e) => updateToken(themeTab, token, e.target.value)}
+                  title={token}
+                  className="w-8 h-8 shrink-0 rounded border border-gray-200 bg-white cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                />
+                <input
+                  value={value}
+                  onChange={(e) => updateToken(themeTab, token, e.target.value)}
+                  placeholder="#rrggbb"
+                  className="flex-1 px-2.5 py-1.5 text-xs font-mono border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
+                />
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="text-xs text-gray-400">
+          Acepta <span className="font-mono">#fff200</span>,{" "}
+          <span className="font-mono">#ff4444</span> y{" "}
+          <span className="font-mono">rgba(0,0,0,0.08)</span>. Un valor vacío o
+          inválido vuelve al color por defecto.
+        </p>
       </div>
     </div>
   );

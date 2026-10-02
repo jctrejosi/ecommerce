@@ -4,6 +4,10 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import './index.css';
 import App from './App';
 import { API_BASE_URL } from './services/api';
+import { initTheme } from './lib/theme';
+
+// Aplica el tema guardado antes de pintar (evita el destello de tema claro).
+initTheme();
 
 const API_URL = API_BASE_URL;
 

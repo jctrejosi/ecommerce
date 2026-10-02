@@ -45,8 +45,8 @@ const DB_CONTAINER = "ecommerce_postgres";
 const DB_NAME = "ecommerce";
 const DB_BACKUP_DIR = path.join(ROOT, "db", "backup");
 
-// BD de analytics (db-campaigns/docker-compose.yml) y su respaldo en db-campaigns/backups.
-const CAMPAIGNS_DIR = path.join(ROOT, "db-campaigns");
+// BD de analytics (crm/db/docker-compose.yml) y su respaldo en crm/db/backups.
+const CAMPAIGNS_DIR = path.join(ROOT, "crm", "db");
 const CAMPAIGNS_CONTAINER = "analytics_postgres";
 const CAMPAIGNS_DB = "analytics";
 const CAMPAIGNS_BACKUP_DIR = path.join(CAMPAIGNS_DIR, "backups");
@@ -58,7 +58,7 @@ const HELP = ARGS.includes("--help");
 // Las apps móviles (Expo) corren desacopladas por defecto: así la terminal queda
 // libre y se puede cerrar sin matar Metro. Con --fg se muestra el QR aquí mismo.
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
-// Restaura la copia de datos de analytics (db-campaigns) desde el respaldo
+// Restaura la copia de datos de analytics (crm/db) desde el respaldo
 // versionado y sale. Acepta también el alias mal escrito `--migration-campaings`.
 const MIGRATION_CAMPAIGNS =
   ARGS.includes("--migration-campaigns") || ARGS.includes("--migration-campaings");
@@ -161,7 +161,7 @@ const SERVICES = [
   },
   {
     name: "analytics",
-    dir: "Interface web analytics",
+    dir: "crm/interface web",
     url: "http://localhost:8444",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
@@ -210,7 +210,7 @@ const SERVICES = [
   },
   {
     name: "ia",
-    dir: "ia-service",
+    dir: "crm/ia-service",
     url: "http://localhost:8002",
     dev: ["bash", "dev.sh"],
     prod: null, // se resuelve en resolveCmd()
@@ -555,7 +555,7 @@ function restoreDatabaseIfNeeded() {
   }
 }
 
-// ── Restauración de la copia de datos de analytics (db-campaigns/backups) ────
+// ── Restauración de la copia de datos de analytics (crm/db/backups) ────
 // El respaldo va troceado (analytics_<fecha>.backup.part-000, ...) para subirlo a
 // GitHub; si no hay volcado completo se reensamblan las partes y se valida el
 // sha256 del volcado completo antes de restaurar.

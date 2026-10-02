@@ -48,7 +48,7 @@ export default function LoginScreen({ onLogin }: Props) {
   }
 
   return (
-    <div className="flex min-h-full flex-col bg-slate-950">
+    <div className="login-bg flex min-h-full flex-col">
       <div className="flex flex-1 items-center justify-center px-4 py-8">
         <div className="w-full max-w-sm">
           <div className="mb-8 text-center">
@@ -60,46 +60,46 @@ export default function LoginScreen({ onLogin }: Props) {
               />
             )}
             <h1 className="text-2xl font-bold text-white">Mercaldas Delivery</h1>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="mt-1 text-sm text-ink-faint">
               Panel administrativo de repartidores
             </p>
           </div>
 
           <form
             onSubmit={handleSubmit}
-            className="rounded-2xl bg-white p-6 shadow-2xl"
+            className="rounded-2xl bg-surface p-6 shadow-2xl"
           >
-          <label className="block text-sm font-semibold text-slate-700">
+          <label className="block text-sm font-semibold text-ink-soft">
             Usuario o email
             <div className="relative mt-1.5">
-              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
               <input
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 autoFocus
                 autoComplete="username"
                 placeholder="admin@tienda.com"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-200"
+                className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-200"
               />
             </div>
           </label>
 
-          <label className="mt-4 block text-sm font-semibold text-slate-700">
+          <label className="mt-4 block text-sm font-semibold text-ink-soft">
             Contraseña
             <div className="relative mt-1.5">
-              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-faint" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2.5 pl-9 pr-10 text-sm outline-none transition focus:border-amber-400 focus:bg-white focus:ring-2 focus:ring-amber-200"
+                className="w-full rounded-xl border border-line bg-surface-2 py-2.5 pl-9 pr-10 text-sm outline-none transition focus:border-amber-400 focus:bg-surface focus:ring-2 focus:ring-amber-200"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-ink-faint hover:text-ink-soft"
                 aria-label={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
               >
                 {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -116,14 +116,14 @@ export default function LoginScreen({ onLogin }: Props) {
           <button
             type="submit"
             disabled={busy || !identifier.trim() || !password}
-            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-slate-900 py-2.5 text-sm font-bold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-invert py-2.5 text-sm font-bold text-invert-ink transition hover:bg-invert/90 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {busy && <Loader2 className="h-4 w-4 animate-spin" />}
             {busy ? 'Ingresando…' : 'Ingresar'}
           </button>
         </form>
 
-        <p className="mt-6 text-center text-xs text-slate-500">
+        <p className="mt-6 text-center text-xs text-ink-faint">
           Acceso restringido a administradores · Mercaldas
         </p>
         </div>

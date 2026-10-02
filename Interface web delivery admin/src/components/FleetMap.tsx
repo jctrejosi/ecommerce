@@ -928,9 +928,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
 
       {/* Pantalla de carga: solo cubre la sección del mapa mientras inicializa */}
       {!styleReady && !mapError && (
-        <div className="absolute inset-0 z-600 flex flex-col items-center justify-center gap-3 bg-slate-100">
-          <Loader2 className="h-7 w-7 animate-spin text-slate-400" />
-          <p className="text-xs font-semibold text-slate-500">Cargando mapa…</p>
+        <div className="absolute inset-0 z-600 flex flex-col items-center justify-center gap-3 bg-surface-3">
+          <Loader2 className="h-7 w-7 animate-spin text-ink-faint" />
+          <p className="text-xs font-semibold text-ink-faint">Cargando mapa…</p>
         </div>
       )}
 
@@ -941,8 +941,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         title="Cambiar estilo del mapa"
         className={`absolute bottom-6 left-4 z-500 flex h-10 w-10 items-center justify-center rounded-xl shadow-lg ring-1 transition ${
           layersOpen
-            ? 'bg-slate-900 text-white ring-slate-900'
-            : 'bg-white text-slate-600 ring-slate-200 hover:text-slate-900'
+            ? 'bg-invert text-invert-ink ring-slate-900'
+            : 'bg-surface text-ink-soft ring-line hover:text-ink'
         }`}
       >
         <Layers className="h-4.5 w-4.5" />
@@ -951,9 +951,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       {layersOpen && (
         <div
           ref={layerPanelRef}
-          className="absolute bottom-[4.4rem] left-4 z-500 w-60 rounded-2xl bg-white p-1.5 shadow-xl ring-1 ring-slate-200"
+          className="absolute bottom-[4.4rem] left-4 z-500 w-60 rounded-2xl bg-surface p-1.5 shadow-xl ring-1 ring-line"
         >
-          <p className="px-2.5 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <p className="px-2.5 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
             Estilo del mapa
           </p>
           {MAP_STYLE_OPTIONS.map((opt) => (
@@ -965,12 +965,12 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
               }}
               className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left text-xs font-semibold transition-colors ${
                 styleOption.id === opt.id
-                  ? 'bg-amber-50 text-slate-900'
-                  : 'text-slate-600 hover:bg-slate-50'
+                  ? 'bg-amber-50 text-ink'
+                  : 'text-ink-soft hover:bg-surface-2'
               }`}
             >
               <span
-                className="h-6 w-9 shrink-0 rounded-md ring-1 ring-slate-200"
+                className="h-6 w-9 shrink-0 rounded-md ring-1 ring-line"
                 style={{ background: opt.swatch }}
               />
               {opt.name}
@@ -984,35 +984,35 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
 
       {/* Resumen de rutas activas + estado del seleccionado */}
       {activeRouteCount > 0 && (
-        <div className="pointer-events-none absolute bottom-6 left-1/2 z-500 flex -translate-x-1/2 items-center gap-2 rounded-full bg-white/95 px-3 py-1.5 text-[11px] font-bold text-slate-600 shadow-lg ring-1 ring-slate-200">
+        <div className="pointer-events-none absolute bottom-6 left-1/2 z-500 flex -translate-x-1/2 items-center gap-2 rounded-full bg-surface/95 px-3 py-1.5 text-[11px] font-bold text-ink-soft shadow-lg ring-1 ring-line">
           <span>
             {activeRouteCount === 1
               ? '1 ruta activa'
               : `${activeRouteCount} rutas activas`}
           </span>
           {selBadge && (
-            <span className="text-slate-400">· {selBadge}</span>
+            <span className="text-ink-faint">· {selBadge}</span>
           )}
         </div>
       )}
 
       {/* Aviso si el mapa no pudo renderizar (WebGL / carga del estilo) */}
       {mapError && (
-        <div className="absolute inset-0 z-500 flex items-center justify-center bg-slate-100/95">
-          <div className="mx-4 max-w-md rounded-2xl bg-white p-6 text-center shadow-xl ring-1 ring-slate-200">
+        <div className="absolute inset-0 z-500 flex items-center justify-center bg-surface-3/95">
+          <div className="mx-4 max-w-md rounded-2xl bg-surface p-6 text-center shadow-xl ring-1 ring-line">
             <p className="text-3xl">🗺️</p>
-            <h3 className="mt-2 text-sm font-bold text-slate-900">El mapa no se pudo mostrar</h3>
-            <p className="mt-1.5 text-xs leading-relaxed text-slate-500">{mapError}</p>
+            <h3 className="mt-2 text-sm font-bold text-ink">El mapa no se pudo mostrar</h3>
+            <p className="mt-1.5 text-xs leading-relaxed text-ink-faint">{mapError}</p>
             <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
               <button
                 onClick={fallbackStandard}
-                className="rounded-xl bg-slate-900 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-slate-800"
+                className="rounded-xl bg-invert px-3.5 py-2 text-xs font-bold text-invert-ink transition hover:bg-invert/90"
               >
                 Usar mapa Estándar
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="rounded-xl border border-slate-200 px-3.5 py-2 text-xs font-bold text-slate-600 transition hover:bg-slate-50"
+                className="rounded-xl border border-line px-3.5 py-2 text-xs font-bold text-ink-soft transition hover:bg-surface-2"
               >
                 Recargar página
               </button>
@@ -1021,7 +1021,7 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         </div>
       )}
       {/* Indicador de capa activa (esquina inferior derecha) */}
-      <div className="pointer-events-none absolute bottom-3 right-3 z-500 flex items-center gap-1.5 rounded-full bg-white/90 px-2.5 py-1 text-[10px] font-semibold text-slate-500 shadow ring-1 ring-slate-200">
+      <div className="pointer-events-none absolute bottom-3 right-3 z-500 flex items-center gap-1.5 rounded-full bg-surface/90 px-2.5 py-1 text-[10px] font-semibold text-ink-faint shadow ring-1 ring-line">
         <span className={`h-1.5 w-1.5 rounded-full ${styleReady ? 'bg-emerald-500' : 'bg-amber-400 animate-pulse'}`} />
         {styleReady ? styleOption.name : 'Cargando mapa…'}
       </div>

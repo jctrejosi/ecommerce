@@ -139,7 +139,7 @@ export function OrderTrackingModal({ orderCode, onClose }: OrderTrackingModalPro
       data.branch?.location != null);
 
   return (
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-3 sm:p-6">
+    <div className="fixed inset-0 z-[98] flex items-center justify-center p-3 sm:p-6">
       <div className="absolute inset-0 bg-black/50" onClick={onClose} />
       <div className="relative w-full max-w-lg max-h-[92vh] flex flex-col bg-white rounded-3xl shadow-2xl overflow-hidden">
         {/* Header */}

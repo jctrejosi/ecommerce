@@ -5,8 +5,13 @@
 # - El volumen reutiliza `analytics_postgres_data` (si no existe en la máquina,
 #   se crea vacío — restaura el dump para poblarlo, ver README.md).
 #
-# Se levanta con:  node dev.js            (o: docker compose up -d --wait)
+# Se levanta con:  node crm/dev.js         (o: docker compose up -d --wait)
 # Se detiene con:  docker compose stop
+#
+# `name` fija el proyecto de compose: sin él se derivaría del directorio ("db") y,
+# al tener `container_name` fijo, chocaría con el contenedor/volumen existentes
+# (creados por el proyecto "db-campaigns").
+name: db-campaigns
 
 services:
   analytics-postgres:

@@ -141,20 +141,20 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between p-5 pb-3">
         <div>
-          <h1 className="text-lg font-bold text-slate-900">Pedidos</h1>
-          <p className="text-xs text-slate-400">
+          <h1 className="text-lg font-bold text-ink">Pedidos</h1>
+          <p className="text-xs text-ink-faint">
             {loading && orders.length === 0
               ? 'Cargando pedidos…'
               : `Mostrando ${orders.length} de ${total} pedidos`}
           </p>
         </div>
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-ink-faint" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar pedido, repartidor, cliente…"
-            className="w-72 rounded-xl border border-slate-200 bg-white py-2 pl-9 pr-3 text-xs outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
+            className="w-72 rounded-xl border border-line bg-surface py-2 pl-9 pr-3 text-xs outline-none transition focus:border-amber-400 focus:ring-2 focus:ring-amber-100"
           />
         </div>
       </div>
@@ -166,8 +166,8 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
             onClick={() => setFilter(f.key)}
             className={`rounded-full px-2.5 py-1 text-[11px] font-bold transition-colors ${
               filter === f.key
-                ? 'bg-slate-900 text-white'
-                : 'bg-white text-slate-500 ring-1 ring-slate-200 hover:bg-slate-50'
+                ? 'bg-invert text-invert-ink'
+                : 'bg-surface text-ink-faint ring-1 ring-line hover:bg-surface-2'
             }`}
           >
             {f.label}
@@ -184,16 +184,16 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="mx-5 flex-1 overflow-auto rounded-2xl border border-slate-200 bg-white"
+        className="mx-5 flex-1 overflow-auto rounded-2xl border border-line bg-surface"
       >
         <table className="w-full">
           <thead>
-            <tr className="sticky top-0 z-10 border-b border-slate-100 bg-slate-50 text-left">
+            <tr className="sticky top-0 z-10 border-b border-line bg-surface-2 text-left">
               {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Tiempos', 'Total', 'Volumen', ''].map(
                 (h) => (
                   <th
                     key={h}
-                    className="whitespace-nowrap px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-slate-400"
+                    className="whitespace-nowrap px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-ink-faint"
                   >
                     {h}
                   </th>
@@ -201,17 +201,17 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
               )}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-50">
+          <tbody className="divide-y divide-line">
             {loading && orders.length === 0 && (
               <tr>
-                <td colSpan={10} className="p-8 text-center text-xs text-slate-400">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-300" />
+                <td colSpan={10} className="p-8 text-center text-xs text-ink-faint">
+                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-ink-faint" />
                 </td>
               </tr>
             )}
             {vacio && (
               <tr>
-                <td colSpan={10} className="p-8 text-center text-xs text-slate-400">
+                <td colSpan={10} className="p-8 text-center text-xs text-ink-faint">
                   No hay pedidos con este filtro.
                 </td>
               </tr>
@@ -219,14 +219,14 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
             {orders.map((o) => {
               const meta = STATUS_META[o.status];
               return (
-                <tr key={o.assignmentId} className="transition-colors hover:bg-slate-50">
+                <tr key={o.assignmentId} className="transition-colors hover:bg-surface-2">
                   <td className="px-4 py-3">
-                    <p className="font-mono text-xs font-bold text-slate-800">{o.referenceCode}</p>
-                    <p className="text-[11px] text-slate-400">#{o.orderId}</p>
+                    <p className="font-mono text-xs font-bold text-ink">{o.referenceCode}</p>
+                    <p className="text-[11px] text-ink-faint">#{o.orderId}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-700">{o.driverName}</p>
-                    <p className="text-[11px] text-slate-400">{o.driverPlate ?? 'sin placa'}</p>
+                    <p className="text-xs font-semibold text-ink-soft">{o.driverName}</p>
+                    <p className="text-[11px] text-ink-faint">{o.driverPlate ?? 'sin placa'}</p>
                   </td>
                   <td className="px-4 py-3">
                     <span
@@ -237,11 +237,11 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-700">{o.customerName ?? '—'}</p>
-                    <p className="text-[11px] text-slate-400">{o.customerPhone ?? ''}</p>
+                    <p className="text-xs font-semibold text-ink-soft">{o.customerName ?? '—'}</p>
+                    <p className="text-[11px] text-ink-faint">{o.customerPhone ?? ''}</p>
                   </td>
                   <td className="max-w-[220px] px-4 py-3">
-                    <p className="truncate text-xs text-slate-600">
+                    <p className="truncate text-xs text-ink-soft">
                       {[o.addressLine1, o.city].filter(Boolean).join(', ') || 'Sin dirección'}
                     </p>
                   </td>
@@ -263,20 +263,20 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
                         if (!at) return null;
                         return (
                           <div key={step.key} className="flex items-baseline gap-2 whitespace-nowrap">
-                            <span className="w-[84px] shrink-0 text-[10px] font-bold uppercase tracking-wide text-slate-400">
+                            <span className="w-[84px] shrink-0 text-[10px] font-bold uppercase tracking-wide text-ink-faint">
                               {step.label}
                             </span>
-                            <span className="text-xs text-slate-600">{formatDateTime(at)}</span>
+                            <span className="text-xs text-ink-soft">{formatDateTime(at)}</span>
                           </div>
                         );
                       })}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-xs font-bold text-slate-800">
+                  <td className="px-4 py-3 text-xs font-bold text-ink">
                     {formatMoney(o.totals.value, o.totals.currency)}
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-slate-700">
+                    <p className="text-xs font-semibold text-ink-soft">
                       {formatVolume(o.volume?.cm3)}
                     </p>
                     {o.volume?.estimated && (
@@ -299,14 +299,14 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
             })}
             {orders.length > 0 && loadingMore && (
               <tr>
-                <td colSpan={10} className="p-4 text-center text-xs text-slate-400">
-                  <Loader2 className="mx-auto h-4 w-4 animate-spin text-slate-300" />
+                <td colSpan={10} className="p-4 text-center text-xs text-ink-faint">
+                  <Loader2 className="mx-auto h-4 w-4 animate-spin text-ink-faint" />
                 </td>
               </tr>
             )}
             {orders.length > 0 && !loadingMore && !hasMore && (
               <tr>
-                <td colSpan={10} className="p-4 text-center text-xs text-slate-400">
+                <td colSpan={10} className="p-4 text-center text-xs text-ink-faint">
                   No hay más pedidos.
                 </td>
               </tr>

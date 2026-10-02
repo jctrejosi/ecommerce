@@ -105,7 +105,12 @@ export default function OrderDetailScreen() {
   const actions = actionsFor(order.status);
 
   return (
-    <Screen bottomInset title={`Pedido ${order.referenceCode}`} titleSize={17}>
+    <Screen
+      bottomInset
+      title={`Pedido ${order.referenceCode}`}
+      titleSize={17}
+      onBack={() => (router.canGoBack() ? router.back() : router.replace("/(main)"))}
+    >
       {/* El código del pedido va en la cabecera; aquí solo el estado y la fecha */}
       <View style={styles.headerRow}>
         <Text style={styles.assigned}>Asignado: {formatDateTime(order.assignedAt)}</Text>

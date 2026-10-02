@@ -5,6 +5,20 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mercaldas delivery admin | DSI</title>
     <link rel="icon" type="image/png" href="/src/assets/delivery.png" />
+    <script>
+      // Aplica el tema guardado antes de que cargue el bundle (evita el
+      // destello en claro cuando el tema elegido es oscuro).
+      try {
+        var t = localStorage.getItem('delivery_admin_theme');
+        if (t === 'dark') document.documentElement.dataset.theme = 'dark';
+        else if (t === 'system')
+          document.documentElement.dataset.theme = window.matchMedia(
+            '(prefers-color-scheme: dark)',
+          ).matches
+            ? 'dark'
+            : 'light';
+      } catch (e) {}
+    </script>
   </head>
   <body>
     <div id="root"></div>

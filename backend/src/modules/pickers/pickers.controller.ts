@@ -59,10 +59,11 @@ export class PickersController {
   @UseGuards(JwtAuthGuard, SuperuserGuard)
   @ApiOperation({ summary: 'Actualiza un usuario de picking' })
   updateUser(
+    @CurrentUser('sub') actingUserId: bigint,
     @Param('id', ParseIntPipe) id: number,
     @Body() dto: UpdatePickerDto,
   ) {
-    return this.pickersService.update(id, dto);
+    return this.pickersService.update(id, dto, Number(actingUserId));
   }
 
   @Post('users/:id/reset-password')
