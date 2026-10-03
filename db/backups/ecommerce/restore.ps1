@@ -1,8 +1,8 @@
-# Restaura el respaldo de db/backup en el PostgreSQL del proyecto (Windows).
+# Restaura el respaldo de db/backups/ecommerce en el PostgreSQL del proyecto (Windows).
 #
 # Uso:
-#   powershell -ExecutionPolicy Bypass -File .\db\backup\restore.ps1
-#   $env:DB_CONTAINER="otro"; $env:DB_NAME="otra"; .\db\backup\restore.ps1
+#   powershell -ExecutionPolicy Bypass -File .\db\backups\ecommerce\restore.ps1
+#   $env:DB_CONTAINER="otro"; $env:DB_NAME="otra"; .\db\backups\ecommerce\restore.ps1
 #
 # Reensambla las partes, comprueba el sha256 del volcado completo y restaura.
 # Al final verifica conteos: si algo salió mal, lo dice (no falla en silencio).
@@ -39,7 +39,7 @@ if (Test-Path $shaFile) {
   $actual = (Get-FileHash $tmp -Algorithm SHA256).Hash.ToLower()
   if ($expected -ne $actual) {
     Remove-Item $tmp -Force
-    throw "El respaldo NO coincide con su sha256.`n  esperado: $expected`n  obtenido: $actual`n  Suele ser por partes faltantes o descargadas a medias: vuelve a copiar db/backup/ completo."
+    throw "El respaldo NO coincide con su sha256.`n  esperado: $expected`n  obtenido: $actual`n  Suele ser por partes faltantes o descargadas a medias: vuelve a copiar db/backups/ecommerce/ completo."
   }
   Write-Host "OK sha256"
 }

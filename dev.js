@@ -15,6 +15,8 @@
  *                          #   Requiere builds previos (backend: npm run build,
  *                          #   webs: npm run build). Los logs quedan en logs/*.log.
  *   node dev.js --stop     # Detiene los servicios levantados por dev.js.
+ *   node dev.js --migrate  # Restaura la BD desde db/backups/ecommerce y sale
+ *                          #   (si ya tiene datos no la toca; con --force, sí).
  *   node dev.js --help     # Lista todos los comandos implementados.
  *
  * Logs: un archivo por servicio en logs/ (logs/<servicio>.log).
@@ -39,16 +41,20 @@ const PICKING_MOBILE_PORT = 8082;
 const OSRM_DIR = path.join(ROOT, "delivery-routing");
 const OSRM_PORT = 5000;
 
-// BD principal (db/docker/docker-compose.yml) y respaldo versionado en db/backup.
-// El respaldo va troceado (ecommerce.dump.part-000, ...) para subirlo a GitHub.
+// BD principal (db/docker/docker-compose.yml) y respaldo versionado en
+// db/backups/ecommerce (troceado en ecommerce.dump.part-000, ...) para GitHub.
 const DB_CONTAINER = "ecommerce_postgres";
 const DB_NAME = "ecommerce";
-const DB_BACKUP_DIR = path.join(ROOT, "db", "backup");
+const DB_BACKUP_DIR = path.join(ROOT, "db", "backups", "ecommerce");
 
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
 const STOP = ARGS.includes("--stop");
 const HELP = ARGS.includes("--help");
+// `--migrate`: restaura el respaldo versionado (db/backups/ecommerce) y termina.
+// `--force`:   permite sobrescribir una BD que ya tiene datos (solo con --migrate).
+const MIGRATE = ARGS.includes("--migrate");
+const FORCE = ARGS.includes("--force");
 // Las apps móviles (Expo) corren desacopladas por defecto: así la terminal queda
 // libre y se puede cerrar sin matar Metro. Con --fg se muestra el QR aquí mismo.
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
@@ -227,6 +233,8 @@ const NO_SELECTOR_FLAGS = new Set([
   "--live",
   "--stop",
   "--help",
+  "--migrate",
+  "--force",
   "--all",
   "--fg",
   "--foreground",
@@ -395,11 +403,13 @@ function startDatabase() {
   return false;
 }
 
-// ── Restauración del respaldo versionado (db/backup) ────────
+// ── Restauración del respaldo versionado (db/backups/ecommerce) ──
 // Antes de la primera migración la BD local solo tiene las extensiones de
 // init.sql (PostGIS, citext, ...). Si no existe la tabla `products` se asume un
 // clon nuevo y se reensambla el respaldo (part-000, part-001, ...) para
-// restaurarlo con pg_restore. Si ya hay datos, no se toca nada.
+// restaurarlo con pg_restore. Si ya hay datos, no se toca (salvo --force).
+//
+// `node dev.js --migrate` lo hace explícito y devuelve código de salida.
 function dbIsInitialized() {
   const r = spawnSync(
     "docker",
@@ -429,18 +439,32 @@ function loadBackup() {
   return { names, buffer };
 }
 
-function restoreDatabaseIfNeeded() {
+function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
   const backup = loadBackup();
-  if (!backup) return;
+  if (!backup) {
+    if (explicit) {
+      console.warn(
+        `${C.db}[db]${C.reset} ⚠️  No hay respaldo en ${path.relative(ROOT, DB_BACKUP_DIR)} (faltan las partes ecommerce.dump.part-*).`,
+      );
+    }
+    return false;
+  }
 
   const initialized = dbIsInitialized();
   if (initialized === null) {
     console.warn(
       `${C.db}[db]${C.reset} ⚠️  No se pudo verificar el estado de la BD; se omite la restauración del respaldo.`,
     );
-    return;
+    return false;
   }
-  if (initialized) return; // ya tiene datos: no se sobrescribe
+  if (initialized && !force) {
+    if (explicit) {
+      console.log(
+        `${C.db}[db]${C.reset} ℹ️  La BD ya tiene datos: no se restaura nada (usa --force para sobrescribir).`,
+      );
+    }
+    return true; // ya tiene datos: no se sobrescribe
+  }
 
   // Integridad: si existe el hash del volcado completo, se valida antes de restaurar.
   const shaFile = path.join(DB_BACKUP_DIR, "ecommerce.dump.sha256");
@@ -451,13 +475,13 @@ function restoreDatabaseIfNeeded() {
       console.error(
         `${C.db}[db]${C.reset} ✘ El respaldo no coincide con su hash (esperado ${expected.slice(0, 12)}…, obtenido ${actual.slice(0, 12)}…). Se omite la restauración.`,
       );
-      return;
+      return false;
     }
   }
 
   const mb = (backup.buffer.length / (1024 * 1024)).toFixed(1);
   console.log(
-    `${C.db}[db]${C.reset} 📥 BD vacía: restaurando respaldo (${backup.names.length} archivo(s), ${mb} MB)...`,
+    `${C.db}[db]${C.reset} 📥 Restaurando respaldo del ecommerce (${backup.names.length} archivo(s), ${mb} MB)...`,
   );
 
   // Se reensambla a un temporal y se copia al contenedor con `docker cp`,
@@ -512,11 +536,30 @@ function restoreDatabaseIfNeeded() {
     );
     const counts = (chk.stdout || "").trim().split("\n").filter(Boolean).join(" ");
     console.log(`${C.db}[db]${C.reset} ✅ Respaldo restaurado${counts ? " — " + counts : ""}`);
+    return true;
   } else {
     console.warn(
       `${C.db}[db]${C.reset} ⚠️  La restauración del respaldo falló (código ${status}; detalle en logs/db.log).`,
     );
+    return false;
   }
+}
+
+/**
+ * `node dev.js --migrate`: asegura PostgreSQL y restaura el respaldo versionado.
+ * Devuelve el código de salida (0 = BD lista; 1 = no se pudo restaurar).
+ */
+async function runMigrate() {
+  console.log(
+    `${C.db}[db]${C.reset} 📦 Migrando la base de datos desde ${path.relative(ROOT, DB_BACKUP_DIR)}...`,
+  );
+  startDatabase();
+  const dbUp = await waitForPort(5432, 90000);
+  if (!dbUp) {
+    console.error(`${C.db}[db]${C.reset} ✘ PostgreSQL no responde en :5432.`);
+    return 1;
+  }
+  return restoreDatabaseIfNeeded({ force: FORCE, explicit: true }) ? 0 : 1;
 }
 
 // ── Dependencias ───────────────────────────────────────────
@@ -1004,6 +1047,8 @@ function printHelp() {
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
   out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
+  out.push("  node dev.js --migrate           → restaura la BD desde db/backups/ecommerce y sale");
+  out.push("  node dev.js --migrate --force   → ídem, sobrescribiendo una BD con datos");
   out.push("  node dev.js --help              → esta ayuda");
   out.push("");
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
@@ -1040,6 +1085,7 @@ function printHelp() {
   out.push("");
   out.push("BASES DE DATOS");
   out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
+  out.push("  Respaldo versionado: db/backups/ecommerce (troceado) — restaurar: node dev.js --migrate");
   out.push("  Para detenerla:   cd db/docker && docker compose stop");
   out.push("                    cd delivery-routing && docker compose stop  (OSRM)");
   out.push("");
@@ -1049,6 +1095,7 @@ function printHelp() {
   out.push("  node dev.js --picking-mobile    → app picking (Metro en background) + backend + BD");
   out.push("  node dev.js --admin --picking   → combina aplicativos");
   out.push("  node dev.js --prod --delivery-admin");
+  out.push("  node dev.js --migrate            → clon nuevo: deja la BD lista desde el respaldo");
   out.push("");
   out.push("Notas: --client es alias de --web · logs en logs/<servicio>.log · PIDs en logs/.pids.json");
   out.push("       URL de red local (celular): se detecta sola; fuerza con LAN_IP=192.168.x.x");
@@ -1073,6 +1120,7 @@ function printCommands() {
   rows.push(["node dev.js --prod", "modo producción (requiere builds previos)"]);
   rows.push(["node dev.js --fg", "apps Expo con el QR en la terminal (bloquea)"]);
   rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
+  rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
   rows.push(["node dev.js --help", "esta ayuda"]);
 
   const w = Math.max(...rows.map((r) => r[0].length));
@@ -1099,6 +1147,8 @@ async function main() {
     process.exit(1);
   }
   if (STOP) return stopAll();
+  // `--migrate`: tarea puntual (deja la BD restaurada) y salir.
+  if (MIGRATE) process.exit(await runMigrate());
 
   fs.mkdirSync(LOGS_DIR, { recursive: true });
 
@@ -1140,7 +1190,7 @@ async function main() {
         `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
       );
     } else {
-      // Clon nuevo (BD sin tabla `products`): monta el respaldo de db/backup.
+      // Clon nuevo (BD sin tabla `products`): monta el respaldo versionado.
       restoreDatabaseIfNeeded();
     }
   }

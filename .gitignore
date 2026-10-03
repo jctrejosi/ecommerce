@@ -13,8 +13,12 @@ __pycache__/
 !.env.example
 .winrm/
 
-# backups de BD (volcados pesados): no versionar
+# backups de BD (volcados pesados): no versionar, salvo el respaldo canónico
+# del ecommerce (db/backups/ecommerce), que sí se versiona troceado para
+# restaurar en un clon nuevo con `node dev.js --migrate`.
 # OJO: algunos ya estan commiteados; para dejar de seguirlos:
 #   git rm -r --cached db/backups
-db/backups/
+db/backups/*
+!db/backups/ecommerce/
+!db/backups/ecommerce/**
 *.backup

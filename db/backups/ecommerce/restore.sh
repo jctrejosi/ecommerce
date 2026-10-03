@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Restaura el respaldo de db/backup en el PostgreSQL del proyecto.
+# Restaura el respaldo de db/backups/ecommerce en el PostgreSQL del proyecto.
 #
 # Uso:
-#   ./db/backup/restore.sh                       # ecommerce_postgres / ecommerce
-#   DB_CONTAINER=otro DB_NAME=otra ./db/backup/restore.sh
+#   ./db/backups/ecommerce/restore.sh                       # ecommerce_postgres / ecommerce
+#   DB_CONTAINER=otro DB_NAME=otra ./db/backups/ecommerce/restore.sh
 #
 # Reensambla las partes, comprueba el sha256 del volcado completo y restaura.
 # Al final verifica conteos: si algo salió mal, lo dice (no falla en silencio).
@@ -40,7 +40,7 @@ if [ -f "$DIR/ecommerce.dump.sha256" ]; then
     echo "✘ El respaldo NO coincide con su sha256." >&2
     echo "  esperado: $EXPECTED" >&2
     echo "  obtenido: $ACTUAL" >&2
-    echo "  Suele ser por partes faltantes o descargadas a medias: vuelve a copiar db/backup/ completo." >&2
+    echo "  Suele ser por partes faltantes o descargadas a medias: vuelve a copiar db/backups/ecommerce/ completo." >&2
     rm -f "$TMP"
     exit 1
   fi
