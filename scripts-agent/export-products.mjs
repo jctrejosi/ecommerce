@@ -25,6 +25,7 @@ dotenv.config({ path: path.join(ROOT, 'backend', '.env.development.local') });
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ecommerce';
 const OUT_FILE = path.join(ROOT, 'db', 'products.json');
+const OUT_MISSING = path.join(ROOT, 'db', 'products_without_image.json');
 
 const client = new Client({ connectionString: DATABASE_URL });
 await client.connect();
@@ -142,23 +143,36 @@ const products = rows.map((r) => {
   };
 });
 
-const withImage = products.filter((p) => p.image).length;
+const withImage = products.filter((p) => p.image);
+const withoutImage = products.filter((p) => !p.image);
 
-const payload = {
+const allPayload = {
   generated_at: new Date().toISOString(),
   source: 'postgresql ecommerce',
   total_products: products.length,
-  with_image: withImage,
-  without_image: products.length - withImage,
+  with_image: withImage.length,
+  without_image: withoutImage.length,
   products,
 };
 
-fs.writeFileSync(OUT_FILE, JSON.stringify(payload, null, 2));
+const missingPayload = {
+  generated_at: new Date().toISOString(),
+  source: 'postgresql ecommerce',
+  note: 'Productos sin imagen: no tienen portada en la BD ni foto asociada en db/images_products.',
+  total_products: withoutImage.length,
+  products: withoutImage,
+};
+
+fs.writeFileSync(OUT_FILE, JSON.stringify(allPayload, null, 2));
+fs.writeFileSync(OUT_MISSING, JSON.stringify(missingPayload, null, 2));
 console.log(`Productos: ${products.length}`);
-console.log(`  con imagen   : ${withImage}`);
-console.log(`  sin imagen   : ${products.length - withImage}`);
+console.log(`  con imagen   : ${withImage.length}`);
+console.log(`  sin imagen   : ${withoutImage.length}`);
 console.log(
   `JSON: ${path.relative(ROOT, OUT_FILE)} (${(fs.statSync(OUT_FILE).size / 1024 / 1024).toFixed(1)} MB)`,
+);
+console.log(
+  `JSON: ${path.relative(ROOT, OUT_MISSING)} (${(fs.statSync(OUT_MISSING).size / 1024 / 1024).toFixed(1)} MB)`,
 );
 
 await client.end();
