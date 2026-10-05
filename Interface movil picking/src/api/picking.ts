@@ -66,6 +66,10 @@ export const pickingApi = {
   scan: (id: number, code: string) =>
     post<ScanResult>(`/picking/orders/${id}/scan`, { code }),
 
+  /** Marca un item como alistado sin escanear (check manual). */
+  pickItem: (id: number, itemId: number) =>
+    post<ScanResult>(`/picking/orders/${id}/items/${itemId}/pick`),
+
   /** Cierre de turno de hoy (entre todas las sucursales). */
   shiftToday: () => get<{ day: string; closeTime: string | null }>("/picking-admin/shift-today"),
 

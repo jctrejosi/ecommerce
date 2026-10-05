@@ -19,7 +19,7 @@ import {
 import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import type { ScanResult } from "@/api";
 import { isItemDone } from "@/picking/status";
-import { useOrder, useScan } from "@/picking/queries";
+import { useConfirmItem, useOrder, useScan } from "@/picking/queries";
 import { saveSession } from "@/picking/sessionStore";
 import { Header } from "@/ui/Header";
 import { Button } from "@/ui/Button";
@@ -50,6 +50,7 @@ export default function ScannerScreen() {
 
   const { data: order, error, refetch } = useOrder(orderId);
   const scan = useScan(orderId);
+  const confirmItem = useConfirmItem(orderId);
   const [permission, requestPermission] = useCameraPermissions();
 
   const items = order?.items ?? [];
@@ -156,6 +157,28 @@ export default function ScannerScreen() {
     },
     [activeItem?.barcode, activeItem?.plu, advance, scan],
   );
+
+  // Confirma el ítem activo como válido sin escanear el código de barras.
+  const handleConfirm = useCallback(async () => {
+    if (!activeItem || processingRef.current) return;
+    processingRef.current = true;
+    setScanState("idle");
+    setErrorMsg("");
+    try {
+      const result = await confirmItem.mutateAsync(activeItem.id);
+      Vibration.vibrate(60);
+      setSuccessName(result.name);
+      setScanState("success");
+      scheduleReset(() => advance(result), 800);
+    } catch {
+      Vibration.vibrate([120, 60, 120]);
+      setErrorMsg("No se pudo marcar el producto como válido");
+      setScanState("error");
+      scheduleReset(() => setScanState("idle"), 1800);
+    } finally {
+      processingRef.current = false;
+    }
+  }, [activeItem, advance, confirmItem]);
 
   const onBarcodeScanned = useCallback(
     (res: BarcodeScanningResult) => {
@@ -322,6 +345,15 @@ export default function ScannerScreen() {
             disabled={!input.trim()}
           />
         </View>
+
+        {/* Check manual: marca el ítem activo como válido sin escanear el código. */}
+        <Button
+          label="Marcar como válido (sin escanear)"
+          variant="success"
+          icon="checkmark-circle"
+          onPress={() => void handleConfirm()}
+          disabled={!activeItem || scanState !== "idle"}
+        />
       </View>
     </View>
   );

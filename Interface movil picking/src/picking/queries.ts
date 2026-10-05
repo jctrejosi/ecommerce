@@ -112,6 +112,21 @@ export function useScan(orderId: number) {
   });
 }
 
+/**
+ * Marca un ítem como alistado sin escanear (check manual): útil cuando el lector
+ * no está disponible o el código no está impreso.
+ */
+export function useConfirmItem(orderId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (itemId: number) => pickingApi.pickItem(orderId, itemId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: pickingKeys.order(orderId) });
+      void qc.invalidateQueries({ queryKey: PICKING_ROOT });
+    },
+  });
+}
+
 /** Confirma la entrega en caja. */
 export function useCompleteOrder(orderId: number) {
   const qc = useQueryClient();

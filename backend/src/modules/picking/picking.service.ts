@@ -589,11 +589,87 @@ export class PickingService {
       });
     }
 
-    const newPicked = matched.pickedQty + 1;
+    return this.commitPick(id, order, items, matched, matched.pickedQty + 1);
+  }
 
-    // ¿Con este escaneo quedan todos los items alistados? La app lo usa para
-    // llevar al picker a la verificación final, pero NO cambia el estado: el
-    // pedido pasa a "listo" solo al confirmar "entregado en caja" (complete).
+  /**
+   * Marca un item como alistado por completo SIN escanear (confirmación manual
+   * desde la app). Sirve cuando el lector no está disponible o el código no está
+   * impreso. Aplica los mismos efectos que un escaneo (progreso, estado, historial).
+   */
+  async pickItem(id: number, itemId: number) {
+    const [order] = await this.db
+      .select({
+        id: orders.id,
+        status: orders.status,
+        referenceCode: orders.referenceCode,
+        pickerId: orders.pickerId,
+        customerId: orders.customerId,
+      })
+      .from(orders)
+      .where(eq(orders.id, BigInt(id)))
+      .limit(1);
+
+    if (!order) {
+      throw new NotFoundException(`No existe el pedido ${id}`);
+    }
+    if (!isPickingTrigger(order.status) && order.status !== 'preparing') {
+      throw new ConflictException('Este pedido no está en alistamiento');
+    }
+
+    const items = await this.db
+      .select({
+        id: orderItems.id,
+        name: orderItems.productName,
+        quantity: orderItems.quantity,
+        pickedQty: orderItems.pickedQty,
+        barcode: productVariants.barcode,
+        plu: products.plu,
+      })
+      .from(orderItems)
+      .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
+      .leftJoin(products, eq(products.id, productVariants.productId))
+      .where(eq(orderItems.orderId, Number(id)))
+      .orderBy(asc(orderItems.id));
+
+    const matched = items.find((i) => Number(i.id) === Number(itemId));
+    if (!matched) {
+      throw new NotFoundException('El producto no pertenece a este pedido');
+    }
+
+    // Completa lo que falte del item (si ya estaba completo no cambia nada).
+    return this.commitPick(id, order, items, matched, Math.max(matched.pickedQty, matched.quantity));
+  }
+
+  /** Efectos comunes al alistar unidades (escaneo o confirmación manual). */
+  private async commitPick(
+    id: number,
+    order: {
+      status: typeof orders.$inferSelect.status;
+      referenceCode: string | null;
+      pickerId: number | null;
+      customerId: number | null;
+    },
+    items: {
+      id: bigint;
+      name: string;
+      quantity: number;
+      pickedQty: number;
+      barcode: string | null;
+      plu: string | null;
+    }[],
+    matched: {
+      id: bigint;
+      name: string;
+      quantity: number;
+      barcode: string | null;
+      plu: string | null;
+    },
+    newPicked: number,
+  ) {
+    // ¿Quedan todos los items alistados? La app lo usa para llevar al picker a la
+    // verificación final, pero NO cambia el estado: el pedido pasa a "listo" solo
+    // al confirmar "entregado en caja" (complete).
     const allDone = items.every((i) =>
       i.id === matched.id ? newPicked >= i.quantity : i.pickedQty >= i.quantity,
     );

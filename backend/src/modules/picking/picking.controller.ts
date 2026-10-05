@@ -99,6 +99,21 @@ export class PickingController {
     }
   }
 
+  /** Confirmación manual: marca el item como alistado sin escanear (check). */
+  @Post('orders/:id/items/:itemId/pick')
+  @ApiOperation({ summary: 'Marcar un item como alistado sin escanear (check manual)' })
+  async pickItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+  ) {
+    try {
+      return await this.pickingService.pickItem(id, itemId);
+    } catch (e) {
+      if (e instanceof NotFoundException || e instanceof ConflictException) throw e;
+      throw new BadRequestException(e instanceof Error ? e.message : 'Error al confirmar');
+    }
+  }
+
   /** Completar el alistamiento: "entregado en caja" → pedido entregado. */
   @Post('orders/:id/complete')
   @ApiOperation({ summary: 'Completar picking: entregado en caja' })
