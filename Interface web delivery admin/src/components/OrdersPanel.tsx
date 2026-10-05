@@ -184,21 +184,34 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="mx-5 flex-1 overflow-auto rounded-2xl border border-line bg-surface"
+        className="mx-5 flex-1 overflow-auto rounded-2xl border border-line bg-surface scrollbar-gutter-stable"
       >
-        <table className="w-full">
+        <table className="w-full table-fixed">
           <thead>
             <tr className="sticky top-0 z-10 border-b border-line bg-surface-2 text-left">
-              {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Tiempos', 'Total', 'Volumen', ''].map(
-                (h) => (
-                  <th
-                    key={h}
-                    className="whitespace-nowrap px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-ink-faint"
-                  >
-                    {h}
-                  </th>
-                ),
-              )}
+              {/* Anchos fijos: sin esto, las columnas se redistribuyen según el
+                  contenido de cada filtro y la tabla "baila" al cambiarlo. */}
+              {(
+                [
+                  ['Pedido', 'w-[9.5%]'],
+                  ['Repartidor', 'w-[10%]'],
+                  ['Estado', 'w-[10.5%]'],
+                  ['Cliente', 'w-[9.5%]'],
+                  ['Dirección', 'w-[15%]'],
+                  ['Pago', 'w-[9.5%]'],
+                  ['Tiempos', 'w-[19%]'],
+                  ['Total', 'w-[7%]'],
+                  ['Volumen', 'w-[6%]'],
+                  ['', 'w-[4%]'],
+                ] as const
+              ).map(([h, w]) => (
+                <th
+                  key={h}
+                  className={`whitespace-nowrap px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-ink-faint ${w}`}
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -221,11 +234,11 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
               return (
                 <tr key={o.assignmentId} className="transition-colors hover:bg-surface-2">
                   <td className="px-4 py-3">
-                    <p className="font-mono text-xs font-bold text-ink">{o.referenceCode}</p>
+                    <p className="truncate font-mono text-xs font-bold text-ink">{o.referenceCode}</p>
                     <p className="text-[11px] text-ink-faint">#{o.orderId}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-ink-soft">{o.driverName}</p>
+                    <p className="truncate text-xs font-semibold text-ink-soft">{o.driverName}</p>
                     <p className="text-[11px] text-ink-faint">{o.driverPlate ?? 'sin placa'}</p>
                   </td>
                   <td className="px-4 py-3">
@@ -237,7 +250,7 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-ink-soft">{o.customerName ?? '—'}</p>
+                    <p className="truncate text-xs font-semibold text-ink-soft">{o.customerName ?? '—'}</p>
                     <p className="text-[11px] text-ink-faint">{o.customerPhone ?? ''}</p>
                   </td>
                   <td className="max-w-[220px] px-4 py-3">

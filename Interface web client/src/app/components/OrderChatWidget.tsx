@@ -182,7 +182,7 @@ export function OrderChatWidget({ orders }: OrderChatWidgetProps) {
 
       {/* Panel — igual patrón que el chatbot de compras */}
       {open && (
-        <div className="fixed inset-0 z-[96] h-[100dvh] w-full max-w-full bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-32 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[520px] sm:max-h-[70vh] sm:rounded-2xl">
+        <div className="fixed inset-0 z-[96] h-[100dvh] w-full max-w-full bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden pb-[var(--safe-bottom)] sm:top-auto sm:inset-x-auto sm:bottom-32 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[520px] sm:max-h-[70vh] sm:rounded-2xl">
           {selected ? (
             <OrderChatConversation
               orderCode={selected}

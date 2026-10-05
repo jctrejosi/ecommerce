@@ -46,3 +46,234 @@ body { color: #1f2937; }
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* ==========================================================================
+   Tema del panel (modo + acento)
+
+   Tailwind v4 compila cada utilidad de color a `var(--color-*)`, así que el
+   tema se implementa reasignando esas variables desde el `<html>` según
+   `data-accent` y `data-mode`. No requiere tocar los componentes.
+   ========================================================================== */
+
+/* --- Acento: remapea la escala `amber` (color de marca) a otra paleta ----- */
+
+[data-accent='esmeralda'] {
+  --color-amber-50: oklch(97.9% 0.021 166.113);
+  --color-amber-100: oklch(95% 0.052 163.051);
+  --color-amber-200: oklch(90.5% 0.093 164.15);
+  --color-amber-300: oklch(84.5% 0.143 164.978);
+  --color-amber-400: oklch(76.5% 0.177 163.223);
+  --color-amber-500: oklch(69.6% 0.17 162.48);
+  --color-amber-600: oklch(59.6% 0.145 163.225);
+  --color-amber-700: oklch(50.8% 0.118 165.612);
+  --color-amber-800: oklch(43.2% 0.095 166.913);
+  --color-amber-900: oklch(37.8% 0.077 168.94);
+}
+
+[data-accent='azul'] {
+  --color-amber-50: oklch(97% 0.014 254.604);
+  --color-amber-100: oklch(93.2% 0.032 255.585);
+  --color-amber-200: oklch(88.2% 0.059 254.128);
+  --color-amber-300: oklch(80.9% 0.105 251.813);
+  --color-amber-400: oklch(70.7% 0.165 254.624);
+  --color-amber-500: oklch(62.3% 0.214 259.815);
+  --color-amber-600: oklch(54.6% 0.245 262.881);
+  --color-amber-700: oklch(48.8% 0.243 264.376);
+  --color-amber-800: oklch(42.4% 0.199 265.638);
+  --color-amber-900: oklch(37.9% 0.146 265.522);
+}
+
+[data-accent='violeta'] {
+  --color-amber-50: oklch(96.9% 0.016 293.756);
+  --color-amber-100: oklch(94.3% 0.029 294.588);
+  --color-amber-200: oklch(89.4% 0.057 293.283);
+  --color-amber-300: oklch(81.1% 0.111 293.571);
+  --color-amber-400: oklch(70.2% 0.183 293.541);
+  --color-amber-500: oklch(60.6% 0.25 292.717);
+  --color-amber-600: oklch(54.1% 0.281 293.009);
+  --color-amber-700: oklch(49.1% 0.27 292.581);
+  --color-amber-800: oklch(43.2% 0.232 292.759);
+  --color-amber-900: oklch(38% 0.189 293.745);
+}
+
+[data-accent='rosa'] {
+  --color-amber-50: oklch(96.9% 0.015 12.422);
+  --color-amber-100: oklch(94.1% 0.03 12.58);
+  --color-amber-200: oklch(89.2% 0.058 10.001);
+  --color-amber-300: oklch(81% 0.117 11.638);
+  --color-amber-400: oklch(71.2% 0.194 13.428);
+  --color-amber-500: oklch(64.5% 0.246 16.439);
+  --color-amber-600: oklch(58.6% 0.253 17.585);
+  --color-amber-700: oklch(51.4% 0.222 16.935);
+  --color-amber-800: oklch(45.5% 0.188 13.697);
+  --color-amber-900: oklch(41% 0.159 10.272);
+}
+
+[data-accent='teal'] {
+  --color-amber-50: oklch(98.4% 0.014 180.72);
+  --color-amber-100: oklch(95.3% 0.051 180.801);
+  --color-amber-200: oklch(91% 0.096 180.426);
+  --color-amber-300: oklch(85.5% 0.138 181.071);
+  --color-amber-400: oklch(77.7% 0.152 181.912);
+  --color-amber-500: oklch(70.4% 0.14 182.503);
+  --color-amber-600: oklch(60% 0.118 184.704);
+  --color-amber-700: oklch(51.1% 0.096 186.391);
+  --color-amber-800: oklch(43.7% 0.078 188.216);
+  --color-amber-900: oklch(38.6% 0.063 188.416);
+}
+
+/* --- Modo oscuro: invierte la escala neutra ------------------------------ */
+
+[data-mode='oscuro'] {
+  /* `white` es la superficie principal (tarjetas, header, inputs): se vuelve
+     oscura. El texto blanco real se fuerza más abajo, sin capa. */
+  --color-white: #1b1d22;
+  --color-gray-50: #141519;  /* fondo de página */
+  --color-gray-100: #262932; /* superficies sutiles y hover */
+  --color-gray-200: #33373f; /* bordes suaves */
+  --color-gray-300: #464b55; /* bordes */
+  --color-gray-400: #8b909c; /* texto atenuado */
+  --color-gray-500: #9aa0ab;
+  --color-gray-600: #b6bcc6;
+  --color-gray-700: #cdd2da;
+  --color-gray-800: #e4e7ec;
+  --color-gray-900: #f5f6f8; /* texto principal */
+}
+
+[data-mode='oscuro'] body { color: #e4e7ec; }
+
+/* El texto blanco se mantiene blanco (aparece sobre fondos de color: avatar,
+   botones de acento, etc.). Sin capa para ganar a la utilidad de Tailwind. */
+.text-white { color: #ffffff; }
+.hover\:text-white:hover { color: #ffffff; }
+
+/* Los grises atenuados tienen overrides sin capa definidos arriba; en oscuro
+   los invertimos para que se lean sobre superficies oscuras. */
+[data-mode='oscuro'] .text-gray-300 { color: #7f8590; }
+[data-mode='oscuro'] .text-gray-400 { color: #9aa0ab; }
+[data-mode='oscuro'] .text-gray-500 { color: #b6bcc6; }
+[data-mode='oscuro'] .text-gray-600 { color: #cdd2da; }
+
+/* Superficies oscuras en modo claro (pills activas, badges) siguen oscuras
+   para no quedar con el texto blanco ilegible. */
+[data-mode='oscuro'] .bg-gray-800 { background-color: #32363f; }
+[data-mode='oscuro'] .bg-gray-900 { background-color: #3a3f49; }
+
+[data-mode='oscuro'] ::-webkit-scrollbar-thumb { background: #3f434c; }
+[data-mode='oscuro'] ::-webkit-scrollbar-thumb:hover { background: #565b66; }
+
+/* --- Superficies de "chrome" (sidebar, menú de usuario, footer) -----------
+   Antes usaban colores fijos oscuros. Estas variables las hacen seguir el
+   tema: claras en modo claro y oscuras en modo oscuro, con texto acorde. */
+
+:root {
+  --chrome-bg: #ffffff;
+  --chrome-hover: rgba(17, 24, 39, 0.05);
+  --chrome-border: #e6e7eb;
+  --chrome-text: #1f2937;
+  --chrome-text-muted: #5b6270;
+  --chrome-text-faint: #8b909c;
+  --chrome-active-text: var(--color-amber-600);
+}
+
+[data-mode='oscuro'] {
+  --chrome-bg: #1b1d22; /* misma superficie que tarjetas/modales (--color-white) */
+  --chrome-hover: rgba(255, 255, 255, 0.06);
+  --chrome-border: #2a2c34;
+  --chrome-text: #f1f2f4;
+  --chrome-text-muted: #a2a8b3;
+  --chrome-text-faint: #7c828d;
+  --chrome-active-text: var(--color-amber-400);
+}
+
+/* ==========================================================================
+   Ajustes de color en modo oscuro: estados, chips y acciones
+
+   Los tonos claros (chips `*-50`/`*-100`) se vuelven tintes translúcidos para
+   integrarse sobre superficies oscuras, y los textos de estado (60/70/80) se
+   aclaran para leerse encima. Los botones primarios `bg-amber-400 text-amber-900`
+   se conservan (texto oscuro sobre acento brillante).
+   ========================================================================== */
+
+/* Fondos de estado (chips, pastillas, paneles de aviso) */
+[data-mode='oscuro'] .bg-amber-50   { background-color: color-mix(in oklab, var(--color-amber-500) 15%, transparent); }
+[data-mode='oscuro'] .bg-amber-100  { background-color: color-mix(in oklab, var(--color-amber-500) 24%, transparent); }
+[data-mode='oscuro'] .bg-red-50     { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
+[data-mode='oscuro'] .bg-red-100    { background-color: color-mix(in oklab, #ef4444 26%, transparent); }
+[data-mode='oscuro'] .bg-green-50   { background-color: color-mix(in oklab, #22c55e 16%, transparent); }
+[data-mode='oscuro'] .bg-green-100  { background-color: color-mix(in oklab, #22c55e 26%, transparent); }
+[data-mode='oscuro'] .bg-blue-50    { background-color: color-mix(in oklab, #3b82f6 18%, transparent); }
+[data-mode='oscuro'] .bg-blue-100   { background-color: color-mix(in oklab, #3b82f6 28%, transparent); }
+[data-mode='oscuro'] .bg-purple-50  { background-color: color-mix(in oklab, #a855f7 16%, transparent); }
+[data-mode='oscuro'] .bg-purple-100 { background-color: color-mix(in oklab, #a855f7 26%, transparent); }
+[data-mode='oscuro'] .bg-yellow-50  { background-color: color-mix(in oklab, #eab308 16%, transparent); }
+[data-mode='oscuro'] .bg-yellow-100 { background-color: color-mix(in oklab, #eab308 26%, transparent); }
+[data-mode='oscuro'] .bg-teal-50    { background-color: color-mix(in oklab, #14b8a6 16%, transparent); }
+[data-mode='oscuro'] .bg-violet-100 { background-color: color-mix(in oklab, #8b5cf6 26%, transparent); }
+[data-mode='oscuro'] .bg-rose-100   { background-color: color-mix(in oklab, #f43f5e 26%, transparent); }
+[data-mode='oscuro'] .bg-pink-50    { background-color: color-mix(in oklab, #ec4899 16%, transparent); }
+[data-mode='oscuro'] .bg-orange-100 { background-color: color-mix(in oklab, #f97316 26%, transparent); }
+[data-mode='oscuro'] .bg-indigo-100 { background-color: color-mix(in oklab, #6366f1 26%, transparent); }
+[data-mode='oscuro'] .bg-emerald-50 { background-color: color-mix(in oklab, #10b981 16%, transparent); }
+
+/* Hover de filas/opciones (el tinte claro destella en oscuro) */
+[data-mode='oscuro'] .hover\:bg-amber-50:hover  { background-color: color-mix(in oklab, var(--color-amber-500) 16%, transparent); }
+[data-mode='oscuro'] .hover\:bg-amber-100:hover { background-color: color-mix(in oklab, var(--color-amber-500) 26%, transparent); }
+[data-mode='oscuro'] .hover\:bg-red-50:hover    { background-color: color-mix(in oklab, #ef4444 16%, transparent); }
+[data-mode='oscuro'] .hover\:bg-red-100:hover   { background-color: color-mix(in oklab, #ef4444 26%, transparent); }
+[data-mode='oscuro'] .hover\:bg-green-50:hover  { background-color: color-mix(in oklab, #22c55e 16%, transparent); }
+[data-mode='oscuro'] .hover\:bg-green-100:hover { background-color: color-mix(in oklab, #22c55e 26%, transparent); }
+[data-mode='oscuro'] .hover\:bg-blue-50:hover   { background-color: color-mix(in oklab, #3b82f6 18%, transparent); }
+[data-mode='oscuro'] .hover\:bg-blue-100:hover  { background-color: color-mix(in oklab, #3b82f6 28%, transparent); }
+
+/* Texto de estado/acento: se aclara para contrastar sobre fondos oscuros */
+[data-mode='oscuro'] .text-amber-500,
+[data-mode='oscuro'] .text-amber-600,
+[data-mode='oscuro'] .text-amber-700,
+[data-mode='oscuro'] .text-amber-800 { color: var(--color-amber-300); }
+
+[data-mode='oscuro'] .text-red-500,
+[data-mode='oscuro'] .text-red-600,
+[data-mode='oscuro'] .text-red-700,
+[data-mode='oscuro'] .text-red-800 { color: #fca5a5; }
+
+[data-mode='oscuro'] .text-green-600,
+[data-mode='oscuro'] .text-green-700,
+[data-mode='oscuro'] .text-green-800 { color: #86efac; }
+
+[data-mode='oscuro'] .text-blue-600,
+[data-mode='oscuro'] .text-blue-700,
+[data-mode='oscuro'] .text-blue-800 { color: #93c5fd; }
+
+[data-mode='oscuro'] .text-purple-600,
+[data-mode='oscuro'] .text-purple-700 { color: #d8b4fe; }
+
+[data-mode='oscuro'] .text-yellow-600,
+[data-mode='oscuro'] .text-yellow-700 { color: #fde047; }
+
+[data-mode='oscuro'] .text-teal-600,
+[data-mode='oscuro'] .text-teal-700 { color: #5eead4; }
+
+[data-mode='oscuro'] .text-violet-600,
+[data-mode='oscuro'] .text-violet-700 { color: #c4b5fd; }
+
+[data-mode='oscuro'] .text-rose-600,
+[data-mode='oscuro'] .text-rose-700 { color: #fda4af; }
+
+[data-mode='oscuro'] .text-pink-600,
+[data-mode='oscuro'] .text-pink-700 { color: #f9a8d4; }
+
+[data-mode='oscuro'] .text-orange-600,
+[data-mode='oscuro'] .text-orange-700 { color: #fdba74; }
+
+[data-mode='oscuro'] .text-indigo-600,
+[data-mode='oscuro'] .text-indigo-700 { color: #a5b4fc; }
+
+[data-mode='oscuro'] .text-emerald-600,
+[data-mode='oscuro'] .text-emerald-700 { color: #6ee7b7; }
+
+/* Overlays de modales y paneles: un poco más densos en oscuro para dar foco,
+   y el velo blanco de "guardando" pasa a un velo oscuro. */
+[data-mode='oscuro'] .bg-black\/30 { background-color: rgba(0, 0, 0, 0.5); }
+[data-mode='oscuro'] .bg-black\/40 { background-color: rgba(0, 0, 0, 0.6); }
+[data-mode='oscuro'] .bg-white\/75 { background-color: rgba(27, 29, 34, 0.82); }

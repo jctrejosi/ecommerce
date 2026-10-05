@@ -979,7 +979,7 @@ export default function App() {
 
   return (
     <div
-      className="min-h-screen bg-background overflow-x-clip"
+      className="min-h-screen bg-background overflow-x-clip pb-[var(--safe-bottom)]"
       style={{ fontFamily: "'Inter', sans-serif" }}
     >
       <Header {...headerProps} />
@@ -1200,7 +1200,7 @@ export default function App() {
 
       {/* Acciones flotantes (chat de pedido + bot): un solo contenedor en la
           esquina inferior derecha, apilados para que no se solapen. */}
-      <div className="fixed bottom-4 right-3 sm:bottom-5 sm:right-5 z-[90] flex flex-col items-center gap-2">
+      <div className="fixed right-3 bottom-[calc(1rem_+_var(--safe-bottom))] sm:right-5 sm:bottom-[calc(1.25rem_+_var(--safe-bottom))] z-[90] flex flex-col items-center gap-[13px]">
         {/* Chat por pedido (repartidor ↔ cliente) cuando hay pedidos en camino */}
         <OrderChatWidget orders={orders} />
 
@@ -1214,7 +1214,7 @@ export default function App() {
 
       {/* Aviso de backend caído */}
       {backendOnline === false && !reloadingSite && (
-        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[100] bg-secondary text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2">
+        <div className="fixed bottom-[calc(1rem_+_var(--safe-bottom))] left-1/2 -translate-x-1/2 z-[100] bg-secondary text-white text-xs font-medium px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2">
           <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
           Sin conexión con el servidor — reintentando...
         </div>

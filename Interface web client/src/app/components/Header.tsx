@@ -901,6 +901,14 @@ export function Header({
               )}
             </a>
           ))}
+
+          {/* Cambio de tema (claro/oscuro), igual que en el navbar */}
+          <div className="flex items-center justify-between py-2.5 px-2">
+            <span className="text-sm font-medium">
+              {theme === "oscuro" ? "Tema oscuro" : "Tema claro"}
+            </span>
+            <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          </div>
         </div>
       )}
       </header>

@@ -123,6 +123,11 @@ export interface AuthUser {
   email: string;
   username: string;
   fullName: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  /** Foto de perfil (Cloudinary); null si no tiene. */
+  avatarUrl?: string | null;
   isSuperuser: boolean;
   isActive: boolean;
 }

@@ -323,7 +323,7 @@ export function CheckoutModal({
   const paymentMethods = allMethods.filter((m) => m.enabled);
 
   return (
-    <div className="fixed inset-0 z-[60] flex flex-col bg-muted overflow-y-auto">
+    <div className="fixed inset-0 z-[60] flex flex-col bg-muted overflow-y-auto pb-[var(--safe-bottom)]">
       <div className="bg-white border-b border-border px-4 py-3 flex items-center gap-3 sticky top-0 z-10">
         {checkoutStep < 4 && (
           <button

@@ -103,6 +103,14 @@ export interface CreateDriverPayload {
   cargoVolumeCm3?: number;
 }
 
+export interface UpdateProfilePayload {
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  avatarUrl?: string | null;
+}
+
 export interface UpdateDriverPayload {
   fullName?: string;
   username?: string;
@@ -139,6 +147,46 @@ export const api = {
     }),
 
   me: () => fetchJson<AuthUser>('/auth/me'),
+
+  /** Datos de perfil del usuario autenticado (incluye avatar). */
+  updateProfile: (payload: UpdateProfilePayload) =>
+    fetchJson<AuthUser>('/auth/me', {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  /** Cambia la contraseña del usuario autenticado (exige la actual). */
+  changePassword: (currentPassword: string, newPassword: string) =>
+    fetchJson<{ success: boolean }>('/auth/me/password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+
+  /** Sube una imagen (Cloudinary) y devuelve su URL pública. */
+  uploadImage: async (file: File, code: string): Promise<{ url: string }> => {
+    const token = getToken();
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('code', code);
+    fd.append('resize', '512');
+    const res = await fetch(`${API_BASE_URL}/upload/image`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: fd,
+    });
+    if (!res.ok) {
+      let message = `Error ${res.status}`;
+      try {
+        const payload = (await res.json()) as { message?: unknown };
+        if (typeof payload?.message === 'string') message = payload.message;
+      } catch {
+        /* sin cuerpo JSON */
+      }
+      throw new ApiError(message, res.status, null);
+    }
+    return (await res.json()) as { url: string };
+  },
 
   drivers: () => fetchJson<FleetDriver[]>('/delivery/admin/drivers'),
 

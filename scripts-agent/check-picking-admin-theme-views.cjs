@@ -122,20 +122,21 @@ async function main() {
       return true;
     })()`);
     for (let i = 0; i < 60; i++) {
-      if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+      if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
       await sleep(300);
     }
 
     // Aplica el tema Claro por la UI.
-    await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+    await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
     await sleep(200);
     await evaluate(`(() => {
-      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Claro'));
+      const b = document.querySelector('button[aria-label="Modo Claro"]');
       b?.click(); return !!b;
     })()`);
     await sleep(300);
     const theme = await evaluate(`document.documentElement.dataset.theme`);
-    check('el tema activo es light', theme === 'light', theme);
+    const mode = await evaluate(`document.documentElement.dataset.mode`);
+    check('el modo activo es claro (light)', mode === 'light', `${theme}/${mode}`);
 
     // El footer es una banda institucional fija (#111827) en todos los temas, así
     // que en claro debe conservar ese fondo, con texto claro encima (contraste ok).

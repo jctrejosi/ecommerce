@@ -1,9 +1,10 @@
 /**
- * Verifica el cambio de temas (presets) del admin de picking:
+ * Verifica el cambio de tema del admin de picking, ahora en dos ejes:
  *   - El botón "Cambiar tema" está en las opciones del usuario del header.
- *   - Elegir un preset cambia `data-theme` y el color de fondo real.
+ *   - El menú tiene colores (Ámbar/Azul/Violeta) y un conmutador Oscuro/Claro.
+ *   - Color y modo son independientes y cambian `data-theme`/`data-mode` y el fondo.
  *   - La elección persiste tras recargar.
- *   - Quedan capturas del tema oscuro y claro.
+ *   - Quedan capturas de oscuro, claro y azul oscuro.
  *
  * Uso: NODE_PATH=backend/node_modules node scripts-agent/check-picking-admin-theme.cjs
  */
@@ -20,7 +21,7 @@ const PANEL_URL = process.env.PANEL_URL || 'http://127.0.0.1:8446/';
 const DEBUG_PORT = 9349;
 const ADMIN = { username: 'qa-theme-admin', password: 'qa-theme-1234' };
 
-// Fondo esperado de cada preset (`--app`).
+// Fondo esperado de cada color en modo oscuro (`--app`), y el modo claro.
 const BG = {
   amber: 'rgb(12, 12, 13)',
   blue: 'rgb(10, 15, 26)',
@@ -62,13 +63,18 @@ function connect(wsUrl) {
 
 const STATE = `(() => ({
   theme: document.documentElement.dataset.theme || null,
+  mode: document.documentElement.dataset.mode || null,
   bg: getComputedStyle(document.body).backgroundColor,
 }))()`;
 
-// El botón del preset contiene el swatch + label + hint, así que se compara por
-// inclusión del label (no por igualdad) y evitando botones de otras vistas.
-const PICK_THEME = (label) => `(() => {
-  const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes(${JSON.stringify(label)}));
+// Los colores son swatches sin texto (aria-label "Color <nombre>"); los modos son
+// botones circulares con ícono (aria-label "Modo <nombre>").
+const CLICK_MODE = (label) => `(() => {
+  const b = document.querySelector(${JSON.stringify(`button[aria-label="Modo ${label}"]`)});
+  b?.click(); return !!b;
+})()`;
+const CLICK_COLOR = (label) => `(() => {
+  const b = document.querySelector(${JSON.stringify(`button[aria-label="Color ${label}"]`)});
   b?.click(); return !!b;
 })()`;
 
@@ -129,7 +135,7 @@ async function main() {
         return true;
       })()`);
       for (let i = 0; i < 60; i++) {
-        if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+        if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
         await sleep(300);
       }
     };
@@ -137,20 +143,31 @@ async function main() {
     await login();
 
     const initial = await evaluate(STATE);
-    check('tema por defecto = amber', initial.theme === 'amber', `${initial.theme}`);
+    check('tema por defecto = ámbar/oscuro', initial.theme === 'amber' && initial.mode === 'dark', `${initial.theme}/${initial.mode}`);
     check('fondo oscuro por defecto', initial.bg === BG.amber, initial.bg);
 
-    // ── Claro ────────────────────────────────────────────────────────────────
-    await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+    // ── Menú: color + modo ───────────────────────────────────────────────────
+    await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
     await sleep(250);
-    // La clase `uppercase` del título hace que innerText venga en mayúsculas.
-    const hasMenu = await evaluate(`/Tema/i.test(document.body.innerText)`);
-    check('el botón despliega el menú de temas', hasMenu);
-    await evaluate(PICK_THEME('Claro'));
+    // La clase `uppercase` de los títulos hace que innerText venga en mayúsculas.
+    const menuText = await evaluate(`document.body.innerText`);
+    check('el menú muestra "Color" y "Modo"', /color/i.test(menuText) && /modo/i.test(menuText));
+    check('hay 3 colores seleccionables', await evaluate(`document.querySelectorAll('button[aria-label^="Color "]').length === 3`));
+    check(
+      'hay botones de modo Claro, Oscuro y Sistema (con ícono)',
+      await evaluate(`['Claro','Oscuro','Sistema'].every((l) => !!document.querySelector('button[aria-label="Modo ' + l + '"]'))`),
+    );
+    check(
+      'el modo activo se resalta (aria-pressed)',
+      await evaluate(`document.querySelector('button[aria-label="Modo Oscuro"]')?.getAttribute('aria-pressed') === 'true'`),
+    );
+
+    // ── Ámbar + Claro ────────────────────────────────────────────────────────
+    await evaluate(CLICK_MODE('Claro'));
     await sleep(300);
-    const light = await evaluate(STATE);
-    check('elige el tema Claro', light.theme === 'light', `${light.theme}`);
-    check('el fondo cambia a claro', light.bg === BG.light, light.bg);
+    const amberLight = await evaluate(STATE);
+    check('modo Claro sobre ámbar', amberLight.theme === 'amber' && amberLight.mode === 'light', `${amberLight.theme}/${amberLight.mode}`);
+    check('el fondo cambia a claro', amberLight.bg === BG.light, amberLight.bg);
     const shotLight = await send('Page.captureScreenshot', { format: 'png' });
     require('node:fs').mkdirSync('scripts-agent/.scratch', { recursive: true });
     require('node:fs').writeFileSync('scripts-agent/.scratch/picking-admin-theme-light.png', Buffer.from(shotLight.data, 'base64'));
@@ -158,32 +175,62 @@ async function main() {
     // ── Persistencia ─────────────────────────────────────────────────────────
     await send('Page.navigate', { url: PANEL_URL });
     for (let i = 0; i < 60; i++) {
-      if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+      if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
       await sleep(300);
     }
     const afterReload = await evaluate(STATE);
-    check('la elección persiste tras recargar', afterReload.theme === 'light' && afterReload.bg === BG.light, `${afterReload.theme} ${afterReload.bg}`);
+    check(
+      'la elección persiste tras recargar',
+      afterReload.theme === 'amber' && afterReload.mode === 'light' && afterReload.bg === BG.light,
+      `${afterReload.theme}/${afterReload.mode} ${afterReload.bg}`,
+    );
 
-    // ── Azul ─────────────────────────────────────────────────────────────────
-    await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+    // ── Azul + Oscuro (color y modo independientes) ──────────────────────────
+    await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
     await sleep(250);
-    await evaluate(PICK_THEME('Azul'));
+    await evaluate(CLICK_COLOR('Azul'));
     await sleep(300);
-    const blue = await evaluate(STATE);
-    check('elige el tema Azul', blue.theme === 'blue', `${blue.theme}`);
-    check('el fondo cambia al azul oscuro', blue.bg === BG.blue, blue.bg);
+    const blueLight = await evaluate(STATE);
+    check('Azul conserva el modo actual', blueLight.theme === 'blue' && blueLight.mode === 'light', `${blueLight.theme}/${blueLight.mode}`);
+    await evaluate(CLICK_MODE('Oscuro'));
+    await sleep(300);
+    const blueDark = await evaluate(STATE);
+    check('Azul + Oscuro aplica tema azul oscuro', blueDark.theme === 'blue' && blueDark.mode === 'dark', `${blueDark.theme}/${blueDark.mode}`);
+    check('el fondo es el azul oscuro', blueDark.bg === BG.blue, blueDark.bg);
+    const shotBlue = await send('Page.captureScreenshot', { format: 'png' });
+    require('node:fs').writeFileSync('scripts-agent/.scratch/picking-admin-theme-blue.png', Buffer.from(shotBlue.data, 'base64'));
 
-    // ── Vuelve a oscuro (ámbar) para la captura y para dejar el panel igual ──
-    await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
-    await sleep(250);
-    await evaluate(PICK_THEME('Ámbar'));
+    // ── Vuelve a Ámbar/Oscuro para dejar el panel como estaba ────────────────
+    await evaluate(CLICK_COLOR('Ámbar'));
     await sleep(300);
     const back = await evaluate(STATE);
-    check('vuelve a Ámbar', back.theme === 'amber' && back.bg === BG.amber, `${back.theme} ${back.bg}`);
+    check('vuelve a Ámbar oscuro', back.theme === 'amber' && back.mode === 'dark' && back.bg === BG.amber, `${back.theme}/${back.mode} ${back.bg}`);
     const shotDark = await send('Page.captureScreenshot', { format: 'png' });
     require('node:fs').writeFileSync('scripts-agent/.scratch/picking-admin-theme-dark.png', Buffer.from(shotDark.data, 'base64'));
 
-    console.log('\n  capturas: scripts-agent/.scratch/picking-admin-theme-light.png, -dark.png');
+    // ── Modo Sistema: sigue la preferencia del SO ────────────────────────────
+    // El menú del usuario sigue abierto desde el paso anterior.
+    await evaluate(CLICK_MODE('Sistema'));
+    await sleep(300);
+    const sys = await evaluate(`(() => ({
+      mode: document.documentElement.dataset.mode,
+      stored: localStorage.getItem('picking-admin-theme'),
+      pref: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light',
+    }))()`);
+    check('modo Sistema resuelve al modo del SO', sys.mode === sys.pref, `${sys.mode} vs SO ${sys.pref}`);
+    check('la preferencia "system" se persiste', /:system$/.test(sys.stored || ''), sys.stored);
+
+    // Cambio de preferencia del SO en vivo → el panel debe seguirlo sin recargar.
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'light' }] });
+    await sleep(300);
+    const sysLight = await evaluate(`document.documentElement.dataset.mode`);
+    check('Sistema sigue el cambio del SO a claro', sysLight === 'light', sysLight);
+    await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: 'dark' }] });
+    await sleep(300);
+    const sysDark = await evaluate(`document.documentElement.dataset.mode`);
+    check('Sistema sigue el cambio del SO a oscuro', sysDark === 'dark', sysDark);
+
+    console.log('\n  capturas: scripts-agent/.scratch/picking-admin-theme-light.png, -blue.png, -dark.png');
   } finally {
     chrome?.kill('SIGKILL');
     await db.query('DELETE FROM users WHERE username = $1', [ADMIN.username]);

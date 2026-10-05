@@ -5,6 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mercaldas admin | DSI</title>
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <script>
+      // Aplica el tema guardado antes del primer pintado para evitar parpadeo.
+      (function () {
+        try {
+          var m = localStorage.getItem('mercaldas-admin-mode') || 'claro';
+          var a = localStorage.getItem('mercaldas-admin-accent') || 'ambar';
+          document.documentElement.setAttribute('data-mode', m);
+          document.documentElement.setAttribute('data-accent', a);
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

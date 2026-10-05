@@ -176,7 +176,7 @@ export function ProductDetailModal({
 
       {/* Panel - ahora ocupa toda la altura en móvil */}
       <div
-        className="relative bg-background w-full sm:max-w-3xl sm:rounded-2xl overflow-hidden shadow-2xl h-full sm:max-h-[92vh] sm:h-auto flex flex-col"
+        className="relative bg-background w-full sm:max-w-3xl sm:rounded-2xl overflow-hidden shadow-2xl h-full sm:max-h-[92vh] sm:h-auto flex flex-col pb-[var(--safe-bottom)]"
         onClick={(e) => e.stopPropagation()}
         style={{
           animation: "slideUp 0.28s cubic-bezier(0.34,1.56,0.64,1) both",

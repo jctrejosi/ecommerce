@@ -152,14 +152,137 @@
   background-color: color-mix(in srgb, var(--card) 95%, transparent);
 }
 
+/* ── Contraste en tema oscuro ──
+   Muchos componentes usan colores fijos de Tailwind (grises) pensados para
+   fondo claro; en oscuro se remapean a tokens del tema para que el texto siga
+   legible sobre las superficies oscuras y para que ninguna superficie clara
+   quede blanca. */
+
+/* Texto oscuro fijo → texto del tema. */
+:root[data-theme="oscuro"] .text-black,
+:root[data-theme="oscuro"] .text-gray-900,
+:root[data-theme="oscuro"] .text-gray-800,
+:root[data-theme="oscuro"] .text-gray-700,
+:root[data-theme="oscuro"] .text-gray-600,
+.dark .text-black,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700,
+.dark .text-gray-600 {
+  color: var(--foreground);
+}
+
+/* Texto gris medio/claro → texto atenuado del tema. */
+:root[data-theme="oscuro"] .text-gray-500,
+:root[data-theme="oscuro"] .text-gray-400,
+:root[data-theme="oscuro"] .text-gray-300,
+:root[data-theme="oscuro"] .text-slate-500,
+:root[data-theme="oscuro"] .text-slate-400,
+.dark .text-gray-500,
+.dark .text-gray-400,
+.dark .text-gray-300,
+.dark .text-slate-500,
+.dark .text-slate-400 {
+  color: var(--muted-foreground);
+}
+
+:root[data-theme="oscuro"] .placeholder\:text-gray-400::placeholder,
+.dark .placeholder\:text-gray-400::placeholder {
+  color: var(--muted-foreground);
+}
+
+/* Fondos claros fijos → superficie atenuada del tema. */
+:root[data-theme="oscuro"] .bg-gray-50,
+:root[data-theme="oscuro"] .bg-gray-100,
+:root[data-theme="oscuro"] .bg-slate-100,
+:root[data-theme="oscuro"] .hover\:bg-gray-50:hover,
+:root[data-theme="oscuro"] .hover\:bg-gray-100:hover,
+.dark .bg-gray-50,
+.dark .bg-gray-100,
+.dark .bg-slate-100,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover {
+  background-color: var(--muted);
+}
+
+:root[data-theme="oscuro"] .bg-gray-300,
+.dark .bg-gray-300 {
+  background-color: var(--border);
+}
+
+:root[data-theme="oscuro"] .bg-gray-400,
+.dark .bg-gray-400 {
+  background-color: var(--muted-foreground);
+}
+
+:root[data-theme="oscuro"] .border-gray-200,
+:root[data-theme="oscuro"] .border-black\/5,
+:root[data-theme="oscuro"] .border-black\/10,
+.dark .border-gray-200,
+.dark .border-black\/5,
+.dark .border-black\/10 {
+  border-color: var(--border);
+}
+
 /* Texto sobre el color de marca: siempre con el contraste del tema. Cubre tanto
    utilidades (`bg-primary` + `text-foreground`) como estilos inline
    (`background: var(--primary)`), que quedan migrados en los componentes. */
-.bg-primary.text-foreground,
+/* Texto sobre el color de marca: siempre con el contraste del tema. El cliente
+   usa `background: var(--primary)` (o `bg-primary`) para el amarillo y
+   `color: var(--foreground)` para el texto; en oscuro `--foreground` es blanco y
+   quedaría ilegible sobre el amarillo, así que aquí se fuerza `--primary-foreground`
+   tanto en el elemento como en sus hijos (incluidos los que fijan color inline). */
+.bg-primary,
 .bg-primary .text-foreground,
+.bg-primary .text-white,
+.bg-primary [style*="color: var(--foreground)"],
 [style*="background: var(--primary)"],
-[style*="background-color: var(--primary)"] {
+[style*="background-color: var(--primary)"],
+[style*="background: var(--primary)"] .text-foreground,
+[style*="background: var(--primary)"] .text-white,
+[style*="background: var(--primary)"] [style*="color: var(--foreground)"],
+[style*="background-color: var(--primary)"] .text-foreground,
+[style*="background-color: var(--primary)"] .text-white,
+[style*="background-color: var(--primary)"] [style*="color: var(--foreground)"] {
   color: var(--primary-foreground) !important;
+}
+
+/* Variantes de opacidad sobre el amarillo (p. ej. `text-foreground/70` en el
+   header del bot): deben ser tinta oscura de marca a plena opacidad, no el
+   `--foreground` translúcido (que en oscuro es blanco y queda ilegible). */
+.bg-primary .text-foreground\/50,
+.bg-primary .text-foreground\/60,
+.bg-primary .text-foreground\/70,
+.bg-primary .text-foreground\/80,
+.bg-primary .text-foreground\/90,
+[style*="background: var(--primary)"] .text-foreground\/50,
+[style*="background: var(--primary)"] .text-foreground\/60,
+[style*="background: var(--primary)"] .text-foreground\/70,
+[style*="background: var(--primary)"] .text-foreground\/80,
+[style*="background: var(--primary)"] .text-foreground\/90,
+[style*="background-color: var(--primary)"] .text-foreground\/50,
+[style*="background-color: var(--primary)"] .text-foreground\/60,
+[style*="background-color: var(--primary)"] .text-foreground\/70,
+[style*="background-color: var(--primary)"] .text-foreground\/80,
+[style*="background-color: var(--primary)"] .text-foreground\/90 {
+  color: var(--primary-foreground) !important;
+}
+
+/* Mismo criterio para el color de acento (rojo): su texto debe ser
+   `--accent-foreground`, no el `--foreground` (blanco) del tema oscuro. */
+.bg-accent,
+.bg-accent .text-foreground,
+.bg-accent .text-white,
+.bg-accent [style*="color: var(--foreground)"],
+[style*="background: var(--accent)"],
+[style*="background-color: var(--accent)"],
+[style*="background: var(--accent)"] .text-foreground,
+[style*="background: var(--accent)"] .text-white,
+[style*="background: var(--accent)"] [style*="color: var(--foreground)"],
+[style*="background-color: var(--accent)"] .text-foreground,
+[style*="background-color: var(--accent)"] .text-white,
+[style*="background-color: var(--accent)"] [style*="color: var(--foreground)"] {
+  color: var(--accent-foreground) !important;
 }
 
 @theme inline {

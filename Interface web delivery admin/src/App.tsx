@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Sun,
   Truck,
+  User,
   Users,
   Wifi,
   WifiOff,
@@ -45,6 +46,7 @@ import {
 } from './services/browserNotifications';
 import LoginScreen from './components/LoginScreen';
 import AppFooter from './components/AppFooter';
+import ProfileModal from './components/ProfileModal';
 // El logo del header es el de DSI; el del icono de las notificaciones sigue
 // siendo delivery.png.
 import headerLogo from './assets/logo.png';
@@ -107,6 +109,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('map');
   /** Menú del usuario (avatar): cambiador de temas. */
   const [userMenu, setUserMenu] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [theme, setTheme] = useTheme();
   const [accent, setAccent] = useAccent();
 
@@ -487,7 +490,7 @@ export default function App() {
             )}
           </button>
 
-          <div className="relative ml-1 flex items-center gap-2 border-l border-line pl-3">
+          <div className="relative ml-1 flex items-center border-l border-line pl-3">
             <button
               onClick={() => setUserMenu((v) => !v)}
               title="Cuenta y tema"
@@ -495,8 +498,12 @@ export default function App() {
               aria-expanded={userMenu}
               className="flex items-center gap-2 rounded-xl px-1.5 py-1 text-left transition-colors hover:bg-surface-3"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-invert text-xs font-bold text-invert-ink">
-                {initials(user.fullName || user.username)}
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-invert text-xs font-bold text-invert-ink">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials(user.fullName || user.username)
+                )}
               </div>
               <div className="hidden leading-tight md:block">
                 <p className="text-xs font-semibold text-ink">
@@ -510,15 +517,8 @@ export default function App() {
                 }`}
               />
             </button>
-            <button
-              onClick={handleLogout}
-              title="Cerrar sesión"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
 
-            {/* Menú del usuario: temas del panel. */}
+            {/* Menú de cuenta: perfil, sesión y tema del panel. */}
             {userMenu && (
               <>
                 <div
@@ -526,18 +526,46 @@ export default function App() {
                   onClick={() => setUserMenu(false)}
                   aria-hidden
                 />
-                <div className="absolute right-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
-                  <div className="border-b border-line px-4 py-3">
-                    <p className="truncate text-xs font-bold text-ink">
-                      {user.fullName || user.username}
-                    </p>
-                    <p className="truncate text-[11px] text-ink-faint">{user.email}</p>
+                <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+                  <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-invert text-xs font-bold text-invert-ink">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        initials(user.fullName || user.username)
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-bold text-ink">
+                        {user.fullName || user.username}
+                      </p>
+                      <p className="truncate text-[11px] text-ink-faint">{user.email}</p>
+                    </div>
                   </div>
-                  <div className="p-2">
-                    <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+
+                  <div className="p-1.5">
+                    <button
+                      onClick={() => {
+                        setUserMenu(false);
+                        setProfileOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold text-ink-soft transition-colors hover:bg-surface-2"
+                    >
+                      <User className="h-4 w-4 text-ink-faint" /> Mi perfil
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-500/10"
+                    >
+                      <LogOut className="h-4 w-4" /> Cerrar sesión
+                    </button>
+                  </div>
+
+                  <div className="border-t border-line p-3">
+                    <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                       Tema
                     </p>
-                    <div className="flex items-center gap-2 px-2 pb-1.5 pt-0.5">
+                    <div className="flex items-center gap-2 px-1 pb-2 pt-0.5">
                       {THEMES.map((t) => {
                         const Icon = t.icon;
                         const active = theme === t.key;
@@ -567,10 +595,10 @@ export default function App() {
                         );
                       })}
                     </div>
-                    <p className="mt-2 px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                    <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                       Color
                     </p>
-                    <div className="flex items-center gap-2 px-2 pb-1.5 pt-0.5">
+                    <div className="flex items-center gap-2 px-1 pt-0.5">
                       {ACCENTS.map((a) => {
                         const active = accent === a.key;
                         return (
@@ -728,6 +756,14 @@ export default function App() {
           liveTick={chatTick}
           onClose={() => setChatOpen(false)}
           onRefreshChats={() => void refreshChats()}
+        />
+      )}
+
+      {profileOpen && user && (
+        <ProfileModal
+          user={user}
+          onClose={() => setProfileOpen(false)}
+          onSaved={(u) => setUser(u)}
         />
       )}
     </div>

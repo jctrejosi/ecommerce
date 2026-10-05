@@ -8,7 +8,8 @@ import {
   type BotQuickOption,
 } from "../services/chatbot.service";
 import logoBot from "../assets/logo-bot.png";
-import logo from "../assets/tienda.png";
+import logo from "../assets/logo.png";
+import { useBackToClose } from "../hooks/useBackToClose";
 import type { CartItem } from "../app/types";
 
 type ChatMessage = {
@@ -107,6 +108,9 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
   const sessionRef = useRef<string>(getSessionId());
   const historyRef = useRef<BotHistoryMessage[]>([]);
   const hasSentRef = useRef(false);
+
+  // El botón "atrás" del dispositivo cierra el panel del chat.
+  useBackToClose(open, () => setOpen(false));
 
   // Modal del carrito
   const [cartModalOpen, setCartModalOpen] = useState(false);
@@ -371,8 +375,18 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Daisy"
         style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
-        className="relative z-[90] w-[84px] h-[84px] rounded-full bg-white shadow-[0_6px_20px_rgba(26,26,46,0.35)] hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] flex flex-col items-center justify-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-all"
+        className="relative z-[90] w-[84px] h-[84px] rounded-full flex flex-col items-center justify-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
       >
+        <span
+          className="text-lg font-black leading-none -mb-2"
+          style={{
+            fontFamily: "var(--font-script)",
+            color: "var(--foreground)",
+            WebkitTextStroke: "0.4px currentColor",
+          }}
+        >
+          Daisy
+        </span>
         <span className="relative block w-14 h-14">
           {showHint && !open && (
             <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping pointer-events-none" />
@@ -399,22 +413,12 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
             />
           )}
         </span>
-        <span
-          className="text-lg font-black leading-none -mt-1"
-          style={{
-            fontFamily: "var(--font-script)",
-            color: "var(--foreground)",
-            WebkitTextStroke: "0.4px currentColor",
-          }}
-        >
-          Daisy
-        </span>
       </button>
 
       {/* Panel — en móvil ocupa la pantalla entera; en escritorio tarjeta flotante */}
       {open && (
         <div
-          className="fixed inset-0 z-[95] h-[100dvh] w-full max-w-full overflow-x-hidden rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl"
+          className="fixed inset-0 z-[95] h-[100dvh] w-full max-w-full overflow-x-hidden rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden pb-[var(--safe-bottom)] sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl"
           style={{ animation: "panelIn 0.25s ease-out both" }}
         >
           {/* Header */}
@@ -424,7 +428,10 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                 <img src={logoBot} alt="Daisy" className="w-full h-full object-cover" />
               </div>
               <div>
-                <p className="text-sm font-bold leading-tight">Daisy</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold leading-tight">Daisy</p>
+                  <img src={logo} alt="Mercaldas" className="h-4 w-auto object-contain" />
+                </div>
                 <p className="text-[10px] text-foreground/70 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   Arma tu carrito conmigo 🛒
@@ -468,17 +475,10 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                 </svg>
               </button>
             </div>
-
-            {/* Logo centrado en el header */}
-            <img
-              src={logo}
-              alt="DSI"
-              className="absolute left-1/2 top-3 -translate-x-1/2 h-3.5 w-auto object-contain"
-            />
           </div>
 
           {/* Mensajes */}
-          <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-[#F7F7F9]">
+          <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-muted">
             {messages.length === 0 && (
               <div className="text-sm text-gray-600 leading-relaxed">
                 <p>¡Hola! 👋 Soy Daisy, tu asistente de compras de Mercaldas.</p>
@@ -503,7 +503,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                     {m.content}
                   </div>
                   {m.payload?.receta && (
-                    <div className="mt-1.5 max-w-[90%] w-full bg-[#FFFDF2] border border-primary rounded-xl p-3 shadow-sm">
+                    <div className="mt-1.5 max-w-[90%] w-full bg-primary/10 border border-primary rounded-xl p-3 shadow-sm">
                       <p className="text-sm font-bold text-foreground">
                         🍳 {m.payload.receta.nombre}
                       </p>
@@ -569,12 +569,12 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
 
           {/* Opciones rápidas (hasta que el usuario escriba su primer mensaje) */}
           {options.length > 0 && !hasSentRef.current && !loading && (
-            <div className="px-3 pb-2 flex flex-col gap-1.5 bg-[#F7F7F9]">
+            <div className="px-3 pb-2 flex flex-col gap-1.5 bg-muted">
               {options.map((o) => (
                 <button
                   key={o.id}
                   onClick={() => send(o.message)}
-                  className="text-left text-xs font-medium text-foreground bg-white border border-black/10 hover:border-primary hover:bg-[#FFFDF2] px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                  className="text-left text-xs font-medium text-foreground bg-white border border-black/10 hover:border-primary hover:bg-primary/10 px-3 py-2 rounded-xl transition-colors cursor-pointer"
                 >
                   {o.label}
                 </button>
@@ -697,7 +697,7 @@ function BotCartModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[85vh] flex flex-col shadow-2xl"
+        className="bg-white rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[85vh] flex flex-col shadow-2xl pb-[var(--safe-bottom)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -735,7 +735,7 @@ function BotCartModal({
             ) : (
               <div className="space-y-2.5">
                 {items.map((it) => (
-                  <div key={it.variant_id} className="flex items-center gap-2.5 bg-[#F7F7F9] rounded-xl p-2">
+                  <div key={it.variant_id} className="flex items-center gap-2.5 bg-muted rounded-xl p-2">
                     {it.image ? (
                       <img src={it.image} alt="" loading="lazy" className="w-11 h-11 rounded-lg object-cover bg-white shrink-0" />
                     ) : (
@@ -821,7 +821,7 @@ function BotCartModal({
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {products.map((p) => (
-                  <div key={p.product_id} className="bg-[#F7F7F9] rounded-xl p-2 flex flex-col">
+                  <div key={p.product_id} className="bg-muted rounded-xl p-2 flex flex-col">
                     {p.image ? (
                       <img src={p.image} alt={p.name} loading="lazy" className="w-full h-16 object-cover rounded-lg mb-1.5 bg-white" />
                     ) : (

@@ -16,7 +16,7 @@ import { PickerChatDrawer } from './PickerChat'
 import { useChatAlerts } from './useChatAlerts'
 import { NotificationsBell } from './NotificationsBell'
 import { requestNotificationPermission } from './services/browserNotifications'
-import { getStoredTheme, setStoredTheme, THEME_PRESETS, type ThemePreset } from './theme'
+import { getStoredTheme, setStoredTheme, THEME_COLORS, THEME_MODES, type ThemeState } from './theme'
 // Logo corporativo (DSI): lo comparten el header del panel y el pie de copyright.
 import logo from './assets/logo.png'
 // Marca de la app de picking: se conserva al pie de la pantalla de login.
@@ -61,9 +61,13 @@ export default function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Bandeja de chat del header (un hilo por picker).
   const [chatOpen, setChatOpen] = useState(false)
-  // Tema activo (preset) y su menú desplegable en las opciones del usuario.
-  const [theme, setTheme] = useState<ThemePreset>(() => getStoredTheme())
-  const [themeMenu, setThemeMenu] = useState(false)
+  // Tema activo (color + modo) y el menú desplegable de opciones del usuario.
+  const [theme, setTheme] = useState<ThemeState>(() => getStoredTheme())
+  const [userMenu, setUserMenu] = useState(false)
+  const changeTheme = (next: ThemeState) => {
+    setStoredTheme(next)
+    setTheme(next)
+  }
   // Logo de la tienda configurado en el admin general (endpoint público).
   const [storeLogo, setStoreLogo] = useState<string | null>(null)
 
@@ -256,75 +260,100 @@ export default function App() {
                 ) : null}
               </button>
 
-              {/* Opciones del usuario: tema + sesión. */}
-              <div className="flex items-center gap-2.5">
-              {/* Cambio de tema (preset) — opción del usuario. */}
+              {/* Opciones del usuario: menú desplegable con tema (color + modo). */}
               <div className="relative">
                 <button
-                  onClick={() => setThemeMenu((v) => !v)}
-                  title="Cambiar tema"
-                  aria-label="Cambiar tema"
-                  className="shrink-0 w-11 h-11 rounded-full bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center"
+                  onClick={() => setUserMenu((v) => !v)}
+                  title="Opciones del usuario"
+                  aria-label="Opciones del usuario"
+                  aria-expanded={userMenu}
+                  className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-full pl-1 pr-3 py-1 hover:bg-white/10 transition-all"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H13a1 1 0 0 1 0-2h4a4 4 0 0 0 4-4A7 7 0 0 0 12 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="7.5" cy="12" r="1.2" fill="currentColor" />
-                    <circle cx="10" cy="8" r="1.2" fill="currentColor" />
-                    <circle cx="14" cy="7.5" r="1.2" fill="currentColor" />
+                  <span className="w-8 h-8 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold text-sm">
+                    {(authUser?.fullName ?? authUser?.username ?? '?').charAt(0).toUpperCase()}
+                  </span>
+                  <span className="leading-tight text-left">
+                    <span className="block text-white/90 text-xs font-bold truncate max-w-[160px]">
+                      {authUser?.fullName ?? authUser?.username}
+                    </span>
+                    <span className="block text-white/40 text-[10px] font-semibold">Administrador</span>
+                  </span>
+                  <svg
+                    width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    className={`text-white/40 transition-transform ${userMenu ? 'rotate-180' : ''}`}
+                  >
+                    <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                {themeMenu ? (
+                {userMenu ? (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setThemeMenu(false)} />
-                    <div className="absolute right-0 top-full mt-2 z-50 w-48 bg-surface border border-white/10 rounded-xl p-1.5 shadow-xl">
-                      <p className="px-2.5 py-1.5 text-white/40 text-[10px] font-bold uppercase tracking-wider">
-                        Tema
+                    <div className="fixed inset-0 z-40" onClick={() => setUserMenu(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-50 w-60 bg-surface border border-white/10 rounded-xl p-3 shadow-xl">
+                      {/* Color del tema: swatches circulares. */}
+                      <p className="px-1 pb-1.5 text-white/40 text-[10px] font-bold uppercase tracking-wider">
+                        Color
                       </p>
-                      {THEME_PRESETS.map((p) => {
-                        const active = p.id === theme
-                        return (
-                          <button
-                            key={p.id}
-                            onClick={() => {
-                              setStoredTheme(p.id)
-                              setTheme(p.id)
-                              setThemeMenu(false)
-                            }}
-                            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors ${
-                              active ? 'bg-amber-400 text-on-accent' : 'text-white/70 hover:bg-white/5'
-                            }`}
-                          >
-                            <span
-                              className="w-4 h-4 rounded-full border border-white/20"
-                              style={{ background: p.swatch }}
+                      <div className="flex items-center gap-2 px-1 pb-3">
+                        {THEME_COLORS.map((c) => {
+                          const active = c.id === theme.color
+                          return (
+                            <button
+                              key={c.id}
+                              onClick={() => changeTheme({ ...theme, color: c.id })}
+                              title={c.label}
+                              aria-label={`Color ${c.label}`}
+                              aria-pressed={active}
+                              className={`w-7 h-7 rounded-full border-2 transition-transform ${
+                                active ? 'border-white scale-110' : 'border-white/20 hover:scale-105'
+                              }`}
+                              style={{ background: c.swatch }}
                             />
-                            <span className="flex-1 text-left">{p.label}</span>
-                            <span
-                              className={`text-[10px] font-semibold ${
-                                active ? 'text-on-accent/70' : 'text-white/35'
+                          )
+                        })}
+                      </div>
+
+                      {/* Modo claro/oscuro: botones circulares con ícono (sol / luna). */}
+                      <p className="px-1 pb-1.5 text-white/40 text-[10px] font-bold uppercase tracking-wider">
+                        Modo
+                      </p>
+                      <div className="flex items-center gap-2 px-1">
+                        {THEME_MODES.map((m) => {
+                          const active = m.id === theme.mode
+                          return (
+                            <button
+                              key={m.id}
+                              onClick={() => changeTheme({ ...theme, mode: m.id })}
+                              title={m.label}
+                              aria-label={`Modo ${m.label}`}
+                              aria-pressed={active}
+                              className={`w-9 h-9 rounded-full border flex items-center justify-center transition-all ${
+                                active
+                                  ? 'bg-amber-400 text-on-accent border-amber-400'
+                                  : 'bg-white/5 text-white/60 border-white/10 hover:text-white hover:bg-white/10'
                               }`}
                             >
-                              {p.hint}
-                            </span>
-                          </button>
-                        )
-                      })}
+                              {m.id === 'dark' ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                  <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              ) : m.id === 'light' ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                  <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+                                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                              ) : (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                  <rect x="2.5" y="4" width="19" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
+                                  <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   </>
                 ) : null}
-              </div>
-
-              <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-full pl-1 pr-3.5 py-1">
-                <span className="w-8 h-8 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold text-sm">
-                  {(authUser?.fullName ?? authUser?.username ?? '?').charAt(0).toUpperCase()}
-                </span>
-                <div className="leading-tight">
-                  <p className="text-white/90 text-xs font-bold truncate max-w-[160px]">
-                    {authUser?.fullName ?? authUser?.username}
-                  </p>
-                  <p className="text-white/40 text-[10px] font-semibold">Administrador</p>
-                </div>
-              </div>
               </div>
               <button
                 onClick={handleLogout}

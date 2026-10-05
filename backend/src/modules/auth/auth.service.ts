@@ -357,6 +357,7 @@ export class AuthService {
       lastName?: string;
       phone?: string;
       email?: string;
+      avatarUrl?: string | null;
     },
   ) {
     const patch: Partial<typeof users.$inferInsert> = {
@@ -366,6 +367,8 @@ export class AuthService {
     if (body.firstName !== undefined) patch.firstName = body.firstName.trim();
     if (body.lastName !== undefined) patch.lastName = body.lastName.trim();
     if (body.phone !== undefined) patch.phone = body.phone.trim() || null;
+    if (body.avatarUrl !== undefined)
+      patch.avatarUrl = this.toStoredAvatarPath(body.avatarUrl);
 
     if (body.email !== undefined) {
       const email = body.email.trim().toLowerCase();
@@ -385,6 +388,30 @@ export class AuthService {
       .set(patch)
       .where(eq(users.id, BigInt(userId)));
     return this.getProfile(userId);
+  }
+
+  /**
+   * Normaliza la imagen de perfil antes de guardarla.
+   *
+   * La API expone las rutas locales de media como URLs absolutas (ver
+   * `MediaUrlInterceptor`), pero en la BD se guardan relativas (`/static/...`)
+   * para no depender del host/IP. Aquí se revierte ese prefijo: si la URL
+   * apunta a nuestro propio `/static/`, se guarda su ruta; las URLs externas
+   * (Cloudinary, etc.) se conservan tal cual.
+   */
+  private toStoredAvatarPath(url: string | null | undefined): string | null {
+    if (url == null) return null;
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.pathname.startsWith('/static/')
+        ? parsed.pathname
+        : trimmed;
+    } catch {
+      // Ya es una ruta relativa (p. ej. `/static/...`).
+      return trimmed;
+    }
   }
 
   /**

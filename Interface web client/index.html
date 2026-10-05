@@ -4,13 +4,15 @@
     <head>
       
       <meta charset="UTF-8" />
-      <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
       <title>Mercaldas | DSI</title>
       <link rel="icon" type="image/png" href="/favicon.png" />
       <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       <meta name="description" content="A user-friendly online supermarket for Manizales, enabling quick product searches, easy navigation through categories, and seamless checkout for home grocery shopping." />
       <meta name="robots" content="noindex, nofollow" />
-      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
+      <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }
+        :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
+      </style>
       <script>
         // Aplica el tema guardado antes de pintar (evita el parpadeo).
         (function () {

@@ -24,12 +24,19 @@ export class CloudinaryController {
     @Body('code') code?: string,
     @Body('trim') trim?: string,
     @Body('removeBg') removeBg?: string,
+    @Body('resize') resize?: string,
   ) {
     if (!file) throw new BadRequestException('Archivo requerido');
     const folderCode = code || `img_${Date.now().toString(36)}`;
+    const parsedResize = resize ? Number(resize) : NaN;
+    const resizePx =
+      Number.isFinite(parsedResize) && parsedResize > 0
+        ? parsedResize
+        : undefined;
     const result = await this.cloudinaryService.uploadImage(file, folderCode, {
       trim: trim === 'true',
       removeBg: removeBg === 'true',
+      resize: resizePx,
     });
     return result;
   }
