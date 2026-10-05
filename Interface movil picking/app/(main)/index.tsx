@@ -51,8 +51,11 @@ export default function OrderListScreen() {
       sortQueue(
         (orders ?? []).filter((o) => {
           if (orderStatus(o) !== filter) return false;
-          // "Completados" se ve por usuario: solo los que alistó el picker activo.
-          if (filter === "completado") return o.pickerId === user?.id;
+          // "Preparando" y "Completado" se ven por usuario: solo los del picker
+          // activo. "Nuevo" es la cola por reclamar, así que la ven todos.
+          if (filter === "preparando" || filter === "completado") {
+            return o.pickerId === user?.id;
+          }
           return true;
         }),
       ),
@@ -179,7 +182,7 @@ export default function OrderListScreen() {
             const count = (orders ?? []).filter(
               (o) =>
                 orderStatus(o) === t.key &&
-                (t.key !== "completado" || o.pickerId === user?.id),
+                (t.key === "nuevo" || o.pickerId === user?.id),
             ).length;
             return (
               <Pressable

@@ -102,7 +102,8 @@ export default function OrderDetailScreen() {
     );
   }
 
-  const actions = actionsFor(order.status);
+  // Los pedidos de otros repartidores (aún "nuevos") se ven, pero no se gestionan.
+  const actions = order.assignedToMe === false ? [] : actionsFor(order.status);
 
   return (
     <Screen
@@ -116,6 +117,14 @@ export default function OrderDetailScreen() {
         <Text style={styles.assigned}>Asignado: {formatDateTime(order.assignedAt)}</Text>
         <StatusBadge status={order.status} />
       </View>
+
+      {order.assignedToMe === false ? (
+        <View style={styles.card}>
+          <Text style={styles.muted}>
+            Este pedido todavía no está asignado a ti; por ahora solo puedes verlo.
+          </Text>
+        </View>
+      ) : null}
 
       {/* Cliente */}
       <View style={styles.card}>

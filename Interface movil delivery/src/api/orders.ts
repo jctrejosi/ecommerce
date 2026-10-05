@@ -4,10 +4,12 @@ import type { TransitionKey, TransitionPayload } from "./contract";
 import type { ChatMessage } from "./types";
 
 const ACTIVE_KEY = ["delivery", "orders", "active"] as const;
+const AVAILABLE_KEY = ["delivery", "orders", "available"] as const;
 const HISTORY_KEY = ["delivery", "orders", "history"] as const;
 
 export const orderKeys = {
   active: ACTIVE_KEY,
+  available: AVAILABLE_KEY,
   history: HISTORY_KEY,
   detail: (id: number | string) => ["delivery", "orders", "detail", id] as const,
   chat: (id: number | string) => ["delivery", "orders", "chat", id] as const,
@@ -18,6 +20,18 @@ export function useActiveOrders() {
   return useQuery({
     queryKey: ACTIVE_KEY,
     queryFn: () => api.getActiveOrders(),
+    refetchInterval: 5_000,
+  });
+}
+
+/**
+ * Pedidos nuevos (recién salidos de picking) de TODOS los repartidores: la
+ * pestaña Nuevos los muestra a cualquiera, sin importar a quién estén asignados.
+ */
+export function useAvailableOrders() {
+  return useQuery({
+    queryKey: AVAILABLE_KEY,
+    queryFn: () => api.getAvailableOrders(),
     refetchInterval: 5_000,
   });
 }
@@ -76,6 +90,7 @@ export function useTransitionOrder(orderId: number | string) {
     onSuccess: (updated) => {
       queryClient.setQueryData(orderKeys.detail(orderId), updated);
       void queryClient.invalidateQueries({ queryKey: ACTIVE_KEY });
+      void queryClient.invalidateQueries({ queryKey: AVAILABLE_KEY });
       void queryClient.invalidateQueries({ queryKey: HISTORY_KEY });
     },
     onError: () => {

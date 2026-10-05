@@ -9,7 +9,7 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { useActiveOrders, useHistory } from "@/api/orders";
+import { useActiveOrders, useAvailableOrders, useHistory } from "@/api/orders";
 import { useAdminChatSummary } from "@/api/admin-chat";
 import { OrderCard } from "@/ui/OrderCard";
 import { EmptyState } from "@/ui/EmptyState";
@@ -48,8 +48,6 @@ const TABS: { key: TabKey; label: string; icon: IconName; emptyTitle: string; em
   },
 ];
 
-/** Pedidos que acaban de salir de picking (antes de recoger). */
-const NUEVOS_STATUSES = ["ASSIGNED", "ACCEPTED", "READY_FOR_PICKUP"] as const;
 /** Pedidos recogidos y rumbo al cliente. */
 const EN_CAMINO_STATUSES = ["PICKED_UP", "IN_DELIVERY"] as const;
 
@@ -61,25 +59,27 @@ let landingChecked = false;
 
 /**
  * Pantalla "Pedidos": vista del día con 3 pestañas — Nuevos (recién salidos
- * de picking), En camino y Entregados hoy. El historial completo del usuario
- * vive en la pestaña "Historial".
+ * de picking, de todos los repartidores), En camino y Entregados hoy (solo los
+ * propios). El historial completo del usuario vive en la pestaña "Historial".
  */
 export default function OrdersScreen() {
   const router = useRouter();
   const [tab, setTab] = useState<TabKey>("nuevos");
   const active = useActiveOrders();
+  // Pedidos nuevos de todos los repartidores (pestaña Nuevos).
+  const available = useAvailableOrders();
   const history = useHistory();
   // No leídos del chat con el panel (badge del header).
   const chatSummary = useAdminChatSummary();
   const chatUnread = chatSummary.data?.unread ?? 0;
 
   const groups = useMemo(() => {
+    // Nuevos: todos los de la flota. En camino y entregados: solo los míos.
+    const nuevos = available.data ?? [];
     const actives = active.data ?? [];
     const finished = history.data ?? [];
     return {
-      nuevos: actives.filter((o) =>
-        (NUEVOS_STATUSES as readonly string[]).includes(o.status),
-      ),
+      nuevos,
       enCamino: actives.filter((o) =>
         (EN_CAMINO_STATUSES as readonly string[]).includes(o.status),
       ),
@@ -87,12 +87,13 @@ export default function OrdersScreen() {
         (o) => o.status === "DELIVERED" && isToday(o.completedAt ?? o.deliveredAt),
       ),
     } satisfies Record<TabKey, DeliveryOrder[]>;
-  }, [active.data, history.data]);
+  }, [available.data, active.data, history.data]);
 
-  const isLoading = active.isLoading || history.isLoading;
-  const isError = active.isError || history.isError;
-  const error = active.error ?? history.error;
-  const refreshing = active.isRefetching || history.isRefetching;
+  const isLoading = available.isLoading || active.isLoading || history.isLoading;
+  const isError = available.isError || active.isError || history.isError;
+  const error = available.error ?? active.error ?? history.error;
+  const refreshing =
+    available.isRefetching || active.isRefetching || history.isRefetching;
 
   // Al abrir la app con un pedido en camino, se entra directo a ese pedido
   // (solo la primera vez por arranque; luego se respeta la navegación).
@@ -106,6 +107,7 @@ export default function OrdersScreen() {
   }, [active.data, router]);
 
   const refetch = () => {
+    void available.refetch();
     void active.refetch();
     void history.refetch();
   };

@@ -52,7 +52,16 @@ const AREAS = [
   { code: 'TEL-1', name: 'Telefonía', type: 'center', roots: [2036] },
   { code: 'EMP-1', name: 'Empaque', type: 'wall', roots: [2035, 2147, 2148, 2149] },
   { code: 'NOA-1', name: 'No Alimentos', type: 'wall', roots: [2027] },
-  { code: 'ALI-1', name: 'Alimentos', type: 'center', roots: [2026] },
+  // Alimentos dividido por tipo. ALI-1 (Despensa) va al final: reclama sólo lo
+  // que no hayan tomado las estanterías específicas de arriba.
+  { code: 'ALI-2', name: 'Café y Té', type: 'center', roots: [2047, 2071] },
+  { code: 'ALI-3', name: 'Bebidas', type: 'wall', roots: [2067] },
+  { code: 'ALI-4', name: 'Lácteos, Huevos y Refrigerados', type: 'center', roots: [2063, 2064, 2061, 2068] },
+  { code: 'ALI-5', name: 'Charcutería', type: 'center', roots: [2050] },
+  { code: 'ALI-6', name: 'Dulcería y Pasabocas', type: 'center', roots: [2055, 2051, 2069] },
+  { code: 'ALI-7', name: 'Fruver', type: 'wall', roots: [2058] },
+  { code: 'ALI-8', name: 'Alimentos Infantiles', type: 'center', roots: [2062] },
+  { code: 'ALI-1', name: 'Despensa (Abarrotes)', type: 'center', roots: [2026] },
   { code: 'PROD-1', name: 'Producción', type: 'center', roots: [2024] },
 ];
 

@@ -44,6 +44,9 @@ const HISTORY_STATUSES = [
   'CANCELLED',
 ] as const;
 
+/** Pedidos "nuevos": recién salidos de picking, antes de recogerlos. */
+const NEW_STATUSES = ['ASSIGNED', 'ACCEPTED', 'READY_FOR_PICKUP'] as const;
+
 /** Estados de la entrega en los que el chat por pedido está habilitado. */
 const CHAT_ACTIVE_STATUSES = ['PICKED_UP', 'IN_DELIVERY'] as const;
 
@@ -80,6 +83,7 @@ interface OrderRow {
   c_last_name: string | null;
   c_phone: string | null;
   status: string;
+  driver_id: string;
   assigned_at: string | null;
   accepted_at: string | null;
   ready_for_pickup_at: string | null;
@@ -133,6 +137,7 @@ SELECT
   c.last_name AS c_last_name,
   c.phone AS c_phone,
   a.status,
+  a.driver_id,
   a.assigned_at, a.accepted_at, a.ready_for_pickup_at, a.picked_up_at,
   a.in_delivery_at, a.completed_at, a.rejected_at, a.failed_at, a.cancelled_at,
   a.reject_reason, a.cancel_reason,
@@ -239,7 +244,7 @@ export class DeliveryOrdersService {
     return map;
   }
 
-  private toDeliveryOrder(row: OrderRow, items: ItemRow[]) {
+  private toDeliveryOrder(row: OrderRow, items: ItemRow[], driverId: number) {
     const branchPoint = parsePoint(row.branch_location);
     return {
       id: Number(row.order_id),
@@ -288,13 +293,15 @@ export class DeliveryOrdersService {
       completedAt: row.completed_at,
       rejectReason: row.reject_reason,
       deliveredAt: row.completed_at,
+      /** true si la asignación que se devuelve es de este repartidor. */
+      assignedToMe: Number(row.driver_id) === driverId,
     };
   }
 
-  private async rowsToOrders(rows: OrderRow[]) {
+  private async rowsToOrders(rows: OrderRow[], driverId: number) {
     const items = await this.fetchItems(rows.map((r) => r.order_id));
     return rows.map((r) =>
-      this.toDeliveryOrder(r, items.get(r.order_id) ?? []),
+      this.toDeliveryOrder(r, items.get(r.order_id) ?? [], driverId),
     );
   }
 
@@ -305,7 +312,36 @@ export class DeliveryOrdersService {
        ORDER BY a.assigned_at DESC`,
       [driverId, [...ACTIVE_STATUSES]],
     );
-    return this.rowsToOrders(rows);
+    return this.rowsToOrders(rows, driverId);
+  }
+
+  /**
+   * Pedidos "nuevos" (recién salidos de picking) de TODOS los repartidores.
+   * La pestaña Nuevos de la app los muestra a todos, sin importar a quién estén
+   * asignados; el resto de pestañas siguen siendo solo los propios.
+   */
+  async listAvailable(driverId: number) {
+    const rows = await this.drizzle.execute<OrderRow>(
+      `${ORDERS_SELECT}
+       WHERE a.status::text = ANY($1::text[])
+       ORDER BY o.id, a.id DESC`,
+      [[...NEW_STATUSES]],
+    );
+    // Un pedido puede tener una oferta por repartidor (broadcast): se deja una
+    // fila por pedido y, si hay una mía, se prefiere esa.
+    const byOrder = new Map<string, OrderRow>();
+    for (const row of rows) {
+      const current = byOrder.get(row.order_id);
+      if (!current) {
+        byOrder.set(row.order_id, row);
+      } else if (
+        Number(row.driver_id) === driverId &&
+        Number(current.driver_id) !== driverId
+      ) {
+        byOrder.set(row.order_id, row);
+      }
+    }
+    return this.rowsToOrders([...byOrder.values()], driverId);
   }
 
   async getOrder(driverId: number, orderId: number) {
@@ -316,7 +352,23 @@ export class DeliveryOrdersService {
       [driverId, orderId],
     );
     if (!rows.length) throw new NotFoundException('Pedido no encontrado.');
-    return (await this.rowsToOrders(rows))[0];
+    return (await this.rowsToOrders(rows, driverId))[0];
+  }
+
+  /**
+   * Detalle para la app: el pedido propio (cualquier estado) o, si aún es
+   * "nuevo", el de cualquier repartidor (la pestaña Nuevos los muestra a
+   * todos). `transition` y el chat siguen usando `getOrder` (solo los propios).
+   */
+  async getVisibleOrder(driverId: number, orderId: number) {
+    const rows = await this.drizzle.execute<OrderRow>(
+      `${ORDERS_SELECT}
+       WHERE o.id = $2 AND (a.driver_id = $1 OR a.status::text = ANY($3::text[]))
+       ORDER BY (a.driver_id = $1) DESC, a.id DESC LIMIT 1`,
+      [driverId, orderId, [...NEW_STATUSES]],
+    );
+    if (!rows.length) throw new NotFoundException('Pedido no encontrado.');
+    return (await this.rowsToOrders(rows, driverId))[0];
   }
 
   /**
@@ -431,7 +483,7 @@ export class DeliveryOrdersService {
        ORDER BY a.completed_at DESC NULLS LAST, a.id DESC`,
       [driverId, [...HISTORY_STATUSES]],
     );
-    return this.rowsToOrders(rows);
+    return this.rowsToOrders(rows, driverId);
   }
 
   /**

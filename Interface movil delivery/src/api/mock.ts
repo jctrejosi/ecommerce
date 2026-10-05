@@ -240,6 +240,14 @@ export const mockApi: DeliveryApi = {
     return clone(active);
   },
 
+  async getAvailableOrders() {
+    await delay(400);
+    // En el mock no hay pedidos de otros repartidores: los "nuevos" son los
+    // propios que aún no se han recogido.
+    const nuevos = ["ASSIGNED", "ACCEPTED", "READY_FOR_PICKUP"] as string[];
+    return clone(active.filter((o) => nuevos.includes(o.status)));
+  },
+
   async getOrder(id) {
     await delay(300);
     const num = Number(id);

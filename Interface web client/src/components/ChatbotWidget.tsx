@@ -24,9 +24,23 @@ type ChatMessage = {
  *  con carrito y conversación nuevos.)
  */
 function getSessionId(): string {
-  return typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const c = typeof crypto !== "undefined" ? crypto : undefined;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  // En contextos no seguros (p. ej. el WebView de la APK sobre http://)
+  // `crypto.randomUUID` no existe. El bot valida que el session_id sea un UUID,
+  // así que se construye uno v4 a mano (getRandomValues sí está disponible).
+  if (c && typeof c.getRandomValues === "function") {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0"));
+    return `${h.slice(0, 4).join("")}-${h.slice(4, 6).join("")}-${h.slice(6, 8).join("")}-${h.slice(8, 10).join("")}-${h.slice(10, 16).join("")}`;
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 const fmtPrice = (n: number) =>
@@ -743,7 +757,7 @@ function BotCartModal({
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-800 line-clamp-1">{it.name}</p>
-                      <p className="text-xs font-bold text-foreground">{fmtPrice(it.subtotal)}</p>
+                      <p className="text-xs font-bold text-foreground truncate">{fmtPrice(it.subtotal)}</p>
                     </div>
                     {readOnlyProductIds.has(it.product_id) ? (
                       <span className="shrink-0 text-[10px] font-semibold text-gray-400">
@@ -830,12 +844,12 @@ function BotCartModal({
                       </div>
                     )}
                     <p className="text-[11px] leading-tight text-gray-700 line-clamp-2 flex-1">{p.name}</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-xs font-bold text-foreground">{fmtPrice(p.price)}</span>
+                    <div className="flex items-center justify-between gap-1.5 mt-1.5">
+                      <span className="text-xs font-bold text-foreground truncate min-w-0">{fmtPrice(p.price)}</span>
                       <button
                         onClick={() => onAddProduct(p, 1)}
                         disabled={mutating}
-                        className="text-[11px] font-semibold bg-primary text-foreground px-2 py-1 rounded-lg hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
+                        className="shrink-0 whitespace-nowrap text-[11px] font-semibold bg-primary text-foreground px-2 py-1 rounded-lg hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
                       >
                         + Agregar
                       </button>
@@ -856,18 +870,18 @@ function BotCartModal({
               </span>
               <span className="text-lg font-bold text-foreground">{fmtPrice(total)}</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col-reverse sm:flex-row gap-2">
               <button
                 onClick={() => cart && onApplyCart(cart)}
                 disabled={mutating}
-                className="flex-1 text-sm font-bold bg-secondary text-white py-2.5 rounded-xl hover:bg-[#2a2a44] disabled:opacity-50 cursor-pointer"
+                className="w-full sm:flex-1 text-sm font-bold bg-secondary text-white py-2.5 rounded-xl hover:bg-[#2a2a44] disabled:opacity-50 cursor-pointer"
               >
                 {checkout ? "Ir a pagar →" : "Usar este carrito"}
               </button>
               <button
                 onClick={onClose}
                 disabled={mutating}
-                className="px-4 text-sm font-semibold text-gray-500 hover:text-foreground border border-black/10 rounded-xl hover:bg-gray-50 cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-foreground border border-black/10 rounded-xl hover:bg-gray-50 cursor-pointer"
               >
                 Seguir comprando
               </button>
