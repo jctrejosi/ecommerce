@@ -9,6 +9,7 @@ import type {
 } from './types'
 import type { Branch, CatalogProduct, Category, Shelf, ShelfType } from './types'
 import MapView from './MapView'
+import { CategoryTree } from './categoryTree'
 import { useCategoryChangeConfirm, CategoryChangeConfirm } from './shelfCategories'
 import UsersView from './UsersView'
 import OrdersView from './OrdersView'
@@ -502,17 +503,19 @@ export default function App() {
 
 /** Pie de copyright, compartido por el panel y la pantalla de login. */
 function CopyrightFooter() {
+  // La banda sigue el tema (oscura en oscuro, clara en claro) y el texto usa la
+  // tinta del tema (`white/NN` → `--ink`), así contrasta en ambos modos.
   return (
-    <footer className="shrink-0" style={{ background: '#111827' }}>
+    <footer className="shrink-0" style={{ background: 'var(--footer-bg)' }}>
       <div className="flex flex-col md:flex-row items-center justify-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-center">
         <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
           {/* Mismo logo (y tamaño) que el footer del admin general. */}
           <img src={logo} alt="Mercaldas" className="h-[26px] w-auto object-contain" />
         </a>
-        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          © 2026 Desarrollado por <span className="font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>DSI SA</span> · Todos los derechos reservados
+        <p className="text-[11px] text-white/40">
+          © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
         </p>
-        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        <p className="text-[11px] text-white/30">
           Manizales, Caldas, Colombia
         </p>
       </div>
@@ -632,12 +635,14 @@ function ShelvesView({
                 <div className="flex gap-1.5 shrink-0">
                   <button
                     onClick={() => { setCreating(false); setEditing(s) }}
-                    className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10"
+                    className="h-8 px-2.5 rounded-lg bg-white/5 border border-white/10 flex items-center gap-1.5 text-xs font-bold text-white/70 hover:bg-white/10 hover:text-white transition-colors"
                     title="Editar"
+                    aria-label={`Editar ${s.code}`}
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
+                    Editar
                   </button>
                   <button
                     onClick={() => setDeleting(s)}
@@ -705,6 +710,8 @@ function ShelfModal({
     categoryIds: (initial?.categories ?? []).map((c) => c.id),
   }))
   const [catSearch, setCatSearch] = useState('')
+  // El cambio de código se confirma aparte (ver `submit`).
+  const [confirmCode, setConfirmCode] = useState(false)
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -729,12 +736,19 @@ function ShelfModal({
       })),
   })
 
-  const catNorm = catSearch.trim().toLowerCase()
-  const filteredCategories = catNorm
-    ? categories.filter((c) => c.name.toLowerCase().includes(catNorm))
-    : categories
+
 
   const valid = form.code.trim().length > 0
+  // El código es el identificador de la estantería: al editarlo se pide confirmación.
+  const codeChanged = initial != null && form.code.trim() !== initial.code
+  function submit() {
+    if (!valid) return
+    if (codeChanged) {
+      setConfirmCode(true)
+      return
+    }
+    onSave(form)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
@@ -749,7 +763,7 @@ function ShelfModal({
           </h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
@@ -828,38 +842,13 @@ function ShelfModal({
                 })}
               </div>
             )}
-            <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5 [scrollbar-gutter:stable]">
-              {filteredCategories.map((c) => {
-                const checked = form.categoryIds.includes(c.id)
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => requestCategoryChange(c.id, c.name)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-white/5 ${
-                      checked ? 'text-amber-300' : 'text-white/70'
-                    }`}
-                  >
-                    <span
-                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                        checked ? 'bg-amber-400 border-amber-400 text-on-accent' : 'border-white/25'
-                      }`}
-                    >
-                      {checked ? (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                          <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      ) : null}
-                    </span>
-                    <span style={{ paddingLeft: Math.max(0, c.level) * 12 }} className="truncate">
-                      {c.name}
-                    </span>
-                  </button>
-                )
-              })}
-              {filteredCategories.length === 0 && (
-                <p className="px-3 py-4 text-center text-white/30 text-xs">Sin resultados.</p>
-              )}
+            <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-white/10 py-1 [scrollbar-gutter:stable]">
+              <CategoryTree
+                categories={categories}
+                selectedIds={form.categoryIds}
+                onToggle={(c) => requestCategoryChange(c.id, c.name)}
+                query={catSearch}
+              />
             </div>
             <span className="text-white/25 text-[11px] font-medium mt-1 block">
               Una estantería puede agrupar varias categorías.
@@ -914,7 +903,7 @@ function ShelfModal({
             Cancelar
           </button>
           <button
-            onClick={() => valid && onSave(form)}
+            onClick={submit}
             disabled={!valid}
             className="flex-1 py-3 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40"
           >
@@ -924,6 +913,60 @@ function ShelfModal({
       </div>
 
       {pending && <CategoryChangeConfirm pending={pending} onConfirm={confirm} onCancel={cancel} />}
+      {confirmCode && initial && (
+        <ShelfCodeChangeConfirm
+          oldCode={initial.code}
+          newCode={form.code.trim()}
+          onCancel={() => setConfirmCode(false)}
+          onConfirm={() => onSave(form)}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Confirmación al cambiar el código de una estantería: es su identificador en el
+ * panel y en la app, así que se evita cambiarlo por un descuido.
+ */
+function ShelfCodeChangeConfirm({
+  oldCode,
+  newCode,
+  onCancel,
+  onConfirm,
+}: {
+  oldCode: string
+  newCode: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-6" onClick={onCancel}>
+      <div
+        className="w-full max-w-sm bg-surface border border-white/10 rounded-2xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-extrabold text-base">Cambiar código</h3>
+        <p className="text-white/60 text-sm mt-2 leading-relaxed">
+          Vas a cambiar el código de <span className="font-bold text-white/80">«{oldCode}»</span> a{' '}
+          <span className="font-bold text-white/80">«{newCode}»</span>. Es su identificador en el panel y
+          en la app móvil. ¿Deseas continuar?
+        </p>
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold"
+          >
+            Cambiar código
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -973,7 +1016,7 @@ function DeleteShelfModal({
           <h2 className="font-extrabold text-lg text-red-400">Eliminar estantería</h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center" title="Cerrar">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
@@ -1171,8 +1214,9 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Logo de la tienda configurado en el admin general (endpoint público).
+  // Logo y nombre de la tienda configurados en el admin general (endpoint público).
   const [storeLogo, setStoreLogo] = useState<string | null>(null)
+  const [storeName, setStoreName] = useState('Mercaldas')
   const passwordRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -1180,7 +1224,9 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
     api
       .storeInfo()
       .then((d) => {
-        if (!cancelled) setStoreLogo(resolveAssetUrl(d.url))
+        if (cancelled) return
+        setStoreLogo(resolveAssetUrl(d.url))
+        setStoreName(d.title?.trim() || 'Mercaldas')
       })
       .catch(() => undefined)
     return () => {
@@ -1247,7 +1293,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
           >
             <div className="text-center mb-1">
               <h1 className="text-2xl font-extrabold tracking-tight text-white">
-                Picking <span className="text-amber-400">Admin</span>
+                {storeName} <span className="text-amber-400">Picking</span>
               </h1>
               <p className="text-white/40 text-xs font-medium mt-1">
                 Inicia sesión con tu usuario administrador

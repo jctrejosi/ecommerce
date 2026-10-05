@@ -27,6 +27,8 @@
   --success: #22c55e;
   --success-text: #4ade80;
   --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  /* Banda del footer de copyright: oscura en temas oscuros. */
+  --footer-bg: #111827;
 }
 
 [data-theme='blue'] {
@@ -63,6 +65,8 @@
   --success: #16a34a;
   --success-text: #15803d;
   --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  /* En claro la banda del footer también va clara (texto oscuro encima). */
+  --footer-bg: #e4e7ec;
 }
 
 /* Sobre blanco, el acento "soft" (texto/hover) necesita oscurecerse. */

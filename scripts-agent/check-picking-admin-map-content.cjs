@@ -2,7 +2,8 @@
  * Verifica la edición del mapa del picking admin:
  *   1. Botón "Pantalla completa" que deja sólo el mapa (canvas fijo).
  *   2. Al seleccionar una estantería aparece el botón flotante "Editar contenido".
- *   3. Ese botón abre un modal para asociar categorías, y al guardar persiste en BD.
+ *   3. Ese botón abre un modal para editar el NOMBRE de la estantería y asociar
+ *      categorías; al guardar, ambos cambios persisten en BD.
  *
  * Uso: NODE_PATH=backend/node_modules node scripts-agent/check-picking-admin-map-content.cjs
  */
@@ -21,6 +22,7 @@ const ADMIN = { username: 'qa-map-admin', password: 'qa-map-1234' };
 // Estantería DEMO-1 de TID Sucursal 1, y una categoría que no tiene asignada.
 const SHELF_ID = 2;
 const ADD_CATEGORY = { id: 2165, name: 'ACCESORIOS HOGAR' };
+const NEW_SHELF_NAME = 'Estantería QA renombrada';
 
 let checks = 0;
 let failures = 0;
@@ -62,7 +64,10 @@ async function main() {
 
   const before = await db.query('SELECT category_id FROM shelf_categories WHERE shelf_id = $1', [SHELF_ID]);
   const originalCats = before.rows.map((r) => Number(r.category_id));
+  const beforeName = await db.query('SELECT name FROM shelves WHERE id = $1', [SHELF_ID]);
+  const originalName = beforeName.rows[0]?.name ?? null;
   console.log('Categorías originales de la estantería', SHELF_ID, ':', JSON.stringify(originalCats));
+  console.log('Nombre original de la estantería', SHELF_ID, ':', JSON.stringify(originalName));
 
   await db.query('DELETE FROM users WHERE username = $1', [ADMIN.username]);
   const hash = await bcrypt.hash(ADMIN.password, 10);
@@ -177,16 +182,82 @@ async function main() {
     console.log('\n== Modal de contenido ==');
     if (floating) await clickAt(floating.x, floating.y);
     await sleep(400);
-    check('se abre el modal "Contenido de DEMO-1"', await evaluate(`document.body.innerText.includes('Contenido de DEMO-1')`));
+    check('se abre el modal "Editar DEMO-1"', await evaluate(`document.body.innerText.includes('Editar DEMO-1')`));
     {
       const s = await send('Page.captureScreenshot', { format: 'png' });
       require('node:fs').writeFileSync('scripts-agent/.scratch/picking-admin-map-content-modal.png', Buffer.from(s.data, 'base64'));
     }
 
-    // Filtra por la categoría a agregar y márcala.
+    // El editor ahora trae, arriba, el campo Nombre con el valor actual.
+    const nameField = await evaluate(`(() => {
+      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Editar DEMO-1'));
+      const input = m?.querySelectorAll('input')[0];
+      return input ? { value: input.value, placeholder: input.placeholder } : null;
+    })()`);
+    check('el editor trae el campo Nombre con el valor actual', !!nameField && nameField.value === originalName, JSON.stringify(nameField));
+
+    // ── Árbol visual de las categorías ─────────────────────────────────────
+    // ACCESORIOS DEL HOGAR (2093) es padre de ACCESORIOS HOGAR (2165).
+    const treeShape = await evaluate(`(() => {
+      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Editar DEMO-1'));
+      if (!m) return null;
+      const chevrons = m.querySelectorAll('button[aria-label^="Contraer "], button[aria-label^="Expandir "]');
+      const row = (name) => [...m.querySelectorAll('button')].find((b) => b.textContent.trim() === name && !b.textContent.includes('×'));
+      const left = (el) => (el ? Math.round(el.getBoundingClientRect().left) : null);
+      const parent = row('ACCESORIOS DEL HOGAR');
+      const child = row('ACCESORIOS HOGAR');
+      return {
+        chevrons: chevrons.length,
+        parentLeft: left(parent),
+        childLeft: left(child),
+        parentChevron: parent ? parent.parentElement.querySelector('button[aria-label]')?.getAttribute('aria-label') : null,
+      };
+    })()`);
+    check('el árbol muestra padres plegables (chevron)', !!treeShape && treeShape.chevrons > 0, JSON.stringify(treeShape));
+    check(
+      'los hijos quedan más sangrados que su padre',
+      !!treeShape && treeShape.parentLeft != null && treeShape.childLeft != null && treeShape.childLeft > treeShape.parentLeft,
+      JSON.stringify(treeShape),
+    );
+    check('el padre tiene chevron para plegar', !!treeShape && /Contraer ACCESORIOS DEL HOGAR/.test(treeShape.parentChevron || ''), treeShape?.parentChevron);
+
+    // Plegar el padre oculta a sus hijos; luego se reexpande.
+    const collapsed = await evaluate(`(() => {
+      const b = document.querySelector('button[aria-label="Contraer ACCESORIOS DEL HOGAR"]');
+      b?.click(); return !!b;
+    })()`);
+    check('se puede contraer un padre del árbol', collapsed === true);
+    await sleep(200);
+    check(
+      'al contraer, sus hijos se ocultan',
+      await evaluate(`![...document.querySelectorAll('button')].some((b) => b.textContent.trim() === 'ACCESORIOS HOGAR' && !b.textContent.includes('×'))`),
+    );
+    await evaluate(`document.querySelector('button[aria-label="Expandir ACCESORIOS DEL HOGAR"]')?.click()`);
+    await sleep(250);
     await evaluate(`(() => {
-      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Contenido de DEMO-1'));
-      const input = m?.querySelector('input');
+      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'ACCESORIOS DEL HOGAR' && !x.textContent.includes('×'));
+      b?.scrollIntoView({ block: 'center' });
+      return true;
+    })()`);
+    await sleep(300);
+    {
+      const s = await send('Page.captureScreenshot', { format: 'png' });
+      require('node:fs').writeFileSync('scripts-agent/.scratch/picking-admin-map-tree.png', Buffer.from(s.data, 'base64'));
+    }
+
+    await evaluate(`(() => {
+      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Editar DEMO-1'));
+      const input = m.querySelectorAll('input')[0];
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, ${JSON.stringify(NEW_SHELF_NAME)});
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    })()`);
+
+    // Filtra por la categoría a agregar y márcala (el buscador es el 2º input).
+    await evaluate(`(() => {
+      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Editar DEMO-1'));
+      const input = m.querySelectorAll('input')[1];
       const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
       setter.call(input, ${JSON.stringify(ADD_CATEGORY.name)});
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -194,7 +265,7 @@ async function main() {
     })()`);
     await sleep(300);
     const rowClicked = await evaluate(`(() => {
-      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Contenido de DEMO-1'));
+      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Editar DEMO-1'));
       const b = [...m.querySelectorAll('button')].find((x) => x.textContent.trim() === ${JSON.stringify(ADD_CATEGORY.name)});
       b?.click();
       return !!b;
@@ -210,21 +281,23 @@ async function main() {
     check('confirma el aviso de categoría ya asignada', confirmed === true);
     await sleep(200);
     await evaluate(`(() => {
-      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Contenido de DEMO-1'));
-      const b = [...m.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Guardar categorías');
+      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Editar DEMO-1'));
+      const b = [...m.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Guardar cambios');
       b?.click();
       return true;
     })()`);
     await sleep(800);
-    const modalGone = await evaluate(`!document.body.innerText.includes('Contenido de DEMO-1')`);
+    const modalGone = await evaluate(`!document.body.innerText.includes('Editar DEMO-1')`);
     check('el modal se cierra al guardar', modalGone === true);
     const after = await db.query('SELECT category_id FROM shelf_categories WHERE shelf_id = $1 ORDER BY category_id', [SHELF_ID]);
     const afterCats = after.rows.map((r) => Number(r.category_id));
     check('la categoría quedó asociada en la BD', afterCats.includes(ADD_CATEGORY.id), JSON.stringify(afterCats));
+    const afterName = await db.query('SELECT name FROM shelves WHERE id = $1', [SHELF_ID]);
+    check('el nuevo nombre quedó guardado en la BD', afterName.rows[0]?.name === NEW_SHELF_NAME, afterName.rows[0]?.name);
 
     // ── 3b. Tarjeta flotante de la estantería: sus categorías ──────────────
     console.log('\n== Tarjeta flotante de la estantería seleccionada ==');
-    // Guardar categorías llama a onRefresh; la selección debe sobrevivir (fix shelfIdsKey).
+    // Guardar cambios llama a onRefresh; la selección debe sobrevivir (fix shelfIdsKey).
     const stillFixed = await evaluate(`getComputedStyle(document.querySelector('#map-canvas')).position`);
     check('tras guardar categorías el editor sigue a pantalla completa', stillFixed === 'fixed', stillFixed);
     const cardBtn = await evaluate(`(() => {
@@ -246,9 +319,9 @@ async function main() {
     // El botón de la tarjeta abre el mismo modal de categorías.
     if (cardBtn) await clickAt(cardBtn.x, cardBtn.y);
     await sleep(400);
-    check('"Asociar categorías" reabre el modal de contenido', await evaluate(`document.body.innerText.includes('Contenido de DEMO-1')`));
+    check('"Asociar categorías" reabre el modal de contenido', await evaluate(`document.body.innerText.includes('Editar DEMO-1')`));
     await evaluate(`(() => {
-      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Contenido de DEMO-1'));
+      const m = [...document.querySelectorAll('div')].find((d) => typeof d.className === 'string' && d.className.includes('bg-black/60') && d.textContent.includes('Editar DEMO-1'));
       const b = m ? [...m.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Cancelar') : null;
       (b || [...document.querySelectorAll('button')].find((x) => x.textContent.trim() === 'Cancelar'))?.click();
       return true;
@@ -264,10 +337,13 @@ async function main() {
     const shot = await send('Page.captureScreenshot', { format: 'png' });
     require('node:fs').mkdirSync('scripts-agent/.scratch', { recursive: true });
     require('node:fs').writeFileSync('scripts-agent/.scratch/picking-admin-map-content.png', Buffer.from(shot.data, 'base64'));
-    console.log('\n  capturas: scripts-agent/.scratch/picking-admin-map-fullscreen.png, -content-modal.png');
+    console.log('\n  capturas: scripts-agent/.scratch/picking-admin-map-fullscreen.png, -content-modal.png, -tree.png');
   } finally {
     chrome?.kill('SIGKILL');
-    // Restaura las categorías originales de la estantería.
+    // Restaura el nombre y las categorías originales de la estantería.
+    if (originalName != null) {
+      await db.query('UPDATE shelves SET name = $1 WHERE id = $2', [originalName, SHELF_ID]);
+    }
     await db.query('DELETE FROM shelf_categories WHERE shelf_id = $1', [SHELF_ID]);
     for (const cid of originalCats) {
       await db.query('INSERT INTO shelf_categories (shelf_id, category_id) VALUES ($1, $2)', [SHELF_ID, cid]);

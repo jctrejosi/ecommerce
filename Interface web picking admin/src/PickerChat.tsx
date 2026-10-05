@@ -166,7 +166,7 @@ export function ChatThread({
             className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-              <path d="M15 18l-6-6 6-6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
         ) : null}
@@ -183,7 +183,7 @@ export function ChatThread({
           className="ml-auto w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </button>
       </div>
@@ -350,7 +350,7 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
                 className="ml-auto w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center shrink-0"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </button>
             </div>

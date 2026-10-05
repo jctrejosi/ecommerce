@@ -20,10 +20,14 @@ const IMG_RETRY_MS = 2500;
 /** Quita el cache-bust `_r=N` que se agrega al reintentar. */
 const baseSrc = (url: string) => url.replace(/([?&])_r=\d+$/, "");
 
-const isPlaceholder = (img: HTMLImageElement) => img.src === placeholderHref;
+const isPlaceholder = (img: HTMLImageElement) =>
+  img.getAttribute("src") === productPlaceholder || img.src === placeholderHref;
 
 const applyPlaceholder = (img: HTMLImageElement) => {
-  const failed = img.src;
+  // Se lee el atributo (no la propiedad): así distinguimos una imagen con `src`
+  // real de una sin `src` (producto sin imagen), y comparamos exacto contra el
+  // placeholder aunque el navegador haya normalizado el data URI en `img.src`.
+  const failed = img.getAttribute("src") || "";
   const failedBase = failed ? baseSrc(failed) : "";
 
   // Imagen nueva (React cambió el `src`): se reinicia el contador de reintentos.
@@ -32,7 +36,8 @@ const applyPlaceholder = (img: HTMLImageElement) => {
     img.dataset.retries = "0";
   }
 
-  if (failed && !isPlaceholder(img)) img.src = productPlaceholder;
+  // Aplica el placeholder tanto si la imagen falló como si no tenía `src`.
+  if (!isPlaceholder(img)) img.src = productPlaceholder;
 
   const real = img.dataset.realSrc;
   if (!real) return;
@@ -45,7 +50,7 @@ const applyPlaceholder = (img: HTMLImageElement) => {
     () => {
       // Sólo se reintenta si el placeholder sigue puesto (la app no lo cambió).
       if (!img.isConnected) return;
-      if (img.getAttribute("src") !== productPlaceholder) return;
+      if (!isPlaceholder(img)) return;
       if (img.dataset.realSrc !== real) return;
       img.src = `${real}${real.includes("?") ? "&" : "?"}_r=${tries + 1}`;
     },

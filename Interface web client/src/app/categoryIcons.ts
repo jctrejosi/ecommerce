@@ -7,7 +7,7 @@
 export const CATEGORY_ICONS: Record<string, string> = {
   // ── Raíz ────────────────────────────────────────────────────────────────
   "carnes-frias-embutidos-y-delicatessen": "🥓",
-  electrodomesticos: "🔌",
+  "electrodomesticos": "🔌",
 
   // ── Nivel 1 ─────────────────────────────────────────────────────────────
   "carnes-pollo-y-pescado-02": "🥩",
@@ -204,28 +204,163 @@ export const CATEGORY_ICONS: Record<string, string> = {
 export const CATEGORY_FALLBACK_ICON = "🛒";
 
 /**
+ * Íconos asignados uno por uno al **nombre** de la categoría (normalizado a
+ * minúsculas y sin acentos). Es la fuente principal: los nombres son más
+ * estables que los `slug` numéricos del catálogo.
+ */
+export const CATEGORY_ICONS_BY_NAME: Record<string, string> = {
+  "accesorios del hogar": "🏠",
+  "accesorios hogar": "🏠",
+  "accesorios vehiculos": "🚗",
+  "aderezos-salsas": "🧂",
+  "alimentos": "🍽️",
+  "anchetas mercaldas": "🎁",
+  "anchetas mercaldas (41857)": "🎁",
+  "anchetas mercaldas surtidas": "🎁",
+  "aseo banos": "🧼",
+  "aseo cocina-hogar": "🧼",
+  "aseo pisos": "🧹",
+  "aseo ropa": "🧺",
+  "bolsa plastica mer": "🛍️",
+  "bolsa reutilizable": "🛍️",
+  "botiquin": "🩹",
+  "cafe": "☕",
+  "cafeteria": "☕",
+  "cafeteria (4015501)": "☕",
+  "carne en canal m.p.": "🥩",
+  "carne en cortes p.t.": "🥩",
+  "carnes": "🥩",
+  "carnes proc m.p.": "🥓",
+  "carnes proc p.t.": "🥓",
+  "carnes procesadas": "🥓",
+  "carros": "🚗",
+  "cereales": "🥣",
+  "charcuteria": "🥓",
+  "chocolates": "🍫",
+  "cigarrillos-encendedores": "🚬",
+  "comercial": "🏪",
+  "complementos alimenticios": "💊",
+  "comunicacion movil": "📱",
+  "condimentos": "🧂",
+  "congelados": "🧊",
+  "consumo interno": "🏠",
+  "categoria 40124": "📦",
+  "categoria 4012401": "📦",
+  "descuento x ajuste": "🏷️",
+  "desechables": "🍽️",
+  "domicilios": "🛵",
+  "dotacion": "👕",
+  "droga blanca": "💊",
+  "dulceria-pasabocas": "🍬",
+  "electrodomesticos y gasodomesticos": "🔌",
+  "empaque": "📦",
+  "empaque grano": "🌾",
+  "endulzantes": "🍬",
+  "enlatados": "🥫",
+  "farmacia": "💊",
+  "ferreteria": "🔧",
+  "fruver": "🥬",
+  "general": "🛒",
+  "genericos": "💊",
+  "grano": "🌾",
+  "grasas": "🧈",
+  "harinas": "🌾",
+  "harinas (1015601)": "🌾",
+  "higiene intima": "🧴",
+  "higiene oral": "🪥",
+  "hospitalarios": "💊",
+  "huevos": "🥚",
+  "imp. cons bolsas": "🛍️",
+  "infantil": "👶",
+  "infantil-alimentos": "👶",
+  "insumos": "📦",
+  "inyectologia": "💉",
+  "jardineria": "🌱",
+  "jugueteria": "🧸",
+  "lacteos": "🥛",
+  "licores": "🍷",
+  "limpieza y desinfeccion": "🧹",
+  "limpieza y desinfeccion (2197001)": "🧹",
+  "linea hogar": "🏠",
+  "marca": "🏷️",
+  "mascotas": "🐾",
+  "medicamentos arl sura": "💊",
+  "modificadores de leche": "🥛",
+  "no alimentos": "🧴",
+  "panaderia": "🍞",
+  "panaderia mercaldas": "🍞",
+  "panaderia mercaldas materia prima": "🍞",
+  "panaderia mercaldas producto terminado": "🍞",
+  "papeleria": "✏️",
+  "parqueadero": "🅿️",
+  "pastas alimenticias": "🍝",
+  "produccion": "🏭",
+  "productos catering": "🍽️",
+  "recuperacion tarj parqueadero": "🅿️",
+  "refrescos": "🥤",
+  "refrigerados": "🧊",
+  "reposteria": "🧁",
+  "ropa y accesorios": "👕",
+  "ropa y accesorios (11450)": "👕",
+  "ropa y accesorios (1145001)": "👕",
+  "servicios": "🛠️",
+  "sopas-caldos-bases": "🍲",
+  "sopas-caldos-bases-cremas": "🍲",
+  "tarjeta regalo mercaldas": "🎁",
+  "te-tisanas": "🍵",
+  "telefonia movil": "📱",
+  "uso personal": "🧴",
+  "utiles y papeleria": "✏️",
+  "vehiculos": "🚗",
+  "vehiculos (11668)": "🚗",
+};
+
+/**
  * Palabras clave (sobre el nombre normalizado) para que una categoría nueva
- * tenga un ícono coherente sin tocar este archivo.
+ * tenga un ícono coherente sin tocar este archivo. Se usan límites de palabra
+ * (`\b`) para evitar falsos positivos por subcadenas.
  */
 const CATEGORY_KEYWORDS: Array<[RegExp, string]> = [
-  [/carne|res|cerdo|pollo|pescado|marisco|embutido|jamon|chorizo|salchicha/, "🥩"],
-  [/fruta|banano|naranja|manzana|uva|melon/, "🍎"],
-  [/verdura|vegetal|hortaliza|lechuga|cebolla|papa/, "🥬"],
-  [/leche|lacteo|yogur|queso|kumis/, "🥛"],
-  [/arroz|grano|pasta|fideo|spagueti/, "🍚"],
-  [/pan|arepa|galleta|tostad/, "🍞"],
-  [/cafe|chocolate|cocoa|te|aromatica|infusion/, "☕"],
-  [/azucar|panel|endulz|dulce|postre|helado/, "🍬"],
-  [/aceite|oliva/, "🫒"],
-  [/salsa|aderezo|vinagre|condimento|caldo|sal/, "🧂"],
-  [/conserva|enlatado|encurtido/, "🥫"],
-  [/limpieza|limpiador|jabon|detergente|esponja|blanqueador/, "🧹"],
-  [/electro|nevera|lavadora|secadora|licuadora|ventilador|aire|estufa/, "🔌"],
-  [/bebe|infantil|panal|compota/, "👶"],
-  [/mascota|gato|perro/, "🐾"],
-  [/vino|licor|cerveza|aguardiente|whisky/, "🍷"],
-  [/cuidado personal|belleza|cabello|afeit|maquillaje/, "💄"],
-  [/hogar|cosina|cocina|olla|sarten/, "🏠"],
+  [/\b(carne|carnes|res|cerdo|pollo|pescado|marisco|embutido|jamon|chorizo|salchicha|charcuteria|tocino)\b/, "🥩"],
+  [/\b(fruta|frutas|banano|naranja|manzana|uva|melon|fruver)\b/, "🍎"],
+  [/\b(verdura|verduras|vegetal|hortaliza|lechuga|cebolla|papa)\b/, "🥬"],
+  [/\b(leche|leches|lacteo|lacteos|yogur|queso|kumis)\b/, "🥛"],
+  [/\b(arroz|grano|granos|pasta|pastas|fideo|spagueti)\b/, "🍚"],
+  [/\b(pan|arepa|galleta|tostad|panaderia)\b/, "🍞"],
+  [/\b(cafe|cafeteria|chocolate|chocolates|cocoa|aromatica|infusion)\b/, "☕"],
+  [/\b(azucar|panel|endulz|endulzante|endulzantes|dulce|dulceria|pasteleria|reposteria|postre|helado)\b/, "🍬"],
+  [/\b(aceite|aceites|oliva)\b/, "🫒"],
+  [/\b(salsa|salsas|aderezo|aderezos|vinagre|condimento|condimentos|caldo|caldos|sal|sopas)\b/, "🧂"],
+  [/\b(conserva|conservas|enlatado|enlatados|encurtido)\b/, "🥫"],
+  [/\b(limpieza|limpiador|jabon|detergente|esponja|blanqueador|aseo)\b/, "🧹"],
+  [/\b(electro|electrodomestico|electrodomesticos|nevera|lavadora|secadora|licuadora|ventilador|aire|estufa)\b/, "🔌"],
+  [/\b(bebe|infantil|panal|panales|compota)\b/, "👶"],
+  [/\b(mascota|mascotas|gato|perro)\b/, "🐾"],
+  [/\b(vino|vinos|licor|licores|cerveza|aguardiente|whisky)\b/, "🍷"],
+  [/\b(cuidado personal|belleza|cabello|afeit|maquillaje)\b/, "💄"],
+  [/\b(hogar|cocina|olla|sarten)\b/, "🏠"],
+  [/\b(vehiculo|vehiculos|carro|carros|auto|moto)\b/, "🚗"],
+  [/\b(farmacia|medicamento|medicamentos|droga|generico|genericos|hospitalario|botiquin|inyectologia)\b/, "💊"],
+  [/\b(huevo|huevos)\b/, "🥚"],
+  [/\b(cereal|cereales)\b/, "🥣"],
+  [/\b(harina|harinas|grasa|grasas)\b/, "🌾"],
+  [/\b(congelado|congelados|refrigerado|refrigerados|refrigeracion)\b/, "🧊"],
+  [/\b(papeleria|utiles|libros|cuadernos)\b/, "✏️"],
+  [/\b(servicio|servicios)\b/, "🛠️"],
+  [/\b(bolsa|bolsas|desechable|desechables|empaque|insumos)\b/, "📦"],
+  [/\b(jardineria|planta|plantas)\b/, "🌱"],
+  [/\b(juguete|juguetes|jugueteria)\b/, "🧸"],
+  [/\b(ferreteria|herramienta|herramientas)\b/, "🔧"],
+  [/\b(ropa|prenda|prendas|dotacion)\b/, "👕"],
+  [/\b(higiene|higienicos|uso personal|personal)\b/, "🧴"],
+  [/\b(te|tisanas|aromaticas)\b/, "🍵"],
+  [/\b(refresco|refrescos|gaseosa|bebida|bebidas)\b/, "🥤"],
+  [/\b(movil|telefono|telefonia|comunicacion)\b/, "📱"],
+  [/\b(regalo|regalos|anchetas|tarjeta regalo)\b/, "🎁"],
+  [/\b(parqueadero)\b/, "🅿️"],
+  [/\b(produccion)\b/, "🏭"],
+  [/\b(comercial|tienda)\b/, "🏪"],
+  [/\b(cigarrillo|cigarrillos|encendedor|encendedores)\b/, "🚬"],
 ];
 
 /** Normaliza a minúsculas y sin acentos para comparar contra las palabras clave. */
@@ -236,11 +371,18 @@ function normalize(text: string): string {
     .toLowerCase();
 }
 
-/** Ícono de una categoría: por `slug` exacto, luego por nombre y al final genérico. */
+/**
+ * Ícono de una categoría: por nombre exacto (mapa curado), luego por `slug`
+ * histórico, después por palabras clave y al final el genérico.
+ */
 export function categoryIcon(
   slug: string | null | undefined,
   name?: string | null,
 ): string {
+  const normalizedName = normalize((name || "").trim());
+  if (normalizedName && CATEGORY_ICONS_BY_NAME[normalizedName]) {
+    return CATEGORY_ICONS_BY_NAME[normalizedName];
+  }
   if (slug && CATEGORY_ICONS[slug]) return CATEGORY_ICONS[slug];
   const haystack = normalize(name || slug || "");
   for (const [pattern, icon] of CATEGORY_KEYWORDS) {

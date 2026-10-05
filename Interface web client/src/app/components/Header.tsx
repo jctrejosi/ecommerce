@@ -903,12 +903,19 @@ export function Header({
           ))}
 
           {/* Cambio de tema (claro/oscuro), igual que en el navbar */}
-          <div className="flex items-center justify-between py-2.5 px-2">
+          <button
+            type="button"
+            onClick={toggleTheme}
+            aria-label={theme === "oscuro" ? "Cambiar a tema claro" : "Cambiar a tema oscuro"}
+            className="w-full flex items-center justify-between py-2.5 px-2 rounded-lg text-left hover:bg-muted transition-colors cursor-pointer"
+          >
             <span className="text-sm font-medium">
               {theme === "oscuro" ? "Tema oscuro" : "Tema claro"}
             </span>
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
-          </div>
+            <span className="flex items-center justify-center w-8 h-8 rounded-full border border-border text-foreground">
+              {theme === "oscuro" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+            </span>
+          </button>
         </div>
       )}
       </header>

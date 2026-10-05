@@ -138,8 +138,7 @@ async function main() {
     const mode = await evaluate(`document.documentElement.dataset.mode`);
     check('el modo activo es claro (light)', mode === 'light', `${theme}/${mode}`);
 
-    // El footer es una banda institucional fija (#111827) en todos los temas, así
-    // que en claro debe conservar ese fondo, con texto claro encima (contraste ok).
+    // En claro el footer también va claro: fondo claro y texto oscuro encima.
     const footer = await evaluate(`(() => {
       const f = document.querySelector('footer');
       if (!f) return null;
@@ -153,13 +152,13 @@ async function main() {
     })()`);
     const lum = (rgb) => rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
     check(
-      'el footer conserva el fondo institucional #111827 en claro',
-      footer && footer.bg.join(',') === '17,24,39',
-      `rgb(${footer?.bg})`,
+      'el footer tiene fondo claro en modo claro',
+      footer && lum(footer.bg) > 150,
+      `rgb(${footer?.bg}) (lum ${Math.round(lum(footer?.bg ?? [0, 0, 0]))})`,
     );
     check(
-      'el texto del footer es claro (contrasta con la banda oscura)',
-      footer && lum(footer.fg) > 100,
+      'el texto del footer es oscuro (contrasta con el fondo claro)',
+      footer && lum(footer.fg) < 120,
       `rgb(${footer?.fg}) (lum ${Math.round(lum(footer?.fg ?? [0, 0, 0]))})`,
     );
 
