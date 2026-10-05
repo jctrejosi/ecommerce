@@ -9,6 +9,9 @@
  *  - `/ofm/*`                    → tiles de OpenFreeMap (mapa de rastreo).
  *  - API (`/catalog/…`, `/landing/…`, `/orders`, `/cart`, `/customer-auth/…`,
  *    `/socket.io/*`, …)          → proxy a 127.0.0.1:3000 (backend NestJS).
+ *  - `/static/*`                 → imágenes locales del catálogo (mismo proxy al
+ *                                  backend), para que las URLs que devuelve el API
+ *                                  (`/static/...`) carguen sin salir de este origen.
  *  - Bot (`/chat…`)              → proxy a 127.0.0.1:8000 (FastAPI del bot).
  *  - Resto                       → estáticos de `dist` con SPA fallback.
  *
@@ -55,6 +58,7 @@ const API_EXACT = new Set([
 const API_PREFIXES = [
   "/catalog/",
   "/landing/",
+  "/static/",
   "/geocode/",
   "/popups/",
   "/featured/",
@@ -128,6 +132,12 @@ function proxyHttp(req, res, target) {
     headers: {
       ...req.headers,
       host: `${target.host}:${target.port}`,
+      // El backend arma las URLs absolutas de medios (`/static/...`) con el host
+      // de la petición: se le pasa el host del cliente (el WebView) para que
+      // apunten a ESTE servidor y no a 127.0.0.1:3000 (que en el celular es el
+      // propio teléfono). Ver MediaUrlInterceptor.
+      "x-forwarded-host": req.headers.host || `${target.host}:${target.port}`,
+      "x-forwarded-proto": "http",
     },
   };
   const up = http.request(opts, (ur) => {
