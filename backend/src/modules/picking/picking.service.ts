@@ -21,6 +21,7 @@ import {
   productVariants,
   products,
   users,
+  userBranches,
   media,
   productImages,
   productLocations,
@@ -143,8 +144,12 @@ export class PickingService {
     });
   }
 
-  /** Cola de picking (la "cola" vive en la BD: orders por estado + reviewedAt). */
-  async queue(status?: string) {
+  /** Cola de picking (la "cola" vive en la BD: orders por estado + reviewedAt).
+   *
+   * Cuando llega `userId` (picker autenticado con sucursal asignada) la cola se
+   * limita a los pedidos de **su sucursal**. Los pedidos sin sucursal/usuarios
+   * sin sucursal no se filtran (compatibilidad). */
+  async queue(status?: string, userId?: number) {
     const tab: QueueTab =
       status === 'nuevo' || status === 'preparando' || status === 'completado'
         ? status
@@ -164,6 +169,12 @@ export class PickingService {
       where = inArray(orders.status, ['ready', 'shipped', 'delivered']);
     } else {
       where = inArray(orders.status, QUEUE_STATUSES);
+    }
+
+    // Filtro por sucursal del picker autenticado (si tiene una asignada).
+    const branchId = userId != null ? await this.branchOfUser(userId) : null;
+    if (branchId != null) {
+      where = and(where, eq(orders.branchId, branchId));
     }
 
     const rows = await this.db
@@ -226,17 +237,30 @@ export class PickingService {
     });
   }
 
-  async unreviewedCount() {
+  async unreviewedCount(userId?: number) {
+    const base = and(
+      isNull(orders.reviewedAt),
+      inArray(orders.status, ['created', 'payment_pending', 'paid', 'preparing']),
+    );
+    // El conteo sigue la misma sucursal que la cola del picker.
+    const branchId = userId != null ? await this.branchOfUser(userId) : null;
     const [row] = await this.db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(orders)
       .where(
-        and(
-          isNull(orders.reviewedAt),
-          inArray(orders.status, ['created', 'payment_pending', 'paid', 'preparing']),
-        ),
+        branchId != null ? and(base, eq(orders.branchId, branchId)) : base,
       );
     return { count: row?.count ?? 0 };
+  }
+
+  /** Sucursal asignada a un picker (una sola) o null si no tiene. */
+  private async branchOfUser(userId: number): Promise<number | null> {
+    const [row] = await this.db
+      .select({ branchId: userBranches.branchId })
+      .from(userBranches)
+      .where(eq(userBranches.userId, userId))
+      .limit(1);
+    return row ? Number(row.branchId) : null;
   }
 
   /**

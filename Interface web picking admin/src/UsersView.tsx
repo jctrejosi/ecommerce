@@ -6,6 +6,7 @@ import { ChatThread, onChatsChanged } from './PickerChat'
 import { onPickingConnection, onPickingEvent } from './services/pickingSocket'
 import { onOrderEvent } from './services/ordersSocket'
 import type {
+  Branch,
   PickerChatConversation,
   PickerHistory,
   PickerSummary,
@@ -43,7 +44,7 @@ const STATUS_LABEL: Record<string, { label: string; cls: string }> = {
   delivered: { label: 'Entregado', cls: 'bg-green-400/15 text-green-400 border-green-400/30' },
 }
 
-const emptyUserForm = () => ({ fullName: '', username: '', email: '', phone: '', password: '' })
+const emptyUserForm = () => ({ fullName: '', username: '', email: '', phone: '', password: '', branchId: '', isSuperuser: false })
 
 // Estilo de la lista de usuarios: tarjetas (kanban) o tabla compacta.
 type ViewStyle = 'cards' | 'table'
@@ -67,11 +68,14 @@ const getStoredView = (): ViewStyle => {
 export default function UsersView({
   notify,
   currentUserId,
+  branchId,
 }: {
   notify: (m: string) => void
   currentUserId: number | null
+  branchId: number | null
 }) {
   const [users, setUsers] = useState<PickUser[]>([])
+  const [branches, setBranches] = useState<Branch[]>([])
   const [metrics, setMetrics] = useState<PickerSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -113,11 +117,11 @@ export default function UsersView({
 
   const loadUsers = useCallback(async () => {
     try {
-      setUsers(await api.users())
+      setUsers(await api.users(branchId))
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'No se pudieron cargar los usuarios')
     }
-  }, [])
+  }, [branchId])
 
   const loadMetrics = useCallback(async () => {
     try {
@@ -127,14 +131,23 @@ export default function UsersView({
     }
   }, [notify])
 
+  // Sucursales disponibles para asignar a los pickers (una sola por picker).
+  const loadBranches = useCallback(async () => {
+    try {
+      setBranches(await api.branches())
+    } catch {
+      /* la lista de sucursales no debe tumbar la vista */
+    }
+  }, [])
+
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      await Promise.all([loadUsers(), loadMetrics()])
+      await Promise.all([loadUsers(), loadMetrics(), loadBranches()])
     } finally {
       setLoading(false)
     }
-  }, [loadUsers, loadMetrics])
+  }, [loadUsers, loadMetrics, loadBranches])
 
   useEffect(() => {
     void load()
@@ -203,6 +216,8 @@ export default function UsersView({
         email: form.email.trim(),
         phone: form.phone.trim() || undefined,
         password: form.password,
+        branchId: form.branchId ? Number(form.branchId) : null,
+        isSuperuser: form.isSuperuser,
       })
       notify('Usuario creado')
       setForm(emptyUserForm())
@@ -233,6 +248,18 @@ export default function UsersView({
   const applyReset = async (u: PickUser, password: string) => {
     await api.resetUserPassword(u.id, password)
     notify(`Contraseña actualizada para ${u.name}`)
+  }
+
+  // Asigna (o quita) la sucursal única del picker desde la lista.
+  const assignBranch = async (u: PickUser, branchId: number | null) => {
+    try {
+      await api.updateUser(u.id, { branchId })
+      const b = branches.find((x) => x.id === branchId)
+      notify(b ? `${u.name} → ${b.name}` : `Sucursal quitada a ${u.name}`)
+      await loadUsers()
+    } catch (e) {
+      notify(e instanceof ApiError ? e.message : 'No se pudo asignar la sucursal')
+    }
   }
 
   // Un superusuario no puede desactivarse a sí mismo ni dejar el sistema sin
@@ -349,7 +376,11 @@ export default function UsersView({
             {loading ? 'Actualizando…' : 'Actualizar'}
           </button>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => {
+              // El nuevo usuario nace en la sucursal seleccionada (si hay).
+              setForm({ ...emptyUserForm(), branchId: branchId ? String(branchId) : '' })
+              setShowForm(true)
+            }}
             className="px-4 py-2 rounded-xl text-sm font-bold bg-amber-400 text-on-accent"
           >
             Nuevo usuario
@@ -463,6 +494,27 @@ export default function UsersView({
                   </span>
                 </div>
 
+                {/* Sucursal única del picker */}
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-white/35 text-[10px] font-bold uppercase tracking-wider shrink-0">
+                    Sucursal
+                  </span>
+                  <select
+                    value={u.branchId ?? ''}
+                    onChange={(e) =>
+                      void assignBranch(u, e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="flex-1 bg-app border border-white/10 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-amber-400"
+                  >
+                    <option value="">Sin sucursal</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Estado en vivo del picker */}
                 {m && (
                   <>
@@ -574,6 +626,7 @@ export default function UsersView({
           ) : (
             <UsersTable
               users={filtered}
+              branches={branches}
               metricsById={metricsById}
               now={now}
               unreadOf={unreadOf}
@@ -583,6 +636,7 @@ export default function UsersView({
               onHistory={(m) => void openHistory(m)}
               onReset={(u) => setReset(u)}
               onConfirm={(u, kind) => setConfirm({ user: u, kind })}
+              onAssignBranch={(u, b) => void assignBranch(u, b)}
             />
           )}
           {filtered.length === 0 && (
@@ -642,6 +696,36 @@ export default function UsersView({
                 />
               </label>
             ))}
+
+            <label className="flex flex-col gap-1.5">
+              <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">
+                Sucursal (opcional)
+              </span>
+              <select
+                value={form.branchId}
+                onChange={(e) => setForm((f) => ({ ...f, branchId: e.target.value }))}
+                className="bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm outline-none focus:border-amber-400"
+              >
+                <option value="">Sin sucursal</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex items-center gap-2.5 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.isSuperuser}
+                onChange={(e) => setForm((f) => ({ ...f, isSuperuser: e.target.checked }))}
+                className="w-4 h-4 accent-amber-400"
+              />
+              <span className="text-white/70 text-sm font-medium">
+                Administrador (superusuario)
+              </span>
+            </label>
 
             <div className="flex justify-end gap-2 pt-1">
               <button
@@ -854,6 +938,7 @@ export default function UsersView({
  */
 function UsersTable({
   users,
+  branches,
   metricsById,
   now,
   unreadOf,
@@ -863,8 +948,10 @@ function UsersTable({
   onHistory,
   onReset,
   onConfirm,
+  onAssignBranch,
 }: {
   users: PickUser[]
+  branches: Branch[]
   metricsById: Map<number, PickerSummary>
   now: number
   unreadOf: (pickerId: number) => number
@@ -874,15 +961,17 @@ function UsersTable({
   onHistory: (m: PickerSummary) => void
   onReset: (u: PickUser) => void
   onConfirm: (u: PickUser, kind: UserConfirmKind) => void
+  onAssignBranch: (u: PickUser, branchId: number | null) => void
 }) {
   const iconBtn =
     'w-8 h-8 rounded-lg bg-white/5 border border-white/10 hover:bg-white/10 text-white/60 hover:text-white flex items-center justify-center transition-colors'
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10 bg-surface-alt">
-      <table className="w-full text-sm min-w-[960px]">
+      <table className="w-full text-sm min-w-[1080px]">
         <thead>
           <tr className="text-left text-white/40 text-[10px] font-bold uppercase tracking-wider border-b border-white/10">
             <th className="px-3 py-3">Usuario</th>
+            <th className="px-3 py-3">Sucursal</th>
             <th className="px-3 py-3">Rol</th>
             <th className="px-3 py-3">Estado</th>
             <th className="px-3 py-3">Pedido en curso</th>
@@ -922,6 +1011,22 @@ function UsersTable({
                       <p className="text-white/40 text-xs truncate max-w-[170px]">@{u.username}</p>
                     </div>
                   </div>
+                </td>
+                <td className="px-3 py-3">
+                  <select
+                    value={u.branchId ?? ''}
+                    onChange={(e) =>
+                      onAssignBranch(u, e.target.value ? Number(e.target.value) : null)
+                    }
+                    className="bg-app border border-white/10 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-amber-400 max-w-[170px]"
+                  >
+                    <option value="">Sin sucursal</option>
+                    {branches.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name}
+                      </option>
+                    ))}
+                  </select>
                 </td>
                 <td className="px-3 py-3">
                   <div className="flex flex-wrap gap-1">

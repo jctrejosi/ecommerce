@@ -124,6 +124,9 @@ export interface AuthUser {
   fullName: string;
   isSuperuser: boolean;
   isActive: boolean;
+  /** Sucursal asignada (define el alcance del admin de sucursal). */
+  branchId: number | null;
+  branchName: string | null;
 }
 
 export interface LoginResponse {
@@ -146,6 +149,9 @@ export interface PickUser {
   isSuperuser: boolean;
   /** Si puede iniciar sesión en la app móvil de picking. */
   isPicker: boolean;
+  /** Sucursal asignada (una sola); null si no tiene. */
+  branchId: number | null;
+  branchName: string | null;
 }
 
 export interface CreatePickUserPayload {
@@ -154,6 +160,10 @@ export interface CreatePickUserPayload {
   email: string;
   phone?: string;
   password: string;
+  /** Sucursal única a asignar (opcional). */
+  branchId?: number | null;
+  /** Crear como administrador (superusuario). */
+  isSuperuser?: boolean;
 }
 
 export interface ShelfPayload {
@@ -177,7 +187,10 @@ export const api = {
 
   branches: () => fetchJson<Branch[]>('/picking-admin/branches'),
 
-  categories: () => fetchJson<Category[]>('/picking-admin/categories'),
+  categories: (branchId?: number | null) =>
+    fetchJson<Category[]>(
+      `/picking-admin/categories${branchId ? `?branchId=${branchId}` : ''}`,
+    ),
 
   categoryOrganization: (categoryId: number, branchId: number) =>
     fetchJson<CategoryOrganization>(
@@ -215,10 +228,15 @@ export const api = {
       method: 'DELETE',
     }),
 
-  products: (branchId: number, search?: string) =>
-    fetchJson<CatalogProduct[]>(
-      `/picking-admin/products?branchId=${branchId}${search && search.trim() ? `&search=${encodeURIComponent(search.trim())}` : ''}`,
-    ),
+  products: (branchId: number, search?: string, offset = 0, limit = 60) => {
+    const qs = new URLSearchParams({ branchId: String(branchId) });
+    if (search && search.trim()) qs.set('search', search.trim());
+    qs.set('limit', String(limit));
+    qs.set('offset', String(offset));
+    return fetchJson<{ total: number; products: CatalogProduct[] }>(
+      `/picking-admin/products?${qs.toString()}`,
+    );
+  },
 
   metrics: () => fetchJson<PickerSummary[]>('/picking-admin/metrics'),
 
@@ -273,7 +291,10 @@ export const api = {
     }),
 
   // ─── Usuarios de picking ───────────────────────────────────────────────────
-  users: () => fetchJson<PickUser[]>('/picking-admin/users'),
+  users: (branchId?: number | null) =>
+    fetchJson<PickUser[]>(
+      `/picking-admin/users${branchId ? `?branchId=${branchId}` : ''}`,
+    ),
 
   createUser: (payload: CreatePickUserPayload) =>
     fetchJson<PickUser>('/picking-admin/users', {

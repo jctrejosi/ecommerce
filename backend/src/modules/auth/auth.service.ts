@@ -9,7 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleService } from '../../database/drizzle.service';
-import { users, userRefreshTokens } from '../../../drizzle/schema';
+import { users, userRefreshTokens, userBranches, branches } from '../../../drizzle/schema';
 import { eq, and, or, ne } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -38,6 +38,9 @@ export interface LoginResponse {
     phone?: string | null;
     /** Foto de perfil (Cloudinary); null si no tiene. */
     avatarUrl?: string | null;
+    /** Sucursal asignada (define el alcance del admin de sucursal). */
+    branchId?: number | null;
+    branchName?: string | null;
   };
 }
 
@@ -194,6 +197,14 @@ export class AuthService {
       [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
       'Usuario';
 
+    // Sucursal asignada (una sola): define el alcance del admin de sucursal.
+    const [loginBranch] = await this.db
+      .select({ id: branches.id, name: branches.name })
+      .from(userBranches)
+      .innerJoin(branches, eq(branches.id, userBranches.branchId))
+      .where(eq(userBranches.userId, Number(user.id)))
+      .limit(1);
+
     return {
       accessToken,
       refreshToken: refreshTokenString,
@@ -209,6 +220,8 @@ export class AuthService {
         isActive: user.isActive,
         phone: user.phone,
         avatarUrl: user.avatarUrl ?? null,
+        branchId: loginBranch ? Number(loginBranch.id) : null,
+        branchName: loginBranch?.name ?? null,
       },
     };
   }
@@ -330,6 +343,14 @@ export class AuthService {
       [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
       'Usuario';
 
+    // Sucursal asignada (una sola): define el alcance del admin de sucursal.
+    const [branch] = await this.db
+      .select({ id: branches.id, name: branches.name })
+      .from(userBranches)
+      .innerJoin(branches, eq(branches.id, userBranches.branchId))
+      .where(eq(userBranches.userId, Number(user.id)))
+      .limit(1);
+
     return {
       id: Number(user.id),
       email: user.email,
@@ -341,6 +362,8 @@ export class AuthService {
       avatarUrl: user.avatarUrl ?? null,
       isSuperuser: user.isSuperuser,
       isActive: user.isActive,
+      branchId: branch ? Number(branch.id) : null,
+      branchName: branch?.name ?? null,
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

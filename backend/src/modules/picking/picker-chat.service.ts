@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
-import { pickerChatMessages, users } from '../../../drizzle/schema';
+import { pickerChatMessages, userBranches, users } from '../../../drizzle/schema';
 import { PushService } from '../notifications/push.service';
 import { PickingGateway } from './picking.gateway';
 
@@ -149,8 +149,11 @@ export class PickerChatService {
     };
   }
 
-  /** Bandeja del panel: un renglón por picker con no leídos y último mensaje. */
-  async listConversations(): Promise<PickerConversation[]> {
+  /** Bandeja del panel: un renglón por picker con no leídos y último mensaje.
+   *
+   * Con `branchId` solo lista los pickers de esa sucursal (alcance del admin de
+   * sucursal). */
+  async listConversations(branchId?: number | null): Promise<PickerConversation[]> {
     const pickers = await this.db
       .select({
         id: users.id,
@@ -161,7 +164,14 @@ export class PickerChatService {
         isActive: users.isActive,
       })
       .from(users)
-      .where(and(eq(users.isPicker, true), isNull(users.deletedAt)))
+      .leftJoin(userBranches, eq(userBranches.userId, users.id))
+      .where(
+        and(
+          eq(users.isPicker, true),
+          isNull(users.deletedAt),
+          branchId != null ? eq(userBranches.branchId, branchId) : undefined,
+        ),
+      )
       .orderBy(asc(users.firstName), asc(users.lastName));
 
     // No leídos por picker (solo lo que escribió el picker).

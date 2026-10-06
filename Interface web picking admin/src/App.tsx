@@ -9,6 +9,7 @@ import type {
 } from './types'
 import type { Branch, CatalogProduct, Category, Shelf, ShelfType } from './types'
 import MapView from './MapView'
+import ProductDetailModal from './ProductDetailModal'
 import { CategoryTree } from './categoryTree'
 import { useCategoryChangeConfirm, CategoryChangeConfirm } from './shelfCategories'
 import UsersView from './UsersView'
@@ -52,6 +53,8 @@ export default function App() {
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<CatalogProduct[]>([])
+  const [productsTotal, setProductsTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [loading, setLoading] = useState(false)
@@ -109,6 +112,8 @@ export default function App() {
       .then((u) => {
         setAuthUser(u)
         setAuthState('in')
+        // El admin de sucursal queda fijado a su sucursal.
+        if (u.branchId != null) setBranchId(u.branchId)
       })
       .catch(() => setAuthState('out'))
   }, [])
@@ -142,13 +147,13 @@ export default function App() {
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar las sucursales'))
   }, [])
 
-  // Categorías (para asociar a las estanterías)
+  // Categorías (para asociar a las estanterías) — del surtido de la sucursal.
   useEffect(() => {
     api
-      .categories()
+      .categories(branchId ?? undefined)
       .then(setCategories)
       .catch(() => undefined)
-  }, [])
+  }, [branchId])
 
   // Estanterías de la sucursal seleccionada
   useEffect(() => {
@@ -164,11 +169,29 @@ export default function App() {
   const loadProducts = useCallback((branch: number, q: string) => {
     setLoading(true)
     api
-      .products(branch, q)
-      .then(setProducts)
+      .products(branch, q, 0, INFINITE_STEP)
+      .then((res) => {
+        setProducts(res.products)
+        setProductsTotal(res.total)
+      })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Error cargando productos'))
       .finally(() => setLoading(false))
   }, [])
+
+  // Siguiente página de productos (lazy load).
+  const loadMoreProducts = useCallback(() => {
+    if (!branchId || loadingMore) return
+    if (products.length >= productsTotal) return
+    setLoadingMore(true)
+    api
+      .products(branchId, appliedSearch, products.length, INFINITE_STEP)
+      .then((res) => {
+        setProducts((cur) => [...cur, ...res.products])
+        setProductsTotal(res.total)
+      })
+      .catch((e) => setError(e instanceof ApiError ? e.message : 'Error cargando productos'))
+      .finally(() => setLoadingMore(false))
+  }, [branchId, appliedSearch, products.length, productsTotal, loadingMore])
 
   // Productos al cambiar de sucursal
   useEffect(() => {
@@ -179,6 +202,8 @@ export default function App() {
   }, [branchId, loadProducts])
 
   const branch = branches.find((b) => b.id === branchId) ?? null
+  // Alcance del admin: si tiene sucursal asignada, no puede cambiarla.
+  const scopedBranchId = authUser?.branchId ?? null
 
   if (authState === 'checking') {
     return (
@@ -371,32 +396,46 @@ export default function App() {
 
           {/* Fila inferior: selector de sucursales */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">Sucursales</span>
-            {/* "Todas": solo lo aprovechan las vistas que no dependen de una
-                sucursal (Pedidos); las de estantería piden elegir una. */}
-            <button
-              onClick={() => setBranchId(null)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-                branchId === null
-                  ? 'bg-amber-400 text-on-accent border-amber-400'
-                  : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
-              }`}
-            >
-              Todas
-            </button>
-            {branches.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setBranchId(b.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-                  branchId === b.id
-                    ? 'bg-amber-400 text-on-accent border-amber-400'
-                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
-                }`}
-              >
-                {b.name}
-              </button>
-            ))}
+            {scopedBranchId != null ? (
+              // Admin de sucursal: sucursal fija, sin selector.
+              <>
+                <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">
+                  Sucursal
+                </span>
+                <span className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-400/15 text-amber-400 border border-amber-400/40">
+                  {branch?.name ?? authUser?.branchName ?? `Sucursal ${scopedBranchId}`}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">Sucursales</span>
+                {/* "Todas": solo lo aprovechan las vistas que no dependen de una
+                    sucursal (Pedidos); las de estantería piden elegir una. */}
+                <button
+                  onClick={() => setBranchId(null)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                    branchId === null
+                      ? 'bg-amber-400 text-on-accent border-amber-400'
+                      : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
+                  }`}
+                >
+                  Todas
+                </button>
+                {branches.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setBranchId(b.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                      branchId === b.id
+                        ? 'bg-amber-400 text-on-accent border-amber-400'
+                        : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
+                    }`}
+                  >
+                    {b.name}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -407,7 +446,7 @@ export default function App() {
         <div className="shrink-0 pr-[var(--app-scrollbar)]">
           <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3">
             <div className="flex gap-2 flex-wrap">
-              {(['shelves', 'categories', 'map', 'products', 'orders', 'users', 'schedule'] as const).map((t) => (
+              {(['map', 'shelves', 'categories', 'products', 'orders', 'users', 'schedule'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -472,14 +511,18 @@ export default function App() {
         ) : tab === 'orders' ? (
           <OrdersView branchId={branchId} branchName={branch?.name ?? ''} notify={notify} />
         ) : tab === 'users' ? (
-          <UsersView notify={notify} currentUserId={authUser?.id ?? null} />
+          <UsersView notify={notify} currentUserId={authUser?.id ?? null} branchId={branchId} />
         ) : tab === 'schedule' ? (
           <ScheduleView branchId={branchId} branches={branches} notify={notify} />
         ) : (
           <ProductsView
             branchId={branchId}
+            shelves={shelves}
             products={products}
+            total={productsTotal}
             loading={loading}
+            loadingMore={loadingMore}
+            onLoadMore={loadMoreProducts}
             search={search}
             setSearch={setSearch}
             appliedSearch={appliedSearch}
@@ -1070,55 +1113,59 @@ function DeleteShelfModal({
 
 function ProductsView({
   branchId,
+  shelves,
   products,
+  total,
   loading,
+  loadingMore,
+  onLoadMore,
   search,
   setSearch,
   appliedSearch,
   onSearch,
 }: {
   branchId: number | null
+  shelves: Shelf[]
   products: CatalogProduct[]
+  total: number
   loading: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
   search: string
   setSearch: (s: string) => void
   appliedSearch: string
   onSearch: () => void
 }) {
-  const [visibleCount, setVisibleCount] = useState(INFINITE_STEP)
+  // Producto abierto en el detalle (con la miniatura del mapa).
+  const [selected, setSelected] = useState<CatalogProduct | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setVisibleCount(INFINITE_STEP)
-  }, [branchId, appliedSearch])
-
-  const visible = products.slice(0, visibleCount)
   const withoutShelf = useMemo(
     () => products.filter((p) => p.shelves.length === 0).length,
     [products],
   )
+  const hasMore = products.length < total
 
-  // Lazy load infinito: cuando el sentinel entra en pantalla, cargar más
+  // Lazy load: cuando el sentinel entra en pantalla, pedir la siguiente página.
   useEffect(() => {
     const el = sentinelRef.current
-    if (!el || visible.length >= products.length) return
+    if (!el || !hasMore) return
     const obs = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((v) => Math.min(products.length, v + INFINITE_STEP))
-        }
+        if (entries[0]?.isIntersecting) onLoadMore()
       },
       { rootMargin: '400px' },
     )
     obs.observe(el)
     return () => obs.disconnect()
-  }, [products.length, visible.length])
+  }, [hasMore, onLoadMore, products.length])
 
   if (!branchId) {
     return <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
   }
 
   return (
+    <>
     <div className="flex flex-col" style={{ height: 'calc(100dvh - 210px)', minHeight: 320 }}>
       {/* Filtros y encabezados — fijos (no hacen scroll) */}
       <div className="shrink-0">
@@ -1138,7 +1185,9 @@ function ProductsView({
         </div>
 
         <p className="text-white/40 text-xs font-medium mb-1">
-          {loading ? 'Cargando…' : `${products.length} producto(s)`}
+          {loading
+            ? 'Cargando…'
+            : `${products.length} de ${total} producto(s) de esta sucursal`}
           {appliedSearch ? ` para “${appliedSearch}”` : ''}
         </p>
         <p className="text-white/30 text-[11px] font-medium mb-3 leading-relaxed">
@@ -1149,10 +1198,13 @@ function ProductsView({
 
       {/* Lista — único elemento con scroll */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 pb-4">
-        {visible.map((p) => (
-          <div
+        {products.map((p) => (
+          <button
             key={p.productVariantId}
-            className="bg-surface border border-white/10 rounded-xl px-4 py-3"
+            type="button"
+            onClick={() => setSelected(p)}
+            title="Ver detalle y ubicación en el mapa"
+            className="w-full text-left bg-surface border border-white/10 rounded-xl px-4 py-3 hover:border-amber-400/60 hover:bg-white/5 transition-colors"
           >
             <p className="font-bold text-sm truncate">{p.productName}</p>
             <p className="text-white/35 text-xs font-medium truncate">
@@ -1190,20 +1242,31 @@ function ProductsView({
                 </span>
               )}
             </div>
-          </div>
+          </button>
         ))}
-        {visible.length === 0 && !loading && (
+        {products.length === 0 && !loading && (
           <p className="text-white/30 text-sm text-center py-10">Sin resultados.</p>
         )}
         {/* Sentinel del lazy load infinito */}
-        {visible.length < products.length && (
+        {hasMore && (
           <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4">
             <div className="w-4 h-4 rounded-full border-2 border-white/15 border-t-amber-400 animate-spin" />
-            <span className="text-white/30 text-xs font-semibold">Cargando más…</span>
+            <span className="text-white/30 text-xs font-semibold">
+              {loadingMore ? 'Cargando más…' : 'Desplázate para ver más'}
+            </span>
           </div>
         )}
       </div>
     </div>
+
+    {selected && (
+      <ProductDetailModal
+        product={selected}
+        shelves={shelves}
+        onClose={() => setSelected(null)}
+      />
+    )}
+    </>
   )
 }
 
@@ -1523,8 +1586,13 @@ function CategoriesView({
   const [assignShelfId, setAssignShelfId] = useState<number | null>(null)
 
   useEffect(() => {
-    api.categories().then(setCategories).catch(() => undefined)
-  }, [])
+    api
+      .categories(branchId ?? undefined)
+      .then(setCategories)
+      .catch(() => undefined)
+    setSelectedId(null)
+    setOrg(null)
+  }, [branchId])
 
   const loadOrg = useCallback(async (categoryId: number) => {
     if (!branchId) return

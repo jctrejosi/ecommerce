@@ -49,7 +49,6 @@ import HomepageEditor from "./views/HomepageEditor";
 import {
   HomeHeroSection,
   HomePromosSection,
-  HomeProductTypesSection,
   HomeBenefitsBarSection,
   HomeFeaturedSection,
   HomeDealsSection,
@@ -92,7 +91,6 @@ export type ViewId =
   | "homepage"
   | "homeHero"
   | "homePromos"
-  | "homeProductTypes"
   | "homeBenefitsBar"
   | "homeFeatured"
   | "homeDeals"
@@ -142,7 +140,6 @@ const NAV: NavSection[] = [
     title: "Contenido",
     items: [
       { id: "homeHero", label: "Banners publicitarios", icon: LayoutTemplate },
-      { id: "homeProductTypes", label: "Tipos de Producto", icon: Layers },
       { id: "homeBenefitsBar", label: "Barra de Beneficios", icon: Zap },
       { id: "homeFeatured", label: "Productos Destacados", icon: Package },
       { id: "homePromos", label: "Banners Promocionales", icon: Megaphone },
@@ -178,7 +175,6 @@ const VIEW_PATHS: Record<string, ViewId> = {
   "homepage-editor": "homepage",
   "home/hero": "homeHero",
   "home/promos": "homePromos",
-  "home/product-types": "homeProductTypes",
   "home/benefits-bar": "homeBenefitsBar",
   "home/featured": "homeFeatured",
   "home/deals": "homeDeals",
@@ -207,7 +203,6 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   homepage: "homepage-editor",
   homeHero: "home/hero",
   homePromos: "home/promos",
-  homeProductTypes: "home/product-types",
   homeBenefitsBar: "home/benefits-bar",
   homeFeatured: "home/featured",
   homeDeals: "home/deals",
@@ -276,7 +271,6 @@ const LABELS: Record<ViewId, string> = {
   homepage: "Editor de Inicio",
   homeHero: "Banners publicitarios",
   homePromos: "Banners Promocionales",
-  homeProductTypes: "Tipos de Producto",
   homeBenefitsBar: "Barra de Beneficios",
   homeFeatured: "Productos Destacados",
   homeDeals: "Ofertas del Día",
@@ -820,8 +814,6 @@ function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProf
       return <HomeHeroSection />;
     case "homePromos":
       return <HomePromosSection />;
-    case "homeProductTypes":
-      return <HomeProductTypesSection />;
     case "homeBenefitsBar":
       return <HomeBenefitsBarSection />;
     case "homeFeatured":
