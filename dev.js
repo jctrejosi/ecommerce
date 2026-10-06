@@ -103,7 +103,6 @@ const C = {
   web: "\x1b[32m",
   webclient: "\x1b[36m",
   admin: "\x1b[34m",
-  picking: "\x1b[95m",
   "picking-admin": "\x1b[91m",
   "delivery-admin": "\x1b[93m",
   bot: "\x1b[35m",
@@ -154,14 +153,6 @@ const SERVICES = [
     deps: PNPM_DEPS,
   },
   {
-    name: "picking",
-    dir: "Interface web picking",
-    url: "http://localhost:8445",
-    dev: [PM, "run", "dev"],
-    prod: [PM, "run", "preview"],
-    deps: PNPM_DEPS,
-  },
-  {
     name: "picking-admin",
     dir: "Interface web picking admin",
     url: "http://localhost:8446",
@@ -205,7 +196,6 @@ const APP_ALIASES = {
   "client-apk": "webclient",
   backend: "backend",
   admin: "admin",
-  picking: "picking",
   "picking-admin": "picking-admin",
   "delivery-admin": "delivery-admin",
   bot: "bot",
@@ -219,7 +209,6 @@ const APP_DEPENDS = {
   backend: ["db"],
   webclient: ["backend"], // sirve la web del cliente (APK/WebView) y proxy del API
   admin: ["backend"],
-  picking: ["backend"],
   "picking-admin": ["backend"],
   // El panel de delivery pinta rutas por calles (OSRM) en el mapa de flota.
   "delivery-admin": ["backend", "osrm"],
@@ -1004,7 +993,6 @@ const APP_LABELS = {
   backend: "API backend (NestJS)",
   webclient: "Cliente web (servidor del cliente / APK WebView)",
   admin: "Panel admin web",
-  picking: "Picking web",
   "picking-admin": "Picking admin web",
   "delivery-admin": "Delivery admin web",
   bot: "Bot (Python)",
@@ -1031,7 +1019,6 @@ function helpDeps(name) {
 const APP_ORDER = [
   "webclient",
   "admin",
-  "picking",
   "picking-admin",
   "delivery-admin",
   "backend",
@@ -1094,7 +1081,7 @@ function printHelp() {
   out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + OSRM + BD (rutas del mapa)");
   out.push("  node dev.js --delivery          → API real (backend + OSRM + BD) y la app delivery (Metro en background)");
   out.push("  node dev.js --picking-mobile    → app picking (Metro en background) + backend + BD");
-  out.push("  node dev.js --admin --picking   → combina aplicativos");
+  out.push("  node dev.js --admin --picking-admin   → combina aplicativos");
   out.push("  node dev.js --prod --delivery-admin");
   out.push("  node dev.js --migrate            → clon nuevo: deja la BD lista desde el respaldo");
   out.push("");
@@ -1172,7 +1159,7 @@ async function main() {
   );
   if (PM === "npm")
     console.warn(
-      `${C.picking}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes en los fronts.`,
+      `${C.bot}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes en los fronts.`,
     );
   console.log("");
 
