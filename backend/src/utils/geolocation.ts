@@ -95,10 +95,24 @@ export function parsePointText(
   if (!value) return null;
   const text = String(value).trim();
 
+  // WKT, p. ej. `POINT(-75.5188 5.0329)` (lng lat).
   const wkt = text.match(
     /POINT\s*\(\s*(-?\d+(?:\.\d+)?)\s+(-?\d+(?:\.\d+)?)\s*\)/i,
   );
   if (wkt) return { lng: parseFloat(wkt[1]), lat: parseFloat(wkt[2]) };
+
+  // Formato del admin (campo "Coordenadas GPS"): `lat,lng`, p. ej.
+  // `5.067,-75.517`. El `0,0` (Null Island) es el valor por defecto del
+  // formulario y se trata como "sin ubicación".
+  const comma = text.match(
+    /^(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)$/,
+  );
+  if (comma) {
+    const lat = parseFloat(comma[1]);
+    const lng = parseFloat(comma[2]);
+    if (lat === 0 && lng === 0) return null;
+    return isValidCoordinates(lat, lng) ? { lng, lat } : null;
+  }
 
   return parseEwkbPoint(text);
 }

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
+import { BranchScopeService } from '../../common/branch-scope/branch-scope.service';
 import { CloudinaryModule } from '../cloudinary/cloudinary.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { OrdersModule } from '../orders/orders.module';
@@ -33,6 +34,7 @@ import { SuperuserGuard } from './superuser.guard';
     DriverChatService,
     DeliveryGateway,
     SuperuserGuard,
+    BranchScopeService,
   ],
   exports: [DeliveryOrdersService, DeliveryLoadService, DeliveryGateway],
 })

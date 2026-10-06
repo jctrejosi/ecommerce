@@ -80,6 +80,14 @@ export class CreateDriverDto {
   @Min(1000)
   @Max(100_000_000)
   cargoVolumeCm3?: number;
+
+  /**
+   * Sucursal asignada (una sola). Opcional. El admin de sucursal siempre la
+   * fuerza a la suya; el admin global puede elegir cualquiera (o ninguna).
+   */
+  @IsOptional()
+  @IsInt()
+  branchId?: number | null;
 }
 
 /** DTO para actualizar un repartidor. Todos los campos son opcionales. */
@@ -165,6 +173,11 @@ export class UpdateDriverDto {
   @Min(1000)
   @Max(100_000_000)
   cargoVolumeCm3?: number | null;
+
+  /** Sucursal única: `null` la quita; omitirla deja la actual. */
+  @IsOptional()
+  @IsInt()
+  branchId?: number | null;
 }
 
 export class ResetPasswordDto {

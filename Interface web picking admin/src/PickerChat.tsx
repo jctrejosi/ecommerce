@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { api, ApiError } from './services/api'
-import type { PickerChatConversation, PickerChatMessage } from './types'
+import type { PickerChatConversation, PickerChatMessage, Branch } from './types'
 import { onPickingEvent } from './services/pickingSocket'
 
 const fmtTime = (s: string | null) => {
@@ -255,6 +255,10 @@ export function ChatThread({
 interface PickerChatDrawerProps {
   open: boolean
   onClose: () => void
+  /** Sucursales disponibles para el filtro (todas las del panel). */
+  branches: Branch[]
+  /** Si el admin está atado a una sucursal, el filtro queda fijo a ella. */
+  lockedBranchId?: number | null
 }
 
 /**
@@ -262,12 +266,14 @@ interface PickerChatDrawerProps {
  * leídos, y al elegir uno abre el hilo. El chat es uno por picker, así que
  * siempre se entra por esta lista.
  */
-export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
+export function PickerChatDrawer({ open, onClose, branches, lockedBranchId = null }: PickerChatDrawerProps) {
   const [chats, setChats] = useState<PickerChatConversation[]>([])
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<{ id: number; name: string } | null>(null)
   // Filtro de la bandeja: por nombre, usuario (código) o email.
   const [query, setQuery] = useState('')
+  // Filtro por sucursal: null = todas.
+  const [branchFilter, setBranchFilter] = useState<number | null>(lockedBranchId)
 
   const load = useCallback(async () => {
     try {
@@ -298,23 +304,27 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
     if (!open) {
       setSelected(null)
       setQuery('')
+      setBranchFilter(lockedBranchId)
     }
-  }, [open])
+  }, [open, lockedBranchId])
 
   if (!open) return null
 
   const totalUnread = chats.reduce((n, c) => n + (c.unread ?? 0), 0)
 
   const q = query.trim().toLowerCase()
+  const byBranch = chats.filter(
+    (c) => branchFilter == null || c.branchId === branchFilter,
+  )
   const filtered = q
-    ? chats.filter(
+    ? byBranch.filter(
         (c) =>
           c.fullName.toLowerCase().includes(q) ||
           c.username.toLowerCase().includes(q) ||
           c.email.toLowerCase().includes(q) ||
           String(c.pickerId).includes(q),
       )
-    : chats
+    : byBranch
 
   return (
     <div
@@ -355,7 +365,23 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
               </button>
             </div>
 
-            <div className="px-4 sm:px-5 pb-3 shrink-0">
+            <div className="px-4 sm:px-5 pb-3 shrink-0 flex flex-col gap-2">
+              {/* Filtro por sucursal: acota la lista de pickers a una tienda.
+                  El admin de sucursal queda fijo a la suya. */}
+              {lockedBranchId == null && branches.length > 0 && (
+                <select
+                  value={branchFilter ?? ''}
+                  onChange={(e) => setBranchFilter(e.target.value ? Number(e.target.value) : null)}
+                  className="w-full bg-app border border-white/10 rounded-xl px-3 py-2.5 text-sm font-medium outline-none focus:border-amber-400/50"
+                >
+                  <option value="">Todas las sucursales</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
@@ -374,7 +400,9 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
                 </p>
               ) : filtered.length === 0 ? (
                 <p className="text-white/30 text-sm text-center py-10">
-                  Sin coincidencias para “{query.trim()}”.
+                  {q
+                    ? `Sin coincidencias para “${query.trim()}”.`
+                    : 'No hay pickers en la sucursal seleccionada.'}
                 </p>
               ) : (
                 filtered.map((c) => {
@@ -399,6 +427,7 @@ export function PickerChatDrawer({ open, onClose }: PickerChatDrawerProps) {
                           ) : null}
                         </span>
                         <span className="block text-white/40 text-xs font-medium truncate">
+                          {c.branchName ? `${c.branchName} · ` : ''}
                           {c.lastMessage
                             ? `${c.lastMessage.senderType === 'admin' ? 'Tú: ' : ''}${c.lastMessage.body}`
                             : 'Sin mensajes'}

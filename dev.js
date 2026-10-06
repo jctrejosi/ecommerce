@@ -221,7 +221,8 @@ const APP_DEPENDS = {
   admin: ["backend"],
   picking: ["backend"],
   "picking-admin": ["backend"],
-  "delivery-admin": ["backend"],
+  // El panel de delivery pinta rutas por calles (OSRM) en el mapa de flota.
+  "delivery-admin": ["backend", "osrm"],
   bot: ["backend"],
   delivery: ["backend", "osrm"], // API real: backend (+BD) + OSRM para rutas
   "picking-mobile": ["backend"], // app móvil de picking (Expo, QR)
@@ -1090,7 +1091,7 @@ function printHelp() {
   out.push("                    cd delivery-routing && docker compose stop  (OSRM)");
   out.push("");
   out.push("EJEMPLOS");
-  out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + BD");
+  out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + OSRM + BD (rutas del mapa)");
   out.push("  node dev.js --delivery          → API real (backend + OSRM + BD) y la app delivery (Metro en background)");
   out.push("  node dev.js --picking-mobile    → app picking (Metro en background) + backend + BD");
   out.push("  node dev.js --admin --picking   → combina aplicativos");

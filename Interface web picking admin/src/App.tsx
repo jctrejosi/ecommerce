@@ -537,7 +537,12 @@ export default function App() {
       <CopyrightFooter />
 
       {/* Bandeja de chat (bandeja de pickers + hilo) */}
-      <PickerChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} />
+      <PickerChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        branches={branches}
+        lockedBranchId={scopedBranchId}
+      />
     </div>
   )
 }

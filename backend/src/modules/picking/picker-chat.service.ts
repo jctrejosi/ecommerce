@@ -5,7 +5,12 @@ import {
 } from '@nestjs/common';
 import { and, asc, desc, eq, isNull, sql } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
-import { pickerChatMessages, userBranches, users } from '../../../drizzle/schema';
+import {
+  branches,
+  pickerChatMessages,
+  userBranches,
+  users,
+} from '../../../drizzle/schema';
 import { PushService } from '../notifications/push.service';
 import { PickingGateway } from './picking.gateway';
 
@@ -30,6 +35,9 @@ export interface PickerConversation {
   username: string;
   email: string;
   isActive: boolean;
+  /** Sucursal del picker (null si no tiene asignada). */
+  branchId: number | null;
+  branchName: string | null;
   unread: number;
   lastMessage: {
     body: string;
@@ -162,9 +170,12 @@ export class PickerChatService {
         username: users.username,
         email: users.email,
         isActive: users.isActive,
+        branchId: userBranches.branchId,
+        branchName: branches.name,
       })
       .from(users)
       .leftJoin(userBranches, eq(userBranches.userId, users.id))
+      .leftJoin(branches, eq(branches.id, userBranches.branchId))
       .where(
         and(
           eq(users.isPicker, true),
@@ -215,6 +226,8 @@ export class PickerChatService {
             username: p.username,
             email: p.email,
             isActive: p.isActive,
+            branchId: p.branchId != null ? Number(p.branchId) : null,
+            branchName: p.branchName ?? null,
             unread: unreadBy.get(Number(p.id)) ?? 0,
             lastMessage: last
               ? {

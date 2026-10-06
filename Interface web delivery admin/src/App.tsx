@@ -13,6 +13,7 @@ import {
   Moon,
   Package,
   RefreshCw,
+  Store,
   Sun,
   Truck,
   User,
@@ -22,6 +23,7 @@ import {
 } from 'lucide-react';
 import type {
   AuthUser,
+  Branch,
   DriverConversation,
   DriverFilter,
   FleetDriver,
@@ -119,6 +121,10 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
 
+  // ── Sucursal: filtro transversal (mapa, repartidores y pedidos) ──
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchId, setBranchId] = useState<number | null>(null);
+
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [statusFilter, setStatusFilter] = useState<DriverFilter>('all');
@@ -159,6 +165,8 @@ export default function App() {
       .me()
       .then((profile) => {
         setUser(profile);
+        // El admin de sucursal queda fijado a su sucursal.
+        if (profile.branchId != null) setBranchId(profile.branchId);
         setBooting(false);
       })
       .catch(() => {
@@ -167,13 +175,31 @@ export default function App() {
       });
   }, []);
 
+  // ── Sucursales del selector (el backend ya aplica el alcance del admin) ──
+  useEffect(() => {
+    if (!user) return;
+    api
+      .branches()
+      .then((bs) => {
+        setBranches(bs);
+        if (user.branchId != null) setBranchId(user.branchId);
+      })
+      .catch(() => undefined);
+  }, [user]);
+
+  // Al cambiar de sucursal se limpia la selección (puede quedar fuera del filtro).
+  useEffect(() => {
+    setSelectedId(null);
+    setHiddenIds(new Set());
+  }, [branchId]);
+
   // ── Carga de datos ──
   // Los pedidos los carga la propia pestaña "Pedidos" (paginados, de a 20);
   // aquí solo se refresca la flota. Los sockets avisan al panel vía `lastSync`.
   const refresh = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const d = await api.drivers();
+      const d = await api.drivers(branchId);
       setDrivers(d);
       setLastSync(new Date());
       setError(null);
@@ -187,7 +213,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     if (!user) return;
@@ -310,6 +336,7 @@ export default function App() {
   const handleLogin = useCallback((token: string, u: AuthUser) => {
     setToken(token);
     setUser(u);
+    if (u.branchId != null) setBranchId(u.branchId);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -318,6 +345,7 @@ export default function App() {
     setUser(null);
     setDrivers([]);
     setSelectedId(null);
+    setBranchId(null);
   }, []);
 
   const changeDriverColor = useCallback(
@@ -384,6 +412,9 @@ export default function App() {
     [unreadByDriver],
   );
 
+  // Alcance del admin: si tiene sucursal asignada, el selector queda fijado.
+  const scopedBranchId = user?.branchId ?? null;
+
   if (booting) {
     return (
       <div className="flex h-full items-center justify-center bg-surface-3">
@@ -398,8 +429,13 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* ── Topbar ── */}
-      <header className="z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2">
+      {/* ── Topbar ──
+          El header es un flex item y por tanto crea su propio contexto de
+          apilamiento (z-index aplica aunque position sea static). Debe quedar
+          POR ENCIMA del contenido (los encabezados sticky de las tablas usan
+          z-10 y los overlays del mapa z-500/600) pero por DEBAJO de los modales
+          (z-1000); si no, el dropdown del usuario queda tapado por las tablas. */}
+      <header className="z-900 flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2">
         {/* Marca: el logo ocupa el ancho del título (w-full sobre el texto) */}
         <div className="flex shrink-0 flex-col items-center justify-center gap-1">
           <img
@@ -431,6 +467,37 @@ export default function App() {
             );
           })}
         </nav>
+
+        {/* Filtro por sucursal: aplica al mapa, a los repartidores y a los pedidos. */}
+        {branches.length > 0 && (
+          <label
+            className="flex shrink-0 items-center gap-1.5"
+            title={
+              scopedBranchId != null
+                ? 'Solo puedes ver tu sucursal'
+                : 'Filtrar por sucursal'
+            }
+          >
+            <Store className="h-4 w-4 text-ink-faint" />
+            <select
+              value={branchId ?? ''}
+              onChange={(e) =>
+                setBranchId(e.target.value ? Number(e.target.value) : null)
+              }
+              disabled={scopedBranchId != null}
+              className="cursor-pointer rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink-soft outline-none transition hover:bg-surface-3 focus:border-accent disabled:cursor-default disabled:opacity-70"
+            >
+              {scopedBranchId == null && (
+                <option value="">Todas las sucursales</option>
+              )}
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {/* Las cifras de la flota (entregas / pedidos / desconectados) se
@@ -728,7 +795,13 @@ export default function App() {
 
       {tab === 'orders' && (
         <main className="min-h-0 flex-1">
-          <OrdersPanel onLocate={locateDriver} reloadTick={lastSync?.getTime() ?? 0} />
+          <OrdersPanel
+            branchId={branchId}
+            onLocate={locateDriver}
+            reloadTick={lastSync?.getTime() ?? 0}
+            drivers={drivers}
+            onChat={openChat}
+          />
         </main>
       )}
 
@@ -746,6 +819,8 @@ export default function App() {
           }
           onClose={() => setModal(null)}
           onSaved={handleSaved}
+          branches={branches}
+          lockedBranchId={scopedBranchId}
         />
       )}
 

@@ -1,14 +1,21 @@
 import { Loader2, LocateFixed, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
-import type { AssignmentStatus, FleetOrder } from '../types';
+import type { AssignmentStatus, FleetDriver, FleetOrder } from '../types';
 import { api, ApiError } from '../services/api';
 import { STATUS_META } from '../lib/status';
 import { formatDateTime, formatMoney, formatVolume } from '../lib/format';
+import OrderDetailModal from './OrderDetailModal';
 
 interface Props {
   /** Sube con cada aviso en vivo (socket / refresco periódico) para recargar. */
   reloadTick: number;
   onLocate: (driverId: number) => void;
+  /** Sucursal seleccionada en el panel (null = todas). */
+  branchId?: number | null;
+  /** Flota cargada, para resolver foto/estado del repartidor en el detalle. */
+  drivers?: FleetDriver[];
+  /** Abre el chat con el repartidor del pedido. */
+  onChat?: (driverId: number) => void;
 }
 
 /** Cuántos pedidos se cargan por página (lazyload). */
@@ -50,8 +57,16 @@ const TIMELINE: { label: string; key: TimelineKey }[] = [
  * cancelados) con lazyload de 20 en 20. El filtro y la búsqueda los resuelve el
  * backend, así que aplican sobre el total y no solo sobre lo ya cargado.
  */
-export default function OrdersPanel({ reloadTick, onLocate }: Props) {
+export default function OrdersPanel({
+  reloadTick,
+  onLocate,
+  branchId = null,
+  drivers = [],
+  onChat,
+}: Props) {
   const [orders, setOrders] = useState<FleetOrder[]>([]);
+  /** Pedido abierto en el modal de detalle (null = cerrado). */
+  const [selected, setSelected] = useState<FleetOrder | null>(null);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -96,6 +111,7 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
           offset,
           status: filter === 'all' ? undefined : filter,
           q: query || undefined,
+          branchId,
         });
         setOrders((prev) => (mode === 'more' ? [...prev, ...page.items] : page.items));
         setTotal(page.total);
@@ -113,7 +129,7 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
         setLoadingMore(false);
       }
     },
-    [filter, query],
+    [filter, query, branchId],
   );
 
   // Filtro o búsqueda nuevos: recarga desde cero.
@@ -232,7 +248,11 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
             {orders.map((o) => {
               const meta = STATUS_META[o.status];
               return (
-                <tr key={o.assignmentId} className="transition-colors hover:bg-surface-2">
+                <tr
+                  key={o.assignmentId}
+                  onClick={() => setSelected(o)}
+                  className="cursor-pointer transition-colors hover:bg-surface-2"
+                >
                   <td className="px-4 py-3">
                     <p className="truncate font-mono text-xs font-bold text-ink">{o.referenceCode}</p>
                     <p className="text-[11px] text-ink-faint">#{o.orderId}</p>
@@ -300,7 +320,10 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => onLocate(o.driverId)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onLocate(o.driverId);
+                      }}
                       title="Ubicar en el mapa"
                       className="flex h-7 w-7 items-center justify-center rounded-lg text-sky-500 hover:bg-sky-50"
                     >
@@ -327,6 +350,26 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
           </tbody>
         </table>
       </div>
+
+      {selected && (
+        <OrderDetailModal
+          order={selected}
+          driver={drivers.find((d) => d.id === selected.driverId) ?? null}
+          onClose={() => setSelected(null)}
+          onLocate={(driverId) => {
+            setSelected(null);
+            onLocate(driverId);
+          }}
+          onChat={
+            onChat
+              ? (driverId) => {
+                  setSelected(null);
+                  onChat(driverId);
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

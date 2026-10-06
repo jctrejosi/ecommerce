@@ -1,5 +1,6 @@
 import type {
   AuthUser,
+  Branch,
   DriverChatMessage,
   DriverConversation,
   FleetDriver,
@@ -101,6 +102,8 @@ export interface CreateDriverPayload {
   vehicleColor?: string;
   /** Capacidad de carga del vehículo en cm³ (1 L = 1.000 cm³). */
   cargoVolumeCm3?: number;
+  /** Sucursal única a asignar (opcional). */
+  branchId?: number | null;
 }
 
 export interface UpdateProfilePayload {
@@ -129,6 +132,8 @@ export interface UpdateDriverPayload {
   routeColor?: string;
   /** Capacidad de carga en cm³; `null` la borra. */
   cargoVolumeCm3?: number | null;
+  /** Sucursal única: `null` la quita; omitirla deja la actual. */
+  branchId?: number | null;
 }
 
 /** Ruta por calles (OSRM) para pintar en el mapa de flota. */
@@ -188,7 +193,14 @@ export const api = {
     return (await res.json()) as { url: string };
   },
 
-  drivers: () => fetchJson<FleetDriver[]>('/delivery/admin/drivers'),
+  /** Sucursales para el selector del panel (el backend ya aplica el alcance). */
+  branches: () => fetchJson<Branch[]>('/delivery/admin/branches'),
+
+  drivers: (branchId?: number | null) =>
+    fetchJson<FleetDriver[]>(
+      `/delivery/admin/drivers${branchId != null ? `?branchId=${branchId}` : ''}`,
+      { cache: 'no-store' },
+    ),
 
   driver: (id: number) => fetchJson<FleetDriver>(`/delivery/admin/drivers/${id}`),
 
@@ -215,13 +227,20 @@ export const api = {
    * paginados de a 20 para la pestaña "Pedidos". `status` filtra y `q` busca.
    */
   orders: (
-    params: { limit?: number; offset?: number; status?: string; q?: string } = {},
+    params: {
+      limit?: number;
+      offset?: number;
+      status?: string;
+      q?: string;
+      branchId?: number | null;
+    } = {},
   ) => {
     const search = new URLSearchParams();
     if (params.limit != null) search.set('limit', String(params.limit));
     if (params.offset != null) search.set('offset', String(params.offset));
     if (params.status) search.set('status', params.status);
     if (params.q) search.set('q', params.q);
+    if (params.branchId != null) search.set('branchId', String(params.branchId));
     const qs = search.toString();
     return fetchJson<OrderPage>(`/delivery/admin/orders${qs ? `?${qs}` : ''}`, {
       cache: 'no-store',
