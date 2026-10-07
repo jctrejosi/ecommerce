@@ -27,6 +27,7 @@ import type {
   DriverConversation,
   DriverFilter,
   FleetDriver,
+  FleetOrder,
 } from './types';
 import { api, ApiError, getToken, setToken } from './services/api';
 import {
@@ -126,6 +127,11 @@ export default function App() {
   const [branchId, setBranchId] = useState<number | null>(null);
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  /**
+   * Pedido entregado enfocado en el mapa: se pintan su domicilio, la sucursal de
+   * salida y la ruta histórica (tienda → domicilio) con su tiempo.
+   */
+  const [focusedOrder, setFocusedOrder] = useState<FleetOrder | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [statusFilter, setStatusFilter] = useState<DriverFilter>('all');
   const [search, setSearch] = useState('');
@@ -345,6 +351,7 @@ export default function App() {
     setUser(null);
     setDrivers([]);
     setSelectedId(null);
+    setFocusedOrder(null);
     setBranchId(null);
   }, []);
 
@@ -373,9 +380,23 @@ export default function App() {
   );
 
   const locateDriver = useCallback((driverId: number) => {
+    setFocusedOrder(null);
     setSelectedId(driverId);
     setStatusFilter('all');
     setHiddenIds(new Set());
+    setTab('map');
+  }, []);
+
+  /**
+   * Muestra en el mapa el recorrido de un pedido entregado: su domicilio, la
+   * sucursal de salida y la ruta (tienda → domicilio) con su tiempo. No ubica a
+   * ningún repartidor en vivo (el pedido ya está cerrado).
+   */
+  const viewOrderOnMap = useCallback((order: FleetOrder) => {
+    setSelectedId(null);
+    setStatusFilter('all');
+    setHiddenIds(new Set());
+    setFocusedOrder(order);
     setTab('map');
   }, []);
 
@@ -727,6 +748,8 @@ export default function App() {
             hiddenIds={hiddenIds}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            focusedOrder={focusedOrder}
+            onClearFocused={() => setFocusedOrder(null)}
           />
 
           {/* Cifras de la flota sobre el mapa (esquina superior derecha).
@@ -798,6 +821,7 @@ export default function App() {
           <OrdersPanel
             branchId={branchId}
             onLocate={locateDriver}
+            onViewOrderOnMap={viewOrderOnMap}
             reloadTick={lastSync?.getTime() ?? 0}
             drivers={drivers}
             onChat={openChat}

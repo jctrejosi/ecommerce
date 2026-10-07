@@ -7,13 +7,14 @@ import {
 } from 'react';
 import * as maplibregl from 'maplibre-gl';
 import type { Map as MlMap, Marker, StyleSpecification } from 'maplibre-gl';
-import { Check, Layers, Loader2 } from 'lucide-react';
+import { Check, Layers, Loader2, MapPin, Route, Store, User, X } from 'lucide-react';
 import type { Feature } from 'geojson';
-import type { FleetDriver } from '../types';
+import type { FleetDriver, FleetOrder } from '../types';
 import { api } from '../services/api';
 import { decodePolyline } from '../lib/polyline';
 import { driverColor } from '../lib/driverColors';
 import { driverVisual, isDriverOnline } from '../lib/status';
+import { formatDateTime } from '../lib/format';
 import {
   MAP_STYLE_OPTIONS,
   LAYER_STORAGE_KEY,
@@ -41,6 +42,13 @@ interface Props {
    * pestaña); con `false` solo se recalcula el tamaño del lienzo al volver.
    */
   active?: boolean;
+  /**
+   * Pedido entregado que se quiere revisar en el mapa: pinta el domicilio, la
+   * sucursal de salida y la ruta que hizo el repartidor (tienda → domicilio).
+   */
+  focusedOrder?: FleetOrder | null;
+  /** Quita el pedido enfocado del mapa. */
+  onClearFocused?: () => void;
 }
 
 /** Enfoque del mapa: la operación de delivery es solo en Manizales. */
@@ -155,6 +163,23 @@ function patchNullableFilters(node: unknown): unknown {
  * 4. Se corrigen los filtros numéricos sobre propiedades nullables que
  *    rompen el parseo de tiles (bug de los estilos de OpenFreeMap).
  */
+/** `fetch` de JSON con reintentos: el proveedor de tiles devuelve 502
+ * transitorios que no deben tumbar el mapa. */
+async function fetchJsonRetry(url: string, intentos = 5): Promise<unknown> {
+  let lastErr: unknown;
+  for (let i = 1; i <= intentos; i++) {
+    try {
+      const res = await fetch(url, { cache: 'no-store' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.json();
+    } catch (err) {
+      lastErr = err;
+      if (i < intentos) await new Promise((r) => setTimeout(r, 300 * i));
+    }
+  }
+  throw lastErr;
+}
+
 async function resolveStyle(opt: MapStyleOption): Promise<StyleSpecification> {
   if (!opt.styleUrl && !opt.spec) {
     throw new Error('Estilo sin spec ni styleUrl');
@@ -167,7 +192,10 @@ async function resolveStyle(opt: MapStyleOption): Promise<StyleSpecification> {
 
   let spec: StyleSpecification;
   if (opt.styleUrl) {
-    const url = `${host}${new URL(opt.styleUrl).pathname}`;
+    // Los estilos propios van empaquetados en el proyecto (ruta local);
+    // cualquier otra URL se resuelve contra el host de tiles.
+    const local = opt.styleUrl.startsWith('/');
+    const url = local ? opt.styleUrl : `${host}${new URL(opt.styleUrl).pathname}`;
     const res = await fetch(url);
     if (!res.ok) throw new Error(`Estilo ${url} → ${res.status}`);
     const text = await res.text();
@@ -178,8 +206,14 @@ async function resolveStyle(opt: MapStyleOption): Promise<StyleSpecification> {
     spec = opt.spec as StyleSpecification;
   }
 
-  if (spec.glyphs) spec.glyphs = toBase(spec.glyphs);
-  if (typeof spec.sprite === 'string') {
+  // Fuentes de glifos empaquetadas en el proyecto (ver public/map/fonts):
+  // no se piden a la red al pintar las etiquetas.
+  if (spec.glyphs) spec.glyphs = '/map/fonts/{fontstack}/{range}.pbf';
+  // El sprite de OpenFreeMap también va empaquetado (pocos KB) para evitar
+  // peticiones externas al pintar los iconos del mapa base.
+  if (typeof spec.sprite === 'string' && spec.sprite.includes('ofm_f384')) {
+    spec.sprite = '/map/sprites/ofm';
+  } else if (typeof spec.sprite === 'string') {
     spec.sprite = toBase(spec.sprite);
   } else if (Array.isArray(spec.sprite)) {
     spec.sprite = spec.sprite.map((s) => ({ ...s, url: toBase(s.url) }));
@@ -192,15 +226,30 @@ async function resolveStyle(opt: MapStyleOption): Promise<StyleSpecification> {
     sources.map(async (raw) => {
       const src = raw as unknown as { url?: string; tiles?: string[] };
       if (!src.url || src.tiles) return;
+      let tj: { tiles?: string[] } | null = null;
       try {
-        const tj = (await (await fetch(toBase(src.url))).json()) as {
-          tiles?: string[];
-        };
-        src.tiles = (tj.tiles ?? []).map(toBase);
-        delete src.url;
+        tj = (await fetchJsonRetry(toBase(src.url))) as { tiles?: string[] };
       } catch (err) {
-        console.warn('[delivery-admin:map] no se pudo resolver el TileJSON', src.url, err);
+        // El proveedor devuelve 502 de forma intermitente. Se usa la copia
+        // empaquetada en el proyecto para no dejar el mapa sin tiles.
+        console.warn(
+          '[delivery-admin:map] TileJSON en vivo no disponible, uso el empaquetado',
+          src.url,
+          err,
+        );
+        try {
+          const res = await fetch('/map/tiles/planet.json');
+          if (res.ok) tj = (await res.json()) as { tiles?: string[] };
+        } catch {
+          /* sin fallback */
+        }
       }
+      const tiles = tj?.tiles ?? [];
+      if (!tiles.length) {
+        throw new Error(`TileJSON sin tiles: ${src.url}`);
+      }
+      src.tiles = tiles.map(toBase);
+      delete src.url;
     }),
   );
   // Sources con tiles inline (p. ej. el relieve ne2 de Liberty) → misma base.
@@ -231,7 +280,7 @@ function detectWebGL(): boolean {
 }
 
 const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
-  { drivers, hiddenIds, selectedId, onSelect, active = true },
+  { drivers, hiddenIds, selectedId, onSelect, active = true, focusedOrder = null, onClearFocused },
   ref,
 ) {
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -257,9 +306,23 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   const destMarkersRef = useRef<Marker[]>([]);
   /** Marcador de la sucursal del repartidor seleccionado (punto de recogida). */
   const branchMarkerRef = useRef<Marker | null>(null);
+  /** Marcadores del pedido entregado enfocado (domicilio + sucursal). */
+  const focusedMarkersRef = useRef<Marker[]>([]);
+  /** Ruta histórica tienda → domicilio del pedido enfocado (entregado). */
+  const [focusedRoute, setFocusedRoute] = useState<LiveRouteData | null>(null);
+  const focusedRouteRef = useRef(focusedRoute);
+  focusedRouteRef.current = focusedRoute;
+  const [focusedState, setFocusedState] = useState<
+    'loading' | 'ok' | 'empty' | null
+  >(null);
   const [styleOption, setStyleOption] = useState<MapStyleOption>(defaultStyleOption);
   const [styleReady, setStyleReady] = useState(false);
   const [mapError, setMapError] = useState<string | null>(null);
+  /**
+   * Nº de reintentos automáticos ya agotados al cargar el estilo/mapa. Se usa
+   * solo para dar feedback en la pantalla de carga ("Reintentando conexión…").
+   */
+  const [styleAttempt, setStyleAttempt] = useState(0);
   const [layersOpen, setLayersOpen] = useState(false);
   const layerButtonRef = useRef<HTMLButtonElement | null>(null);
   const layerPanelRef = useRef<HTMLDivElement | null>(null);
@@ -275,6 +338,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
   hiddenIdsRef.current = hiddenIds;
   const styleOptionRef = useRef(styleOption);
   styleOptionRef.current = styleOption;
+  /** Pedido entregado enfocado (mirror para handlers estables). */
+  const focusedOrderRef = useRef(focusedOrder);
+  focusedOrderRef.current = focusedOrder;
   /** id del estilo ya aplicado al mapa (evita re-setStyle en el montaje). */
   const appliedStyleIdRef = useRef<string | null>(null);
 
@@ -330,6 +396,20 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
 
   const overlaySourceId = 'fleet-overlays';
 
+  // Ruta del pedido entregado enfocado (distancia y tiempo de OSRM).
+  const focusedBadge =
+    focusedState === 'loading'
+      ? 'Calculando ruta…'
+      : focusedState === 'empty'
+        ? 'Ruta no disponible'
+        : focusedRoute
+          ? `${
+              focusedRoute.distanceM >= 1000
+                ? `${(focusedRoute.distanceM / 1000).toFixed(1)} km`
+                : `${Math.round(focusedRoute.distanceM)} m`
+            } · ≈ ${Math.max(1, Math.round(focusedRoute.durationS / 60))} min`
+          : '—';
+
   // ── Capas de overlays (rutas y paradas) sobre el estilo base ──
   function ensureOverlayLayers(map: MlMap) {
     if (map.getSource(overlaySourceId)) return;
@@ -377,6 +457,30 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         'line-opacity': ['case', ['==', ['get', 'dim'], true], 0.3, 1],
       },
     });
+    // Ruta histórica de un pedido entregado (tienda → domicilio). Va encima de
+    // todo con color propio para distinguirse de las rutas en vivo.
+    map.addLayer({
+      id: 'ov-route-order-casing',
+      type: 'line',
+      source: overlaySourceId,
+      filter: ['==', ['get', 'kind'], 'route-order'],
+      paint: {
+        'line-color': '#ffffff',
+        'line-width': 10,
+        'line-opacity': 1,
+      },
+    });
+    map.addLayer({
+      id: 'ov-route-order',
+      type: 'line',
+      source: overlaySourceId,
+      filter: ['==', ['get', 'kind'], 'route-order'],
+      paint: {
+        'line-color': '#7c3aed',
+        'line-width': 5,
+        'line-opacity': 1,
+      },
+    });
   }
 
   /** Recalcula el GeoJSON de overlays con los datos actuales. */
@@ -419,6 +523,16 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         geometry: { type: 'LineString', coordinates: full.coords },
       });
     }
+    // Ruta histórica del pedido entregado enfocado.
+    const focused = focusedOrderRef.current;
+    const fr = focusedRouteRef.current;
+    if (focused?.destination && fr) {
+      features.push({
+        type: 'Feature',
+        properties: { kind: 'route-order' },
+        geometry: { type: 'LineString', coordinates: fr.coords },
+      });
+    }
     // La sucursal no es geometría: es un marcador (ver syncMarkers).
 
     (map.getSource(overlaySourceId) as maplibregl.GeoJSONSource).setData({
@@ -437,6 +551,8 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     destMarkersRef.current = [];
     branchMarkerRef.current?.remove();
     branchMarkerRef.current = null;
+    for (const marker of focusedMarkersRef.current) marker.remove();
+    focusedMarkersRef.current = [];
     const selectedNow = selectedIdRef.current;
 
     for (const d of driversRef.current) {
@@ -488,6 +604,34 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
         .setLngLat([branch.lng, branch.lat])
         .addTo(map);
     }
+
+    // Pedido entregado enfocado: domicilio y sucursal de salida.
+    const focused = focusedOrderRef.current;
+    if (focused) {
+      const fdest = focused.destination;
+      if (fdest) {
+        const holder = document.createElement('div');
+        holder.innerHTML = destPinHtml();
+        const el = holder.firstElementChild as HTMLElement;
+        el.title = 'Dirección de entrega (pedido entregado)';
+        focusedMarkersRef.current.push(
+          new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([fdest.lng, fdest.lat])
+            .addTo(map),
+        );
+      }
+      const fbranch = focused.branchLocation;
+      if (fbranch) {
+        const holder = document.createElement('div');
+        holder.innerHTML = branchPinHtml();
+        const el = holder.firstElementChild as HTMLElement;
+        focusedMarkersRef.current.push(
+          new maplibregl.Marker({ element: el, anchor: 'center' })
+            .setLngLat([fbranch.lng, fbranch.lat])
+            .addTo(map),
+        );
+      }
+    }
   }
 
   function applyStyleZoom() {
@@ -512,117 +656,132 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
 
     let cancelled = false;
     let map: MlMap | null = null;
+    let retryTimer: number | null = null;
+    /** Reintentos automáticos acumulados antes de rendirse y mostrar el aviso. */
+    let attempt = 0;
+    const MAX_ATTEMPTS = 5;
 
-    void resolveStyle(styleOptionRef.current)
-      .then((style) => {
-        if (cancelled || !style) return;
-        map = new maplibregl.Map({
-          container: el,
-          style,
-          center: [MANIZALES_CENTER[1], MANIZALES_CENTER[0]],
-          zoom: 14,
-          minZoom: 13,
-          maxZoom: 18,
-          maxBounds: MANIZALES_BOUNDS,
-          // Sin el control de atribución flotante (esquina inferior derecha).
-          attributionControl: false,
-        });
-        appliedStyleIdRef.current = styleOptionRef.current.id;
+    const clearTimers = () => {
+      if (retryTimer != null) {
+        window.clearTimeout(retryTimer);
+        retryTimer = null;
+      }
+    };
 
-        let hasLoaded = false;
-        let vectorTileErrors = 0;
-        const sawTileRef = { current: false };
-        map.on('click', () => onSelectRef.current(null));
-        map.on('load', () => {
-          hasLoaded = true;
-          ensureOverlayLayers(map!);
-          syncOverlays();
-          syncMarkers();
-          applyStyleZoom();
-          setStyleReady(true);
-          // Si tras 12 s no llegó ningún tile del mapa base, se avisa (sin
-          // recargas automáticas). MapLibre emite eventos de source con varios
-          // sourceDataType (content/metadata/tile…), por eso el detector se
-          // basa en `sawTileRef` (ver abajo) más `areTilesLoaded()`.
-          window.setTimeout(() => {
-            if (cancelled || !mapRef.current) return;
-            if (sawTileRef.current || mapRef.current.areTilesLoaded()) return;
-            console.warn('[delivery-admin:map] no llegaron tiles en 12 s');
-            setMapError(
-              'El mapa no recibió tiles del proveedor en 12 s. Puede ser un bloqueo de red/adblock hacia tiles.openfreemap.org — prueba el mapa Estándar.',
-            );
-          }, 12000);
-        });
-        map.on('data', (e) => {
-          const ev = e as { sourceId?: string; dataType?: string; sourceDataType?: string };
-          // Cualquier evento de un source del mapa base (no los overlays
-          // propios, que se añaden vacíos al cargar) o de un tile cuenta como
-          // “llegaron tiles”. Los eventos de estilo no traen sourceId.
-          if (ev.dataType === 'tile') {
-            sawTileRef.current = true;
-          } else if (
-            ev.dataType === 'source' &&
-            ev.sourceId &&
-            ev.sourceId !== overlaySourceId
-          ) {
-            sawTileRef.current = true;
-          }
-        });
-        map.on('style.load', () => {
-          ensureOverlayLayers(map!);
-          syncOverlays();
-          applyStyleZoom();
-        });
-        map.on('error', (e) => {
-          const err = (e?.error ?? {}) as { message?: string; url?: string };
-          const msg = String(err?.message ?? '');
-          const url = String(err?.url ?? '');
+    /** Desmonta el mapa actual (si lo hay) para reconstruirlo desde cero. */
+    const teardownMap = () => {
+      clearTimers();
+      if (map) {
+        map.remove();
+        map = null;
+      }
+      mapRef.current = null;
+      markersRef.current.clear();
+      destMarkersRef.current = [];
+      branchMarkerRef.current = null;
+      focusedMarkersRef.current = [];
+    };
 
-          // Fallo acumulado de tiles vectoriales ⇒ los bloquea el navegador/red.
-          if (url.includes('/planet/')) {
-            vectorTileErrors += 1;
-            if (vectorTileErrors >= 6) {
-              const current = styleOptionRef.current;
-              if (current.id === 'waze') {
+    /**
+     * Reintenta cargar el estilo automáticamente con backoff. Solo cuando se
+     * agotan los intentos se muestra el aviso: un fallo transitorio de red no
+     * debe dejar al usuario con la pantalla de error.
+     */
+    const scheduleRetry = () => {
+      if (cancelled) return;
+      if (attempt >= MAX_ATTEMPTS) {
+        setMapError(
+          'No se pudo cargar el estilo del mapa. Revisa tu conexión o el bloqueador de anuncios.',
+        );
+        return;
+      }
+      teardownMap();
+      setStyleReady(false);
+      setStyleAttempt(attempt);
+      const delay = Math.min(800 * attempt, 4000);
+      console.warn(
+        `[delivery-admin:map] reintento ${attempt + 1}/${MAX_ATTEMPTS} en ${delay} ms`,
+      );
+      retryTimer = window.setTimeout(bootMap, delay);
+    };
+
+    const bootMap = () => {
+      if (cancelled) return;
+      attempt += 1;
+      void resolveStyle(styleOptionRef.current)
+        .then((style) => {
+          if (cancelled || !style) return;
+          // El estilo resolvió: se parte de cero para futuros reintentos.
+          attempt = 0;
+          map = new maplibregl.Map({
+            container: el,
+            style,
+            center: [MANIZALES_CENTER[1], MANIZALES_CENTER[0]],
+            zoom: 14,
+            minZoom: 13,
+            maxZoom: 18,
+            maxBounds: MANIZALES_BOUNDS,
+            // Sin el control de atribución flotante (esquina inferior derecha).
+            attributionControl: false,
+          });
+          appliedStyleIdRef.current = styleOptionRef.current.id;
+
+          let vectorTileErrors = 0;
+          map.on('click', () => onSelectRef.current(null));
+          map.on('load', () => {
+            ensureOverlayLayers(map!);
+            syncOverlays();
+            syncMarkers();
+            applyStyleZoom();
+            setStyleReady(true);
+          });
+          map.on('style.load', () => {
+            ensureOverlayLayers(map!);
+            syncOverlays();
+            applyStyleZoom();
+            // El estilo ya está listo: se muestra el mapa de una vez. Los tiles
+            // siguen llegando (la red puede tardar); no se bloquea la pantalla
+            // de carga esperándolos.
+            setStyleAttempt(0);
+            setStyleReady(true);
+          });
+          map.on('error', (e) => {
+            const err = (e?.error ?? {}) as { message?: string; url?: string };
+            const msg = String(err?.message ?? '');
+            const url = String(err?.url ?? '');
+            // Tiles vectoriales del estilo Waze: si fallan repetido, se pasa al
+            // mapa raster Estándar (otra fuente) para no quedarse en blanco.
+            if (url.includes('/planet/')) {
+              vectorTileErrors += 1;
+              if (vectorTileErrors >= 6 && styleOptionRef.current.id === 'waze') {
                 console.warn(
                   '[delivery-admin:map] los tiles vectoriales no cargan — cambio a Estándar (raster)',
                 );
-                setStyleOption(MAP_STYLE_OPTIONS.find((o) => o.id === 'standard') ?? current);
-              } else if (!sawTileRef.current) {
-                console.warn('[delivery-admin:map] los tiles vectoriales no cargan:', url);
-                setMapError(
-                  'No se pudieron cargar los tiles del mapa. Revisa tu conexión o bloqueador de anuncios, o prueba el mapa Estándar.',
+                setStyleOption(
+                  MAP_STYLE_OPTIONS.find((o) => o.id === 'standard') ??
+                    styleOptionRef.current,
                 );
               }
+              return;
             }
-            return;
-          }
-          if (/\.(png|webp|jpg|jpeg)(\?|$)/.test(url)) return;
-          console.warn('[delivery-admin:map]', msg || url || e);
-          if (
-            !hasLoaded &&
-            !url.includes('/fonts/') &&
-            (/fetch|style|glyph|unable|network|load/i.test(msg) || url.includes('/planet'))
-          ) {
-            console.error('[delivery-admin:map] no se pudo cargar el estilo:', msg || url);
-            setMapError(
-              'No se pudo cargar el mapa (se necesita acceso a tiles.openfreemap.org). Revisa tu conexión o el bloqueador de anuncios.',
-            );
-          }
-        });
+            if (/\.(png|webp|jpg|jpeg)(\?|$)/.test(url)) return;
+            console.warn('[delivery-admin:map]', msg || url || e);
+          });
 
-        mapRef.current = map;
-      })
-      .catch((err) => {
-        console.error('[delivery-admin:map] no se pudo resolver el estilo:', err);
-        if (!cancelled) {
-          setMapError('No se pudo cargar el estilo del mapa. Revisa tu conexión o el bloqueador de anuncios.');
-        }
-      });
+          mapRef.current = map;
+        })
+        .catch((err) => {
+          console.error('[delivery-admin:map] no se pudo resolver el estilo:', err);
+          scheduleRetry();
+        });
+    };
+
+    bootMap();
 
     return () => {
       cancelled = true;
-      map?.remove();
+      clearTimers();
+      if (map) map.remove();
       mapRef.current = null;
       markersRef.current.clear();
       destMarkersRef.current = [];
@@ -768,6 +927,85 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selOrderIdForFull, selFullFrom, routeTick]);
 
+  // ── Pedido entregado enfocado: ruta histórica tienda → domicilio ──
+  useEffect(() => {
+    const dest = focusedOrder?.destination ?? null;
+    const branch = focusedOrder?.branchLocation ?? null;
+    if (!focusedOrder || !dest || !branch) {
+      setFocusedRoute(null);
+      setFocusedState(null);
+      return;
+    }
+    let cancelled = false;
+    setFocusedState('loading');
+    (async () => {
+      try {
+        const res = await api.orderRoute(
+          focusedOrder.orderId,
+          'customer',
+          `${branch.lng},${branch.lat}`,
+        );
+        const coords = decodePolyline(res.polyline);
+        if (cancelled) return;
+        if (coords.length < 2) {
+          setFocusedRoute(null);
+          setFocusedState('empty');
+          return;
+        }
+        setFocusedRoute({ coords, distanceM: res.distanceM, durationS: res.durationS });
+        setFocusedState('ok');
+      } catch {
+        if (!cancelled) {
+          setFocusedRoute(null);
+          setFocusedState('empty');
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [focusedOrder]);
+
+  // Encuadre del pedido enfocado: abarca el domicilio y la sucursal de salida.
+  const focusedFitKey = focusedOrder ? String(focusedOrder.orderId) : '';
+  const fittedFocusedRef = useRef<string | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !styleReady) return;
+    if (!focusedOrder) {
+      fittedFocusedRef.current = null;
+      return;
+    }
+    if (fittedFocusedRef.current === focusedFitKey) return;
+    const pts: [number, number][] = [];
+    if (focusedOrder.destination) {
+      pts.push([focusedOrder.destination.lng, focusedOrder.destination.lat]);
+    }
+    if (focusedOrder.branchLocation) {
+      pts.push([focusedOrder.branchLocation.lng, focusedOrder.branchLocation.lat]);
+    }
+    if (!pts.length) return;
+    fittedFocusedRef.current = focusedFitKey;
+    if (pts.length === 1) {
+      map.easeTo({
+        center: pts[0],
+        zoom: Math.max(map.getZoom(), 15),
+        duration: 700,
+      });
+      return;
+    }
+    const lngs = pts.map((p) => p[0]);
+    const lats = pts.map((p) => p[1]);
+    map.fitBounds(
+      [
+        [Math.min(...lngs), Math.min(...lats)],
+        [Math.max(...lngs), Math.max(...lats)],
+      ],
+      { padding: 90, maxZoom: 15, duration: 700 },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedOrder, styleReady, focusedFitKey]);
+
   // ── Enfoque: abarcar los marcadores activos (repartidores + destinos) ──
   // Se ajusta cuando cambia el conjunto de marcadores (no en cada movimiento,
   // porque la clave usa los ids y las coordenadas del destino, que son fijas).
@@ -811,14 +1049,14 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
     if (!styleReady) return;
     syncOverlays();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drivers, hiddenIds, selectedId, styleReady, routes, fullRoute]);
+  }, [drivers, hiddenIds, selectedId, styleReady, routes, fullRoute, focusedOrder, focusedRoute]);
 
   // ── Pines de repartidores ──
   useEffect(() => {
     if (!styleReady) return;
     syncMarkers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drivers, hiddenIds, selectedId, styleReady]);
+  }, [drivers, hiddenIds, selectedId, styleReady, focusedOrder]);
 
   // ── Encuadre al seleccionar ──
   /**
@@ -930,7 +1168,9 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
       {!styleReady && !mapError && (
         <div className="absolute inset-0 z-600 flex flex-col items-center justify-center gap-3 bg-surface-3">
           <Loader2 className="h-7 w-7 animate-spin text-ink-faint" />
-          <p className="text-xs font-semibold text-ink-faint">Cargando mapa…</p>
+          <p className="text-xs font-semibold text-ink-faint">
+            {styleAttempt > 0 ? 'Reintentando conexión…' : 'Cargando mapa…'}
+          </p>
         </div>
       )}
 
@@ -993,6 +1233,69 @@ const FleetMap = forwardRef<FleetMapHandle, Props>(function FleetMap(
           {selBadge && (
             <span className="text-ink-faint">· {selBadge}</span>
           )}
+        </div>
+      )}
+
+      {/* Pedido entregado enfocado: domicilio, sucursal y ruta con su tiempo */}
+      {focusedOrder && (
+        <div className="absolute left-4 top-4 z-500 w-72 overflow-hidden rounded-2xl bg-surface shadow-xl ring-1 ring-line">
+          <div className="flex items-start justify-between gap-2 border-b border-line px-3.5 py-2.5">
+            <div className="min-w-0">
+              <p className="truncate font-mono text-sm font-bold text-ink">
+                {focusedOrder.referenceCode}
+              </p>
+              <p className="text-[11px] text-ink-faint">
+                Entregado
+                {focusedOrder.completedAt
+                  ? ` · ${formatDateTime(focusedOrder.completedAt)}`
+                  : ''}
+              </p>
+            </div>
+            <button
+              onClick={() => onClearFocused?.()}
+              title="Quitar del mapa"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-ink-faint hover:bg-surface-3 hover:text-ink-soft"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="space-y-2 px-3.5 py-3 text-xs">
+            <p className="flex items-start gap-2 text-ink-soft">
+              <User className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
+              <span className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                  Repartidor
+                </span>
+                {focusedOrder.driverName}
+              </span>
+            </p>
+            <p className="flex items-start gap-2 text-ink-soft">
+              <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
+              <span className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                  Dirección de entrega
+                </span>
+                {[focusedOrder.addressLine1, focusedOrder.city].filter(Boolean).join(', ') ||
+                  'Sin dirección'}
+              </span>
+            </p>
+            <p className="flex items-start gap-2 text-ink-soft">
+              <Store className="mt-0.5 h-3.5 w-3.5 shrink-0 text-ink-faint" />
+              <span className="min-w-0">
+                <span className="block text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                  Sucursal de salida
+                </span>
+                {focusedOrder.branchName ?? '—'}
+              </span>
+            </p>
+            <p className="flex items-center gap-2 border-t border-line pt-2 text-ink">
+              <Route className="h-3.5 w-3.5 shrink-0 text-violet-600" />
+              <span className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                Ruta
+              </span>
+              <span className="ml-auto font-bold">{focusedBadge}</span>
+            </p>
+          </div>
         </div>
       )}
 

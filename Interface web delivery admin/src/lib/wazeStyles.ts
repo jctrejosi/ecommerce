@@ -10,7 +10,8 @@ import type { StyleSpecification, FilterSpecification } from 'maplibre-gl';
  * es público/distribuible (Waze retiró su tile-server en 2023).
  */
 
-export const GLYPHS = 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf';
+// Glifos empaquetados en el proyecto (public/map/fonts), no en la red.
+export const GLYPHS = '/map/fonts/{fontstack}/{range}.pbf';
 export const VECTOR_SOURCE_URL = 'https://tiles.openfreemap.org/planet';
 
 interface Palette {
@@ -352,12 +353,17 @@ function rasterSpec(
   };
 }
 
-/** Estilos remotos de OpenFreeMap (mismo proveedor que la app móvil). */
+/** Estilos de OpenFreeMap (mismo proveedor que la app móvil).
+ *
+ * El JSON del estilo va **empaquetado en el proyecto** (`public/map/styles`)
+ * para no depender de la red al cargar el mapa: solo los tiles (y las fuentes
+ * de glifos) se piden al proveedor, ya que no es viable empaquetar el planeta.
+ */
 const OFM = (id: string, name: string, maxZoom: number, swatch: string, dark = false) =>
   ({
     id,
     name,
-    styleUrl: `https://tiles.openfreemap.org/styles/${id}`,
+    styleUrl: `/map/styles/${id}.json`,
     maxZoom,
     dark,
     swatch,

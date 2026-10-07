@@ -7,6 +7,7 @@ import {
   MapPin,
   MessageCircle,
   Phone,
+  Route,
   Store,
   Truck,
   User,
@@ -26,6 +27,11 @@ interface Props {
   onLocate?: (driverId: number) => void;
   /** Abre el chat con el repartidor (cierra el modal). */
   onChat?: (driverId: number) => void;
+  /**
+   * Muestra en el mapa el recorrido del pedido entregado (domicilio + sucursal
+   * + ruta con su tiempo). Solo se ofrece cuando el pedido está `DELIVERED`.
+   */
+  onShowRoute?: () => void;
 }
 
 /** Pasos del pedido, en orden. Se muestran los que ya ocurrieron, con su hora. */
@@ -86,8 +92,10 @@ export default function OrderDetailModal({
   onClose,
   onLocate,
   onChat,
+  onShowRoute,
 }: Props) {
   const meta = STATUS_META[order.status];
+  const isDelivered = order.status === 'DELIVERED';
 
   // Cerrar con Escape (además del clic en el fondo).
   useEffect(() => {
@@ -251,13 +259,22 @@ export default function OrderDetailModal({
 
         {/* ── Acciones ── */}
         <div className="flex flex-wrap items-center gap-2 border-t border-line bg-surface px-5 py-3.5">
-          {onLocate && (
+          {isDelivered && onShowRoute ? (
             <button
-              onClick={() => onLocate(order.driverId)}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-invert px-3.5 py-2 text-xs font-bold text-invert-ink transition hover:bg-invert/90"
+              onClick={onShowRoute}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 py-2 text-xs font-bold text-white transition hover:bg-violet-700"
             >
-              <LocateFixed className="h-3.5 w-3.5" /> Ver en el mapa
+              <Route className="h-3.5 w-3.5" /> Ver ruta en el mapa
             </button>
+          ) : (
+            onLocate && (
+              <button
+                onClick={() => onLocate(order.driverId)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-invert px-3.5 py-2 text-xs font-bold text-invert-ink transition hover:bg-invert/90"
+              >
+                <LocateFixed className="h-3.5 w-3.5" /> Ver en el mapa
+              </button>
+            )
           )}
           {onChat && (
             <button

@@ -16,6 +16,12 @@ interface Props {
   drivers?: FleetDriver[];
   /** Abre el chat con el repartidor del pedido. */
   onChat?: (driverId: number) => void;
+  /**
+   * Muestra en el mapa el recorrido de un pedido ENTRETADO (domicilio +
+   * sucursal + ruta con su tiempo). Si no se provee, los entregados caen a
+   * `onLocate` (posible repartidor sin pedido activo).
+   */
+  onViewOrderOnMap?: (order: FleetOrder) => void;
 }
 
 /** Cuántos pedidos se cargan por página (lazyload). */
@@ -63,10 +69,20 @@ export default function OrdersPanel({
   branchId = null,
   drivers = [],
   onChat,
+  onViewOrderOnMap,
 }: Props) {
   const [orders, setOrders] = useState<FleetOrder[]>([]);
   /** Pedido abierto en el modal de detalle (null = cerrado). */
   const [selected, setSelected] = useState<FleetOrder | null>(null);
+
+  /**
+   * Pedidos entregados → recorrido histórico en el mapa; el resto → ubicar al
+   * repartidor en vivo.
+   */
+  const viewOnMap = (order: FleetOrder) => {
+    if (order.status === 'DELIVERED' && onViewOrderOnMap) onViewOrderOnMap(order);
+    else onLocate(order.driverId);
+  };
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -322,9 +338,13 @@ export default function OrdersPanel({
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        onLocate(o.driverId);
+                        viewOnMap(o);
                       }}
-                      title="Ubicar en el mapa"
+                      title={
+                        o.status === 'DELIVERED'
+                          ? 'Ver el recorrido en el mapa'
+                          : 'Ubicar en el mapa'
+                      }
                       className="flex h-7 w-7 items-center justify-center rounded-lg text-sky-500 hover:bg-sky-50"
                     >
                       <LocateFixed className="h-3.5 w-3.5" />
@@ -360,6 +380,15 @@ export default function OrdersPanel({
             setSelected(null);
             onLocate(driverId);
           }}
+          onShowRoute={
+            onViewOrderOnMap
+              ? () => {
+                  const o = selected;
+                  setSelected(null);
+                  onViewOrderOnMap(o);
+                }
+              : undefined
+          }
           onChat={
             onChat
               ? (driverId) => {
