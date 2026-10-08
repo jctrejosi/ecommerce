@@ -234,6 +234,21 @@ FAVLRIVA 10889.09 = 68200` (base de líneas) y `FAVARIOS 7900` → `FAVLRNET 761
 (= pago). Pendiente de confirmar con el ERP (§11 del plan): numeración
 `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM` y el tratamiento del envío.
 
+### 8.4 Entrada de clientes (`sync-customers.mjs`)
+
+`node scripts-agent/erp/sync-customers.mjs` trae los clientes de `POSCLI`
+(146.371 filas) a `customers` con el mismo modelo: diff por huella
+(`erp_snapshot`, `erp_table='POSCLI'`) y merge no destructivo. Identidad
+`CODCLI` → `erp_customer_code` / `provider_id` (`provider='ERP'`).
+
+- `customers.email` es NOT NULL y UNIQUE → si el ERP no trae email (o choca con
+  otro cliente) se sintetiza `<CODCLI>@erp.mercaldas.local`.
+- `FECHABAJA` no se usa (poblado en el 99,9% y su significado sin confirmar);
+  `BLOQUE` sólo toma `''`/`'F'` → todos activos.
+- Resultado: **146.318** clientes ERP (44 locales intactos), 0 emails duplicados.
+- Requisito: `POSCLI` (`.adt`+`.adi`) debe estar en la carpeta de datos de
+  OpenADS (`db/ads/openads/data`); el sembrado inicial no lo incluía.
+
 ---
 
 ### Anexo — comandos útiles

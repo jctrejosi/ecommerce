@@ -15,9 +15,11 @@
 > **Estado de implementación (piloto con la copia `db/ADD_ANALITICA`)**:
 > - ✅ **Fase 2** — migración `db/sql/19_erp_integration.sql` aplicada;
 >   `erp_code_map` poblado (`scripts-agent/erp/sync-codes.mjs`).
-> - ✅ **Fase 3** (parcial) — **entrada ERP → Postgres** funcionando con
->   `scripts-agent/erp/sync-catalog.mjs` (diff por huella contra `erp_snapshot`,
->   idempotente). Detalle y resultados: `docs/OPENADS-VALIDACION.md` §8.
+> - ✅ **Fase 3** (parcial) — **entrada ERP → Postgres**: catálogo con
+>   `scripts-agent/erp/sync-catalog.mjs` y clientes con
+>   `scripts-agent/erp/sync-customers.mjs` (diff por huella contra `erp_snapshot`,
+>   idempotente, merge no destructivo). Detalle: `docs/OPENADS-VALIDACION.md` §8.
+>   Falta la facturación (`FADDIA`/`FAPAGO` → `invoices`/`payments`/`orders`).
 > - ✅ **Fase 4** (piloto) — **salida Postgres → ERP** con
 >   `scripts-agent/erp/push-orders.mjs` (`orders`/`order_items` → `DOMDIA`/`DOMITE`,
 >   idempotente por `FACONTROL`). Lote del piloto enviado: **87 pedidos** (`80` en
