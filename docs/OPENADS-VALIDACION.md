@@ -207,6 +207,29 @@ La segunda corrida detecta **0 cambios** (idempotente).
 - `INEAN` (código de barras) se deduplica **por artículo**; se conservan 21.189
   códigos y se anulan 424 duplicados reales.
 
+### 8.3 Salida Postgres → ERP (`push-orders.mjs`)
+
+`node scripts-agent/erp/push-orders.mjs` escribe pedidos en el ERP (`DOMDIA` +
+`DOMITE`, mapeo §4.4). Idempotente por `FACONTROL = orders.reference_code`
+(se comprueba en el ERP antes de insertar; si ya está, se salta). Marca
+`orders.erp_sync_status`/`erp_document_ref` y deja rastro en `erp_outbox`.
+Flags: `--dry-run`, `--limit=N`, `--order=ID`, `--force`.
+
+Validado contra la copia: pedidos insertados y releídos; la cabecera cuadra
+(`subtotal + domicilio(FAVARIOS) = grand_total = pago`); `IFARTIC`/`IFEAN` se
+resuelven por `product_variants` (la copia de `order_items.variant_sku` puede
+venir vacía); reintentar un pedido ya enviado → “ya en el ERP”.
+
+**Lote del piloto enviado**: `node scripts-agent/erp/push-orders.mjs --limit=200`
+→ **80 aplicados, 0 fallidos** (más los 7 previos = **87 pedidos** con
+`erp_sync_status='sent'`). Los **11 pedidos restantes** son `cancelled`/`refunded`
+y el script los excluye a propósito (`WHERE status NOT IN ('cancelled','refunded')`),
+por lo que quedan sin `FACONTROL` (correcto). Verificado en el ERP: `DOMDIA` con
+`FACONTROL LIKE 'DEMO-%'` = 85 filas; p. ej. pedido 502 → `FAVLRBRU 57310.91 +
+FAVLRIVA 10889.09 = 68200` (base de líneas) y `FAVARIOS 7900` → `FAVLRNET 76100`
+(= pago). Pendiente de confirmar con el ERP (§11 del plan): numeración
+`FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM` y el tratamiento del envío.
+
 ---
 
 ### Anexo — comandos útiles

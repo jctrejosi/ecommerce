@@ -18,7 +18,12 @@
 > - ✅ **Fase 3** (parcial) — **entrada ERP → Postgres** funcionando con
 >   `scripts-agent/erp/sync-catalog.mjs` (diff por huella contra `erp_snapshot`,
 >   idempotente). Detalle y resultados: `docs/OPENADS-VALIDACION.md` §8.
-> - ⏳ **Fase 4** — salida Postgres → ERP (`push-orders.mjs`) **pendiente**.
+> - ✅ **Fase 4** (piloto) — **salida Postgres → ERP** con
+>   `scripts-agent/erp/push-orders.mjs` (`orders`/`order_items` → `DOMDIA`/`DOMITE`,
+>   idempotente por `FACONTROL`). Lote del piloto enviado: **87 pedidos** (`80` en
+>   la última corrida, `0` fallidos); los `cancelled`/`refunded` se excluyen.
+>   Falta confirmar con el ERP la numeración (`FAPEDIDO`), estados
+>   (`FAESTADO`/`IFESTADO`), tipo de domicilio y el trato del envío (`FAVARIOS`).
 > - ⏳ **Fase 5** — triggers `DSI_EVENTO` en el ERP **pendiente** (o plan B,
 >   que es el diff por huella ya implementado).
 
@@ -720,8 +725,9 @@ CREATE UNIQUE INDEX ON customers (erp_customer_code) WHERE erp_customer_code IS 
 | **3 · Entrada** | Endpoint `/erp/events` + proyectores de catálogo/precios/stock probados con la copia | Fase 2 |
 | **4 · Salida** | Outbox + endpoint de pedidos + agente escribiendo en una copia local | Fase 2 |
 
-> Avance del piloto: Fase 2 ✅, Fase 3 (entrada por diff de catálogo) ✅ con
-> `sync-catalog.mjs`; Fases 4 y 5 pendientes (ver cabecera).
+> Avance del piloto: Fase 2 ✅; Fase 3 (entrada por diff de catálogo) ✅ con
+> `sync-catalog.mjs`; Fase 4 (salida de pedidos) ✅ con `push-orders.mjs`;
+> Fase 5 (triggers) pendiente (ver cabecera).
 | **5 · Triggers** | `DSI_EVENTO` + triggers + purga en el ERP (o plan B) | Fase 0/ERP |
 | **6 · Sandbox ERP** | 5–10 pedidos reales → verificar factura en `FADDIA`/`FADITE`/`FAPAGO` | Fases 4–5 |
 | **7 · Conciliación** | Job diario + panel + alertas | Fase 6 |

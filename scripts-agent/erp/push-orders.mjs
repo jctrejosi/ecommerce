@@ -65,7 +65,7 @@ const q = (t, p) => pg.query(t, p);
 
 const ORDER_COLS = `
   o.id, o.reference_code, o.status, o.branch_id, b.code AS branch_code,
-  o.subtotal, o.discount_total, o.tax_total, o.grand_total,
+  o.subtotal, o.discount_total, o.tax_total, o.shipping_cost, o.shipping_tax, o.grand_total,
   o.customer_name, o.customer_phone, o.customer_email, o.notes, o.created_at,
   o.customer_id, o.customer_address_id, o.erp_document_ref, o.erp_sync_status,
   c.erp_customer_code, c.document_number, c.first_name, c.last_name, c.phone AS c_phone,
@@ -113,7 +113,15 @@ log(`   ${existingControl.size} controles existentes`);
 // ─────────────────── helpers de escritura ───────────────────
 
 async function insertOrder(ord) {
-  const items = (await q('SELECT * FROM order_items WHERE order_id = $1 ORDER BY id', [ord.id])).rows;
+  const items = (
+    await q(
+      `SELECT oi.*, pv.sku AS pv_sku, pv.barcode AS pv_barcode
+         FROM order_items oi
+         LEFT JOIN product_variants pv ON pv.id = oi.product_variant_id
+        WHERE oi.order_id = $1 ORDER BY oi.id`,
+      [ord.id],
+    )
+  ).rows;
   const pays = (await q('SELECT payment_method, amount FROM payments WHERE order_id = $1 ORDER BY id LIMIT 3', [ord.id])).rows;
 
   const { ymd, hms } = bogota(ord.created_at);
@@ -145,7 +153,8 @@ async function insertOrder(ord) {
       IFFACT: '',
       IFPEDIDO: pedido,
       IFCLIENTE: codcli,
-      IFARTIC: clip(it.variant_sku, 19),
+      IFARTIC: clip(it.variant_sku || it.pv_sku, 19), // SKU: la relación manda sobre la copia de la línea
+      IFEAN: clip(it.pv_barcode, 18),
       IFNOMBRE: clip(it.product_name, 60),
       IFCANT: money(qty),
       IFVLRUNI: money(uniGross),
@@ -163,6 +172,14 @@ async function insertOrder(ord) {
     });
   }
 
+  // Sanidad: la base neta de las líneas debe cuadrar con el subtotal del pedido.
+  if (Math.abs(sumBase - Number(ord.subtotal || 0)) > 1) {
+    log(`   ⚠️  pedido ${ord.id}: base de líneas ${money(sumBase)} ≠ subtotal ${money(ord.subtotal)}`);
+  }
+
+  // Cabecera: totales del pedido (§4.4). El domicilio no va en las líneas, así
+  // que FAVLRNET = grand_total y el envío se registra en FAVARIOS para cuadrar
+  // con lo pagado. Las líneas cumplen sus propias invariantes.
   const header = {
     FASUCUR: sucursal,
     FAFACTURA: '',
@@ -177,10 +194,11 @@ async function insertOrder(ord) {
     FAEMAIL: email,
     FAFCHFAC: ymd,
     FATIME: hms,
-    FAVLRBRU: money(sumBase),
+    FAVLRBRU: money(ord.subtotal),
     FAVLRDES: money(ord.discount_total),
-    FAVLRIVA: money(sumIva),
-    FAVLRNET: money(sumNet),
+    FAVLRIVA: money(ord.tax_total),
+    FAVARIOS: money(Number(ord.shipping_cost || 0) + Number(ord.shipping_tax || 0)),
+    FAVLRNET: money(ord.grand_total),
     FAPAG01: PAY_MAP[pays[0]?.payment_method] ?? '',
     FAVLR01: money(pays[0]?.amount),
     FAPAG02: PAY_MAP[pays[1]?.payment_method] ?? '',
@@ -194,7 +212,7 @@ async function insertOrder(ord) {
   };
 
   if (DRY) {
-    log(`   [dry] pedido ${ord.id} ${ord.reference_code} → DOMDIA suc=${sucursal} net=${money(sumNet)} + ${domiteRows.length} ítems`);
+    log(`   [dry] pedido ${ord.id} ${ord.reference_code} → DOMDIA suc=${sucursal} net=${money(ord.grand_total)} + ${domiteRows.length} ítems`);
     return { ok: true, dry: true };
   }
 
@@ -208,7 +226,7 @@ async function insertOrder(ord) {
     if (!ires.ok) throw new Error(`DOMITE insert falló (artic ${row.IFARTIC}): ${JSON.stringify(ires)}`);
   }
 
-  return { ok: true, recno: hres.recno, control: header.FACONTROL, pedido: header.FAPEDIDO, sumNet: money(sumNet), items: domiteRows.length };
+  return { ok: true, recno: hres.recno, control: header.FACONTROL, pedido: header.FAPEDIDO, sumNet: money(ord.grand_total), items: domiteRows.length };
 }
 
 /** Quita claves con valor vacío (el endpoint solo escribe lo que recibe). */
