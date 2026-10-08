@@ -11,6 +11,16 @@
 >   del catálogo TID.
 >
 > **Última actualización**: 2026-10-08.
+>
+> **Estado de implementación (piloto con la copia `db/ADD_ANALITICA`)**:
+> - ✅ **Fase 2** — migración `db/sql/19_erp_integration.sql` aplicada;
+>   `erp_code_map` poblado (`scripts-agent/erp/sync-codes.mjs`).
+> - ✅ **Fase 3** (parcial) — **entrada ERP → Postgres** funcionando con
+>   `scripts-agent/erp/sync-catalog.mjs` (diff por huella contra `erp_snapshot`,
+>   idempotente). Detalle y resultados: `docs/OPENADS-VALIDACION.md` §8.
+> - ⏳ **Fase 4** — salida Postgres → ERP (`push-orders.mjs`) **pendiente**.
+> - ⏳ **Fase 5** — triggers `DSI_EVENTO` en el ERP **pendiente** (o plan B,
+>   que es el diff por huella ya implementado).
 
 ---
 
@@ -102,6 +112,7 @@ y el backend no necesita driver ADS (recuerda: el servidor ADS para Linux quedó
 | Driver | Advantage .NET Data Provider / ODBC de Advantage |
 | Tablas | *free tables* por defecto; los triggers requieren **diccionario** (`.add`) → **verificar** (§11) |
 | Lectura alternativa | Copia de archivos por SMB (ya existe `db/adt-reader/upload-addt.py`) para *backfill* y conciliación |
+| **Linux/Docker (validado)** | **OpenADS** (`db/ads/openads/`) monta las `.adt` de una réplica y las sirve por API/SQL. Ver `docs/OPENADS-VALIDACION.md` |
 | Escritura | Solo el agente, en transacciones; nunca desde Linux |
 
 ### 3.2 Captura de cambios en el ERP
@@ -265,8 +276,8 @@ Zona horaria de referencia: **America/Bogota**. Las fechas del ERP no llevan hor
 | `INUNIDAD` | char | `product_attributes` | unidad de medida |
 | `INPRESEN` | char | `product_attributes` | presentación |
 | `INEMBALAJE` | double | `product_attributes` | factor de empaque |
-| `INMARCAP` | char | → `brands` (vía `TIDMARCAS.MCODIGO`) | **marca real** (92 %) |
-| `INMARCA` | char | atributo auxiliar | 3 %, no es la marca |
+| `INMARCAP` | char | `brands.name` (+ `brands.code` si casa con `TIDMARCAS`) | **marca real** (nombre; coincide con `MNOMBRE` en 33.741 filas) |
+| `INMARCA` | char | respaldo (vía `TIDMARCAS.MCODIGO`) | poblado en el 100% pero **apunta a marcas sin relación** → no se usa como fuente |
 | `INTIPO` | char | → `product_types` (vía `TIDTPRO.CODIGO`) | tipo de producto |
 | `INTIMP` | char | → `product_tax_classes` / `tax_rates` (vía `TIDTIPOS`) | clase de impuesto |
 | `INPROVEE` | char | → `suppliers` | proveedor |
@@ -708,6 +719,9 @@ CREATE UNIQUE INDEX ON customers (erp_customer_code) WHERE erp_customer_code IS 
 | **2 · Núcleo Postgres** | Migraciones de §6, codecs, `erp_code_map` poblado desde `POSPAGO`/`TIDTIPOS`/`POSDANE` | — |
 | **3 · Entrada** | Endpoint `/erp/events` + proyectores de catálogo/precios/stock probados con la copia | Fase 2 |
 | **4 · Salida** | Outbox + endpoint de pedidos + agente escribiendo en una copia local | Fase 2 |
+
+> Avance del piloto: Fase 2 ✅, Fase 3 (entrada por diff de catálogo) ✅ con
+> `sync-catalog.mjs`; Fases 4 y 5 pendientes (ver cabecera).
 | **5 · Triggers** | `DSI_EVENTO` + triggers + purga en el ERP (o plan B) | Fase 0/ERP |
 | **6 · Sandbox ERP** | 5–10 pedidos reales → verificar factura en `FADDIA`/`FADITE`/`FAPAGO` | Fases 4–5 |
 | **7 · Conciliación** | Job diario + panel + alertas | Fase 6 |

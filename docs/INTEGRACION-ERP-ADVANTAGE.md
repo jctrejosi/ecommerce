@@ -582,11 +582,12 @@ transacción** → marcar `FACONTROL` → responder `FAPEDIDO`.
 
 ### 10.10 Nota sobre “ADS en Linux”
 
-Ya se intentó (`db/ads/`): el plan de correr el servidor ADS en Docker quedó
-**bloqueado** porque el instalador `adslinux-11.10.0.24.tar.gz` no es público
-(SAP descontinuó el producto). Por eso el camino óptimo es el **agente en el
-Windows del ERP** (o el `db/adt-reader/` vía SMB que ya existe), y no un driver
-remoto desde Linux.
+Ya se intentó (`db/ads/`): el plan de correr el **servidor oficial** ADS en Docker
+quedó **bloqueado** porque el instalador `adslinux-11.10.0.24.tar.gz` no es
+público (SAP descontinuó el producto). **Resuelto** con **OpenADS**
+(reimplementación open-source): ver `docs/OPENADS-VALIDACION.md`. En resumen,
+ya monta nuestras tablas `.adt` en Docker y escribe de forma byte-compatible;
+los triggers requieren diccionario y las *free tables* se capturan por diff.
 
 ---
 

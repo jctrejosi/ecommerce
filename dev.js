@@ -22,7 +22,8 @@
  * Logs: un archivo por servicio en logs/ (logs/<servicio>.log).
  *
  * La BD (docker) queda corriendo al salir; se detiene con
- * `cd db/docker && docker compose stop`.
+ * `cd db/docker && docker compose stop`. Junto a PostgreSQL se levanta también
+ * Advantage/OpenADS (la BD del ERP, db/ads/openads) salvo con `--no-advantage`.
  */
 const { spawn, spawnSync } = require("node:child_process");
 const fs = require("node:fs");
@@ -41,11 +42,23 @@ const PICKING_MOBILE_PORT = 8082;
 const OSRM_DIR = path.join(ROOT, "delivery-routing");
 const OSRM_PORT = 5000;
 
-// BD principal (db/docker/docker-compose.yml) y respaldo versionado en
-// db/backups/ecommerce (troceado en ecommerce.dump.part-000, ...) para GitHub.
+// BD principal (db/docker/docker-compose.yml) y respaldos versionados en
+// db/backups/ecommerce/backup_<fecha>/ (troceados en ecommerce.dump.part-000,
+// ...) para GitHub. Se restaura el subdirectorio con la fecha más reciente.
 const DB_CONTAINER = "ecommerce_postgres";
 const DB_NAME = "ecommerce";
 const DB_BACKUP_DIR = path.join(ROOT, "db", "backups", "ecommerce");
+
+// Advantage (OpenADS): la BD del ERP, montada en Docker (db/ads/openads).
+// La consume el conector ERP ⇄ Postgres (scripts-agent/erp). No es dependencia
+// del ecommerce, así que si falta imagen/datos se avisa pero NO se aborta.
+const ADV_DIR = path.join(ROOT, "db", "ads", "openads");
+const ADV_IMAGE = "mercaldas/openads:1.09.73";
+const ADV_CONTAINER = "openads-img";
+const ADV_DATA = path.join(ADV_DIR, "data"); // copia ESCRIBIBLE que se monta
+const ADV_DATA_SEED = path.join(ADV_DIR, "data-test"); // copia ya validada
+const ADV_WIRE_PORT = 16262; // protocolo wire ADS (ace*.dll)
+const ADV_HTTP_PORT = 18080; // consola Studio / REST / SQL
 
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
@@ -58,6 +71,8 @@ const FORCE = ARGS.includes("--force");
 // Las apps móviles (Expo) corren desacopladas por defecto: así la terminal queda
 // libre y se puede cerrar sin matar Metro. Con --fg se muestra el QR aquí mismo.
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
+// `--no-advantage`: no levantar el contenedor de la BD del ERP (OpenADS).
+const NO_ADVANTAGE = ARGS.includes("--no-advantage");
 
 // Dependencias por servicio: `marker` es lo que se comprueba para saber si ya
 // están instaladas; `install` son los comandos que las instalan si faltan.
@@ -109,6 +124,7 @@ const C = {
   delivery: "\x1b[92m",
   "picking-mobile": "\x1b[94m",
   osrm: "\x1b[90m",
+  advantage: "\x1b[33m",
   reset: "\x1b[0m",
 };
 
@@ -228,6 +244,7 @@ const NO_SELECTOR_FLAGS = new Set([
   "--all",
   "--fg",
   "--foreground",
+  "--no-advantage",
 ]);
 
 /** Flags `--x` no reconocidos. Si hay alguno, el launcher no ejecuta nada. */
@@ -414,9 +431,31 @@ function dbIsInitialized() {
   return (r.stdout || "").trim() === "t";
 }
 
-function loadBackup() {
+/**
+ * Directorio del respaldo a usar: el subdirectorio `backup_<fecha>` más
+ * reciente dentro de db/backups/ecommerce/ (o la propia carpeta si todavía
+ * tiene las partes sueltas — formato antiguo).
+ */
+function resolveBackupDir() {
   if (!fs.existsSync(DB_BACKUP_DIR)) return null;
-  const files = fs.readdirSync(DB_BACKUP_DIR);
+  const entries = fs.readdirSync(DB_BACKUP_DIR, { withFileTypes: true });
+  const dated = entries
+    .filter((e) => e.isDirectory() && /^backup_\d{4}-\d{2}-\d{2}$/.test(e.name))
+    .map((e) => e.name)
+    .sort();
+  if (dated.length) return path.join(DB_BACKUP_DIR, dated[dated.length - 1]);
+  const flat = entries.some(
+    (e) =>
+      e.isFile() &&
+      (e.name === "ecommerce.dump" || /^ecommerce\.dump\.part-\d+$/.test(e.name)),
+  );
+  return flat ? DB_BACKUP_DIR : null;
+}
+
+function loadBackup() {
+  const dir = resolveBackupDir();
+  if (!dir) return null;
+  const files = fs.readdirSync(dir);
   const single = files.includes("ecommerce.dump");
   const parts = files
     .filter((f) => /^ecommerce\.dump\.part-\d+$/.test(f))
@@ -424,9 +463,9 @@ function loadBackup() {
   if (!single && parts.length === 0) return null;
   const names = single ? ["ecommerce.dump"] : parts;
   const buffer = Buffer.concat(
-    names.map((n) => fs.readFileSync(path.join(DB_BACKUP_DIR, n))),
+    names.map((n) => fs.readFileSync(path.join(dir, n))),
   );
-  return { names, buffer };
+  return { dir, names, buffer };
 }
 
 function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
@@ -434,7 +473,7 @@ function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
   if (!backup) {
     if (explicit) {
       console.warn(
-        `${C.db}[db]${C.reset} ⚠️  No hay respaldo en ${path.relative(ROOT, DB_BACKUP_DIR)} (faltan las partes ecommerce.dump.part-*).`,
+        `${C.db}[db]${C.reset} ⚠️  No hay respaldo en ${path.relative(ROOT, DB_BACKUP_DIR)} (falta un subdirectorio backup_<fecha> con las partes ecommerce.dump.part-*).`,
       );
     }
     return false;
@@ -457,7 +496,7 @@ function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
   }
 
   // Integridad: si existe el hash del volcado completo, se valida antes de restaurar.
-  const shaFile = path.join(DB_BACKUP_DIR, "ecommerce.dump.sha256");
+  const shaFile = path.join(backup.dir, "ecommerce.dump.sha256");
   if (fs.existsSync(shaFile)) {
     const expected = fs.readFileSync(shaFile, "utf8").trim();
     const actual = crypto.createHash("sha256").update(backup.buffer).digest("hex");
@@ -579,6 +618,104 @@ function startOsrm() {
     `${C.osrm}[osrm]${C.reset} 💡 Si aún no has preparado el grafo: cd delivery-routing && ./prepare.sh`,
   );
   return false;
+}
+
+// ── Advantage / OpenADS (BD del ERP, Docker) ──────────────────
+
+/** ¿Existe la imagen Docker localmente? */
+function dockerImageExists(img) {
+  return spawnSync("docker", ["image", "inspect", img], { stdio: "ignore" }).status === 0;
+}
+
+/** ¿Existe el contenedor (corriendo o parado)? */
+function dockerContainerExists(name) {
+  return spawnSync("docker", ["container", "inspect", name], { stdio: "ignore" }).status === 0;
+}
+
+/** ¿Está corriendo ese contenedor? */
+function dockerContainerRunning(name) {
+  const r = spawnSync("docker", ["inspect", "-f", "{{.State.Running}}", name], {
+    encoding: "utf8",
+  });
+  return r.status === 0 && (r.stdout || "").trim() === "true";
+}
+
+/**
+ * Prepara el directorio de datos Advantage que se monta en el contenedor.
+ * NUNCA se monta el original (db/ADD_ANALITICA): el motor escribe locks y
+ * journal, así que la copia de trabajo debe ser escribible. Si no existe
+ * `db/ads/openads/data` se siembra desde la copia ya validada `data-test`
+ * (o, si el usuario la dejó ahí, desde db/ADD_ANALITICA).
+ */
+function ensureAdvantageData() {
+  if (dirHasContent(ADV_DATA)) return true;
+  const seeds = [ADV_DATA_SEED, path.join(ROOT, "db", "ADD_ANALITICA")];
+  for (const seed of seeds) {
+    if (!dirHasContent(seed)) continue;
+    try {
+      fs.mkdirSync(ADV_DATA, { recursive: true });
+      fs.cpSync(seed, ADV_DATA, { recursive: true });
+      if (dirHasContent(ADV_DATA)) return true;
+    } catch {
+      /* intenta la siguiente semilla */
+    }
+  }
+  return false;
+}
+
+/** Levanta el contenedor de Advantage (OpenADS) en segundo plano. */
+function startAdvantage() {
+  const { fd } = openLog("advantage");
+  const run = (args) =>
+    spawnSync("docker", args, { stdio: ["ignore", fd, fd], timeout: 120000 });
+
+  const alreadyExists = dockerContainerExists(ADV_CONTAINER);
+
+  if (!alreadyExists) {
+    if (!dockerImageExists(ADV_IMAGE)) {
+      fs.closeSync(fd);
+      console.warn(`${C.advantage}[adv]${C.reset} ⚠️  Falta la imagen ${ADV_IMAGE} (BD del ERP).`);
+      console.warn(
+        `${C.advantage}[adv]${C.reset} 💡 Constrúyela una vez:\n` +
+          `      bash db/ads/openads/build.sh\n` +
+          `      docker build -t ${ADV_IMAGE} -f db/ads/openads/Dockerfile db/ads/openads`,
+      );
+      return false;
+    }
+    if (!ensureAdvantageData()) {
+      fs.closeSync(fd);
+      console.warn(
+        `${C.advantage}[adv]${C.reset} ⚠️  No hay tablas Advantage en ${path.relative(ROOT, ADV_DATA)}.`,
+      );
+      console.warn(
+        `${C.advantage}[adv]${C.reset} 💡 Copia el ERP ahí: cp -r db/ADD_ANALITICA/. ${path.relative(ROOT, ADV_DATA)}/`,
+      );
+      return false;
+    }
+    run([
+      "run", "-d", "--name", ADV_CONTAINER,
+      "-p", `${ADV_WIRE_PORT}:6262`, "-p", `${ADV_HTTP_PORT}:8080`,
+      "-v", `${ADV_DATA}:/data`,
+      "-e", "OPENADS_ERROR_LOG_PATH=/var/log/openads",
+      ADV_IMAGE,
+      "--data", "/data", "--host", "0.0.0.0", "--port", "6262",
+      "--http_port", "8080", "--auth_user", "dsi:dsi", "--http_user", "dsi:dsi",
+    ]);
+  } else if (!dockerContainerRunning(ADV_CONTAINER)) {
+    run(["start", ADV_CONTAINER]); // sobre uno ya corriendo devuelve !=0: no es error
+  }
+  fs.closeSync(fd);
+
+  if (!dockerContainerRunning(ADV_CONTAINER)) {
+    console.warn(
+      `${C.advantage}[adv]${C.reset} ⚠️  No se pudo arrancar Advantage (detalle en logs/advantage.log).`,
+    );
+    return false;
+  }
+  console.log(
+    `${C.advantage}[adv]${C.reset} 🛒 Advantage (ERP) → Studio http://localhost:${ADV_HTTP_PORT} (dsi/dsi)`,
+  );
+  return true;
 }
 
 // ── Dependencias ───────────────────────────────────────────
@@ -739,7 +876,7 @@ function asLanHostname(ip) {
   return ip ? `${ip.replace(/\./g, "-")}.${LAN_ALIAS_DOMAIN}` : null;
 }
 
-function printUrls(services, showDb, showOsrm) {
+function printUrls(services, showDb, showOsrm, showAdvantage) {
   const ip = lanIp();
   console.log("\n━━━━━━━━━━━━━ Mercaldas — URLs ━━━━━━━━━━━━━");
   for (const svc of services) {
@@ -759,6 +896,7 @@ function printUrls(services, showDb, showOsrm) {
   }
   if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
   if (showOsrm) console.log("  OSRM           → Rutas http://localhost:5000 (docker, Manizales)");
+  if (showAdvantage) console.log("  ADVANTAGE      → ERP http://localhost:18080 (docker, OpenADS/Studio · dsi/dsi)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   const started = services.map((s) => s.name).join(", ");
   console.log(`Logs: logs/*.log  (${started || "sin servicios"}).`);
@@ -979,6 +1117,12 @@ function stopAll() {
   // OSRM corre como contenedor (no como proceso node): se detiene aparte.
   spawnSync("docker", ["compose", "stop"], { cwd: OSRM_DIR, stdio: "ignore" });
 
+  // Advantage (BD del ERP): contenedor propio.
+  if (dockerContainerRunning(ADV_CONTAINER)) {
+    spawnSync("docker", ["stop", ADV_CONTAINER], { stdio: "ignore" });
+    console.log(`⏹  Advantage (${ADV_CONTAINER})`);
+  }
+
   try {
     fs.unlinkSync(PIDS_FILE);
   } catch {
@@ -1034,6 +1178,7 @@ function printHelp() {
   out.push("  node dev.js <flags>             → solo los aplicativos pedidos (+ sus dependencias)");
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
   out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
+  out.push("  node dev.js --no-advantage      → no levantar la BD del ERP (OpenADS/Advantage)");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
   out.push("  node dev.js --migrate           → restaura la BD desde db/backups/ecommerce y sale");
   out.push("  node dev.js --migrate --force   → ídem, sobrescribiendo una BD con datos");
@@ -1073,9 +1218,13 @@ function printHelp() {
   out.push("");
   out.push("BASES DE DATOS");
   out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
+  out.push("  Advantage/OpenADS (:18080 Studio · :16262 wire) — BD del ERP de Mercaldas, en Docker.");
+  out.push("    Se levanta junto a PostgreSQL (omítela con --no-advantage). Imagen: mercaldas/openads:1.09.73.");
+  out.push("    Datos: db/ads/openads/data (copia escribible). Detalle: db/ads/openads/README.md");
   out.push("  Respaldo versionado: db/backups/ecommerce (troceado) — restaurar: node dev.js --migrate");
   out.push("  Para detenerla:   cd db/docker && docker compose stop");
   out.push("                    cd delivery-routing && docker compose stop  (OSRM)");
+  out.push("                    docker stop openads-img                        (Advantage/ERP)");
   out.push("");
   out.push("EJEMPLOS");
   out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + OSRM + BD (rutas del mapa)");
@@ -1109,6 +1258,7 @@ function printCommands() {
   rows.push(["node dev.js --fg", "apps Expo con el QR en la terminal (bloquea)"]);
   rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
   rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
+  rows.push(["node dev.js --no-advantage", "no levantar la BD del ERP (OpenADS)"]);
   rows.push(["node dev.js --help", "esta ayuda"]);
 
   const w = Math.max(...rows.map((r) => r[0].length));
@@ -1118,6 +1268,7 @@ function printCommands() {
   console.log("Bases de datos (docker compose stop):");
   console.log("  cd db/docker            → PostgreSQL :5432");
   console.log("  cd delivery-routing     → OSRM :5000");
+  console.log("  docker stop openads-img → Advantage/OpenADS :18080 (ERP)");
 }
 
 // ── Main ─────────────────────────────────────────────────────
@@ -1143,6 +1294,8 @@ async function main() {
   const plan = resolveSelection(); // null ⇒ todo
   const wantDb = plan === null || plan.includes("db");
   const wantOsrm = plan === null || plan.includes("osrm");
+  // Advantage (BD del ERP, OpenADS) acompaña a PostgreSQL; `--no-advantage` lo omite.
+  const wantAdvantage = wantDb && !NO_ADVANTAGE;
   const svcNames =
     plan === null
       ? SERVICES.map((s) => s.name)
@@ -1184,6 +1337,14 @@ async function main() {
   }
   if (!wantDb)
     console.log(`${C.db}[db]${C.reset} 🚫 PostgreSQL no iniciado (esta selección no lo necesita).`);
+
+  if (wantAdvantage) {
+    if (startAdvantage() && !(await waitForPort(ADV_HTTP_PORT, 90000))) {
+      console.warn(
+        `${C.advantage}[adv]${C.reset} ⚠️  Advantage no responde en :${ADV_HTTP_PORT} (revisa logs/advantage.log).`,
+      );
+    }
+  }
 
   if (wantOsrm) {
     startOsrm();
@@ -1228,7 +1389,7 @@ async function main() {
     }
   }
 
-  printUrls(services, wantDb, wantOsrm);
+  printUrls(services, wantDb, wantOsrm, wantAdvantage);
 
   if (MODE === "dev") {
     if (wantDelivery) {
@@ -1279,4 +1440,9 @@ async function main() {
   process.exit(0); // cierra el script; los servicios siguen en segundo plano
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+// Exportado solo para pruebas (dev.js se ejecuta como script).
+module.exports = { startAdvantage, ensureAdvantageData };

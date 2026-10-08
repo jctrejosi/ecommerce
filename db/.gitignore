@@ -8,6 +8,12 @@
 /ads/installers/
 /ads/data/
 
+# OpenADS (reimplementación open-source de ADS): código clonado y build local
+/ads/openads/src/
+/ads/openads/build/
+/ads/openads/data/
+/ads/openads/data-test/
+
 # dumps de la réplica de analytics (grandes, no se versionan en git)
 /backups/analytics/
 
