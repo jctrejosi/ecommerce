@@ -1,0 +1,147 @@
+{
+  "table": "CATALOGO2",
+  "source": "db/ADD_ANALITICA/CATALOGO2.adt",
+  "bytes": 3800,
+  "recordCount": 0,
+  "recordLength": 127,
+  "headerLength": 3800,
+  "fieldCount": 17,
+  "fields": [
+    {
+      "name": "UpdateTime",
+      "type": 14,
+      "typeName": "?14",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "EntryID",
+      "type": 15,
+      "typeName": "?15",
+      "offset": 13,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "TxnID",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 17,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "TxnReady",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 21,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "ThisDBID",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 25,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "AllDBID",
+      "type": 6,
+      "typeName": "?6",
+      "offset": 29,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "TableName",
+      "type": 8,
+      "typeName": "?8",
+      "offset": 38,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CRC",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 68,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CompatLock",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 72,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IdentColumns",
+      "type": 6,
+      "typeName": "?6",
+      "offset": 73,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "RecordNumber",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 82,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "UpdateType",
+      "type": 4,
+      "typeName": "char",
+      "offset": 86,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "RecordData",
+      "type": 6,
+      "typeName": "?6",
+      "offset": 87,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "BlobData",
+      "type": 6,
+      "typeName": "?6",
+      "offset": 96,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "ErrorCode",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 105,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "ErrorInfo",
+      "type": 5,
+      "typeName": "?5",
+      "offset": 109,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "ErrorInfo2",
+      "type": 5,
+      "typeName": "?5",
+      "offset": 118,
+      "length": 9,
+      "decimals": 0
+    }
+  ]
+}

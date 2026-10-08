@@ -1,0 +1,99 @@
+{
+  "table": "POSPOPER",
+  "source": "db/ADD_ANALITICA/POSPOPER.ADT",
+  "bytes": 5183,
+  "recordCount": 21,
+  "recordLength": 123,
+  "headerLength": 2600,
+  "fieldCount": 11,
+  "fields": [
+    {
+      "name": "IINICIAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "INOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 9,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "IPASSWORD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 39,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "IPASS2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 45,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "IVENCE",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 51,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IMENSA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 55,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IAUTORIZA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 56,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ICEDULA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 57,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "IDIREC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 72,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "ITELEF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 102,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "ICADUCA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 122,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

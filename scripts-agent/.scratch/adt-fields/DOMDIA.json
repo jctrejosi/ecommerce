@@ -1,0 +1,459 @@
+{
+  "table": "DOMDIA",
+  "source": "db/ADD_ANALITICA/DOMDIA.ADT",
+  "bytes": 49305344,
+  "recordCount": 52496,
+  "recordLength": 939,
+  "headerLength": 11600,
+  "fieldCount": 56,
+  "fields": [
+    {
+      "name": "FACIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FAPLACA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 9,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "FACODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "FANOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 28,
+      "length": 45,
+      "decimals": 0
+    },
+    {
+      "name": "FADIREC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 73,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "FACIUDAD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 133,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "FATELEF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 145,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "FANIT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 160,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "FATIPPER",
+      "type": 4,
+      "typeName": "char",
+      "offset": 175,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "FAFACTURA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 176,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "FAPEDIDO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 188,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "FAFCHFAC",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 200,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FAFCHVEN",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 204,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FACANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 208,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FACANT2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 216,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRBRU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 224,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRRETV",
+      "type": 10,
+      "typeName": "double",
+      "offset": 232,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRRETI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 240,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVARIOS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 248,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRDES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 256,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRFLE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 264,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 272,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRIMC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 280,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLROIP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 288,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRNET",
+      "type": 10,
+      "typeName": "double",
+      "offset": 296,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLR01",
+      "type": 10,
+      "typeName": "double",
+      "offset": 304,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAPAG01",
+      "type": 4,
+      "typeName": "char",
+      "offset": 312,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLR02",
+      "type": 10,
+      "typeName": "double",
+      "offset": 314,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAPAG02",
+      "type": 4,
+      "typeName": "char",
+      "offset": 322,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLR03",
+      "type": 10,
+      "typeName": "double",
+      "offset": 324,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAPAG03",
+      "type": 4,
+      "typeName": "char",
+      "offset": 332,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLDESFI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 334,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAPEDINT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 342,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "FAVENDED",
+      "type": 4,
+      "typeName": "char",
+      "offset": 367,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FAOBSER",
+      "type": 4,
+      "typeName": "char",
+      "offset": 369,
+      "length": 250,
+      "decimals": 0
+    },
+    {
+      "name": "FATIME",
+      "type": 4,
+      "typeName": "char",
+      "offset": 619,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FADOCPAGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 627,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "FANOMCOMP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 642,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FAOBSERVEN",
+      "type": 4,
+      "typeName": "char",
+      "offset": 662,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "FACOND",
+      "type": 4,
+      "typeName": "char",
+      "offset": 692,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FAESTADO",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 712,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FAMENSA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 714,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "DIRIP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 718,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "FAHORAD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 758,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAHORAE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 766,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAPTOFAC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 774,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "FASUCUR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 786,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "FASECTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 789,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FATIPODOM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 809,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FACONTROL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 811,
+      "length": 36,
+      "decimals": 0
+    },
+    {
+      "name": "FAVTEX",
+      "type": 4,
+      "typeName": "char",
+      "offset": 847,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "FACANALV",
+      "type": 4,
+      "typeName": "char",
+      "offset": 859,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FAEMAIL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 863,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "FACELU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 913,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "FAFPAGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 928,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "FAFCHEN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 931,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

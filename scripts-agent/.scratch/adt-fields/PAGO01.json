@@ -1,0 +1,131 @@
+{
+  "table": "PAGO01",
+  "source": "db/ADD_ANALITICA/PAGO01.ADT",
+  "bytes": 3400,
+  "recordCount": 0,
+  "recordLength": 155,
+  "headerLength": 3400,
+  "fieldCount": 15,
+  "fields": [
+    {
+      "name": "FPSUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPCAJA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FPCODI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 19,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 27,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPNUMERO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 35,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FPCTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 55,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FPNUMDOC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 75,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FPAUTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 95,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPCLIENTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 99,
+      "length": 11,
+      "decimals": 0
+    },
+    {
+      "name": "FPCARTERA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 110,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "FPBASE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 111,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 119,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FPCONSUMO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 139,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPBASECONSU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 147,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

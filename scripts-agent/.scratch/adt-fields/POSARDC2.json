@@ -1,0 +1,139 @@
+{
+  "table": "POSARDC2",
+  "source": "db/ADD_ANALITICA/POSARDC2.ADT",
+  "bytes": 4227,
+  "recordCount": 3,
+  "recordLength": 209,
+  "headerLength": 3600,
+  "fieldCount": 16,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 24,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CODIGO1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 54,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 73,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 103,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAI",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 111,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAF",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 115,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "HORAI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 119,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "HORAF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 125,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "CODIGO2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 131,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 150,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "HORAI2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 180,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "HORAF2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 186,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "BORRA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 192,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 193,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 201,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

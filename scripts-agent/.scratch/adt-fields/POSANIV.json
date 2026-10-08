@@ -1,0 +1,251 @@
+{
+  "table": "POSANIV",
+  "source": "db/ADD_ANALITICA/POSANIV.ADT",
+  "bytes": 6639,
+  "recordCount": 1,
+  "recordLength": 239,
+  "headerLength": 6400,
+  "fieldCount": 30,
+  "fields": [
+    {
+      "name": "AFECHA1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "AFECHA2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 13,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "AHORA1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 21,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "AHORA2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 31,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "ACANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 41,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "APORCEN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 49,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "AACTI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 57,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "BFECHA1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 60,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BFECHA2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 68,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BHORA1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 76,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "BHORA2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 86,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "BVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 96,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BVALOR2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 104,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BCANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 112,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BACTI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 120,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "BGBONO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 123,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "BACTIGANA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 124,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BCONTA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 132,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BGANA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 140,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CFECHA1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 148,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CFECHA2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 156,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CHORA1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 164,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CHORA2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 174,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CCODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 184,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "DFECHA1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 187,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DFECHA2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 195,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DHORA1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 203,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DHORA2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 213,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DPAGA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 223,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DLLEVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 231,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

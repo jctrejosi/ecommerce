@@ -1,0 +1,51 @@
+{
+  "table": "POSPRUTA",
+  "source": "db/ADD_ANALITICA/POSPRUTA.ADT",
+  "bytes": 48746,
+  "recordCount": 1214,
+  "recordLength": 39,
+  "headerLength": 1400,
+  "fieldCount": 5,
+  "fields": [
+    {
+      "name": "OPCION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 8,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "NIVEL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 33,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "USUARIO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 34,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "SALE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 38,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

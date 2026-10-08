@@ -1,0 +1,283 @@
+{
+  "table": "POSCONSE",
+  "source": "db/ADD_ANALITICA/POSCONSE.ADT",
+  "bytes": 20266,
+  "recordCount": 47,
+  "recordLength": 278,
+  "headerLength": 7200,
+  "fieldCount": 34,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 7,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CANT",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 37,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "VALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 41,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DEBBRUTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 49,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CREBRUTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 63,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "DEBIVA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 77,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CREIVA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 91,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "DEBNETO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 105,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CRENETO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 119,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CCOSTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 133,
+      "length": 7,
+      "decimals": 0
+    },
+    {
+      "name": "PVAL1",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 140,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "PVAL2",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 142,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "INVEN",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 144,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PEXE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 145,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CODEAN",
+      "type": 4,
+      "typeName": "char",
+      "offset": 146,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "INFCOMP",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 159,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "TALON",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 160,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "BLOQUEO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 161,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "UNIDAD",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 162,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "TAMA2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 163,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PVAL12",
+      "type": 10,
+      "typeName": "double",
+      "offset": 171,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PVAL22",
+      "type": 10,
+      "typeName": "double",
+      "offset": 179,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TAMAEAN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 187,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CODEAN2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 195,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "CODEAN3",
+      "type": 4,
+      "typeName": "char",
+      "offset": 208,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "CODEAN4",
+      "type": 4,
+      "typeName": "char",
+      "offset": 221,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "CODEAN5",
+      "type": 4,
+      "typeName": "char",
+      "offset": 234,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "DISMICAJA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 247,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "SOLOPAGO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 248,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "NITCONSE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 249,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "IMPRIME",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 261,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PTIPOP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 262,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PPLU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 270,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

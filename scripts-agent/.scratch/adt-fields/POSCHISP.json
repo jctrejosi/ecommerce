@@ -1,0 +1,123 @@
+{
+  "table": "POSCHISP",
+  "source": "db/ADD_ANALITICA/POSCHISP.ADT",
+  "bytes": 11650,
+  "recordCount": 26,
+  "recordLength": 325,
+  "headerLength": 3200,
+  "fieldCount": 14,
+  "fields": [
+    {
+      "name": "CHECOD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "CHEAN",
+      "type": 4,
+      "typeName": "char",
+      "offset": 8,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CHPLU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 22,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CHDESCRIP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 30,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CHPORDCTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 80,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CHVLRVEN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 88,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CHPUM",
+      "type": 10,
+      "typeName": "double",
+      "offset": 96,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CHOBS1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 104,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CHOBS2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 154,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CHOBS3",
+      "type": 4,
+      "typeName": "char",
+      "offset": 204,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CHOBS4",
+      "type": 4,
+      "typeName": "char",
+      "offset": 254,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CHVLR2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 304,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CHMARCA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 312,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CHPROVEE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 313,
+      "length": 12,
+      "decimals": 0
+    }
+  ]
+}

@@ -1,0 +1,251 @@
+{
+  "table": "POSCAJA",
+  "source": "db/ADD_ANALITICA/POSCAJA.ADT",
+  "bytes": 21052,
+  "recordCount": 44,
+  "recordLength": 333,
+  "headerLength": 6400,
+  "fieldCount": 30,
+  "fields": [
+    {
+      "name": "SUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "CAJERO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 40,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "ACTIVA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 44,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "HISTOK",
+      "type": 4,
+      "typeName": "char",
+      "offset": 45,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ULTFAC",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 46,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "ULTCON",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 50,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "MARCA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 54,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PREFIJOF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 55,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "PREFIJOC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 59,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "TOPE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 65,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "RESOLU1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 73,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "RESOLU2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 113,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "FINCON",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 153,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "ADVCON",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 157,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FECVEN",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 161,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAVTA",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 165,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "EFECTVTA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 169,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "OTRASVTA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 177,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "SERIAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 185,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "ULTFACFE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 205,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FINCONFE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 213,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PREFIJOFE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 221,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "RESOLU1FE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 225,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "RESOLU2FE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 265,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "FECVENFE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 305,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FEPREFINC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 313,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FEULTNC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 317,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "ADVCONFE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 325,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

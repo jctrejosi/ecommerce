@@ -1,0 +1,75 @@
+{
+  "table": "TIDOBSER",
+  "source": "db/ADD_ANALITICA/TIDOBSER.ADT",
+  "bytes": 346589,
+  "recordCount": 1281,
+  "recordLength": 269,
+  "headerLength": 2000,
+  "fieldCount": 8,
+  "fields": [
+    {
+      "name": "INARTIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 24,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 59,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER3",
+      "type": 4,
+      "typeName": "char",
+      "offset": 94,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER4",
+      "type": 4,
+      "typeName": "char",
+      "offset": 129,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER5",
+      "type": 4,
+      "typeName": "char",
+      "offset": 164,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER6",
+      "type": 4,
+      "typeName": "char",
+      "offset": 199,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER7",
+      "type": 4,
+      "typeName": "char",
+      "offset": 234,
+      "length": 35,
+      "decimals": 0
+    }
+  ]
+}

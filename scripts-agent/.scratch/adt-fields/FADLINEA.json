@@ -1,0 +1,363 @@
+{
+  "table": "FADLINEA",
+  "source": "db/ADD_ANALITICA/FADLINEA.adt",
+  "bytes": 12689,
+  "recordCount": 3,
+  "recordLength": 1163,
+  "headerLength": 9200,
+  "fieldCount": 44,
+  "fields": [
+    {
+      "name": "SUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO01",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA01",
+      "type": 4,
+      "typeName": "char",
+      "offset": 14,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO02",
+      "type": 4,
+      "typeName": "char",
+      "offset": 56,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA02",
+      "type": 4,
+      "typeName": "char",
+      "offset": 57,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO03",
+      "type": 4,
+      "typeName": "char",
+      "offset": 99,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA03",
+      "type": 4,
+      "typeName": "char",
+      "offset": 100,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO04",
+      "type": 4,
+      "typeName": "char",
+      "offset": 142,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA04",
+      "type": 4,
+      "typeName": "char",
+      "offset": 143,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO05",
+      "type": 4,
+      "typeName": "char",
+      "offset": 185,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA05",
+      "type": 4,
+      "typeName": "char",
+      "offset": 186,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO06",
+      "type": 4,
+      "typeName": "char",
+      "offset": 228,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA06",
+      "type": 4,
+      "typeName": "char",
+      "offset": 229,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO07",
+      "type": 4,
+      "typeName": "char",
+      "offset": 271,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA07",
+      "type": 4,
+      "typeName": "char",
+      "offset": 272,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO08",
+      "type": 4,
+      "typeName": "char",
+      "offset": 314,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA08",
+      "type": 4,
+      "typeName": "char",
+      "offset": 315,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO09",
+      "type": 4,
+      "typeName": "char",
+      "offset": 357,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA09",
+      "type": 4,
+      "typeName": "char",
+      "offset": 358,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO10",
+      "type": 4,
+      "typeName": "char",
+      "offset": 400,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA10",
+      "type": 4,
+      "typeName": "char",
+      "offset": 401,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO11",
+      "type": 4,
+      "typeName": "char",
+      "offset": 443,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA11",
+      "type": 4,
+      "typeName": "char",
+      "offset": 444,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO12",
+      "type": 4,
+      "typeName": "char",
+      "offset": 486,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA12",
+      "type": 4,
+      "typeName": "char",
+      "offset": 487,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO13",
+      "type": 4,
+      "typeName": "char",
+      "offset": 529,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA13",
+      "type": 4,
+      "typeName": "char",
+      "offset": 530,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO14",
+      "type": 4,
+      "typeName": "char",
+      "offset": 572,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA14",
+      "type": 4,
+      "typeName": "char",
+      "offset": 573,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO15",
+      "type": 4,
+      "typeName": "char",
+      "offset": 615,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA15",
+      "type": 4,
+      "typeName": "char",
+      "offset": 616,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WTIPO16",
+      "type": 4,
+      "typeName": "char",
+      "offset": 658,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA16",
+      "type": 4,
+      "typeName": "char",
+      "offset": 659,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA1M",
+      "type": 4,
+      "typeName": "char",
+      "offset": 701,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA2M",
+      "type": 4,
+      "typeName": "char",
+      "offset": 743,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA3M",
+      "type": 4,
+      "typeName": "char",
+      "offset": 785,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "WMENSA4M",
+      "type": 4,
+      "typeName": "char",
+      "offset": 827,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "LUNES",
+      "type": 4,
+      "typeName": "char",
+      "offset": 869,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "MARTES",
+      "type": 4,
+      "typeName": "char",
+      "offset": 911,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "MIERCOLES",
+      "type": 4,
+      "typeName": "char",
+      "offset": 953,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "JUEVES",
+      "type": 4,
+      "typeName": "char",
+      "offset": 995,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "VIERNES",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1037,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "SABADO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1079,
+      "length": 42,
+      "decimals": 0
+    },
+    {
+      "name": "DOMINGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1121,
+      "length": 42,
+      "decimals": 0
+    }
+  ]
+}

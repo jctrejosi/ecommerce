@@ -1,0 +1,195 @@
+{
+  "table": "FCONTA",
+  "source": "db/ADD_ANALITICA/FCONTA.ADT",
+  "bytes": 430289,
+  "recordCount": 1581,
+  "recordLength": 269,
+  "headerLength": 5000,
+  "fieldCount": 23,
+  "fields": [
+    {
+      "name": "FIMPUESTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FLINEA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 7,
+      "length": 7,
+      "decimals": 0
+    },
+    {
+      "name": "FNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 14,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "DEB01",
+      "type": 4,
+      "typeName": "char",
+      "offset": 44,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE01",
+      "type": 4,
+      "typeName": "char",
+      "offset": 56,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB02",
+      "type": 4,
+      "typeName": "char",
+      "offset": 68,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE02",
+      "type": 4,
+      "typeName": "char",
+      "offset": 80,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB03",
+      "type": 4,
+      "typeName": "char",
+      "offset": 92,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE03",
+      "type": 4,
+      "typeName": "char",
+      "offset": 104,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB04",
+      "type": 4,
+      "typeName": "char",
+      "offset": 116,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE04",
+      "type": 4,
+      "typeName": "char",
+      "offset": 128,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB05",
+      "type": 4,
+      "typeName": "char",
+      "offset": 140,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE05",
+      "type": 4,
+      "typeName": "char",
+      "offset": 152,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB06",
+      "type": 4,
+      "typeName": "char",
+      "offset": 164,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE06",
+      "type": 4,
+      "typeName": "char",
+      "offset": 176,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB07",
+      "type": 4,
+      "typeName": "char",
+      "offset": 188,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE07",
+      "type": 4,
+      "typeName": "char",
+      "offset": 200,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB08",
+      "type": 4,
+      "typeName": "char",
+      "offset": 212,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE08",
+      "type": 4,
+      "typeName": "char",
+      "offset": 224,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DEB09",
+      "type": 4,
+      "typeName": "char",
+      "offset": 236,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CRE09",
+      "type": 4,
+      "typeName": "char",
+      "offset": 248,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "COMPRO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 260,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CCOSTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 262,
+      "length": 7,
+      "decimals": 0
+    }
+  ]
+}
