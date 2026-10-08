@@ -206,6 +206,10 @@ La segunda corrida detecta **0 cambios** (idempotente).
   artículo×sucursal coincide con nuestro modelo.
 - `INEAN` (código de barras) se deduplica **por artículo**; se conservan 21.189
   códigos y se anulan 424 duplicados reales.
+- **Merge no destructivo** (`COALESCE`): al re-sincronizar (p. ej.
+  `--reset-snapshot`, que recorre todos los artículos) los campos que el ERP no
+  trae (`NULL`) **no** pisan el valor existente en Postgres. Imágenes, banners,
+  popups y demás datos locales viven en otras tablas y **no se tocan**.
 
 ### 8.3 Salida Postgres → ERP (`push-orders.mjs`)
 

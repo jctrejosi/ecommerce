@@ -448,11 +448,17 @@ await insertBatches(
     buildDescription(p), 'SIMPLE', p.artic.slice(0, 6),
     brandNameOf(p), 'PUBLIC', p.web, p.activo, now, now,
   ]),
+  // Merge no destructivo: si el ERP no trae el campo (NULL), se conserva el
+  // valor que ya exista en Postgres. Imágenes, banners, popups y demás datos
+  // locales viven en otras tablas y NO se tocan.
   `ON CONFLICT (external_id) WHERE (external_id IS NOT NULL AND deleted_at IS NULL)
-   DO UPDATE SET brand_id=EXCLUDED.brand_id, plu=EXCLUDED.plu, name=EXCLUDED.name,
-     slug=EXCLUDED.slug, description=EXCLUDED.description, sku_prefix=EXCLUDED.sku_prefix,
-     manufacturer=EXCLUDED.manufacturer, is_public=EXCLUDED.is_public,
-     is_active=EXCLUDED.is_active, updated_at=EXCLUDED.updated_at`,
+   DO UPDATE SET brand_id=COALESCE(EXCLUDED.brand_id, products.brand_id),
+     plu=COALESCE(EXCLUDED.plu, products.plu), name=COALESCE(EXCLUDED.name, products.name),
+     slug=COALESCE(EXCLUDED.slug, products.slug),
+     description=COALESCE(EXCLUDED.description, products.description),
+     sku_prefix=COALESCE(EXCLUDED.sku_prefix, products.sku_prefix),
+     manufacturer=COALESCE(EXCLUDED.manufacturer, products.manufacturer),
+     is_public=EXCLUDED.is_public, is_active=EXCLUDED.is_active, updated_at=EXCLUDED.updated_at`,
 );
 
 const productIdByArtic = new Map(
@@ -481,10 +487,17 @@ await insertBatches(
       true, now,
     ];
   }),
-  `ON CONFLICT (sku) DO UPDATE SET product_id=EXCLUDED.product_id, barcode=EXCLUDED.barcode,
-     current_price=EXCLUDED.current_price, current_compare_price=EXCLUDED.current_compare_price,
-     cost_price=EXCLUDED.cost_price, length_mm=EXCLUDED.length_mm, width_mm=EXCLUDED.width_mm,
-     height_mm=EXCLUDED.height_mm, is_active=EXCLUDED.is_active, updated_at=EXCLUDED.updated_at`,
+  // Merge no destructivo: barcode/costo/dimensiones/comparativo solo se
+  // sobrescriben si el ERP trae un valor; si no, se conserva el local.
+  `ON CONFLICT (sku) DO UPDATE SET product_id=EXCLUDED.product_id,
+     barcode=COALESCE(EXCLUDED.barcode, product_variants.barcode),
+     current_price=COALESCE(NULLIF(EXCLUDED.current_price, 0), product_variants.current_price),
+     current_compare_price=COALESCE(EXCLUDED.current_compare_price, product_variants.current_compare_price),
+     cost_price=COALESCE(EXCLUDED.cost_price, product_variants.cost_price),
+     length_mm=COALESCE(EXCLUDED.length_mm, product_variants.length_mm),
+     width_mm=COALESCE(EXCLUDED.width_mm, product_variants.width_mm),
+     height_mm=COALESCE(EXCLUDED.height_mm, product_variants.height_mm),
+     is_active=EXCLUDED.is_active, updated_at=EXCLUDED.updated_at`,
 );
 
 const variantBySku = new Map(
@@ -524,7 +537,8 @@ await insertBatches(
   ['product_variant_id', 'branch_id', 'price', 'compare_price', 'cost', 'changed_by', 'change_reason', 'created_at'],
   priceRows.map((r) => [...r, now]),
   `ON CONFLICT (product_variant_id, branch_id) WHERE (end_date IS NULL AND branch_id IS NOT NULL)
-   DO UPDATE SET price=EXCLUDED.price, compare_price=EXCLUDED.compare_price, cost=EXCLUDED.cost,
+   DO UPDATE SET price=EXCLUDED.price, compare_price=EXCLUDED.compare_price,
+     cost=COALESCE(EXCLUDED.cost, prices.cost),
      changed_by=EXCLUDED.changed_by, change_reason=EXCLUDED.change_reason, version=prices.version + 1`,
 );
 
