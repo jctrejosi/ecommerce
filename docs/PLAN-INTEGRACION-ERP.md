@@ -15,11 +15,11 @@
 > **Estado de implementación (piloto con la copia `db/ADD_ANALITICA`)**:
 > - ✅ **Fase 2** — migración `db/sql/19_erp_integration.sql` aplicada;
 >   `erp_code_map` poblado (`scripts-agent/erp/sync-codes.mjs`).
-> - ✅ **Fase 3** (parcial) — **entrada ERP → Postgres**: catálogo con
->   `scripts-agent/erp/sync-catalog.mjs` y clientes con
->   `scripts-agent/erp/sync-customers.mjs` (diff por huella contra `erp_snapshot`,
->   idempotente, merge no destructivo). Detalle: `docs/OPENADS-VALIDACION.md` §8.
->   Falta la facturación (`FADDIA`/`FAPAGO` → `invoices`/`payments`/`orders`).
+> - ✅ **Fase 3** — **entrada ERP → Postgres**: catálogo (`sync-catalog.mjs`),
+>   clientes (`sync-customers.mjs`) y facturación (`sync-invoices.mjs` →
+>   `erp_invoices`/`erp_payments`), con diff por huella / `row_hash`, idempotentes
+>   y con merge no destructivo. Detalle: `docs/OPENADS-VALIDACION.md` §8.
+>   Falta la conciliación pedido↔factura y el detalle de línea (`FADITE`).
 > - ✅ **Fase 4** (piloto) — **salida Postgres → ERP** con
 >   `scripts-agent/erp/push-orders.mjs` (`orders`/`order_items` → `DOMDIA`/`DOMITE`,
 >   idempotente por `FACONTROL`). Lote del piloto enviado: **87 pedidos** (`80` en
@@ -421,6 +421,11 @@ Solo **lectura** (el ERP es dueño). Sirve para conciliar y actualizar estados.
 | `FADITE.IFARTIC`, `IFCANT`, `IFVLRUNI`, `IFPORIVA` | `order_items` (verificación) | |
 | `FAPAGO.FPFACT`, `FPCODI`, `FPVALOR` | `payments` (`payment_method`, `amount`) | `FPCODI` → código de pago |
 | `FAPAGO.FPTIPO` | `payments.status` | `F`/`C` |
+
+> **Implementado**: `scripts-agent/erp/sync-invoices.mjs` espeja `FADDIA`/`FAPAGO`
+> 1:1 en `erp_invoices`/`erp_payments` (clave = hash de fila). La conciliación
+> contra `orders`/`invoices`/`payments` queda pendiente de cuando el ERP facture
+> nuestros pedidos (`FADOMICIL` → nº de pedido).
 
 ### 4.6 Diccionario de códigos (`erp_code_map`)
 

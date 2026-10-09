@@ -249,6 +249,25 @@ FAVLRIVA 10889.09 = 68200` (base de líneas) y `FAVARIOS 7900` → `FAVLRNET 761
 - Requisito: `POSCLI` (`.adt`+`.adi`) debe estar en la carpeta de datos de
   OpenADS (`db/ads/openads/data`); el sembrado inicial no lo incluía.
 
+### 8.5 Entrada de facturación (`sync-invoices.mjs`)
+
+`node scripts-agent/erp/sync-invoices.mjs` espeja la facturación del ERP:
+`FADDIA` → `erp_invoices` (**1.167.637**) y `FAPAGO` → `erp_payments`
+(**2.140.937**).
+
+- **No** son las tablas `invoices`/`payments`: ésas son del pedido web
+  (`order_id NOT NULL`). Las facturas del ERP (POS + domicilio) no están atadas a
+  nuestras órdenes, por eso van a un espejo propio.
+- Clave = **hash de la fila completa** (no hay id único: `FPAUTO`/`FPNUMERO`
+  vienen vacíos y hay Nº de factura repetidos). Re-ejecutar es idempotente
+  (`ON CONFLICT (erp_key) ... WHERE row_hash IS DISTINCT FROM`); los duplicados
+  exactos se colapsan (166 en `FAPAGO`).
+- 16.624 facturas traen `FADOMICIL` (canal domicilio); el resto son ventas POS.
+  Medios de pago vistos: `EFEC`, `DA`, `TD`, `TC`, `WR`, `RP`, `TR`, `MP`, `SI`…
+- Requisito: `FADDIA`/`FAPAGO` en la carpeta de datos de OpenADS.
+- Pendiente: conciliación pedido↔factura (mapeo §4.5 del plan) cuando el ERP
+  facture nuestros pedidos; `FADITE` (5,7 GB) queda fuera (detalle de línea).
+
 ---
 
 ### Anexo — comandos útiles
