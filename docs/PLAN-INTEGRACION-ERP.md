@@ -4,6 +4,8 @@
 > **Alcance**: sincronización bidireccional entre la base Postgres del ecommerce
 > y la base Advantage (ADS) del ERP de Mercaldas.
 > **Documentos relacionados**:
+> - `docs/PLAN-SINCRONIZACION-ERP.md` — **roadmap para producción** (objetivo
+>   operativo, qué se sincroniza y qué no, fases A–D).
 > - `docs/INTEGRACION-ERP-ADVANTAGE.md` — descubrimiento y contexto de la copia
 >   `db/ADD_ANALITICA/` (tablas, hallazgos, opciones, preguntas abiertas).
 > - `docs/DATABASE.md` — modelo actual del ecommerce (Postgres).

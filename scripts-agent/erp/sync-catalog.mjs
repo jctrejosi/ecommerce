@@ -106,6 +106,9 @@ async function deleteIn(pg, table, col, ids) {
 const erp = createErpClient();
 const pg = createPg();
 await pg.connect();
+// Los cambios que hacemos aquí vienen DEL ERP: no deben reencolarse al ERP
+// (triggers de la migración 21).
+await pg.query("SET app.erp_sync = 'on'");
 const q = (text, params) => pg.query(text, params);
 const one = async (text, params) => (await pg.query(text, params)).rows[0];
 

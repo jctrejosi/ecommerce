@@ -1,5 +1,5 @@
 /**
- * Aplica db/sql/19_erp_integration.sql (idempotente).
+ * Aplica db/sql/19_erp_integration.sql y db/sql/20_erp_invoice_mirror.sql (idempotente).
  * Uso: node scripts-agent/erp/init-db.mjs
  */
 import fs from 'node:fs';
@@ -7,15 +7,15 @@ import path from 'node:path';
 import { ROOT } from './lib.mjs';
 import { createPg } from './openads.mjs';
 
-const sql = fs.readFileSync(
-  path.join(ROOT, 'db/sql/19_erp_integration.sql'),
-  'utf8',
+const sqls = ['19_erp_integration.sql', '20_erp_invoice_mirror.sql'].map((f) =>
+  fs.readFileSync(path.join(ROOT, 'db/sql', f), 'utf8'),
 );
 
 const pg = createPg();
 await pg.connect();
 try {
-  await pg.query(sql);
+  await pg.query(sqls[0]);
+  await pg.query(sqls[1]);
   const { rows } = await pg.query(
     `SELECT table_name FROM information_schema.tables
       WHERE table_schema='public' AND table_name LIKE 'erp\\_%'

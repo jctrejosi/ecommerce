@@ -3,6 +3,9 @@
  *
  *   FADDIA → erp_invoices · FAPAGO → erp_payments
  *
+ * ⚠️ OPCIONAL (Fase A de docs/PLAN-SINCRONIZACION-ERP.md): el ecommerce NO
+ * consume estas tablas; sólo se conserva por análisis. Requiere `--full`.
+ *
  * El ERP es el dueño (sólo lectura). NO son las tablas `invoices`/`payments`
  * del pedido web (ésas las llena el backend y están atadas a `orders`).
  *
@@ -13,10 +16,10 @@
  *
  * Mapeo: docs/PLAN-INTEGRACION-ERP.md §4.5.
  *
- * Uso:
- *   node scripts-agent/erp/sync-invoices.mjs --dry-run
- *   node scripts-agent/erp/sync-invoices.mjs --limit=5000
- *   node scripts-agent/erp/sync-invoices.mjs
+ * Uso (opt-in):
+ *   node scripts-agent/erp/sync-invoices.mjs --full --dry-run
+ *   node scripts-agent/erp/sync-invoices.mjs --full --limit=5000
+ *   node scripts-agent/erp/sync-invoices.mjs --full
  */
 import { createErpClient, createPg } from './openads.mjs';
 import { s, n, args, log, sha1 } from './lib.mjs';
@@ -26,6 +29,16 @@ const DRY = !!a['dry-run'];
 const LIMIT = a.limit ? Number(a.limit) : Infinity;
 const PAGE = Number(a.page || 2000);
 const CHUNK = 1000;
+
+// Fase A (poda): el espejo completo de facturación NO hace parte del set
+// requerido. Sólo se ejecuta con --full.
+if (!a.full) {
+  log('ℹ️  sync-invoices está DESHABILITADO por defecto (Fase A: poda del alcance).');
+  log('   El ecommerce no usa `erp_invoices`/`erp_payments`; sólo se requiere la');
+  log('   conciliación de facturas de NUESTROS pedidos (Fase B).');
+  log('   Para forzar el espejo completo añade --full.');
+  process.exit(0);
+}
 
 const erp = createErpClient();
 const pg = createPg();
