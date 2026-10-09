@@ -8,6 +8,11 @@
  * sobrescribe un campo cuando trae valor; si no, se conserva lo que haya en
  * Postgres). No toca ninguna otra tabla.
  *
+ * **Propiedad de clientes**: un cliente `provider='local'` es del ecommerce y NO
+ * se sobrescribe desde el ERP (aunque ya tenga `erp_customer_code` tras subirlo
+ * con push-customers). Los clientes `provider='ERP'` sí se actualizan desde el
+ * ERP. Esto evita que una edición local se revierta en el siguiente sync.
+ *
  * Mapeo: docs/PLAN-INTEGRACION-ERP.md §4.3 / docs/INTEGRACION-ERP-ADVANTAGE.md §4.1.
  *
  * Detalles:
@@ -174,7 +179,8 @@ const conflict = `ON CONFLICT (erp_customer_code) WHERE (erp_customer_code IS NO
   provider = EXCLUDED.provider,
   provider_id = COALESCE(EXCLUDED.provider_id, customers.provider_id),
   is_active = EXCLUDED.is_active,
-  updated_at = EXCLUDED.updated_at`;
+  updated_at = EXCLUDED.updated_at
+  WHERE customers.provider <> 'local'`;
 
 log(`⏳ Upsert de ${out.length} clientes…`);
 await insertBatches(pg, 'customers', cols, out, conflict);

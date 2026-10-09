@@ -53,15 +53,19 @@ código (módulos `catalog`, `inventory`, `orders`, `customers`, `delivery`).
 
 | Sentido | Entidad | Script / artefacto | Estado |
 |---|---|---|---|
-| ERP → PG | Diccionario de códigos | `sync-codes.mjs` | ✅ (6 dominios) |
+| ERP → PG | Diccionario de códigos | `sync-codes.mjs` | ✅ (6 dominios + `order_status`) |
 | ERP → PG | Catálogo | `sync-catalog.mjs` | ✅ |
 | ERP → PG | Clientes | `sync-customers.mjs` | ✅ |
 | ERP → PG | Facturación (espejo completo) | `sync-invoices.mjs` | ⚠️ opcional/gated (`--full`); no lo usa el ecommerce |
 | PG → ERP | Pedidos | `push-orders.mjs` | ✅ |
-| PG → ERP | Clientes | `push-customers.mjs` | ✅ (`CODCLI` provisional) |
+| PG → ERP | Clientes (alta + actualización) | `push-customers.mjs` | ✅ (`CODCLI` provisional) |
 | PG → ERP | Precio / stock | `push-catalog.mjs` + triggers (`db/sql/21_erp_catalog_outbox.sql`) | ✅ |
+| PG → ERP | Maestras: marcas, categorías, tipos, producto | `push-catalog.mjs` + triggers (`db/sql/22_erp_outbox_masters.sql`) | ✅ |
+| PG → ERP | Estado de pedido (`DOMDIA.FAESTADO`) | `push-catalog.mjs` + trigger (`22`) + `erp_code_map` | ✅ (códigos **provisionales**) |
 | ERP ⇄ PG | Conciliación factura→pedido | `reconcile.mjs` | ✅ |
+| PG → ERP | Drenado de salida (loop/cron) | `sync-out.mjs` | ✅ |
 | — | Runner / automatización | `sync-all.mjs` | ✅ (cron/Task Scheduler) |
+| — | Arranque con el launcher | `dev.js --erp-sync` | ✅ (deja la salida en bucle) |
 | Backend | Módulo/endpoints ERP | — | ❌ no existe (todo por scripts) |
 | Tiempo real | Triggers `DSI_EVENTO` + endpoints `/erp/*` | — | ❌ pendiente |
 
@@ -72,19 +76,20 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
 ## 4. Lo que falta para lograrlo
 
 ### 4.A Inyectar una venta (PG → ERP)
-- ✅ Pedido → `DOMDIA`/`DOMITE`.
-- ❌ **Alta de cliente PG → `POSCLI`** (el ERP asigna `CODCLI`; hoy no sube).
-- ❌ **Drenado de `erp_outbox`** como servicio/loop (hoy `push-orders` lee `orders` directo).
-- ❌ Numeración y estados: `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM`.
-- ❌ **Retorno**: el ERP factura → actualizar estado/factura de *nuestro* pedido (conciliación `FADOMICIL` → `orders`).
+- ✅ Pedido → `DOMDIA`/`DOMITE` (`push-orders.mjs`).
+- ✅ **Alta/actualización de cliente PG → `POSCLI`** (`push-customers.mjs`; `CODCLI` provisional).
+- ✅ **Drenado de `erp_outbox`** como loop (`sync-out.mjs --loop=N`).
+- ⚠️ Numeración y estados: `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM` (**códigos provisionales**).
+- ✅ **Retorno**: el ERP factura → actualizar estado/factura de *nuestro* pedido (`reconcile.mjs`).
 
 ### 4.B Modificar producto desde el backend → ERP
-- Hoy `catalog.service.createProduct/updateProduct` y `inventory` escriben **sólo en Postgres**.
-- Hace falta: **regla de propiedad por campo** (quién manda), `erp_outbox` de catálogo
-  (`kind='product'|'price'|'stock'`), writers a `TIDSAL`/`TIDMARCAS`/`TIDCATE`/`TIDTPRO`
-  y **resolución de conflictos** (marca de tiempo/hash).
-- Ojo: `TIDSAL` es por sucursal y tiene campos derivados → escribir con cuidado;
-  el **stock** conviene por **movimientos**, no pisando `INSALDO00`.
+- ✅ Tras editar en el backend, el trigger encola en `erp_outbox` y `push-catalog.mjs`
+  escribe en `TIDSAL`/`TIDMARCAS`/`TIDTAB`/`TIDTPRO` (precio, stock, marca,
+  categoría, tipo, nombre de producto). Ver `db/sql/22_erp_outbox_masters.sql`.
+- ⚠️ Regla de propiedad: el ERP es dueño del catálogo; nuestro push lo pisa
+  (decisión aceptada). Guardia `app.erp_sync='on'` evita el ping-pong.
+- Ojo: `TIDSAL` es por sucursal; el **stock** conviene por **movimientos**, no
+  pisando `INSALDO00` (hoy provisional).
 
 ### 4.C Conexión y despliegue en el sitio del ERP
 - ✅ URL/credenciales parametrizadas (`OPENADS_URL`/`OPENADS_USER`/`OPENADS_PASS`).
@@ -93,14 +98,22 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
 - ❌ Provisionar la copia del ERP (`db/ADD_ANALITICA` no va en git).
 
 ### 4.D Automatización
-- ❌ **Mínimo**: un scheduler/cron que corra los syncs y el drenado del outbox.
+- ✅ **Salida continua**: `node dev.js --erp-sync` deja `sync-out --apply` en bucle
+  (o cron/Task Scheduler con `sync-out --apply`).
+- ✅ **Entrada**: `sync-all.mjs` para el volcado pesado (catálogo + 146k clientes).
 - ❌ **Tiempo real**: triggers `DSI_EVENTO` en el ERP + agente + endpoints `/erp/*` en el backend.
+
+### 4.F Valores a confirmar en sitio
+- Checklist completo: `docs/CHECKLIST-ERP-SITIO.md` (enums, numeración, `CODCLI`,
+  medios de pago, stock como movimientos, alta de artículos, conciliación real).
 
 ### 4.E Decisiones de negocio (bloquean el mapeo fino)
 - §11 de `PLAN-INTEGRACION-ERP.md`: `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM`,
   `FACANALV`, `FADOCPAGO`, `CLAWEB`/`NEWWEB`, `FECHABAJA`.
 - Medios de pago `NEQUI`/`DAVIPLATA`/`PSE` ↔ `POSPAGO`.
-- `erp_code_map`: faltan dominios (tipo factura, estado pedido/línea, tipo domicilio, tipo doc).
+- `erp_code_map`: falta confirmar los **códigos reales** de `FAESTADO`
+  (`order_status`); hoy hay una semilla **provisional** (`db/sql/23_erp_order_status_map.sql`).
+  Faltan además dominios (tipo factura, estado línea, tipo domicilio, tipo doc).
 
 ---
 
@@ -122,20 +135,24 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
 - **Aceptación**: un pedido web real termina registrado en el ERP, con cliente
   creado, y al facturarse el ERP el estado del pedido en PG se actualiza.
 
-### Fase C — Escritura de producto/precio/stock PG → ERP  ✅ *implementada (prototipo)*
+### Fase C — Escritura de producto/precio/stock PG → ERP  ✅ *implementada*
 
-- Matriz de propiedad por campo + outbox de catálogo + writers + resolución de conflictos.
-- Implementado: triggers `21_erp_catalog_outbox.sql` + `push-catalog.mjs`
-  (precio lista 1 global; stock por sucursal pisando `INSALDO00` — provisional).
-- **Aceptación**: editar el precio (o el stock) de un producto en el backend se
-  refleja en el ERP (y el diff inverso no lo revierte por el guardia `app.erp_sync`).
+- Matriz de propiedad por campo + outbox de catálogo + writers.
+- Implementado: triggers `21_erp_catalog_outbox.sql` (precio/stock) y
+  `22_erp_outbox_masters.sql` (marcas, categorías, tipos, producto, estado de
+  pedido) + `push-catalog.mjs` (drena `erp_outbox`).
+- **Aceptación**: editar precio/stock/marca/categoría/tipo/nombre/estado en el
+  backend se refleja en el ERP (y el diff inverso no lo revierte por el guardia
+  `app.erp_sync`).
 
 ### Fase D — Automatización y despliegue  ✅ *implementada (agente/servicio pendiente)*
 
 - Runner `sync-all.mjs` (modo seguro / `--apply`).
+- Arranque de la salida continua con el launcher: `dev.js --erp-sync`.
 - Runbook: `docs/RUNBOOK-ERP.md` (env, cron/Task Scheduler, troubleshooting).
-- **Aceptación**: en la máquina del ERP, `dev.js` + scheduler dejan el sistema
-  sincronizado sin intervención manual, sólo cambiando la URL/credenciales.
+- Checklist de sitio: `docs/CHECKLIST-ERP-SITIO.md`.
+- **Aceptación**: en la máquina del ERP, `dev.js --erp-sync` + scheduler dejan el
+  sistema sincronizado sin intervención manual, sólo cambiando la URL/credenciales.
 
 **Orden recomendado**: A → B → D(scheduler) → C.
 

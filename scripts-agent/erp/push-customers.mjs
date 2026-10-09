@@ -1,55 +1,56 @@
 /**
- * Alta de clientes del ecommerce → ERP (Advantage `POSCLI`).
+ * Clientes del ecommerce → ERP (Advantage `POSCLI`) — alta y actualización.
  *
  *   customers (Postgres)  →  POSCLI (ERP)
  *
- * Se ejecuta cuando un cliente se crea en el ecommerce y hay que reflejarlo en
- * el ERP para poder facturarle. El ERP es el dueño del `CODCLI`; mientras se
- * confirma su algoritmo (§11 del plan) se genera con `ERP_CODCLI_SEQ`
- * (formato `2999########`, 13 dígitos) y se guarda de vuelta en
- * `customers.erp_customer_code`.
+ * - Si el cliente no tiene `erp_customer_code`: se **crea** en POSCLI y se guarda
+ *   el `CODCLI` de vuelta.
+ * - Si ya lo tiene y sus datos cambiaron (hash): se **actualiza** en POSCLI.
  *
- * Alcance: clientes locales (`provider='local'`, sin `erp_customer_code`).
- * Escritura gateada: por defecto **dry-run**; escribe sólo con `--apply`.
+ * El ERP es el dueño del `CODCLI`; mientras se confirma su algoritmo (§11) se
+ * genera con `ERP_NEW_CODE_PREFIX` + id. Escritura gateada: por defecto
+ * **dry-run**; escribe sólo con `--apply`.
  *
  * Uso:
- *   node scripts-agent/erp/push-customers.mjs                 # dry-run
- *   node scripts-agent/erp/push-customers.mjs --apply --limit=1
+ *   node scripts-agent/erp/push-customers.mjs
+ *   node scripts-agent/erp/push-customers.mjs --apply --limit=50
  */
 import { createErpClient, createPg } from './openads.mjs';
-import { s, args, log } from './lib.mjs';
+import { s, args, log, sha1 } from './lib.mjs';
 
 const a = args();
 const APPLY = !!a.apply;
-const LIMIT = a.limit ? Number(a.limit) : 50;
-const SEQ0 = Number(process.env.ERP_CODCLI_SEQ || 1);
+const LIMIT = a.limit ? Number(a.limit) : 200;
+const PREFIX = process.env.ERP_NEW_CODE_PREFIX || 'DSI';
 const SUCURSAL = process.env.ERP_CUSTOMER_SUCURSAL || '01';
 const TIPODOC = process.env.ERP_CUSTOMER_TIPODOC || '13';
 
-const codcli = (i) => '2999' + String(SEQ0 + i).padStart(9, '0');
+const lit = (v) => `'${String(v ?? '').replace(/'/g, "''")}'`;
+const newCode = (id) => PREFIX + String(id).padStart(8, '0');
 
 const erp = createErpClient();
 const pg = createPg();
 await pg.connect();
+await pg.query("SET app.erp_sync = 'on'"); // no reencolar lo que subimos
+const q = (t, p) => pg.query(t, p);
 
 const rows = (
-  await pg.query(
-    `SELECT id, first_name, last_name, document_number, document_type, phone, email
+  await q(
+    `SELECT id, first_name, last_name, document_number, document_type, phone, email, erp_customer_code
        FROM customers
-      WHERE deleted_at IS NULL AND erp_customer_code IS NULL AND provider = 'local'
+      WHERE deleted_at IS NULL AND provider = 'local'
       ORDER BY id
       LIMIT $1`,
     [LIMIT],
   )
 ).rows;
-log(`Clientes locales sin código ERP: ${rows.length}${APPLY ? '' : ' (dry-run)'}`);
 
-let ok = 0;
-for (let i = 0; i < rows.length; i++) {
-  const c = rows[i];
-  const code = codcli(i);
-  const payload = {
-    CODCLI: code,
+const snap = new Map(
+  (await q("SELECT erp_key, hash FROM erp_snapshot WHERE erp_table='PG_CUSTOMER'")).rows.map((r) => [r.erp_key, r.hash]),
+);
+
+function fields(c) {
+  return {
     NOMCLI: [s(c.first_name), s(c.last_name)].filter(Boolean).join(' ').slice(0, 40),
     NOMBRE: s(c.first_name) || '',
     APELLIDO: s(c.last_name) || '',
@@ -61,17 +62,55 @@ for (let i = 0; i < rows.length; i++) {
     ORIGENW: 'W',
     BLOQUE: 'F',
   };
-  if (!APPLY) {
-    log(`   [dry] ${c.id} ${payload.EMAIL} → POSCLI.CODCLI=${code}`);
-    ok++;
+}
+const hashOf = (c) => sha1([c.first_name, c.last_name, c.document_number, c.document_type, c.phone, c.email].map((v) => s(v)));
+
+let created = 0;
+let updated = 0;
+let untouched = 0;
+for (const c of rows) {
+  const hash = hashOf(c);
+  const code = s(c.erp_customer_code);
+
+  if (!code) {
+    const payload = { CODCLI: newCode(c.id), ...fields(c) };
+    if (!APPLY) {
+      log(`   [dry] crear ${c.id} → ${payload.CODCLI} ${payload.EMAIL}`);
+      created++;
+      continue;
+    }
+    const res = await erp.insert('poscli', payload);
+    if (!res.ok) throw new Error(`insert POSCLI falló (${payload.CODCLI}): ${JSON.stringify(res)}`);
+    await q('UPDATE customers SET erp_customer_code=$2, updated_at=now() WHERE id=$1', [c.id, payload.CODCLI]);
+    await q(
+      "INSERT INTO erp_snapshot (erp_table, erp_key, hash) VALUES ('PG_CUSTOMER',$1,$2) ON CONFLICT (erp_table, erp_key) DO UPDATE SET hash=EXCLUDED.hash, synced_at=now()",
+      [String(c.id), hash],
+    );
+    log(`   ✅ creado ${c.id} → ${payload.CODCLI}`);
+    created++;
     continue;
   }
-  const res = await erp.insert('poscli', payload);
-  if (!res.ok) throw new Error(`insert POSCLI falló (${code}): ${JSON.stringify(res)}`);
-  await pg.query('UPDATE customers SET erp_customer_code=$2, updated_at=now() WHERE id=$1', [c.id, code]);
-  log(`   ✅ ${c.id} → CODCLI ${code} (recno ${res.recno})`);
-  ok++;
+
+  if (snap.get(String(c.id)) === hash) {
+    untouched++;
+    continue;
+  }
+
+  const f = fields(c);
+  const setSql = Object.entries(f).map(([k, v]) => `${k}=${lit(v)}`).join(', ');
+  if (!APPLY) {
+    log(`   [dry] actualizar ${c.id} → ${code}`);
+    updated++;
+    continue;
+  }
+  await erp.sql(`UPDATE poscli SET ${setSql} WHERE CODCLI = ${lit(code)}`);
+  await q(
+    "INSERT INTO erp_snapshot (erp_table, erp_key, hash) VALUES ('PG_CUSTOMER',$1,$2) ON CONFLICT (erp_table, erp_key) DO UPDATE SET hash=EXCLUDED.hash, synced_at=now()",
+    [String(c.id), hash],
+  );
+  log(`   ✅ actualizado ${c.id} → ${code}`);
+  updated++;
 }
 
-log(`\n${APPLY ? '✅ Push clientes' : '🧪 DRY-RUN'} — ${ok}/${rows.length}`);
+log(`\n${APPLY ? '✅ Push clientes' : '🧪 DRY-RUN'} — creados: ${created}, actualizados: ${updated}, sin cambios: ${untouched}`);
 await pg.end();

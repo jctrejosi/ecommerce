@@ -79,11 +79,13 @@ try {
       seen.set(code, { label: f.label(row), meta: f.meta(row) });
     }
     for (const [code, v] of seen) {
+      // Un `erp_value` = un `canonical` para los dominios del ERP. La PK es
+      // (domain, erp_value, canonical), así que borramos antes para no dejar
+      // filas obsoletas si el nombre del ERP cambió entre corridas.
+      await pg.query('DELETE FROM erp_code_map WHERE domain=$1 AND erp_value=$2', [f.domain, code]);
       await pg.query(
         `INSERT INTO erp_code_map (domain, erp_value, canonical, label, meta)
-         VALUES ($1,$2,$3,$4,$5)
-         ON CONFLICT (domain, erp_value) DO UPDATE
-           SET canonical=EXCLUDED.canonical, label=EXCLUDED.label, meta=EXCLUDED.meta`,
+         VALUES ($1,$2,$3,$4,$5)`,
         [f.domain, code, (v.label || code).toUpperCase(), v.label, JSON.stringify(v.meta)],
       );
     }

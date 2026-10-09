@@ -73,6 +73,14 @@ const FORCE = ARGS.includes("--force");
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
 // `--no-advantage`: no levantar el contenedor de la BD del ERP (OpenADS).
 const NO_ADVANTAGE = ARGS.includes("--no-advantage");
+// `--erp-sync`: además, deja corriendo la SALIDA Postgres → ERP en bucle
+// (scripts-agent/erp/sync-out.mjs --apply). `--erp-interval=<seg>` lo ajusta.
+const ERP_SYNC = ARGS.includes("--erp-sync");
+const ERP_INTERVAL = (() => {
+  const raw = ARGS.find((a) => a.toLowerCase().startsWith("--erp-interval="));
+  const n = raw ? Number(raw.split("=")[1]) : Number(process.env.ERP_SYNC_INTERVAL || 30);
+  return Number.isFinite(n) && n >= 5 ? Math.floor(n) : 30;
+})();
 
 // Dependencias por servicio: `marker` es lo que se comprueba para saber si ya
 // están instaladas; `install` son los comandos que las instalan si faltan.
@@ -245,6 +253,8 @@ const NO_SELECTOR_FLAGS = new Set([
   "--fg",
   "--foreground",
   "--no-advantage",
+  "--erp-sync",
+  "--erp-interval",
 ]);
 
 /** Flags `--x` no reconocidos. Si hay alguno, el launcher no ejecuta nada. */
@@ -254,13 +264,18 @@ function unknownFlags() {
       f.toLowerCase(),
     ),
   );
-  return ARGS.filter((a) => a.startsWith("--") && !valid.has(a.toLowerCase()));
+  return ARGS.filter((a) => {
+    if (!a.startsWith("--")) return false;
+    return !valid.has(a.toLowerCase().split("=")[0]); // admite --flag=valor
+  });
 }
 
 /** null ⇒ levantar todo (comportamiento por defecto). */
 function resolveSelection() {
-  const requested = ARGS.filter((a) => a.startsWith("--") && !NO_SELECTOR_FLAGS.has(a))
-    .map((a) => a.slice(2).toLowerCase());
+  const requested = ARGS.filter((a) => a.startsWith("--"))
+    .map((a) => a.toLowerCase().split("=")[0])
+    .filter((k) => !NO_SELECTOR_FLAGS.has(k))
+    .map((k) => k.slice(2));
   if (requested.length === 0) return null;
   const names = requested.map((r) => APP_ALIASES[r]).filter((n) => n !== undefined);
   if (names.length === 0) return null;
@@ -831,6 +846,36 @@ function startService(svc) {
 }
 
 /**
+ * Deja corriendo la SALIDA Postgres → ERP en bucle (`sync-out.mjs --apply`).
+ * Requiere Postgres y Advantage arriba. Registra su pid para `--stop`.
+ */
+function startErpSync() {
+  const script = path.join(ROOT, "scripts-agent", "erp", "sync-out.mjs");
+  if (!fs.existsSync(script)) {
+    console.warn(
+      `${C.advantage}[erp-sync]${C.reset} ⚠️  No existe ${path.relative(ROOT, script)}; se omite.`,
+    );
+    return null;
+  }
+  console.log(
+    `${C.advantage}[erp-sync]${C.reset} 🔄 salida PG→ERP cada ${ERP_INTERVAL}s (log: logs/erp-sync.log)`,
+  );
+  const { fd } = openLog("erp-sync");
+  const child = spawn("node", [script, "--apply", `--loop=${ERP_INTERVAL}`], {
+    cwd: ROOT,
+    stdio: ["ignore", fd, fd],
+    detached: true, // su propio grupo: sobrevive a la terminal y lo mata --stop
+    shell: process.platform === "win32",
+  });
+  child.on("error", (err) => {
+    console.error(`${C.advantage}[erp-sync]${C.reset} ✘ no se pudo arrancar: ${err.message}`);
+  });
+  child.unref();
+  fs.closeSync(fd); // el hijo heredó su propio fd al archivo
+  return child.pid;
+}
+
+/**
  * IPv4 de la red local, para abrir los servicios desde el celular.
  * Se puede forzar con `LAN_IP=192.168.x.x`.
  */
@@ -1179,6 +1224,8 @@ function printHelp() {
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
   out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
   out.push("  node dev.js --no-advantage      → no levantar la BD del ERP (OpenADS/Advantage)");
+  out.push("  node dev.js --erp-sync          → deja la salida PG→ERP en bucle (requiere Advantage)");
+  out.push("  node dev.js --erp-sync --erp-interval=15  → igual, cada 15 s (def. 30)");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
   out.push("  node dev.js --migrate           → restaura la BD desde db/backups/ecommerce y sale");
   out.push("  node dev.js --migrate --force   → ídem, sobrescribiendo una BD con datos");
@@ -1222,6 +1269,8 @@ function printHelp() {
   out.push("    Se levanta junto a PostgreSQL (omítela con --no-advantage). Imagen: mercaldas/openads:1.09.73.");
   out.push("    Datos: db/ads/openads/data (copia escribible). Detalle: db/ads/openads/README.md");
   out.push("  Respaldo versionado: db/backups/ecommerce (troceado) — restaurar: node dev.js --migrate");
+  out.push("  Sync ERP (conector scripts-agent/erp): `node dev.js --erp-sync` deja corriendo la salida");
+  out.push("    PG→ERP en bucle (push-customers/push-catalog/push-orders/reconcile cada 30 s). Ver docs/RUNBOOK-ERP.md");
   out.push("  Para detenerla:   cd db/docker && docker compose stop");
   out.push("                    cd delivery-routing && docker compose stop  (OSRM)");
   out.push("                    docker stop openads-img                        (Advantage/ERP)");
@@ -1259,6 +1308,7 @@ function printCommands() {
   rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
   rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
   rows.push(["node dev.js --no-advantage", "no levantar la BD del ERP (OpenADS)"]);
+  rows.push(["node dev.js --erp-sync", "deja la salida PG→ERP en bucle (requiere Advantage)"]);
   rows.push(["node dev.js --help", "esta ayuda"]);
 
   const w = Math.max(...rows.map((r) => r[0].length));
@@ -1368,6 +1418,18 @@ async function main() {
       fs.unlinkSync(PIDS_FILE);
     } catch {
       /* noop */
+    }
+  }
+
+  // Salida Postgres → ERP en bucle, opcional con --erp-sync (necesita Advantage).
+  if (ERP_SYNC) {
+    if (!wantAdvantage) {
+      console.warn(
+        `${C.advantage}[erp-sync]${C.reset} ⚠️  --erp-sync necesita Advantage; se omite (--no-advantage).`,
+      );
+    } else {
+      const pid = startErpSync();
+      if (pid) registerPid("erp-sync", pid);
     }
   }
 

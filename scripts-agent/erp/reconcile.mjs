@@ -32,6 +32,8 @@ const STATUS_BY_TIPO = { AN: 'cancelled', RE: 'refunded' };
 
 const pg = createPg();
 await pg.connect();
+// Aplicamos estado del ERP a nuestros pedidos: no reencolar al ERP.
+await pg.query("SET app.erp_sync = 'on'");
 const q = (t, p) => pg.query(t, p);
 
 const orders = (await q('SELECT id, reference_code, erp_document_ref, status FROM orders')).rows;
