@@ -87,4 +87,25 @@ curl -u dsi:dsi "http://localhost:18080/api/tables/FADITE.ADT/schema"
   librería ACE de SAP (no disponible). No afecta a las *free tables* del ERP.
 - Los **triggers requieren diccionario** (nuestras tablas son *free tables*), y
   en SQL disparan **una vez por lote**, no por fila.
-- La consola Studio lista solo `.dbf`; las `.adt` se abren por nombre.
+- ~~La consola Studio lista solo `.dbf`; las `.adt` se abren por nombre.~~
+  **Parcheado** (ver abajo): el Studio ya lista también las `.adt`.
+
+## Parche local: la consola Studio lista `.adt`
+
+El Studio de OpenADS upstream solo enumeraba `*.dbf` en `/api/tables`, así que
+las tablas Advantage (`.adt`) del ERP no aparecían en la interfaz (solo se podían
+abrir por nombre vía SQL). Parche en el fuente vendorizado
+(`db/ads/openads/src/tools/serverd/http_server.cpp`, función `list_dbf_files`):
+
+```cpp
+if (ext == ".dbf" || ext == ".adt")   // antes: if (ext == ".dbf")
+```
+
+Como `src/` y `build/` están gitignored, el parche **no se versiona**: hay que
+aplicarlo en un clon nuevo antes de reconstruir la imagen.
+
+1. Aplicar el cambio en el fuente (una línea).
+2. `bash db/ads/openads/build.sh` (build incremental).
+3. `docker cp db/ads/openads/build/tools/serverd/openads_serverd openads-img:/opt/openads/openads_serverd && docker restart openads-img`
+   — o reconstruir la imagen (`docker build -t mercaldas/openads:1.09.73 -f db/ads/openads/Dockerfile db/ads/openads`).
+4. Verificar: `curl -u dsi:dsi http://localhost:18080/api/tables` ya devuelve las `.adt`.

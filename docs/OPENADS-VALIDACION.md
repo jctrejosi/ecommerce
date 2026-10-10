@@ -91,8 +91,9 @@ IFCAJA=06  IFTIPO=E  IFVENDED=LMHA
      por fila (los navegacionales, sí por registro).
    - **No hay detección de deadlocks** y la anidación se corta a 64 niveles.
    - Hay tablas virtuales `__new`, `__old`, `__error` (muy útiles para la cola).
-6. **Solo `.dbf` se listan en Studio**; las `.adt` se abren por nombre
-   (`/api/tables/<nombre>`). No es limitación del motor.
+6. **El Studio listaba solo `.dbf`** (las `.adt` solo se abrían por nombre,
+   `/api/tables/<nombre>`). **Parcheado** (ver §8, punto 3): ahora la consola
+   lista también las `.adt`. No era limitación del motor.
 7. **Sin TLS nativo en el listener** y credenciales en claro → LAN + firewall
    (el log lo advierte explícitamente).
 8. **Aviso del propio proyecto**: los huecos de paridad de diccionario y control
@@ -142,9 +143,9 @@ ERP (Windows, SAP ADS vivo)
 
 ## 8. Conector en uso: correcciones y sync de catálogo
 
-> Fecha: 2026-10-08 (mismo día, fase de conector).
+> Fecha: 2026-10-08 (conector). Punto 3 y nota de DA-Web añadidos el 2026-10-10.
 
-Dos correcciones sobre el binario de OpenADS (build propio, `src/` gitignored),
+Tres correcciones sobre el binario de OpenADS (build propio, `src/` gitignored),
 en `src/tools/serverd/http_server.cpp`:
 
 1. **`POST /api/sql` devolvía 500** con cualquier texto latin-1 (p. ej. `Ñ`).
@@ -155,9 +156,48 @@ en `src/tools/serverd/http_server.cpp`:
 2. **`/api/sql` no tenía `offset`**. Se añadió `offset` al endpoint y a `run_sql`
    (`AdsSkip` antes de materializar), para poder paginar tablas grandes
    proyectando solo las columnas necesarias (ej. `TIDSAL`, 51.938 filas).
+3. **El navegador de tablas del Studio listaba solo `.dbf`**, así que las
+   tablas Advantage del ERP (`.adt`) no aparecían en la interfaz (había que
+   abrirlas por nombre). En `tools/serverd/http_server.cpp`, función
+   `list_dbf_files`:
 
-Reconstrucción: `docker build -t mercaldas/openads:test -f db/ads/openads/Dockerfile db/ads/openads`
-y relanzar `openads-img` (data `db/ads/openads/data-test` → `/data`).
+   ```cpp
+   if (ext == ".dbf" || ext == ".adt")   // antes: if (ext == ".dbf")
+   ```
+
+   Tras el parche, `GET /api/tables` devuelve las 17 tablas `.adt` y el Studio
+   las muestra en la barra lateral (Browse/Structure/Insert/SQL/export).
+
+**Reconstrucción y despliegue del binario parcheado**: `src/` y `build/` están
+**gitignored**, así que el parche no se versiona y hay que reaplicarlo en un
+clon nuevo. Pasos:
+
+```bash
+# 1. aplicar el cambio de una línea en:
+#    db/ads/openads/src/tools/serverd/http_server.cpp
+# 2. compilar (incremental) y verificar
+bash db/ads/openads/build.sh
+# 3. inyectar en el contenedor vivo y reiniciar
+#    (o usar la ruta canónica de la imagen, abajo)
+docker cp db/ads/openads/build/tools/serverd/openads_serverd \
+  openads-img:/opt/openads/openads_serverd
+docker restart openads-img
+```
+
+Ruta canónica (reconstruye la imagen desde el fuente, ~5–10 min):
+
+```bash
+docker build -t mercaldas/openads:1.09.73 -f db/ads/openads/Dockerfile db/ads/openads
+```
+
+Detalle y mantenimiento del parche: `db/ads/openads/README.md` §*Parche local*.
+
+> **Alternativa evaluada: DA-Web** (`FiveTechSoft/OpenADS/DA-Web`). Es otra
+> consola, pero enlaza el motor **en proceso** vía `php_openads.dll` +
+> `openace64.dll` sobre **PHP 8 + Apache en Windows**, y soporta *free tables*
+> (`.adt`). No sirve para este entorno Linux/Docker (no es cliente del server
+> OpenADS); tendría sentido solo en el **PC Windows del ERP**. Para Linux, la
+> consola Studio parcheada cubre el mismo caso.
 
 ### 8.1 Catálogos de códigos poblados (`erp_code_map`)
 
