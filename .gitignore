@@ -22,3 +22,10 @@ db/backups/*
 !db/backups/ecommerce/
 !db/backups/ecommerce/**
 *.backup
+
+# Archivos físicos crudos de Postgres (heap/_fsm/_vm, no portables a mano).
+# Se extraen con las instrucciones de db/pg-raw/README.md; solo se versiona la
+# documentación, no los binarios.
+db/pg-raw/**
+!db/pg-raw/README.md
+!db/pg-raw/**/README.md
