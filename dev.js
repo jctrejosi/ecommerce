@@ -3,11 +3,13 @@
  * Mercaldas — lanzador de servicios.
  *
  * Uso:
- *   node dev.js            # DEV: instala dependencias faltantes, levanta
- *                          #   PostgreSQL + los servicios (y las apps Expo) en
- *                          #   segundo plano, espera a que el backend esté listo,
- *                          #   imprime las URLs y termina (la terminal queda
- *                          #   libre: se puede cerrar sin matar Metro).
+ *   node dev.js            # SOLO monta los servicios ya instalados (PostgreSQL +
+ *                          #   backend + webs + bot + OSRM + delivery) en segundo
+ *                          #   plano, espera a que el backend esté listo, imprime
+ *                          #   las URLs y termina (la terminal queda libre).
+ *   node dev.js --init     # Primer arranque: instala dependencias, compila todo
+ *                          #   y migra la BD (PostgreSQL) desde el respaldo; luego
+ *                          #   monta los servicios.
  *   node dev.js <flags>    # Solo los aplicativos pedidos (p. ej. --delivery-admin).
  *   node dev.js --fg       # Las apps Expo (delivery/picking) se quedan en
  *                          #   primer plano mostrando el QR (bloquea la terminal).
@@ -17,7 +19,6 @@
  *   node dev.js --stop     # Detiene los servicios levantados por dev.js.
  *   node dev.js --migrate  # Restaura la BD desde db/backups/ecommerce y sale
  *                          #   (si ya tiene datos no la toca; con --force, sí).
- *   node dev.js --no-restore  # No restaurar el respaldo: solo levantar PostgreSQL.
  *   node dev.js --help     # Lista todos los comandos implementados.
  *
  * Logs: un archivo por servicio en logs/ (logs/<servicio>.log).
@@ -79,8 +80,9 @@ const FORCE = ARGS.includes("--force");
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
 // `--no-advantage`: no levantar el contenedor de la BD del ERP (OpenADS).
 const NO_ADVANTAGE = ARGS.includes("--no-advantage");
-// `--no-restore`: no restaurar el respaldo versionado; solo levantar PostgreSQL.
-const NO_RESTORE = ARGS.includes("--no-restore");
+// `--init`: primer arranque — instala dependencias, compila todo y migra la BD
+// (PostgreSQL) desde el respaldo; luego monta los servicios.
+const INIT = ARGS.includes("--init");
 // `--erp-sync`: además, deja corriendo la SALIDA Postgres → ERP en bucle
 // (scripts-agent/erp/sync-out.mjs --apply). `--erp-interval=<seg>` lo ajusta.
 const ERP_SYNC = ARGS.includes("--erp-sync");
@@ -195,6 +197,7 @@ const SERVICES = [
     url: "http://localhost:3000",
     dev: ["npm", "run", "dev"],
     prod: ["npm", "run", "start:prod"],
+    build: [["npm", "run", "build"]],
     deps: NPM_DEPS,
   },
   {
@@ -206,6 +209,9 @@ const SERVICES = [
     url: "http://localhost:4173",
     dev: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
     prod: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
+    // El webclient sirve `Interface web client/dist`: --init lo compila.
+    buildDir: "Interface web client",
+    build: [[PM, "install"], [PM, "run", "build"]],
     // Escucha en 0.0.0.0 y resuelve el API en su propio origen, así que se
     // puede abrir tal cual desde el celular (es la URL que usa el APK).
     lan: true,
@@ -221,6 +227,7 @@ const SERVICES = [
     url: "http://localhost:8443",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    build: [[PM, "run", "build"]],
     // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local, así
     // que el panel se puede abrir desde el celular con la IP del equipo. El
     // cliente resuelve el API contra el host que sirvió la página
@@ -234,6 +241,7 @@ const SERVICES = [
     url: "http://localhost:8446",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    build: [[PM, "run", "build"]],
     // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local
     // (`CORS_ALLOW_LAN`), así que se puede abrir desde el celular con la IP del
     // equipo. El cliente resuelve el API contra el host que sirvió la página.
@@ -246,6 +254,7 @@ const SERVICES = [
     url: "http://localhost:8447",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    build: [[PM, "run", "build"]],
     // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local
     // (`CORS_ALLOW_LAN`), así que el panel se puede abrir desde el celular con
     // la IP del equipo (la que imprime `dev.js`). El cliente resuelve el API
@@ -305,7 +314,7 @@ const NO_SELECTOR_FLAGS = new Set([
   "--fg",
   "--foreground",
   "--no-advantage",
-  "--no-restore",
+  "--init",
   "--erp-sync",
   "--erp-interval",
 ]);
@@ -853,6 +862,32 @@ function ensureDeps(svc) {
   return true;
 }
 
+/**
+ * Compila un servicio si declara `build` (backend: `npm run build`; fronts:
+ * `PM run build`). Solo lo usa `--init`; un fallo no bloquea el arranque dev.
+ */
+function buildService(svc) {
+  if (!Array.isArray(svc.build) || svc.build.length === 0) return true;
+  const color = C[svc.name] || "";
+  const cwd = path.join(ROOT, svc.buildDir || svc.dir);
+  console.log(`${color}[${svc.name}]${C.reset} 🔨 compilando...`);
+  for (const step of svc.build) {
+    const r = spawnSync(step[0], step.slice(1), {
+      cwd,
+      stdio: "inherit",
+      shell: PM_SHELL && PKG_MANAGERS.has(step[0]),
+    });
+    if (r.status !== 0) {
+      console.warn(
+        `${color}[${svc.name}]${C.reset} ⚠️  falló el build: ${step.join(" ")} (se continúa; en dev no hace falta para el servidor de desarrollo)`,
+      );
+      return false;
+    }
+  }
+  console.log(`${color}[${svc.name}]${C.reset} ✅ build listo`);
+  return true;
+}
+
 // ── Arranque de servicios ───────────────────────────────────
 
 function resolveCmd(svc) {
@@ -1283,7 +1318,8 @@ function printHelp() {
   out.push("🧪 Mercaldas launcher — comandos implementados (node dev.js en la raíz)");
   out.push("");
   out.push("USO");
-  out.push("  node dev.js                     → levanta TODO (BDs + backend + todos los web + bot + OSRM + delivery)");
+  out.push("  node dev.js                     → SOLO monta los servicios ya instalados (no instala ni compila)");
+  out.push("  node dev.js --init              → primer arranque: instala, compila y migra la BD (PostgreSQL)");
   out.push("  node dev.js <flags>             → solo los aplicativos pedidos (+ sus dependencias)");
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
   out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
@@ -1293,7 +1329,6 @@ function printHelp() {
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
   out.push("  node dev.js --migrate           → restaura la BD desde db/backups/ecommerce y sale");
   out.push("  node dev.js --migrate --force   → ídem, sobrescribiendo una BD con datos");
-  out.push("  node dev.js --no-restore        → no restaurar el respaldo; solo levantar PostgreSQL");
   out.push("  node dev.js --help              → esta ayuda");
   out.push("");
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
@@ -1371,8 +1406,8 @@ function printCommands() {
   rows.push(["node dev.js --prod", "modo producción (requiere builds previos)"]);
   rows.push(["node dev.js --fg", "apps Expo con el QR en la terminal (bloquea)"]);
   rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
+  rows.push(["node dev.js --init", "primer arranque: instala + compila + migra la BD (PostgreSQL)"]);
   rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
-  rows.push(["node dev.js --no-restore", "no restaurar el respaldo (solo levantar PostgreSQL)"]);
   rows.push(["node dev.js --no-advantage", "no levantar la BD del ERP (OpenADS)"]);
   rows.push(["node dev.js --erp-sync", "deja la salida PG→ERP en bucle (requiere Advantage)"]);
   rows.push(["node dev.js --help", "esta ayuda"]);
@@ -1432,12 +1467,23 @@ async function main() {
     );
   console.log("");
 
-  // 1. Instalar dependencias faltantes de los servicios elegidos.
+  // Por defecto `node dev.js` SOLO monta los servicios (no instala, no compila
+  // ni migra la BD). El primer arranque desde cero se hace con `--init`.
   const sinDeps = new Set();
-  for (const svc of services) {
-    if (!ensureDeps(svc)) sinDeps.add(svc.name);
+  if (INIT) {
+    console.log(`🧱 --init: primer arranque → instalando dependencias y compilando...\n`);
+    for (const svc of services) {
+      if (!ensureDeps(svc)) sinDeps.add(svc.name);
+    }
+    for (const svc of services) {
+      if (!sinDeps.has(svc.name)) buildService(svc);
+    }
+    console.log("");
+  } else {
+    console.log(
+      `ℹ️  Se montan los servicios ya instalados (primer arranque desde cero: node dev.js --init).\n`,
+    );
   }
-  console.log("");
 
   if (wantDb) {
     startDatabase();
@@ -1446,13 +1492,13 @@ async function main() {
       console.warn(
         `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
       );
-    } else if (NO_RESTORE) {
-      console.log(
-        `${C.db}[db]${C.reset} 🚫 Restauración del respaldo omitida (--no-restore): PostgreSQL queda solo.`,
-      );
+    } else if (INIT) {
+      // Primer arranque: monta el respaldo versionado en PostgreSQL (solo la BD).
+      restoreDatabaseIfNeeded({ force: FORCE, explicit: true });
     } else {
-      // Clon nuevo (BD sin tabla `products`): monta el respaldo versionado.
-      restoreDatabaseIfNeeded();
+      console.log(
+        `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD (usa --init, o node dev.js --migrate).`,
+      );
     }
   }
   if (!wantDb)
