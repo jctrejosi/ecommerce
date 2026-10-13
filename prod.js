@@ -29,7 +29,12 @@
  *   node prod.js --help            → ayuda
  */
 
-const { spawn, spawnSync } = require("child_process");
+const cp = require("child_process");
+// En Windows, un proceso con `detached` y sin `windowsHide` abre una terminal
+// nueva por servicio. Se envuelven spawn/spawnSync para ocultarla siempre (en
+// otros SO la opción se ignora).
+const spawn = (cmd, args, opts = {}) => cp.spawn(cmd, args, { windowsHide: true, ...opts });
+const spawnSync = (cmd, args, opts = {}) => cp.spawnSync(cmd, args, { windowsHide: true, ...opts });
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
@@ -73,13 +78,54 @@ const PNPM_DEPS = {
   markerType: "dir",
   install: [[PM, "install"]],
 };
+// ── Python (bot) ────────────────────────────────────────────
+// En Windows `python3` no existe (alias de la Microsoft Store) y el venv usa
+// Scripts\ en vez de bin/; se prueba python3 → python → py -3.
+const PY_VENV_BIN =
+  process.platform === "win32"
+    ? [".venv", "Scripts", "python.exe"]
+    : [".venv", "bin", "python"];
+const PY_VENV_PY = PY_VENV_BIN.join(path.sep);
+
+/** Candidatos a intérprete: PATH primero, luego ubicaciones típicas de Windows. */
+function pythonCandidates() {
+  const list = [["python3"], ["python"], ["py", "-3"]];
+  if (process.platform === "win32") {
+    for (const root of [
+      path.join(process.env.LOCALAPPDATA || "", "Programs", "Python"),
+      path.join(process.env.ProgramFiles || "", "Python"),
+    ]) {
+      try {
+        for (const dir of fs.readdirSync(root)) {
+          if (/^Python3/.test(dir)) list.push([path.join(root, dir, "python.exe")]);
+        }
+      } catch {
+        /* carpeta inexistente */
+      }
+    }
+  }
+  return list;
+}
+
+function findPython() {
+  for (const cmd of pythonCandidates()) {
+    const r = spawnSync(cmd[0], [...cmd.slice(1), "--version"], { stdio: "ignore" });
+    if (r.status === 0) return cmd;
+  }
+  return null;
+}
+
+const PY_BASE = findPython();
 const PYTHON_DEPS = {
-  marker: [".venv", "bin", "python"],
+  marker: PY_VENV_BIN,
   markerType: "file",
-  install: [
-    ["python3", "-m", "venv", ".venv"],
-    [".venv", "bin", "pip", "install", "-r", "requirements.txt"],
-  ],
+  // null ⇒ no hay Python instalado; `ensureDeps` lo reporta y omite el servicio.
+  install: PY_BASE
+    ? [
+        [...PY_BASE, "-m", "venv", ".venv"],
+        [PY_VENV_PY, "-m", "pip", "install", "-r", "requirements.txt"],
+      ]
+    : null,
 };
 
 // Colores de terminal (igual que dev.js).
@@ -386,6 +432,12 @@ function ensureDeps(svc) {
   if (installed) return true;
 
   console.log(`${color}[${svc.name}]${C.reset} 📦 instalando dependencias...`);
+  if (!svc.deps.install) {
+    console.error(
+      `${color}[${svc.name}]${C.reset} ✘ no se encontró Python (python3/python/py); instálalo y reintenta — se omite este servicio`,
+    );
+    return false;
+  }
   for (const step of svc.deps.install) {
     const r = spawnSync(step[0], step.slice(1), { cwd, stdio: "inherit" });
     if (r.status !== 0) {
@@ -475,11 +527,12 @@ function resolveCmd(svc) {
   }
 
   if (svc.name === "bot") {
-    const py = path.join(cwd, ".venv", "bin", "python");
+    const py = path.join(cwd, PY_VENV_PY);
     if (!fs.existsSync(py)) {
+      const base = (PY_BASE || ["python3"]).join(" ");
       console.warn(
         `${C.bot}[bot]${C.reset} ⚠️  ${svc.dir}/.venv no existe — ` +
-          `crealo con: python3 -m venv ${svc.dir}/.venv && ${svc.dir}/.venv/bin/pip install -r ${svc.dir}/requirements.txt`,
+          `crealo con: ${base} -m venv ${svc.dir}/.venv && ${path.join(svc.dir, PY_VENV_PY)} -m pip install -r ${svc.dir}/requirements.txt`,
       );
       return null;
     }

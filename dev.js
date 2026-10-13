@@ -17,6 +17,7 @@
  *   node dev.js --stop     # Detiene los servicios levantados por dev.js.
  *   node dev.js --migrate  # Restaura la BD desde db/backups/ecommerce y sale
  *                          #   (si ya tiene datos no la toca; con --force, sí).
+ *   node dev.js --no-restore  # No restaurar el respaldo: solo levantar PostgreSQL.
  *   node dev.js --help     # Lista todos los comandos implementados.
  *
  * Logs: un archivo por servicio en logs/ (logs/<servicio>.log).
@@ -25,7 +26,12 @@
  * `cd db/docker && docker compose stop`. Junto a PostgreSQL se levanta también
  * Advantage/OpenADS (la BD del ERP, db/ads/openads) salvo con `--no-advantage`.
  */
-const { spawn, spawnSync } = require("node:child_process");
+const cp = require("node:child_process");
+// En Windows, un proceso con `detached` y sin `windowsHide` abre una terminal
+// nueva por servicio. Se envuelven spawn/spawnSync para ocultarla siempre (en
+// otros SO la opción se ignora).
+const spawn = (cmd, args, opts = {}) => cp.spawn(cmd, args, { windowsHide: true, ...opts });
+const spawnSync = (cmd, args, opts = {}) => cp.spawnSync(cmd, args, { windowsHide: true, ...opts });
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -73,6 +79,8 @@ const FORCE = ARGS.includes("--force");
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
 // `--no-advantage`: no levantar el contenedor de la BD del ERP (OpenADS).
 const NO_ADVANTAGE = ARGS.includes("--no-advantage");
+// `--no-restore`: no restaurar el respaldo versionado; solo levantar PostgreSQL.
+const NO_RESTORE = ARGS.includes("--no-restore");
 // `--erp-sync`: además, deja corriendo la SALIDA Postgres → ERP en bucle
 // (scripts-agent/erp/sync-out.mjs --apply). `--erp-interval=<seg>` lo ajusta.
 const ERP_SYNC = ARGS.includes("--erp-sync");
@@ -106,19 +114,63 @@ const PNPM_DEPS = {
   markerType: "dir",
   installers: PM_INSTALLERS,
 };
-const PYTHON_DEPS = {
-  marker: [".venv", "bin", "python"],
-  markerType: "file",
-  install: [
-    ["python3", "-m", "venv", ".venv"],
-    [".venv", "bin", "pip", "install", "-r", "requirements.txt"],
-  ],
-};
 
 function hasBin(cmd) {
   const r = spawnSync(cmd, ["--version"], { stdio: "ignore", shell: PM_SHELL });
   return r.status === 0;
 }
+
+// ── Python (bot) ────────────────────────────────────────────
+// En Windows `python3` no existe (es el alias de la Microsoft Store, que
+// falla): el lanzador real es `python` o `py`. Además ahí el venv guarda el
+// intérprete en Scripts\ en vez de bin/.
+const PY_VENV_BIN =
+  process.platform === "win32"
+    ? [".venv", "Scripts", "python.exe"]
+    : [".venv", "bin", "python"];
+const PY_VENV_PY = PY_VENV_BIN.join(path.sep);
+
+/** Candidatos a intérprete: PATH primero, luego ubicaciones típicas de Windows. */
+function pythonCandidates() {
+  const list = [["python3"], ["python"], ["py", "-3"]];
+  if (process.platform === "win32") {
+    for (const root of [
+      path.join(process.env.LOCALAPPDATA || "", "Programs", "Python"),
+      path.join(process.env.ProgramFiles || "", "Python"),
+    ]) {
+      try {
+        for (const dir of fs.readdirSync(root)) {
+          if (/^Python3/.test(dir)) list.push([path.join(root, dir, "python.exe")]);
+        }
+      } catch {
+        /* carpeta inexistente */
+      }
+    }
+  }
+  return list;
+}
+
+/** Intérprete base disponible (python3 → python → py -3 → instalaciones Windows). */
+function findPython() {
+  for (const cmd of pythonCandidates()) {
+    const r = spawnSync(cmd[0], [...cmd.slice(1), "--version"], { stdio: "ignore" });
+    if (r.status === 0) return cmd;
+  }
+  return null;
+}
+
+const PY_BASE = findPython();
+const PYTHON_DEPS = {
+  marker: PY_VENV_BIN,
+  markerType: "file",
+  // null ⇒ no hay Python instalado; `ensureDeps` lo reporta y omite el servicio.
+  install: PY_BASE
+    ? [
+        [...PY_BASE, "-m", "venv", ".venv"],
+        [PY_VENV_PY, "-m", "pip", "install", "-r", "requirements.txt"],
+      ]
+    : null,
+};
 
 const C = {
   db: "\x1b[36m",
@@ -205,7 +257,7 @@ const SERVICES = [
     name: "bot",
     dir: "bot",
     url: "http://localhost:8000",
-    dev: ["bash", "dev.sh"],
+    dev: null, // se resuelve en resolveCmd() (intérprete del venv)
     prod: null, // se resuelve en resolveCmd()
     deps: PYTHON_DEPS,
   },
@@ -253,6 +305,7 @@ const NO_SELECTOR_FLAGS = new Set([
   "--fg",
   "--foreground",
   "--no-advantage",
+  "--no-restore",
   "--erp-sync",
   "--erp-interval",
 ]);
@@ -776,6 +829,13 @@ function ensureDeps(svc) {
     return false;
   }
 
+  if (!svc.deps.install) {
+    console.error(
+      `${color}[${svc.name}]${C.reset} ✘ no se encontró Python (python3/python/py); instálalo y reintenta — se omite este servicio`,
+    );
+    return false;
+  }
+
   for (const step of svc.deps.install) {
     const r = spawnSync(step[0], step.slice(1), {
       cwd,
@@ -796,17 +856,21 @@ function ensureDeps(svc) {
 // ── Arranque de servicios ───────────────────────────────────
 
 function resolveCmd(svc) {
-  if (svc.name === "bot" && MODE === "prod") {
-    const py = path.join(ROOT, "bot", ".venv", "bin", "python");
+  if (svc.name === "bot") {
+    // Se invoca el intérprete del venv directamente en vez de `bash dev.sh`:
+    // así funciona igual en Linux/macOS y en Windows (venv en Scripts\).
+    const py = path.join(ROOT, svc.dir, PY_VENV_PY);
     if (!fs.existsSync(py)) {
+      const base = (PY_BASE || ["python3"]).join(" ");
       console.warn(
         `${C.bot}[bot]${C.reset} ⚠️  bot/.venv no existe — crealo con: ` +
-          `python3 -m venv bot/.venv && bot/.venv/bin/pip install -r bot/requirements.txt`,
+          `${base} -m venv bot/.venv && ${path.join("bot", PY_VENV_PY)} -m pip install -r bot/requirements.txt`,
       );
       return null;
     }
-    // Producción: uvicorn sin --reload
-    return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
+    const base = [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
+    // Dev: uvicorn con --reload; prod: sin él.
+    return MODE === "prod" ? base : [...base, "--reload"];
   }
   return MODE === "prod" ? svc.prod : svc.dev;
 }
@@ -1229,6 +1293,7 @@ function printHelp() {
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
   out.push("  node dev.js --migrate           → restaura la BD desde db/backups/ecommerce y sale");
   out.push("  node dev.js --migrate --force   → ídem, sobrescribiendo una BD con datos");
+  out.push("  node dev.js --no-restore        → no restaurar el respaldo; solo levantar PostgreSQL");
   out.push("  node dev.js --help              → esta ayuda");
   out.push("");
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
@@ -1307,6 +1372,7 @@ function printCommands() {
   rows.push(["node dev.js --fg", "apps Expo con el QR en la terminal (bloquea)"]);
   rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
   rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
+  rows.push(["node dev.js --no-restore", "no restaurar el respaldo (solo levantar PostgreSQL)"]);
   rows.push(["node dev.js --no-advantage", "no levantar la BD del ERP (OpenADS)"]);
   rows.push(["node dev.js --erp-sync", "deja la salida PG→ERP en bucle (requiere Advantage)"]);
   rows.push(["node dev.js --help", "esta ayuda"]);
@@ -1379,6 +1445,10 @@ async function main() {
     if (!dbUp) {
       console.warn(
         `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
+      );
+    } else if (NO_RESTORE) {
+      console.log(
+        `${C.db}[db]${C.reset} 🚫 Restauración del respaldo omitida (--no-restore): PostgreSQL queda solo.`,
       );
     } else {
       // Clon nuevo (BD sin tabla `products`): monta el respaldo versionado.
