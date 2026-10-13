@@ -8,6 +8,10 @@
 /ads/installers/
 /ads/data/
 
+# Extración de datos de tablas de postgres
+
+/extract_data_pg/
+
 # OpenADS (reimplementación open-source de ADS): código clonado y build local
 /ads/openads/src/
 /ads/openads/build/
