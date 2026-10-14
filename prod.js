@@ -30,11 +30,16 @@
  */
 
 const cp = require("child_process");
-// En Windows, un proceso con `detached` y sin `windowsHide` abre una terminal
-// nueva por servicio. Se envuelven spawn/spawnSync para ocultarla siempre (en
-// otros SO la opción se ignora).
+// `windowsHide` oculta la consola de los hijos en Windows (en otros SO se
+// ignora), pero NO basta junto a `detached`: ese flag implica DETACHED_PROCESS y
+// Windows ignora CREATE_NO_WINDOW, asignando al hijo su PROPIA consola → aparece
+// una ventana de cmd por servicio. Por eso en Windows NO se usa `detached`.
 const spawn = (cmd, args, opts = {}) => cp.spawn(cmd, args, { windowsHide: true, ...opts });
 const spawnSync = (cmd, args, opts = {}) => cp.spawnSync(cmd, args, { windowsHide: true, ...opts });
+// POSIX: detached ⇒ grupo propio, para matarlo entero con `kill -pid`.
+// Windows: sin detached el hijo queda SIN consola (ni ventana) y aun así
+// sobrevive al cierre de la terminal; `--stop` lo mata con taskkill /T por PID.
+const DETACHED = process.platform !== "win32";
 const fs = require("fs");
 const net = require("net");
 const path = require("path");
@@ -561,7 +566,7 @@ function startService(svc) {
   const child = spawn(cmd[0], cmd.slice(1), {
     cwd: path.join(ROOT, svc.dir),
     stdio: ["ignore", fd, fd],
-    detached: true, // grupo de procesos propio: sobrevive a la terminal
+    detached: DETACHED, // POSIX: grupo propio · Windows: sin consola (sin ventana)
     shell: process.platform === "win32",
     env: serviceEnv(svc),
   });
