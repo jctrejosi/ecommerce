@@ -1,0 +1,42 @@
+# Contenedor ÚNICO de Mercaldas (backend + bot + 5 interfaces + Caddy).
+# Solo se publican 80/443; backend y bot quedan en la red interna del contenedor.
+#
+# Uso:
+#   cp docker/.env.example docker/.env   # edita dominios, TLS y secretos
+#   docker compose -f docker/docker-compose.yml build --build-arg VITE_API_URL=https://api.tudominio.com
+#   docker compose -f docker/docker-compose.yml up -d
+#
+# La base de datos NO va aquí: pásala con DATABASE_URL (host/BD externos o el
+# contenedor de db/docker adjunto a la red `mercaldas_internal`).
+name: mercaldas
+
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        # Debe coincidir con https://${HOST_API}. Se hornea en los fronts.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    image: mercaldas/app:latest
+    env_file:
+      - .env
+    environment:
+      BACKEND_PORT: "3100"
+      BOT_PORT: "8001"
+    # Solo el proxy sale al exterior. Cambia los puertos del host si 80/443
+    # ya están ocupados (p. ej. "8080:80").
+    ports:
+      - "${PUBLIC_HTTP_PORT:-80}:80"
+      - "${PUBLIC_HTTPS_PORT:-443}:443"
+    networks:
+      - edge      # salida a internet (DeepSeek, Cloudinary, ACME…) y puertos publicados
+      - internal  # red interna (BD, servicios internos) — no publicada
+    restart: unless-stopped
+
+networks:
+  edge:
+    name: mercaldas_edge
+  internal:
+    name: mercaldas_internal
+    internal: true
