@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # ============================================================
 # Imagen ÚNICA (un solo contenedor) del stack Mercaldas:
-#   backend NestJS + bot FastAPI + 5 interfaces web (Vite) + Caddy.
+#   backend NestJS + bot FastAPI + las interfaces web (Vite) + Caddy.
 #
 # Caddy expone :80/:443 (único publicado) y enruta por dominio/host a cada
 # interfaz; backend y bot escuchan solo en 127.0.0.1 (red interna). Los
@@ -18,7 +18,7 @@ WORKDIR /build/backend
 
 # Dependencias primero (capa cacheable).
 COPY backend/package.json backend/yarn.lock ./
-RUN yarn install --frozen-lockfile
+RUN yarn install --frozen-lockfile --network-timeout 600000
 
 COPY backend/ ./
 # Nest compila src/ a dist/; drizzle/ (importado por el runtime) se compila aparte.
@@ -40,11 +40,10 @@ RUN corepack enable
 WORKDIR /fronts
 COPY ["Interface web client", "web"]
 COPY ["Interface web admin", "admin"]
-COPY ["Interface web picking", "picking"]
 COPY ["Interface web picking admin", "picking-admin"]
 COPY ["Interface web delivery admin", "delivery-admin"]
 RUN set -eux; \
-    for d in web admin picking picking-admin delivery-admin; do \
+    for d in web admin picking-admin delivery-admin; do \
       ( cd "$d" && pnpm install --frozen-lockfile && pnpm run build ); \
     done
 
@@ -55,7 +54,9 @@ ENV NODE_ENV=production \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     BACKEND_PORT=3100 \
-    BOT_PORT=8001
+    BOT_PORT=8001 \
+    XDG_DATA_HOME=/data \
+    XDG_CONFIG_HOME=/config
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-venv \
@@ -80,7 +81,6 @@ COPY --from=backend /build/backend/scripts/picking-shelves.sql ./backend/scripts
 # Interfaces compiladas (una carpeta por interfaz).
 COPY --from=fronts /fronts/web/dist /srv/web
 COPY --from=fronts /fronts/admin/dist /srv/admin
-COPY --from=fronts /fronts/picking/dist /srv/picking
 COPY --from=fronts /fronts/picking-admin/dist /srv/picking-admin
 COPY --from=fronts /fronts/delivery-admin/dist /srv/delivery-admin
 
@@ -92,7 +92,11 @@ RUN python3 -m venv /opt/bot-venv \
 # Proxy + arranque.
 COPY docker/entrypoint.sh ./entrypoint.sh
 COPY docker/gen-caddyfile.mjs ./gen-caddyfile.mjs
-RUN chmod +x ./entrypoint.sh
+# Normaliza CRLF (el repo puede clonarse/trabajarse en Windows), da permisos y
+# crea los directorios persistentes de Caddy (certificados ACME en /data).
+RUN sed -i 's/\r$//' ./entrypoint.sh \
+ && chmod +x ./entrypoint.sh \
+ && mkdir -p /data /config
 
 EXPOSE 80 443
 CMD ["./entrypoint.sh"]

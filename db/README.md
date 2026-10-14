@@ -96,6 +96,12 @@ productos con sus imágenes Cloudinary).
 > ```
 > Destino: `TARGET_DATABASE_URL='...'` (+ `TARGET_DB_SSL=1` para Supabase).
 
+## Imágenes desde internet (productos sin foto)
+
+Pipeline de rastreo de URLs candidatas → descarga → limpieza de fondo →
+enlace a BD: ver `scripts-agent/image-sourcing/README.md`. Los artefactos de
+rastreo viven en `db/image-sourcing/` (`candidates.ndjson`, `summary.json`).
+
 ## Backups
 
 - **`backups/local/ecommerce_local.backup`** — el más importante: contiene el

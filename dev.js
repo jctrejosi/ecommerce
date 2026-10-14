@@ -888,6 +888,31 @@ function buildService(svc) {
   return true;
 }
 
+// ── Plantillas de entorno (bootstrap de --init) ─────────────
+// Si falta el archivo destino, se copia la plantilla (NUNCA sobrescribe). Los
+// valores de las plantillas son de ejemplo/local; revisa los secretos.
+const ENV_BOOTSTRAP = [
+  { dest: ["backend", ".env.development.local"], tpl: [".env.example"] },
+  { dest: ["bot", ".env"], tpl: ["bot", ".env.example"] },
+  { dest: ["Interface web admin", ".env"], tpl: ["Interface web admin", ".env.example"] },
+  {
+    dest: ["Interface movil delivery", ".env"],
+    tpl: ["Interface movil delivery", ".env.example"],
+  },
+];
+
+function ensureEnvFiles() {
+  for (const { dest, tpl } of ENV_BOOTSTRAP) {
+    const destPath = path.join(ROOT, ...dest);
+    const tplPath = path.join(ROOT, ...tpl);
+    if (fs.existsSync(destPath) || !fs.existsSync(tplPath)) continue;
+    fs.copyFileSync(tplPath, destPath);
+    console.log(
+      `${C.db}[env]${C.reset} 📄 ${dest.join("/")} creado desde ${tpl.join("/")} — revisa los valores y secretos`,
+    );
+  }
+}
+
 // ── Arranque de servicios ───────────────────────────────────
 
 function resolveCmd(svc) {
@@ -1472,6 +1497,7 @@ async function main() {
   const sinDeps = new Set();
   if (INIT) {
     console.log(`🧱 --init: primer arranque → instalando dependencias y compilando...\n`);
+    ensureEnvFiles();
     for (const svc of services) {
       if (!ensureDeps(svc)) sinDeps.add(svc.name);
     }

@@ -17,7 +17,7 @@ if [ -z "${CORS_ORIGIN:-}" ]; then
   scheme="https"
   [ "${TLS:-true}" = "false" ] && scheme="http"
   CORS_ORIGIN=""
-  for h in "${HOST_WEB:-}" "${HOST_ADMIN:-}" "${HOST_PICKING:-}" \
+  for h in "${HOST_WEB:-}" "${HOST_ADMIN:-}" \
            "${HOST_PICKING_ADMIN:-}" "${HOST_DELIVERY_ADMIN:-}"; do
     [ -n "$h" ] && CORS_ORIGIN="${CORS_ORIGIN:+$CORS_ORIGIN,}${scheme}://${h}"
   done
@@ -26,6 +26,8 @@ fi
 
 echo "==> Mercaldas (contenedor único): backend :${BACKEND_PORT} · bot :${BOT_PORT} · Caddy :80/:443"
 node /app/gen-caddyfile.mjs
+# Normaliza el formato (evita el aviso de 'not formatted' de Caddy).
+caddy fmt --overwrite /app/Caddyfile.generated
 
 # ---- Backend NestJS ----
 cd /app/backend

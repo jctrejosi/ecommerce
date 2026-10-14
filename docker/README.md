@@ -1,90 +1,47 @@
-# Despliegue en un contenedor único (`docker/`)
+# `docker/` — despliegue en un contenedor único
 
-Imagen única con **todo el stack** de Mercaldas dentro de un solo contenedor:
+Imagen única con **backend + bot + las interfaces web + Caddy**. Solo se publican
+`80`/`443`; backend, bot y BD quedan internos.
 
-| Proceso | Puerto (interno) | Acceso |
+| Proceso | Puerto (interno) | Internet |
 |---|---|---|
-| Backend NestJS | `127.0.0.1:3100` | solo dentro del contenedor |
-| Bot FastAPI | `127.0.0.1:8001` | solo dentro del contenedor |
-| Caddy (proxy + TLS + estáticos) | `:80` / `:443` | **único publicado** |
+| Backend NestJS | `127.0.0.1:3100` | ❌ |
+| Bot FastAPI | `127.0.0.1:8001` | ❌ |
+| Caddy (proxy + TLS + estáticos) | `:80` / `:443` | ✅ único |
 
-Caddy enruta por **dominio/host**: cada interfaz web (build Vite) se sirve en su
-subdominio y el API (backend + `/bot`) en su propio host. Los dominios/hosts se
-configuran con **variables de entorno** en runtime — no hace falta reconstruir
-la imagen para cambiar dominios.
+📖 **Guía completa (Windows Server, firewall, DNS, seguridad y checklist):
+[`docs/DESPLIEGUE-DOCKER.md`](../docs/DESPLIEGUE-DOCKER.md)**
 
-> El `Dockerfile`/`Caddyfile` de la **raíz** son para Render (un solo puerto,
-> rutas `/bot`, `/ia-service`). Este `docker/` es la variante multi-dominio para
-> tu propio servidor. No se tocan entre sí.
-
-## 1. Configurar
+## Rápido
 
 ```bash
-cp docker/.env.example docker/.env
-#   edita docker/.env: HOST_*, TLS, ACME_EMAIL, VITE_API_URL, DATABASE_URL, secretos
-```
+cp docker/.env.example docker/.env    # dominios, TLS, DATABASE_URL, secretos
 
-`VITE_API_URL` debe ser la URL pública del API (`https://<HOST_API>`); se
-**hornea** en los fronts al compilar, por eso también se pasa como `--build-arg`.
-
-## 2. Construir y levantar
-
-```bash
-# VITE_API_URL debe coincidir con el de docker/.env
 docker compose -f docker/docker-compose.yml build \
   --build-arg VITE_API_URL=https://api.tudominio.com
 
 docker compose -f docker/docker-compose.yml up -d
-docker compose -f docker/docker-compose.yml logs -f
+docker compose -f docker/docker-compose.yml ps
 ```
 
-Solo se publican `80` y `443`. Backend y bot nunca se publican: quedan en la red
-`mercaldas_internal` (interna). Si `80/443` ya están ocupados en el host,
-cámbialos con `PUBLIC_HTTP_PORT`/`PUBLIC_HTTPS_PORT` en `docker/.env`.
+## Archivos
 
-## 3. Base de datos
+| Archivo | Rol |
+|---|---|
+| `Dockerfile` | Multi-stage: backend + fronts (Vite) + bot → runtime con Node, Python y Caddy. |
+| `entrypoint.sh` | Arranca backend/bot (127.0.0.1) y Caddy (`:80/:443`) + genera el Caddyfile. |
+| `gen-caddyfile.mjs` | Vhosts por dominio, cabeceras de seguridad, HSTS y Basic Auth opcional. |
+| `docker-compose.yml` | Un servicio, redes `edge`+`internal`, volúmenes de Caddy, `cap_drop`, healthcheck. |
+| `.env.example` | Dominios (`HOST_*`), TLS, secretos y BD. |
 
-La BD **no** va en este contenedor. Dos opciones:
+## Seguridad (resumen)
 
-- **Externa/administrada** (Supabase, RDS…): pon su cadena en `DATABASE_URL`.
-- **Contenedor de `db/docker`**: levántalo y adjúntalo a la red interna, luego
-  usa `DATABASE_URL=postgres://postgres:postgres@ecommerce_postgres:5432/ecommerce`.
+- Solo `80`/`443` publicados; `3100`/`8001` escuchan en `127.0.0.1` dentro del contenedor.
+- BD en la red `mercaldas_internal` (`internal: true`), nunca publicada.
+- TLS Let's Encrypt + HSTS + `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`; se oculta `Server`.
+- `PROTECT_ADMIN=true` → Basic Auth en admin, picking-admin y delivery-admin.
+- Certificados persistentes en los volúmenes `mercaldas_caddy_data`/`mercaldas_caddy_config`.
+- Contenedor con `no-new-privileges` y `cap_drop: ALL` (+ `NET_BIND_SERVICE`).
 
-  ```bash
-  # adjuntar el postgres existente a la red interna del stack
-  docker network connect mercaldas_internal ecommerce_postgres
-  ```
-
-## 4. DNS, TLS y router
-
-- Crea un registro **A** por cada `HOST_*` → IP pública del servidor.
-- Con `TLS=true`, Caddy emite y renueva los certificados (Let's Encrypt) usando
-  `ACME_EMAIL`. Necesita que `80` y `443` lleguen al servidor.
-- Reenvía en el router **solo** `80` y `443` a este host. **No** expongas `3100`
-  ni `8001` (son internos).
-
-## 5. Cómo funciona el enrutado
-
-En el arranque, `docker/entrypoint.sh` ejecuta `docker/gen-caddyfile.mjs`, que
-genera `/app/Caddyfile.generated` a partir de las variables `HOST_*`:
-
-- `HOST_API` → `/bot/*` al bot y el resto al backend.
-- `HOST_WEB` → estáticos de `/srv/web`; `HOST_ADMIN` → `/srv/admin`; etc.
-  (con *fallback* SPA a `index.html`).
-
-Puedes regenerarlo y validarlo manualmente sin arrancar todo:
-
-```bash
-HOST_API=api.example.com HOST_WEB=client.example.com \
-  node docker/gen-caddyfile.mjs
-```
-
-Si no defines ningún `HOST_*`, se genera un vhost `:80` mínimo (solo API) para
-comprobar que el contenedor levanta; las interfaces requieren sus `HOST_*`.
-
-## Notas
-
-- Para cambiar un dominio basta editar `docker/.env` y `up -d` de nuevo; **no**
-  hace falta rebuild salvo que cambies `VITE_API_URL` (va dentro del bundle).
-- Esta carpeta se escribió sin poder ejecutar el build aquí; verifica el primer
-  `build`/`up` y revisa `logs` de Caddy si algún dominio no resuelve.
+> Cambiar un dominio no requiere rebuild (edita `docker/.env` y `up -d`).
+> Cambiar `VITE_API_URL` **sí** requiere rebuild (va horneado en los fronts).
