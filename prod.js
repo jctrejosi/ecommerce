@@ -57,6 +57,7 @@ const BUILD = ARGS.includes("--build");
 const NO_BUILD = ARGS.includes("--no-build");
 const DNS_ONLY = ARGS.includes("--dns");
 const INIT_CONFIG = ARGS.includes("--init-config");
+const WRITE_CADDY = ARGS.includes("--write-caddy");
 const CONFIG_IDX = ARGS.indexOf("--config");
 const CONFIG_PATH =
   CONFIG_IDX >= 0 && ARGS[CONFIG_IDX + 1]
@@ -240,6 +241,7 @@ const NO_SELECTOR_FLAGS = new Set([
   "--dns",
   "--init-config",
   "--config",
+  "--write-caddy",
 ]);
 
 /** Flags `--x` no reconocidos. Si hay alguno, el launcher no ejecuta nada. */
@@ -443,7 +445,12 @@ function ensureDeps(svc) {
     );
     return false;
   }
-  for (const step of svc.deps.install) {
+  for (const raw of svc.deps.install) {
+    // En Windows un ejecutable relativo (p. ej. .venv\Scripts\python.exe) se
+    // resuelve contra el cwd del proceso, no contra `cwd` → lo hacemos absoluto.
+    const looksLikePath = raw[0].includes("/") || raw[0].includes("\\");
+    const step =
+      looksLikePath && !path.isAbsolute(raw[0]) ? [path.resolve(cwd, raw[0]), ...raw.slice(1)] : raw;
     const r = spawnSync(step[0], step.slice(1), { cwd, stdio: "inherit" });
     if (r.status !== 0) {
       console.error(
@@ -682,6 +689,7 @@ function printHelp() {
   out.push("  node prod.js --stop                → detiene los servicios de prod.js");
   out.push("  node prod.js --init-config         → crea prod.config.json (plantilla de dominios)");
   out.push("  node prod.js --dns                 → muestra los registros DNS a configurar en tu proveedor");
+  out.push("  node prod.js --write-caddy         → genera deploy/Caddyfile (proxy + TLS) desde la config");
   out.push("  node prod.js --config <ruta>       → usa otro archivo de configuración");
   out.push("  node prod.js --help                → esta ayuda");
   out.push("");
@@ -870,12 +878,18 @@ function printDns() {
   for (const r of rows) {
     console.log(`     ${r.host.padEnd(wHost)}   A   ${cfg.publicIp || "<TU_IP_PUBLICA>"}`);
   }
-  console.log("     (si tu IP es dinámica, usa DDNS o un CNAME a un host DDNS)");
+  console.log(
+    "     (en VPS la IP es fija; solo si fuera una red doméstica con IP dinámica necesitas DDNS)",
+  );
 
-  console.log("\n  2) Reenvío de puertos en el router:");
-  console.log(`     TCP 80   → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}   (solo para emitir/renovar TLS)`);
-  console.log(`     TCP 443  → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}`);
-  console.log("     NO reenvíes 5432 ni 5000: son internos (base de datos y rutas).");
+  console.log("\n  2) Abre los puertos 80 y 443 en el servidor:");
+  console.log("     • VPS: en el firewall del PROVEEDOR (security group) y en el del sistema operativo.");
+  console.log("     • Windows: reglas de entrada TCP 80 y 443 en Windows Defender Firewall");
+  console.log("       (y comprueba que IIS/HTTP.sys no los estén ocupando).");
+  if (cfg.localIp) {
+    console.log(`     • Red local: reenvía en el router TCP 80 y 443 → ${cfg.localIp}.`);
+  }
+  console.log("     NO abras puertos internos (3000, 5173, 8000, 8443-8447, 5432, 5000): solo 80 y 443.");
 
   console.log("\n  3) Mapa dominio → servicio interno (lo aplica el proxy Caddy):");
   for (const r of rows) {
@@ -913,6 +927,84 @@ function initConfig() {
   console.log(`✅ Creado ${rel} — edita dominios/IP y vuelve a ejecutar prod.js.`);
 }
 
+// ── Caddyfile (proxy + TLS) ─────────────────────────────────
+
+// Astaroth (ML) no lo levanta prod.js: si expones ml.<dominio>, debe estar
+// corriendo aparte en este puerto.
+const ASTAROTH_PORT = 10001;
+
+function servicePort(name) {
+  const svc = SERVICES.find((s) => s.name === name);
+  return svc ? new URL(svc.url).port : null;
+}
+
+/** Genera el Caddyfile (TLS automático + rutas por dominio) desde la config. */
+function caddyfileText(cfg) {
+  const out = [];
+  out.push("# Generado por prod.js desde prod.config.json — NO editar a mano.");
+  out.push("# Ejecuta: caddy run --config deploy/Caddyfile --adapter caddyfile");
+  out.push("");
+  out.push("{");
+  if (cfg.acmeEmail) out.push(`\temail ${cfg.acmeEmail}`);
+  out.push("}");
+  out.push("");
+
+  // Un site block por front: dominio → su puerto interno (vite preview).
+  for (const name of FRONT_SERVICES) {
+    const host = cfg.hosts[name];
+    const port = servicePort(name);
+    if (!host || !port) continue;
+    out.push(`${host} {`);
+    out.push("\tencode zstd gzip");
+    out.push(`\treverse_proxy 127.0.0.1:${port}`);
+    out.push("}");
+    out.push("");
+  }
+
+  // API: backend en la raíz y el bot bajo /bot (mismo esquema que el contenedor).
+  const api = cfg.hosts.api;
+  const backendPort = servicePort("backend");
+  const botPort = servicePort("bot");
+  if (api && backendPort) {
+    out.push(`${api} {`);
+    out.push("\tencode zstd gzip");
+    if (botPort) {
+      out.push("\thandle_path /bot/* {");
+      out.push(`\t\treverse_proxy 127.0.0.1:${botPort}`);
+      out.push("\t}");
+    }
+    out.push("\thandle {");
+    out.push(`\t\treverse_proxy 127.0.0.1:${backendPort}`);
+    out.push("\t}");
+    out.push("}");
+    out.push("");
+  }
+
+  // Astaroth (ML): opcional; requiere el servicio corriendo aparte.
+  if (cfg.hosts.ml) {
+    out.push(`# Requiere Astaroth corriendo en 127.0.0.1:${ASTAROTH_PORT} (proyecto aparte).`);
+    out.push(`${cfg.hosts.ml} {`);
+    out.push("\tencode zstd gzip");
+    out.push(`\treverse_proxy 127.0.0.1:${ASTAROTH_PORT}`);
+    out.push("}");
+    out.push("");
+  }
+
+  return out.join("\n");
+}
+
+function writeCaddyfile() {
+  const cfg = CONFIG || loadConfig();
+  const dir = path.join(ROOT, "deploy");
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, "Caddyfile");
+  fs.writeFileSync(file, caddyfileText(cfg) + "\n");
+  const rel = path.relative(ROOT, file);
+  console.log(`✅ Caddyfile generado: ${rel}`);
+  console.log(`   Ejecuta: caddy run --config ${rel.replace(/\\/g, "/")} --adapter caddyfile`);
+  return file;
+}
+
 // ── Main ────────────────────────────────────────────────────
 
 async function main() {
@@ -930,6 +1022,7 @@ async function main() {
   if (INIT_CONFIG) return initConfig();
 
   CONFIG = loadConfig();
+  if (WRITE_CADDY) return writeCaddyfile();
   if (DNS_ONLY) return printDns();
   if (STOP) return stopAll();
 
