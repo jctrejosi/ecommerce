@@ -8,8 +8,8 @@
  *   Cada interfaz se sirve en su propio subdominio y el API (backend + bot)
  *   en HOST_API. El backend/bot solo escuchan en 127.0.0.1 dentro del contenedor.
  *
- * Si no defines ningún HOST_*, se genera un único vhost `:80` que solo proxya
- *   al backend (útil como smoke-test del contenedor).
+ * Si no defines ningún HOST_*, se genera un único vhost en el puerto HTTP que
+ *   solo proxya al backend (útil como smoke-test del contenedor).
  *
  * Variables:
  *   HOST_API            dominio del API (backend + /bot)         [opcional]
@@ -17,15 +17,20 @@
  *   HOST_ADMIN          admin                → /srv/admin
  *   HOST_PICKING_ADMIN  picking admin        → /srv/picking-admin
  *   HOST_DELIVERY_ADMIN delivery admin       → /srv/delivery-admin
- *   TLS                 "true" (def.) | "false"  (false ⇒ HTTP en :80)
+ *   TLS                 "true" (def.) | "false"  (false ⇒ HTTP; requiere ALLOW_INSECURE)
  *   ACME_EMAIL          email para Let's Encrypt (avisos de expiración)
- *   PROTECT_ADMIN       "true" ⇒ Basic Auth en los paneles de administración
+ *   PROTECT_ADMIN       "true" (def.) ⇒ Basic Auth en los paneles de administración
+ *   PROTECT_BOT         "true" (def.) ⇒ Basic Auth en /bot (nadie lo consume hoy)
  *   ADMIN_USER          usuario del Basic Auth           (def. admin)
  *   ADMIN_PASSWORD      contraseña en claro (se hashea con caddy bcrypt)
  *   ADMIN_PASSWORD_HASH hash bcrypt ya calculado (tiene prioridad)
  *   BACKEND_PORT        puerto interno del backend  (def. 3100)
  *   BOT_PORT            puerto interno del bot      (def. 8001)
- *   CADDYFILE_OUT       ruta de salida (def. /app/Caddyfile.generated)
+ *   HTTP_PORT           puerto HTTP interno de Caddy  (def. 8080; el compose publica 80)
+ *   HTTPS_PORT          puerto HTTPS interno de Caddy (def. 8443; el compose publica 443)
+ *   MAX_REQUEST_BODY    tamaño máximo de cuerpo (def. 50MB; "0" ⇒ sin límite)
+ *   CSP_POLICY          política CSP ("off"/"" ⇒ sin cabecera; por defecto una segura)
+ *   CADDYFILE_OUT       ruta de salida (def. /config/Caddyfile.generated)
  */
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
@@ -35,6 +40,45 @@ const TLS = String(env.TLS ?? "true").toLowerCase() !== "false";
 const EMAIL = (env.ACME_EMAIL || "").trim();
 const BACKEND = `127.0.0.1:${env.BACKEND_PORT || 3100}`;
 const BOT = `127.0.0.1:${env.BOT_PORT || 8001}`;
+
+// Caddy NO corre como root dentro del contenedor, así que escucha en puertos
+// altos; el compose publica 80/443 hacia ellos.
+const HTTP_PORT = String(env.HTTP_PORT || "8080").trim();
+const HTTPS_PORT = String(env.HTTPS_PORT || "8443").trim();
+
+// Límite de tamaño de cuerpo en el borde: evita que un cliente envíe cargas
+// enormes (el backend acepta hasta 50 MB de JSON). "0"/vacío ⇒ sin límite.
+const MAX_BODY = String(env.MAX_REQUEST_BODY ?? "50MB").trim();
+const bodyLimit =
+  MAX_BODY && MAX_BODY !== "0"
+    ? `\trequest_body {\n\t\tmax_size ${MAX_BODY}\n\t}\n`
+    : "";
+
+// CSP por defecto: permite lo que ya usan las SPAs (MapLibre, Cloudinary,
+// Google OAuth y el <script> inline de next-themes) pero cierra <object>,
+// <base> inyectado y el framing. Endurécela con CSP_POLICY según cada app.
+const DEFAULT_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https:",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https:",
+  "connect-src 'self' https: wss:",
+  "frame-src 'self' https:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'self'",
+  // Los pagos (Wompi/Epayco) hacen POST a otro origen: `form-action 'self'`
+  // los rompería, por eso se permite https:.
+  "form-action 'self' https:",
+].join("; ");
+const cspEnv = env.CSP_POLICY;
+const CSP =
+  cspEnv === undefined
+    ? DEFAULT_CSP
+    : /^(off|none|false|0|)$/i.test(cspEnv.trim())
+      ? ""
+      : cspEnv.trim();
 
 // Interfaz → variable de entorno del host y directorio dentro de la imagen.
 // `admin: true` ⇒ es un panel de administración (candidato a Basic Auth).
@@ -50,10 +94,13 @@ const HOST_API = hostOf("HOST_API");
 const frontHosts = FRONTS.map((f) => ({ ...f, host: hostOf(f.envKey) })).filter((f) => f.host);
 const anyHost = Boolean(HOST_API) || frontHosts.length > 0;
 
-// ── Basic Auth opcional para los paneles de administración ──
-const PROTECT_ADMIN = String(env.PROTECT_ADMIN || "false").toLowerCase() === "true";
+// ── Basic Auth de los paneles admin y del bot ──
+// Por defecto AMBOS protegidos (el bot consume crédito de DeepSeek y ninguna
+// interfaz lo consume hoy; si lo conectas a un front, ajusta PROTECT_BOT).
+const PROTECT_ADMIN = String(env.PROTECT_ADMIN ?? "true").toLowerCase() !== "false";
+const PROTECT_BOT = String(env.PROTECT_BOT ?? "true").toLowerCase() !== "false";
 let basicAuth = "";
-if (PROTECT_ADMIN) {
+if (PROTECT_ADMIN || PROTECT_BOT) {
   let hash = (env.ADMIN_PASSWORD_HASH || "").trim();
   if (!hash && env.ADMIN_PASSWORD) {
     const r = spawnSync("caddy", ["hash-password", "--plaintext", env.ADMIN_PASSWORD], {
@@ -65,7 +112,8 @@ if (PROTECT_ADMIN) {
     basicAuth = `\tbasic_auth {\n\t\t${env.ADMIN_USER || "admin"} ${hash}\n\t}\n`;
   } else {
     console.warn(
-      "⚠️  PROTECT_ADMIN=true pero falta ADMIN_PASSWORD/ADMIN_PASSWORD_HASH (o el binario caddy); los paneles NO se protegen.",
+      "⚠️  PROTECT_ADMIN/PROTECT_BOT activos pero falta ADMIN_PASSWORD/ADMIN_PASSWORD_HASH " +
+        "(o el binario caddy); NO se protegen los paneles ni /bot.",
     );
   }
 }
@@ -75,20 +123,24 @@ const headerLines = [
   `\tX-Content-Type-Options "nosniff"`,
   `\tX-Frame-Options "SAMEORIGIN"`,
   `\tReferrer-Policy "strict-origin-when-cross-origin"`,
+  `\tCross-Origin-Opener-Policy "same-origin-allow-popups"`,
+  `\tPermissions-Policy "camera=(self), microphone=(self), geolocation=(self), payment=(self)"`,
   `\t-Server`,
 ];
+if (CSP) headerLines.push(`\tContent-Security-Policy "${CSP}"`);
 if (TLS) headerLines.unshift(`\tStrict-Transport-Security "max-age=31536000; includeSubDomains"`);
 const headerBlock = `\theader {\n${headerLines.join("\n")}\n\t}\n`;
 
-const apiBlock = `${headerBlock}\tencode zstd gzip
+const botAuthBlock = PROTECT_BOT && basicAuth ? basicAuth : "";
+const apiBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
 	handle_path /bot/* {
-		reverse_proxy ${BOT}
+${botAuthBlock}\t\treverse_proxy ${BOT}
 	}
 	handle {
 		reverse_proxy ${BACKEND}
 	}`;
 
-const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}\tencode zstd gzip
+const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
 	root * ${dir}
 	try_files {path} /index.html
 	file_server`;
@@ -100,11 +152,12 @@ let out = "";
 const siteAddr = (host) => (TLS ? host : `http://${host}`);
 
 if (anyHost) {
-  // Opciones globales (email ACME / HTTP puro).
-  const opts = [];
+  // Opciones globales: sin API de administración, puertos altos (no root),
+  // email ACME y HTTP puro si TLS=false.
+  const opts = ["\tadmin off", `\thttp_port ${HTTP_PORT}`, `\thttps_port ${HTTPS_PORT}`];
   if (EMAIL) opts.push(`\temail ${EMAIL}`);
   if (!TLS) opts.push("\tauto_https off");
-  if (opts.length) out += `{\n${opts.join("\n")}\n}\n`;
+  out += `{\n${opts.join("\n")}\n}\n`;
 
   if (HOST_API) out += `\n${siteAddr(HOST_API)} {\n${apiBlock}\n}\n`;
   for (const f of frontHosts) {
@@ -112,13 +165,13 @@ if (anyHost) {
     out += `\n${siteAddr(f.host)} {\n${staticBlock(f.dir, withAuth)}\n}\n`;
   }
 } else {
-  // Sin dominios configurados: vhost mínimo en :80 (solo API) como smoke-test.
+  // Sin dominios configurados: vhost mínimo en el puerto HTTP (solo API).
   out +=
     `# ⚠️  No definiste ningún HOST_* — vhost mínimo (solo API).\n` +
     `#     Define HOST_API y HOST_WEB/HOST_ADMIN/... para publicar las interfaces.\n` +
-    `:80 {\n${apiBlock}\n}\n`;
+    `:${HTTP_PORT} {\n${apiBlock}\n}\n`;
 }
 
-const dest = env.CADDYFILE_OUT || "/app/Caddyfile.generated";
+const dest = env.CADDYFILE_OUT || "/config/Caddyfile.generated";
 fs.writeFileSync(dest, out);
 process.stdout.write(`Caddyfile generado en ${dest}:\n${out}`);

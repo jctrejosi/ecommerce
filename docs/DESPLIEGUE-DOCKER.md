@@ -7,7 +7,7 @@ Imagen única con **todo el stack** dentro de **un solo contenedor**:
 | Backend NestJS | `127.0.0.1:3100` (dentro del contenedor) | ❌ nunca directamente |
 | Bot FastAPI | `127.0.0.1:8001` (dentro del contenedor) | ❌ nunca directamente |
 | PostgreSQL | red interna `mercaldas_internal` | ❌ nunca |
-| **Caddy** (proxy + TLS + estáticos) | `:80` / `:443` | ✅ **único puerto publicado** |
+| **Caddy** (proxy + TLS + estáticos) | `:8080` / `:8443` (el host publica `80`/`443`) | ✅ **único puerto publicado** |
 
 Los archivos viven en `docker/` (`Dockerfile`, `docker-compose.yml`,
 `gen-caddyfile.mjs`, `entrypoint.sh`, `.env.example`).
@@ -45,6 +45,30 @@ en este contenedor: se compilan a APK/IPA apuntando a `HOST_API`.
 - El **API sí es público** (en `HOST_API`): los fronts son SPA y llaman al
   backend desde el navegador. Se protege con TLS y con el firewall, no con un
   puerto abierto.
+
+Además (endurecimiento por defecto):
+
+- **El contenedor NO corre como root**: hay un usuario `merc` creado en la
+  imagen y Caddy escucha en `8080`/`8443` (el compose los publica como
+  `80`/`443`). Ya no hace falta `NET_BIND_SERVICE`.
+- **`PROTECT_ADMIN=true` por defecto** y **fail-closed**: si está activo y no
+  hay `ADMIN_PASSWORD`/`ADMIN_PASSWORD_HASH`, el contenedor **no arranca** (así
+  no quedan paneles abiertos por descuido).
+- **`/bot` protegido por defecto** (`PROTECT_BOT=true`, mismas credenciales):
+  consume crédito de DeepSeek y ninguna interfaz de este repo lo consume hoy.
+- **Rate limit propio** (sin dependencias): `RATE_LIMIT_ENABLED=true` limita
+  `/auth/*` y `/customer-auth/*` por IP (requiere `TRUST_PROXY=loopback`, ya
+  definido en el compose) y el bot limita `/chat` y `/cart*`.
+- **Cabeceras añadidas**: `Content-Security-Policy` (ajustable con `CSP_POLICY`),
+  `Permissions-Policy` y `Cross-Origin-Opener-Policy`.
+- **Límite de tamaño de cuerpo** en el borde (`MAX_REQUEST_BODY`, def. `50MB`).
+- **API de administración de Caddy desactivada** (`admin off`).
+- **Rotación de logs** de Docker (`max-size 10m`, `max-file 5`) para no llenar
+  el disco, y volumen `mercaldas_media` para los medios locales del backend.
+- **`TLS=false` requiere `ALLOW_INSECURE=true`**: no se sirve HTTP en claro por
+  descuido.
+- **BD y OSRM bindeados a `127.0.0.1`** en sus compose (`db/docker`,
+  `delivery-routing`): dejan de publicarse en `0.0.0.0`.
 
 ---
 
@@ -114,7 +138,12 @@ En `docker/.env` configura, como mínimo:
 | `VITE_API_URL` | `https://api.tudominio.com` | debe coincidir con `HOST_API` |
 | `DATABASE_URL` | `postgres://…` | externa o contenedor de `db/docker` |
 | `JWT_SECRET`, `CLOUDINARY_*`, `DEEPSEEK_API_KEY` | — | secretos |
-| `PROTECT_ADMIN` | `true` | Basic Auth en los paneles |
+| `PROTECT_ADMIN` | `true` | Basic Auth en los paneles (**por defecto true**, fail-closed) |
+| `ADMIN_PASSWORD` | — | contraseña del Basic Auth (obligatoria si `PROTECT_ADMIN`) |
+| `PROTECT_BOT` | `true` | Basic Auth en `/bot` (def. true; ponlo `false` si conectas un front al bot) |
+| `MAX_REQUEST_BODY` | `50MB` | tamaño máximo de cuerpo en el borde (`0` = sin límite) |
+| `CSP_POLICY` | (def.) | política CSP; `off` la desactiva |
+| `ALLOW_INSECURE` | `false` | requerido para permitir `TLS=false` |
 
 > `CLOUDINARY_*` son **obligatorias**: sin ellas el backend aborta al arrancar
 > (`Cloudinary credentials are required`) y el contenedor entra en bucle de
@@ -239,5 +268,7 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 - [ ] `docker port` muestra **solo** 80 y 443.
 - [ ] `https://<HOST_API>/api-status` responde.
 - [ ] Cada interfaz carga y llama al API sin errores de CORS.
-- [ ] Paneles de administración protegidos (`PROTECT_ADMIN=true`).
+- [ ] Paneles de administración protegidos (`PROTECT_ADMIN=true` + `ADMIN_PASSWORD`).
+- [ ] `/bot` responde `401` sin credenciales (si `PROTECT_BOT=true`).
 - [ ] `3100`, `8001` y `5432` **no** son accesibles desde fuera.
+- [ ] `docker port` publica **solo** 80 y 443 (el contenedor escucha 8080/8443).

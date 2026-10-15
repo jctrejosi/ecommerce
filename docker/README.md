@@ -7,7 +7,7 @@ Imagen única con **backend + bot + las interfaces web + Caddy**. Solo se public
 |---|---|---|
 | Backend NestJS | `127.0.0.1:3100` | ❌ |
 | Bot FastAPI | `127.0.0.1:8001` | ❌ |
-| Caddy (proxy + TLS + estáticos) | `:80` / `:443` | ✅ único |
+| Caddy (proxy + TLS + estáticos) | `:8080` / `:8443` (el host publica `80`/`443`) | ✅ único |
 
 📖 **Guía completa (Windows Server, firewall, DNS, seguridad y checklist):
 [`docs/DESPLIEGUE-DOCKER.md`](../docs/DESPLIEGUE-DOCKER.md)**
@@ -37,11 +37,14 @@ docker compose -f docker/docker-compose.yml ps
 ## Seguridad (resumen)
 
 - Solo `80`/`443` publicados; `3100`/`8001` escuchan en `127.0.0.1` dentro del contenedor.
+- **El contenedor no corre como root** (usuario `merc`); Caddy escucha en `8080`/`8443`.
 - BD en la red `mercaldas_internal` (`internal: true`), nunca publicada.
-- TLS Let's Encrypt + HSTS + `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`; se oculta `Server`.
-- `PROTECT_ADMIN=true` → Basic Auth en admin, picking-admin y delivery-admin.
-- Certificados persistentes en los volúmenes `mercaldas_caddy_data`/`mercaldas_caddy_config`.
-- Contenedor con `no-new-privileges` y `cap_drop: ALL` (+ `NET_BIND_SERVICE`).
+- TLS Let's Encrypt + HSTS + `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`, `Content-Security-Policy`; se oculta `Server`.
+- `PROTECT_ADMIN=true` **por defecto** (fail-closed si falta la contraseña) y `PROTECT_BOT=true` para `/bot`.
+- **Rate limit** en `/auth/*` y `/customer-auth/*` (backend) y en `/chat`/`/cart*` (bot), por IP.
+- `TLS=false` exige `ALLOW_INSECURE=true`; `MAX_REQUEST_BODY` acota el cuerpo; API de admin de Caddy desactivada.
+- Certificados persistentes en los volúmenes `mercaldas_caddy_data`/`mercaldas_caddy_config`; medios locales en `mercaldas_media`.
+- Contenedor con `no-new-privileges` y `cap_drop: ALL`, rotación de logs de Docker.
 
 > Cambiar un dominio no requiere rebuild (edita `docker/.env` y `up -d`).
 > Cambiar `VITE_API_URL` **sí** requiere rebuild (va horneado en los fronts).
