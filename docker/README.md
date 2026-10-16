@@ -3,11 +3,16 @@
 Imagen única con **backend + bot + las interfaces web + Caddy**. Solo se publican
 `80`/`443`; backend, bot y BD quedan internos.
 
-| Proceso | Puerto (interno) | Internet |
-|---|---|---|
-| Backend NestJS | `127.0.0.1:3100` | ❌ |
-| Bot FastAPI | `127.0.0.1:8001` | ❌ |
-| Caddy (proxy + TLS + estáticos) | `:8080` / `:8443` (el host publica `80`/`443`) | ✅ único |
+| Proceso | Puerto (interno) | Publicado | Internet |
+|---|---|---|---|
+| Backend NestJS | `127.0.0.1:3100` | ❌ | ❌ |
+| Bot FastAPI | `127.0.0.1:8001` | ❌ | ❌ |
+| Caddy (proxy + TLS + estáticos) | `:8080` / `:8443` | `127.0.0.1:30180` / `127.0.0.1:30181` | ❌ (lo alcanza el edge) |
+| **Edge compartido** (`edge/`) | `:80` / `:443` | `80` / `443` | ✅ **único** |
+
+Puertos propios de cada proyecto (nada «genérico» que choque con IIS u otros
+servicios): ecommerce `30180/30181`, CRM `30280/30281` (en loopback). El edge es
+el único que publica 80/443 y el único que habla TLS con internet.
 
 📖 **Guía completa (Windows Server, firewall, DNS, seguridad y checklist):
 [`docs/DESPLIEGUE-DOCKER.md`](../docs/DESPLIEGUE-DOCKER.md)**
@@ -22,7 +27,17 @@ docker compose -f docker/docker-compose.yml build \
 
 docker compose -f docker/docker-compose.yml up -d
 docker compose -f docker/docker-compose.yml ps
+
+# Edge compartido: publica 80/443 y hace TLS para todos los dominios
+cd docker/edge && docker compose up -d
 ```
+
+> En `docker/.env` (modo edge, recomendado si hay más proyectos en el servidor):
+> `TLS=false`, `ALLOW_INSECURE=true`, `PUBLIC_SCHEME=https`,
+> `PUBLIC_HTTP_PORT=127.0.0.1:30180`, `PUBLIC_HTTPS_PORT=127.0.0.1:30181`.
+> Para desplegar el ecommerce **solo** (sin edge): `TLS=true` y
+> `PUBLIC_HTTP_PORT=80` / `PUBLIC_HTTPS_PORT=443`.
+> Detalles: [`edge/README.md`](./edge/README.md).
 
 ## Archivos
 
@@ -36,7 +51,7 @@ docker compose -f docker/docker-compose.yml ps
 
 ## Seguridad (resumen)
 
-- Solo `80`/`443` publicados; `3100`/`8001` escuchan en `127.0.0.1` dentro del contenedor.
+- Solo el edge publica `80`/`443`; el contenedor publica `127.0.0.1:30180/30181` (loopback) y `3100`/`8001` escuchan en `127.0.0.1` dentro del contenedor.
 - **El contenedor no corre como root** (usuario `merc`); Caddy escucha en `8080`/`8443`.
 - BD en la red `mercaldas_internal` (`internal: true`), nunca publicada.
 - TLS Let's Encrypt + HSTS + `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`, `Content-Security-Policy`; se oculta `Server`.

@@ -21,27 +21,36 @@ services:
         # Debe coincidir con https://${HOST_API}. Se hornea en los fronts.
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
     image: mercaldas/app:latest
+    # Nombre fijo: el edge compartido (docker/edge/) alcanza este contenedor por
+    # nombre en la red `shared_edge`.
+    container_name: mercaldas_app
     env_file:
       - .env
     environment:
       BACKEND_PORT: "3100"
       BOT_PORT: "8001"
-      # Puertos internos de Caddy (no root); el host publica 80/443.
+      # Puertos internos de Caddy (no root); el host publica los de abajo.
       HTTP_PORT: "8080"
       HTTPS_PORT: "8443"
       # Detrás de Caddy: confiar en X-Forwarded-For para el rate limit por IP.
-      TRUST_PROXY: "loopback"
+      # `uniquelocal` cubre el salto extra del edge compartido (red Docker
+      # privada → el backend resuelve la IP real del cliente).
+      TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
       RATE_LIMIT_ENABLED: "true"
       # Certificados/estado de Caddy → volúmenes (no se re-emiten en cada up).
       XDG_DATA_HOME: /data
       XDG_CONFIG_HOME: /config
       CADDYFILE_OUT: /config/Caddyfile.generated
-    # Solo el proxy sale al exterior. Cambia los puertos del host si 80/443
-    # ya están ocupados (p. ej. "8080:8080"). El bind a 0.0.0.0 es el necesario
-    # para exponer; limita el acceso con el firewall del servidor.
+    # ── Puertos publicados en el host ──────────────────────────────────────
+    # Por defecto SOLO en loopback y en puertos propios (30180/30181), para no
+    # chocar con 80/443 ni con servicios «genéricos» (8080, 8443…). Pensados
+    # para el despliegue con EDGE COMPARTIDO (docker/edge/), que es el único
+    # que publica 80/443 y termina TLS.
+    # Modo directo (este contenedor es el único en el servidor): pon en
+    # docker/.env  PUBLIC_HTTP_PORT=80  PUBLIC_HTTPS_PORT=443  (y TLS=true).
     ports:
-      - "${PUBLIC_HTTP_PORT:-80}:8080"
-      - "${PUBLIC_HTTPS_PORT:-443}:8443"
+      - "${PUBLIC_HTTP_PORT:-127.0.0.1:30180}:8080"
+      - "${PUBLIC_HTTPS_PORT:-127.0.0.1:30181}:8443"
     volumes:
       - caddy_data:/data
       - caddy_config:/config
@@ -50,6 +59,7 @@ services:
     networks:
       - edge      # salida a internet (DeepSeek, Cloudinary, ACME…) y puertos publicados
       - internal  # red interna (BD/ERP) — no publicada
+      - shared_edge  # la usa el edge compartido (docker/edge/) para alcanzar este contenedor
     # Endurecimiento: sin capacidades extra y sin escalada de privilegios. Al
     # correr como usuario sin privilegios en puertos altos no hace falta
     # NET_BIND_SERVICE.
@@ -77,6 +87,10 @@ networks:
   internal:
     name: mercaldas_internal
     internal: true
+  # Red que comparte con el edge compartido (docker/edge/) cuando 80/443 los
+  # publica ESE contenedor en vez de este. La crea el proyecto al arrancar.
+  shared_edge:
+    name: shared_edge
 
 volumes:
   caddy_data:

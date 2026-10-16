@@ -39,9 +39,13 @@ if [ "$PROTECT_ADMIN" = "true" ] && [ -z "${ADMIN_PASSWORD_HASH:-}" ] && [ -z "$
 fi
 
 # CORS_ORIGIN: si no lo defines, se deriva de los HOST_* de las interfaces.
+# `PUBLIC_SCHEME` fija el esquema público real cuando TLS=false porque TLS lo
+# termina un edge por delante (modo edge compartido: PUBLIC_SCHEME=https).
 if [ -z "${CORS_ORIGIN:-}" ]; then
-  scheme="https"
-  [ "$TLS" = "false" ] && scheme="http"
+  scheme="${PUBLIC_SCHEME:-https}"
+  if [ -z "${PUBLIC_SCHEME:-}" ] && [ "$TLS" = "false" ]; then
+    scheme="http"
+  fi
   CORS_ORIGIN=""
   for h in "${HOST_WEB:-}" "${HOST_ADMIN:-}" \
            "${HOST_PICKING_ADMIN:-}" "${HOST_DELIVERY_ADMIN:-}"; do

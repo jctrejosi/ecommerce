@@ -17,7 +17,8 @@
  *   HOST_ADMIN          admin                → /srv/admin
  *   HOST_PICKING_ADMIN  picking admin        → /srv/picking-admin
  *   HOST_DELIVERY_ADMIN delivery admin       → /srv/delivery-admin
- *   TLS                 "true" (def.) | "false"  (false ⇒ HTTP; requiere ALLOW_INSECURE)
+ *   TLS                 "true" (def.) | "false"  (false ⇒ HTTP, pensado para ir
+ *                       detrás del edge compartido que hace TLS; requiere ALLOW_INSECURE)
  *   ACME_EMAIL          email para Let's Encrypt (avisos de expiración)
  *   PROTECT_ADMIN       "true" (def.) ⇒ Basic Auth en los paneles de administración
  *   PROTECT_BOT         "true" (def.) ⇒ Basic Auth en /bot (nadie lo consume hoy)
@@ -131,13 +132,18 @@ if (CSP) headerLines.push(`\tContent-Security-Policy "${CSP}"`);
 if (TLS) headerLines.unshift(`\tStrict-Transport-Security "max-age=31536000; includeSubDomains"`);
 const headerBlock = `\theader {\n${headerLines.join("\n")}\n\t}\n`;
 
+// Con TLS desactivado este Caddy va detrás de un edge que SÍ hace TLS (modo
+// edge compartido): el backend debe ver el esquema público real (p. ej. para
+// construir URLs absolutas), así que se fija X-Forwarded-Proto=https.
+const protoUp = TLS ? "" : " {\n\t\theader_up X-Forwarded-Proto https\n\t}";
+
 const botAuthBlock = PROTECT_BOT && basicAuth ? basicAuth : "";
 const apiBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
 	handle_path /bot/* {
-${botAuthBlock}\t\treverse_proxy ${BOT}
+${botAuthBlock}\t\treverse_proxy ${BOT}${protoUp}
 	}
 	handle {
-		reverse_proxy ${BACKEND}
+		reverse_proxy ${BACKEND}${protoUp}
 	}`;
 
 const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
@@ -156,7 +162,13 @@ if (anyHost) {
   // email ACME y HTTP puro si TLS=false.
   const opts = ["\tadmin off", `\thttp_port ${HTTP_PORT}`, `\thttps_port ${HTTPS_PORT}`];
   if (EMAIL) opts.push(`\temail ${EMAIL}`);
-  if (!TLS) opts.push("\tauto_https off");
+  if (!TLS) {
+    opts.push("\tauto_https off");
+    // Detrás del edge compartido: el edge es un proxy de confianza (red Docker
+    // privada) y envía el X-Forwarded-For del cliente; sin esto Caddy lo
+    // reemplazaría por la IP del edge y el rate limit sería un único cubo.
+    opts.push("\tservers {\n\t\ttrusted_proxies static private_ranges\n\t}");
+  }
   out += `{\n${opts.join("\n")}\n}\n`;
 
   if (HOST_API) out += `\n${siteAddr(HOST_API)} {\n${apiBlock}\n}\n`;

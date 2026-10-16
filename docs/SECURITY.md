@@ -16,16 +16,21 @@ Principio: **un solo proceso habla con internet (Caddy); nada más se publica.**
 
 | Proceso | Escucha en | Publicado | Notas |
 |---|---|---|---|
-| Caddy (proxy + TLS + estáticos) | `:8080` (HTTP) / `:8443` (HTTPS) | **Sí** → host `80`/`443` | único punto de entrada |
+| Caddy interno (proxy + TLS + estáticos) | `:8080` (HTTP) / `:8443` (HTTPS) | `127.0.0.1:30180` / `127.0.0.1:30181` | lo alcanza el edge (red `shared_edge`) |
+| **Edge compartido** (`docker/edge/`, otro contenedor) | `:80` / `:443` | **Sí** → internet | único punto de entrada; TLS Let's Encrypt |
 | Backend NestJS | `127.0.0.1:3100` | ❌ | loopback dentro del contenedor |
 | Bot FastAPI | `127.0.0.1:8001` | ❌ | loopback dentro del contenedor |
 | PostgreSQL | red `mercaldas_internal` (`internal: true`) | ❌ | sin ruta a internet |
 
 - El contenedor **no corre como root**: usuario `merc` (uid/gid 10001). Por eso
-  Caddy escucha en puertos altos y el compose los publica como 80/443.
-- Redes: `mercaldas_edge` (salida a internet y puertos publicados) y
-  `mercaldas_internal` (**sin** ruta a internet) para la BD/ERP.
-- Cambiar los puertos del host: `PUBLIC_HTTP_PORT` / `PUBLIC_HTTPS_PORT`.
+  Caddy escucha en puertos altos.
+- Redes: `mercaldas_edge` (salida a internet y puertos publicados),
+  `mercaldas_internal` (**sin** ruta a internet) para la BD/ERP y `shared_edge`
+  (red compartida con el edge).
+- Los puertos de cada proyecto son PROPIOS y solo en `127.0.0.1` (ecommerce
+  `30180/30181`): no compiten con 80/443 ni con servicios «genéricos».
+- Modo directo (un solo proyecto en el servidor): `PUBLIC_HTTP_PORT=80`,
+  `PUBLIC_HTTPS_PORT=443` y `TLS=true`.
 
 ## 2. Transporte y TLS
 
@@ -112,10 +117,12 @@ Implementación **propia, en memoria**, sin dependencias ni servicios externos
 | Bot | `/chat*` y `/cart*` | **20 peticiones / 60 s por IP** | `CHAT_RATE_LIMIT`, `CHAT_RATE_WINDOW` |
 
 - Respuesta al exceder: **HTTP 429** con `Retry-After`.
-- Detrás de Caddy es imprescindible `TRUST_PROXY=loopback` (ya definido en el
-  compose) para que la IP sea la del cliente vía `X-Forwarded-For`; **sin eso
-  todas las peticiones comparten un solo cubo** y el límite se agotaría
-  globalmente.
+- Detrás de Caddy es imprescindible `TRUST_PROXY=loopback,uniquelocal` (ya
+  definido en el compose) para que la IP sea la del cliente vía
+  `X-Forwarded-For`; **sin eso todas las peticiones comparten un solo cubo** y
+  el límite se agotaría globalmente. Con el edge delante (modo edge) el Caddy
+  interno confía en esa red (`trusted_proxies static private_ranges`) para no
+  perder la IP real.
 - Los cubos viven en memoria: se reinician con el contenedor y **no** se
   comparten entre réplicas (aquí solo hay una).
 - No sustituye a un WAF: es defensa en profundidad del lado de la aplicación.
@@ -171,9 +178,10 @@ Implementación **propia, en memoria**, sin dependencias ni servicios externos
 ## 10. Verificación (checklist operativo)
 
 ```bash
-# 1. Solo 80 y 443 publicados (el contenedor escucha 8080/8443)
+# 1. Solo el EDGE publica 80/443; la app solo en loopback
 docker compose -f docker/docker-compose.yml ps
-docker port mercaldas-app-1
+docker port mercaldas_app        # espera 127.0.0.1:30180->8080
+docker port edge_caddy           # espera 0.0.0.0:80->80 y 0.0.0.0:443->443
 
 # 2. Desde fuera, los puertos internos NO responden
 curl -sS -m 3 http://<IP>:3100/ || echo "OK: 3100 cerrado"
@@ -235,9 +243,10 @@ algún `429`.
 | `CSP_POLICY` | (política por defecto) | CSP a medida; `off` la desactiva |
 | `MAX_REQUEST_BODY` | `50MB` | Tamaño máximo de cuerpo en el borde (`0` = sin límite) |
 | `RATE_LIMIT_ENABLED` | `false` | Activa el límite de `/auth/*` en el backend (el compose lo pone `true`) |
-| `TRUST_PROXY` | — | Debe ser `loopback` detrás de Caddy para el rate limit por IP |
+| `TRUST_PROXY` | — | Debe ser `loopback,uniquelocal` detrás del edge/Caddy para el rate limit por IP |
 | `CHAT_RATE_LIMIT` / `CHAT_RATE_WINDOW` | `20` / `60` | Límite del bot por IP y ventana |
-| `PUBLIC_HTTP_PORT` / `PUBLIC_HTTPS_PORT` | `80` / `443` | Puertos publicados en el host |
+| `PUBLIC_HTTP_PORT` / `PUBLIC_HTTPS_PORT` | `127.0.0.1:30180` / `127.0.0.1:30181` | Puertos publicados en el host (loopback en modo edge) |
+| `PUBLIC_SCHEME` | `https` | Esquema público real (CORS derivado detrás del edge) |
 | `HOST_*`, `VITE_API_URL` | — | Dominios publicados y URL pública del API |
 
 ## 13. Respuesta ante incidentes (mínimo)

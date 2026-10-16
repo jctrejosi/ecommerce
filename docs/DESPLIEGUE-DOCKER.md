@@ -29,9 +29,15 @@ en este contenedor: se compilan a APK/IPA apuntando a `HOST_API`.
 
 ## 1. Modelo de seguridad
 
-- **Solo se publican 80 y 443** al host. Backend, bot y BD no se publican: el
-  backend y el bot escuchan en `127.0.0.1` dentro del contenedor y la BD vive en
-  la red `mercaldas_internal` (`internal: true`), sin ruta a internet.
+- **Partición de puertos**: los proyectos no compiten por 80/443. Cada uno usa
+  puertos propios (ecommerce `30180/30181`, CRM `30280/30281`) publicados **solo
+  en `127.0.0.1`**, y un **edge compartido** (`docker/edge/`) es el único que
+  publica `80`/`443` y hace TLS. Backend, bot y BD no se publican: el backend y
+  el bot escuchan en `127.0.0.1` dentro del contenedor y la BD vive en la red
+  `mercaldas_internal` (`internal: true`), sin ruta a internet.
+  - Servidor con SOLO el ecommerce (sin edge): `TLS=true` y
+    `PUBLIC_HTTP_PORT=80` / `PUBLIC_HTTPS_PORT=443` → el contenedor publica
+    80/443 y emite el TLS él mismo.
 - **TLS** con Let's Encrypt (Caddy) cuando `TLS=true`; HSTS activado.
 - **Cabeceras de seguridad** en todos los vhosts: `X-Content-Type-Options`,
   `X-Frame-Options`, `Referrer-Policy`, y se elimina la cabecera `Server`.
@@ -176,18 +182,31 @@ La BD no va en este contenedor. Opciones:
 
 Nunca publiques `5432` al host.
 
+**OSRM** (rutas de delivery) sigue el mismo patrón: el contenedor de
+`delivery-routing` se conecta a la red interna y el backend lo alcanza por
+nombre (dentro del contenedor `OSRM_URL=http://localhost:5000` no existe):
+
+```bash
+docker network connect mercaldas_internal delivery_osrm
+# OSRM_URL=http://delivery_osrm:5000   (en docker/.env)
+```
+
+Si no usas el mapa de rutas, déjalo sin configurar: el resto funciona igual.
+
 ---
 
 ## 6. Validar que solo se expone lo necesario
 
 ```bash
-# Puertos publicados del contenedor: deben ser SOLO 80 y 443
+# Puertos: la app SOLO en loopback; el edge (docker/edge/) es quien publica 80/443
 docker compose -f docker/docker-compose.yml ps
-docker port mercaldas-app-1
+docker port mercaldas_app        # espera 127.0.0.1:30180->8080 (nada en 0.0.0.0)
+docker port edge_caddy           # espera 0.0.0.0:80->80 y 0.0.0.0:443->443
 
 # Desde fuera: el backend NO debe responder en su puerto interno
 curl -sS -m 3 http://<IP_DEL_SERVIDOR>:3100/ || echo "OK: 3100 cerrado"
 curl -sS -m 3 http://<IP_DEL_SERVIDOR>:8001/ || echo "OK: 8001 cerrado"
+curl -sS -m 3 http://<IP_DEL_SERVIDOR>:30180/ || echo "OK: 30180 cerrado"
 
 # Interfaces (con DNS real, o forzando el host hacia la IP)
 curl -I https://client.tudominio.com
@@ -265,10 +284,10 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 - [ ] DNS `A` de todos los `HOST_*` → IP pública.
 - [ ] Firewall/router: solo 80 y 443 abiertos.
 - [ ] `build` + `up -d` sin errores.
-- [ ] `docker port` muestra **solo** 80 y 443.
+- [ ] `docker port mercaldas_app` muestra solo `127.0.0.1:30180` (nada en `0.0.0.0`).
+- [ ] Edge levantado (`docker/edge/`) y `docker port edge_caddy` publica 80 y 443.
 - [ ] `https://<HOST_API>/api-status` responde.
 - [ ] Cada interfaz carga y llama al API sin errores de CORS.
 - [ ] Paneles de administración protegidos (`PROTECT_ADMIN=true` + `ADMIN_PASSWORD`).
 - [ ] `/bot` responde `401` sin credenciales (si `PROTECT_BOT=true`).
-- [ ] `3100`, `8001` y `5432` **no** son accesibles desde fuera.
-- [ ] `docker port` publica **solo** 80 y 443 (el contenedor escucha 8080/8443).
+- [ ] `3100`, `8001`, `5432` y `30180` **no** son accesibles desde fuera.

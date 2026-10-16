@@ -1,0 +1,42 @@
+# Edge compartido — Caddyfile (se edita a mano, NO lo genera gen-caddyfile.mjs).
+#
+# Un bloque por proyecto. Todos los dominios listados deben:
+#   1. existir en el DNS (registro A → IP pública del servidor), y
+#   2. estar configurados en el proyecto correspondiente (HOST_* en su .env).
+# El Host se conserva al reenviar, así que el Caddy interno de cada contenedor
+# enruta al vhost correcto.
+
+{
+	email admin@jcti.xyz
+}
+
+# Cabeceras que aporta el edge (TLS/HSTS). El resto (CSP, X-Frame-Options,
+# Permissions-Policy…) ya las añade el Caddy interno de cada contenedor.
+(edge_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+}
+
+# ── Ecommerce (contenedor `mercaldas_app`, Caddy interno en :8080 sin TLS) ──
+mercaldas.jcti.xyz, api.mercaldas.jcti.xyz, admin.mercaldas.jcti.xyz,
+picking-admin.mercaldas.jcti.xyz, delivery-admin.mercaldas.jcti.xyz {
+	import edge_headers
+	reverse_proxy mercaldas_app:8080
+}
+
+# ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
+crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
+	import edge_headers
+	reverse_proxy mercaldas_crm_app:8080
+}
+
+# ── Opcional: modelos de ML (Astaroth) corriendo NATIVOS en el host ──
+# Requiere descomentar `extra_hosts` en docker-compose.yml (Linux) o usar
+# Docker Desktop (Windows), y que Astaroth escuche en ese puerto.
+# ml.mercaldas.jcti.xyz {
+# 	import edge_headers
+# 	reverse_proxy host.docker.internal:10001
+# }
