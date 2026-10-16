@@ -19,15 +19,20 @@ el único que publica 80/443 y el único que habla TLS con internet.
 
 ## Rápido
 
-> Atajo con lanzador: `node prod.js` (sincroniza `docker/.env` desde `prod.config.json`,
-> valida secretos y construye/levanta; `--with-db` levanta también la BD; `--dns`
-> imprime qué configurar). Abajo, los comandos manuales equivalentes.
+> Dos formas, ambas válidas: **solo Docker** (los comandos de abajo; no necesitas
+> node) o el lanzador `node prod.js` (sincroniza `docker/.env` desde
+> `prod.config.json`, valida secretos y construye/levanta; `--with-db` levanta
+> también la BD; `--dns` imprime qué configurar).
 
 ```bash
 cp docker/.env.example docker/.env    # dominios, TLS, DATABASE_URL, secretos
 
-docker compose -f docker/docker-compose.yml build \
-  --build-arg VITE_API_URL=https://api.tudominio.com
+# VITE_API_URL se toma de docker/.env (o pásalo con --build-arg si prefieres)
+docker compose -f docker/docker-compose.yml build
+
+# Base de datos (fuera del contenedor) + red interna
+docker compose -f db/docker/docker-compose.yml up -d
+docker network connect mercaldas_internal ecommerce_postgres
 
 docker compose -f docker/docker-compose.yml up -d
 docker compose -f docker/docker-compose.yml ps

@@ -65,6 +65,7 @@ Internet ── :80/:443 ──> edge (Caddy, TLS) ── shared_edge ──> me
 | Síntoma | Causa | Arreglo |
 |---|---|---|
 | `network shared_edge not found` | los proyectos aún no arrancaron | levántalos primero |
+| Warning `network shared_edge exists but was not created for project …` | normal: otro proyecto la creó antes | se reutiliza sin problema; ignóralo |
 | `502` en un dominio | el contenedor del proyecto no está arriba o el `Host` no existe en su `.env` | revisa `docker ps` y el `.env` del proyecto |
 | No emite certificado | DNS del dominio sin apuntar / 80 ocupado | `nslookup`, libera el 80 (IIS/HTTP.sys) |
 | `port is already allocated` | otro proceso usa 80/443 | detén IIS u otro servidor web, o cambia `EDGE_HTTP_PORT` |
