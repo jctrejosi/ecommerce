@@ -118,6 +118,11 @@ New-NetFirewallRule -DisplayName "Mercaldas HTTPS" -Direction Inbound -Protocol 
 
 ## 3. Puesta en marcha
 
+> Atajo: `node prod.js` hace lo de abajo (sincroniza `docker/.env` desde
+> `prod.config.json`, valida secretos y construye/levanta). `node prod.js --with-db`
+> levanta además la BD. `node prod.js --dns` imprime los registros DNS/firewall.
+> Los comandos manuales equivalen a:
+
 ```bash
 cd <repo>
 cp docker/.env.example docker/.env         # edita dominios, TLS y secretos

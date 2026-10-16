@@ -19,6 +19,10 @@ el único que publica 80/443 y el único que habla TLS con internet.
 
 ## Rápido
 
+> Atajo con lanzador: `node prod.js` (sincroniza `docker/.env` desde `prod.config.json`,
+> valida secretos y construye/levanta; `--with-db` levanta también la BD; `--dns`
+> imprime qué configurar). Abajo, los comandos manuales equivalentes.
+
 ```bash
 cp docker/.env.example docker/.env    # dominios, TLS, DATABASE_URL, secretos
 

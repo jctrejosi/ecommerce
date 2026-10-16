@@ -33,10 +33,11 @@ crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
 	reverse_proxy mercaldas_crm_app:8080
 }
 
-# ── Opcional: modelos de ML (Astaroth) corriendo NATIVOS en el host ──
-# Requiere descomentar `extra_hosts` en docker-compose.yml (Linux) o usar
-# Docker Desktop (Windows), y que Astaroth escuche en ese puerto.
+# ── Opcional: Astaroth (APIs de ML) — contenedor `mercaldas_astaroth_app` ──
+# El CRM ya lo consume por la red interna `shared_edge` (sin pasar por aquí).
+# Descomenta SOLO si quieres exponer las APIs ML a internet: crea el registro
+# DNS y revisa antes Astaroth/docs/SECURITY.md (superficie sensible).
 # ml.mercaldas.jcti.xyz {
 # 	import edge_headers
-# 	reverse_proxy host.docker.internal:10001
+# 	reverse_proxy mercaldas_astaroth_app:8080
 # }

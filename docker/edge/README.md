@@ -6,8 +6,9 @@ que publica **80/443**: termina TLS (Let's Encrypt) para todos los dominios y
 reenvía a cada contenedor de aplicación por la red `shared_edge`.
 
 ```
-Internet ── :80/:443 ──> edge (Caddy, TLS) ── shared_edge ──> mercaldas_app:8080      (ecommerce)
-                                                          └─> mercaldas_crm_app:8080  (CRM)
+Internet ── :80/:443 ──> edge (Caddy, TLS) ── shared_edge ──> mercaldas_app:8080            (ecommerce)
+                                                          ├─> mercaldas_crm_app:8080        (CRM)
+                                                          └─> mercaldas_astaroth_app:8080   (ML, consumo interno)
 ```
 
 | Contenedor | Puertos publicados | Notas |
@@ -15,6 +16,7 @@ Internet ── :80/:443 ──> edge (Caddy, TLS) ── shared_edge ──> me
 | `edge_caddy` | `80`, `443` | único punto de entrada; certificados en `edge_caddy_data` |
 | `mercaldas_app` (ecommerce) | `127.0.0.1:30180` / `127.0.0.1:30181` | solo loopback; TLS interno desactivado |
 | `mercaldas_crm_app` (CRM) | `127.0.0.1:30280` / `127.0.0.1:30281` | solo loopback; TLS interno desactivado |
+| `mercaldas_astaroth_app` (Astaroth ML) | `127.0.0.1:30380` / `127.0.0.1:30381` | solo loopback; lo consume el CRM por `shared_edge` (no necesita el edge) |
 
 ## Puesta en marcha
 
