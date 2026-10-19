@@ -176,12 +176,18 @@ function syncEnvFile(cfg) {
   // Fail-closed del contenedor: avisamos aquí, no en los logs de Docker.
   const current = fs.readFileSync(ENV_FILE, "utf8");
   const problems = [];
+  const mediaStorage = envValue(current, "MEDIA_STORAGE").toLowerCase();
   const cloud = ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"].filter(
     (k) => !envValue(current, k),
   );
-  if (cloud.length) {
+  if (mediaStorage === "local") {
+    console.log(
+      `ℹ️  MEDIA_STORAGE=local → las imágenes se guardan en el volumen ${C.dim}media${C.reset} (sin Cloudinary).`,
+    );
+  } else if (cloud.length) {
     problems.push(
-      `Faltan ${cloud.join(", ")} → el backend aborta ("Cloudinary credentials are required").`,
+      `Faltan ${cloud.join(", ")} → el backend aborta ("Cloudinary credentials are required"). ` +
+        `Usa MEDIA_STORAGE=local si no quieres depender de Cloudinary.`,
     );
   }
   if (!envValue(current, "ADMIN_PASSWORD") && !envValue(current, "ADMIN_PASSWORD_HASH")) {

@@ -29,6 +29,9 @@ Principio: **un solo proceso habla con internet (Caddy); nada más se publica.**
   (red compartida con el edge).
 - Los puertos de cada proyecto son PROPIOS y solo en `127.0.0.1` (ecommerce
   `30180/30181`): no compiten con 80/443 ni con servicios «genéricos».
+- En el VPS Windows el motor Docker vive en la distro **WSL Ubuntu** y su API
+  escucha solo en `127.0.0.1:2375` (nunca en LAN ni en internet). Los 80/443 del
+  edge se publican con `netsh interface portproxy` hacia la IP de WSL.
 - Modo directo (un solo proyecto en el servidor): `PUBLIC_HTTP_PORT=80`,
   `PUBLIC_HTTPS_PORT=443` y `TLS=true`.
 
@@ -154,9 +157,12 @@ Implementación **propia, en memoria**, sin dependencias ni servicios externos
 - **Nunca entran en la imagen**: `.dockerignore` excluye `.env` y `.env.*`.
 - **Nunca se versionan**: `.gitignore` los excluye (excepto `.env.example`).
 - Viven en `docker/.env` (secreto) o como variables del orquestador.
-- Requeridos: `DATABASE_URL`, `JWT_SECRET`, `CLOUDINARY_*` (sin ellas el backend
-  aborta), `DEEPSEEK_API_KEY`; según el caso, claves de Wompi/Epayco y
-  `RESEND_API_KEY`.
+- Requeridos: `DATABASE_URL`, `JWT_SECRET`, `DEEPSEEK_API_KEY`; según el caso,
+  claves de Wompi/Epayco y `RESEND_API_KEY`.
+- Imágenes: con `MEDIA_STORAGE=local` se guardan en el volumen
+  `mercaldas_media` y **no** se necesitan `CLOUDINARY_*`. Si se usa
+  `MEDIA_STORAGE=cloudinary`, entonces `CLOUDINARY_*` son obligatorias (el
+  backend aborta sin ellas).
 - `ADMIN_PASSWORD_HASH` es preferible a `ADMIN_PASSWORD` (esta última se hashea
   al arrancar, pero viaja en claro en el `.env`).
 - Recomendaciones: permisos `600` sobre `docker/.env`, rotación periódica y
@@ -220,7 +226,9 @@ algún `429`.
 |---|---|---|
 | 1 | **Sin WAF ni anti-DDoS**: el origen queda expuesto con su IP real | Poner **Cloudflare** delante (proxy) y restringir 80/443 a sus IPs |
 | 2 | **Sin 2FA** en las cuentas de administración | Añadirlo en la app o restringir los paneles por VPN / Cloudflare Access |
-| 3 | **Host (Windows Server)**: RDP suele estar expuesto | Restringir RDP por IP, cambiar puerto, 2FA; parchear el SO |
+| 3 | **Host (Windows Server)**: RDP (3389) sigue expuesto | Restringir 3389 por IP/VPN, cambiar puerto, 2FA; parchear el SO |
+| 11 | **Puertos heredados del host abiertos a internet**: 5002 (Apache/XAMPP), 6262 (Advantage DB), 8501, 19955 | Cerrarlos en el firewall o en el *security group* del proveedor si no se usan externamente. WinRM (5985) ya está bloqueado. |
+| 12 | **Gestión del servidor por Tailscale** | Si Tailscale cae, el acceso de administración queda en RDP público; mantener 3389 restringido a IPs conocidas. |
 | 4 | **Token de respaldo en `localStorage`** (client) cuando no hay cookie httpOnly | Un XSS podría leerlo; por eso la CSP importa |
 | 5 | **Rate limit en memoria**: no sobrevive reinicios ni se comparte entre réplicas | Un WAF o un almacén compartido si algún día se escala |
 | 6 | **`/api-status` es público** | Es necesario para el cliente (espera al backend); expone solo estado |

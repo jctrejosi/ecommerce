@@ -101,10 +101,10 @@ COPY docker/gen-caddyfile.mjs ./gen-caddyfile.mjs
 # del backend en /app/db) y un usuario SIN privilegios con el que se ejecuta todo.
 RUN sed -i 's/\r$//' ./entrypoint.sh \
  && chmod +x ./entrypoint.sh \
- && mkdir -p /data /config /app/db \
+ && mkdir -p /data /config /app/db /app/backend/logs \
  && groupadd --system --gid 10001 merc \
  && useradd --system --uid 10001 --gid merc --home-dir /app --shell /usr/sbin/nologin merc \
- && chown -R merc:merc /data /config /app/db
+ && chown -R merc:merc /data /config /app/db /app/backend/logs
 
 # No root: Caddy escucha en 8080/8443 (el host publica 80/443).
 USER merc

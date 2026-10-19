@@ -84,25 +84,55 @@ Además (endurecimiento por defecto):
 Instala **Docker Desktop** con backend **WSL2** y ejecuta los comandos desde
 PowerShell o Git Bash.
 
-### Windows Server (2019/2022/2025)
-Docker Desktop **no** está soportado en Windows Server. La vía práctica es:
+### Windows Server (2019/2022/2025) — configuración usada en este VPS
+
+Docker Desktop **no** sirve como servicio: el motor se detiene cuando se cierra
+la sesión RDP del usuario que lo lanzó. En su lugar, el motor vive en una distro
+WSL propia y arranca con `systemd` desde una tarea de sistema.
 
 ```powershell
-# 1) Habilitar WSL2
-wsl --install                 # instala WSL2 + una distro (p. ej. Ubuntu)
-wsl --set-default-version 2
+# 1) Instalar WSL2 + Ubuntu (sin lanzarla)
+wsl --install -d Ubuntu --no-launch
 ```
-
-Dentro de la distro (Ubuntu), instala **Docker Engine + compose plugin**:
 
 ```bash
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker $USER    # vuelve a entrar para aplicar el grupo
-docker version
+# 2) Motor dentro de Ubuntu WSL (script del repo, idempotente)
+wsl -d Ubuntu -u root -- bash /mnt/c/.../ecommerce/scripts-agent/wsl-docker-setup.sh
 ```
 
-Los contenedores son Linux, así que corren igual dentro de WSL2. Ejecuta
-`docker compose` desde la distro (WSL) apuntando a la carpeta del repo.
+El script instala `docker.io` + `docker-compose-v2`, habilita `systemd`, deja la
+API Docker en **loopback** (`127.0.0.1:2375`, nunca en LAN) y arranca el motor.
+
+**Persistencia (sin depender de sesiones):**
+
+| Tarea programada | Principal | Qué hace |
+|---|---|---|
+| `MercaldasDockerEngine` | `Desarrolo4`, S4U, al inicio | `wsl -d Ubuntu -u root -- sleep infinity` mantiene la distro y con ella `systemd` + Docker |
+| `MercaldasPortProxy` | `Desarrolo4`, S4U, al inicio | recalcula la IP de WSL y reescribe `portproxy` 80/443 |
+
+`S4U` no guarda contraseña. Las distros WSL son **por usuario**: una tarea como
+`SYSTEM` no las ve.
+
+```powershell
+# 3) Publicar 80/443 del contenedor edge en las interfaces de Windows
+#    (WSL2 NAT solo expone loopback; la IP de WSL cambia al reiniciar)
+$ip = (wsl -d Ubuntu -u root -- hostname -I).Split(' ')[0]
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=80  connectaddress=$ip connectport=80
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=443 connectaddress=$ip connectport=443
+```
+
+El script `scripts-agent/wsl-portproxy.ps1` hace esto automáticamente al
+arrancar. **No** uses `networkingMode=mirrored`: Windows Server 2022 no lo
+soporta (WSL revierte a NAT).
+
+Como los compose usan bind mounts (`Caddyfile`, `init.sql`), en este servidor
+`prod.js` debe ejecutarse **dentro de WSL**. Usa el lanzador `prod.cmd` (que
+resuelve la ruta con `wslpath` y llama a `node prod.js` dentro de Ubuntu).
+
+```powershell
+.\prod.cmd --with-db
+.\prod.cmd --status
+```
 
 ### Firewall (solo 80 y 443)
 En PowerShell **como administrador**:
@@ -156,9 +186,10 @@ En `docker/.env` configura, como mínimo:
 | `CSP_POLICY` | (def.) | política CSP; `off` la desactiva |
 | `ALLOW_INSECURE` | `false` | requerido para permitir `TLS=false` |
 
-> `CLOUDINARY_*` son **obligatorias**: sin ellas el backend aborta al arrancar
-> (`Cloudinary credentials are required`) y el contenedor entra en bucle de
-> reinicio.
+> Con `MEDIA_STORAGE=local` (recomendado en este VPS) las imágenes se guardan en
+> el volumen `mercaldas_media` y **no hace falta Cloudinary**. Si eliges
+> `MEDIA_STORAGE=cloudinary`, entonces `CLOUDINARY_*` son obligatorias: sin
+> ellas el backend aborta (`Cloudinary credentials are required`).
 
 Deja vacío (o borra) el `HOST_*` de una interfaz que **no** quieras publicar.
 
@@ -168,6 +199,19 @@ Deja vacío (o borra) el `HOST_*` de una interfaz que **no** quieras publicar.
 
 - Un registro **A** por cada `HOST_*` → IP pública del servidor.
 - Reenvía en el router/firewall **solo** TCP `80` y `443` a este host.
+
+Registros para este despliegue (`jcti.xyz` en GoDaddy, TTL 600):
+
+| Tipo | Nombre | Valor |
+|---|---|---|
+| A | `mercaldas` | `170.254.229.68` |
+| A | `api.mercaldas` | `170.254.229.68` |
+| A | `admin.mercaldas` | `170.254.229.68` |
+| A | `picking-admin.mercaldas` | `170.254.229.68` |
+| A | `delivery-admin.mercaldas` | `170.254.229.68` |
+
+> Si `mercaldas` ya existe apuntando a un *parking* de GoDaddy, **edítalo** (no
+> crees un segundo registro A). No crees `picking.mercaldas` (no se sirve).
 - Con `TLS=true`, Caddy emite los certificados al primer arranque (necesita que
   80/443 lleguen al servidor).
 
@@ -278,7 +322,7 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 | Un front no carga | Falta su `HOST_*` o `VITE_API_URL` no coincide con `HOST_API` al compilar. |
 | El navegador da CORS | `CORS_ORIGIN` debe incluir las URLs de las interfaces (se deriva solo de los `HOST_*` si lo dejas vacío). |
 | No conecta a la BD | `DATABASE_URL` incorrecta o el contenedor de BD no está en `mercaldas_internal`. |
-| Docker no responde | En Windows, arranca Docker Desktop (`docker desktop start`) o el daemon en WSL (`sudo service docker start`). |
+| Docker no responde | En este servidor: `wsl -d Ubuntu -u root -- systemctl status docker` y comprueba la tarea `MercaldasDockerEngine`. Docker Desktop está deshabilitado a propósito. |
 
 ---
 

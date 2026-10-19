@@ -8,6 +8,9 @@
 
 {
 	email admin@jcti.xyz
+	# Producción explícita: evita el emisor ZeroSSL por defecto y cualquier
+	# intento contra el endpoint de staging (certs no confiables).
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
 }
 
 # Cabeceras que aporta el edge (TLS/HSTS). El resto (CSP, X-Frame-Options,
@@ -24,14 +27,27 @@
 mercaldas.jcti.xyz, api.mercaldas.jcti.xyz, admin.mercaldas.jcti.xyz,
 picking-admin.mercaldas.jcti.xyz, delivery-admin.mercaldas.jcti.xyz {
 	import edge_headers
+
+	# Emisor explícito. Caddy, por defecto, reintenta contra el CA de
+	# *staging* (`test_ca`) si el primario falla; eso puede dejar un
+	# certificado no confiable. Fijamos ambos al CA de producción.
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			test_dir https://acme-v02.api.letsencrypt.org/directory
+		}
+	}
+
 	reverse_proxy mercaldas_app:8080
 }
 
 # ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
-crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
-	import edge_headers
-	reverse_proxy mercaldas_crm_app:8080
-}
+# Descomenta cuando el CRM esté desplegado. Si se deja activo sin el contenedor
+# ni DNS, Caddy acumula reintentos de ACME y errores de upstream.
+# crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
+# 	import edge_headers
+# 	reverse_proxy mercaldas_crm_app:8080
+# }
 
 # ── Opcional: Astaroth (APIs de ML) — contenedor `mercaldas_astaroth_app` ──
 # El CRM ya lo consume por la red interna `shared_edge` (sin pasar por aquí).
