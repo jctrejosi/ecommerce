@@ -28,6 +28,13 @@ mercaldas.jcti.xyz, api.mercaldas.jcti.xyz, admin.mercaldas.jcti.xyz,
 picking-admin.mercaldas.jcti.xyz, delivery-admin.mercaldas.jcti.xyz {
 	import edge_headers
 
+	# Log de acceso a stdout (visible con `docker logs edge_caddy`). Permite
+	# diagnosticar 4xx/5xx y auditar tráfico. No loguea cuerpos ni credenciales.
+	log {
+		output stdout
+		format json
+	}
+
 	# Emisor explícito. Caddy, por defecto, reintenta contra el CA de
 	# *staging* (`test_ca`) si el primario falla; eso puede dejar un
 	# certificado no confiable. Fijamos ambos al CA de producción.
