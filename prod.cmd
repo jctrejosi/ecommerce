@@ -18,7 +18,8 @@ rem    prod.cmd --stop          detiene el contenedor
 rem ============================================================
 setlocal
 
-for /f "usebackq delims=" %%i in (`wsl.exe -d Ubuntu -u root -- wslpath -u "%~dp0"`) do set "WSLDIR=%%i"
+rem "%~dp0." evita que la barra final rompa el entrecomillado en cmd.
+for /f "usebackq delims=" %%i in (`wsl.exe -d Ubuntu -u root -- wslpath -u "%~dp0."`) do set "WSLDIR=%%i"
 if "%WSLDIR%"=="" (
   echo [prod] No se pudo resolver la ruta del proyecto en WSL. ^¿Esta instalada la distro Ubuntu?
   exit /b 1
