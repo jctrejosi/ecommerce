@@ -35,7 +35,9 @@ RUN yarn build \
 # pública del API (p. ej. https://api.tudominio.com).
 FROM node:20-bookworm-slim AS fronts
 ARG VITE_API_URL=http://localhost:3000
+ARG VITE_BOT_API_URL=http://localhost:8000
 ENV VITE_API_URL=${VITE_API_URL} \
+    VITE_BOT_API_URL=${VITE_BOT_API_URL} \
     CI=true
 RUN corepack enable
 WORKDIR /fronts
