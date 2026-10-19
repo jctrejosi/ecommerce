@@ -47,3 +47,6 @@ set_key EPAYCO_TEST "false"
 # El bot se enlaza con --port "$BOT_PORT" (compose lo fija en 8001); se deja
 # también esta clave para cualquier lectura interna.
 set_key BOT_API_PORT "8001"
+# CSP: el frontend carga Google Fonts (fonts.googleapis.com). La política por
+# defecto solo permite estilos propios, así que se habilita ese origen.
+set_key CSP_POLICY "default-src 'self'; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https:; connect-src 'self' https: wss:; frame-src 'self' https:; object-src 'none'; base-uri 'self'; frame-ancestors 'self'; form-action 'self' https:"
