@@ -44,11 +44,10 @@ set_key CUSTOMER_JWT_EXPIRES_IN "7d"
 set_key CUSTOMER_JWT_REFRESH_EXPIRES_IN "30d"
 set_key WOMPI_REDIRECT_URL "https://mercaldas.jcti.xyz"
 set_key EPAYCO_TEST "false"
-# El chat de la tienda llama a /bot/* desde el navegador: no puede enviar Basic
-# Auth. El bot ya aplica su propio rate limit y CORS restringido a CORS_ORIGIN.
-set_key PROTECT_BOT "false"
+# El bot ya NO se publica en Caddy: el backend lo proxya en /bot por loopback
+# dentro del contenedor. El propio bot aplica su rate limit y CORS interno.
 # El bot se enlaza con --port "$BOT_PORT" (compose lo fija en 8001); se deja
-# también esta clave para cualquier lectura interna.
+# también esta clave para el proxy del backend (BOT_INTERNAL_URL por defecto).
 set_key BOT_API_PORT "8001"
 # CSP: el frontend carga Google Fonts (fonts.googleapis.com). La política por
 # defecto solo permite estilos propios, así que se habilita ese origen.

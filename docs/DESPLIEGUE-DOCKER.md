@@ -60,8 +60,9 @@ Además (endurecimiento por defecto):
 - **`PROTECT_ADMIN=true` por defecto** y **fail-closed**: si está activo y no
   hay `ADMIN_PASSWORD`/`ADMIN_PASSWORD_HASH`, el contenedor **no arranca** (así
   no quedan paneles abiertos por descuido).
-- **`/bot` protegido por defecto** (`PROTECT_BOT=true`, mismas credenciales):
-  consume crédito de DeepSeek y ninguna interfaz de este repo lo consume hoy.
+- **El bot no se publica en Caddy**: el backend proxya `/bot/*` hacia
+  `127.0.0.1:8001` por loopback dentro del contenedor. Así el bot no tiene
+  superficie externa propia y conserva su rate limit interno.
 - **Rate limit propio** (sin dependencias): `RATE_LIMIT_ENABLED=true` limita
   `/auth/*` y `/customer-auth/*` por IP (requiere `TRUST_PROXY=loopback`, ya
   definido en el compose) y el bot limita `/chat` y `/cart*`.
@@ -181,7 +182,6 @@ En `docker/.env` configura, como mínimo:
 | `JWT_SECRET`, `CLOUDINARY_*`, `DEEPSEEK_API_KEY` | — | secretos |
 | `PROTECT_ADMIN` | `true` | Basic Auth en los paneles (**por defecto true**, fail-closed) |
 | `ADMIN_PASSWORD` | — | contraseña del Basic Auth (obligatoria si `PROTECT_ADMIN`) |
-| `PROTECT_BOT` | `true` | Basic Auth en `/bot` (def. true; ponlo `false` si conectas un front al bot) |
 | `MAX_REQUEST_BODY` | `50MB` | tamaño máximo de cuerpo en el borde (`0` = sin límite) |
 | `CSP_POLICY` | (def.) | política CSP; `off` la desactiva |
 | `ALLOW_INSECURE` | `false` | requerido para permitir `TLS=false` |
@@ -338,5 +338,5 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 - [ ] `https://<HOST_API>/api-status` responde.
 - [ ] Cada interfaz carga y llama al API sin errores de CORS.
 - [ ] Paneles de administración protegidos (`PROTECT_ADMIN=true` + `ADMIN_PASSWORD`).
-- [ ] `/bot` responde `401` sin credenciales (si `PROTECT_BOT=true`).
+- [ ] `/bot/health` responde a través del backend (el bot ya no está expuesto por Caddy).
 - [ ] `3100`, `8001`, `5432` y `30180` **no** son accesibles desde fuera.

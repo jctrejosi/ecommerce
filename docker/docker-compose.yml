@@ -32,6 +32,9 @@ services:
     environment:
       BACKEND_PORT: "3100"
       BOT_PORT: "8001"
+      # Proxy interno del bot: el backend reenvía /bot/* por loopback. El bot
+      # no se publica en Caddy ni tiene puerto en el host.
+      BOT_INTERNAL_URL: "http://127.0.0.1:8001"
       # Puertos internos de Caddy (no root); el host publica los de abajo.
       HTTP_PORT: "8080"
       HTTPS_PORT: "8443"

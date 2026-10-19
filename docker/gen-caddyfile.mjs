@@ -5,14 +5,15 @@
  *
  * Modo multi-host (recomendado): define `HOST_API` y, por cada interfaz que
  *   quieras publicar, su `HOST_<APP>` (p. ej. HOST_WEB=client.tudominio.com).
- *   Cada interfaz se sirve en su propio subdominio y el API (backend + bot)
- *   en HOST_API. El backend/bot solo escuchan en 127.0.0.1 dentro del contenedor.
+ *   Cada interfaz se sirve en su propio subdominio y el API (backend) en
+ *   HOST_API. El backend y el bot solo escuchan en 127.0.0.1 dentro del
+ *   contenedor; Caddy solo publica el backend, y este proxya /bot internamente.
  *
  * Si no defines ningún HOST_*, se genera un único vhost en el puerto HTTP que
  *   solo proxya al backend (útil como smoke-test del contenedor).
  *
  * Variables:
- *   HOST_API            dominio del API (backend + /bot)         [opcional]
+ *   HOST_API            dominio del API (backend; /bot lo proxya el backend) [opcional]
  *   HOST_WEB            cliente web          → /srv/web
  *   HOST_ADMIN          admin                → /srv/admin
  *   HOST_PICKING_ADMIN  picking admin        → /srv/picking-admin
@@ -21,12 +22,11 @@
  *                       detrás del edge compartido que hace TLS; requiere ALLOW_INSECURE)
  *   ACME_EMAIL          email para Let's Encrypt (avisos de expiración)
  *   PROTECT_ADMIN       "true" (def.) ⇒ Basic Auth en los paneles de administración
- *   PROTECT_BOT         "true" (def.) ⇒ Basic Auth en /bot (nadie lo consume hoy)
  *   ADMIN_USER          usuario del Basic Auth           (def. admin)
  *   ADMIN_PASSWORD      contraseña en claro (se hashea con caddy bcrypt)
  *   ADMIN_PASSWORD_HASH hash bcrypt ya calculado (tiene prioridad)
  *   BACKEND_PORT        puerto interno del backend  (def. 3100)
- *   BOT_PORT            puerto interno del bot      (def. 8001)
+ *   BOT_PORT            puerto interno del bot (lo usa el backend para su proxy) (def. 8001)
  *   HTTP_PORT           puerto HTTP interno de Caddy  (def. 8080; el compose publica 80)
  *   HTTPS_PORT          puerto HTTPS interno de Caddy (def. 8443; el compose publica 443)
  *   MAX_REQUEST_BODY    tamaño máximo de cuerpo (def. 50MB; "0" ⇒ sin límite)
@@ -40,7 +40,6 @@ const env = process.env;
 const TLS = String(env.TLS ?? "true").toLowerCase() !== "false";
 const EMAIL = (env.ACME_EMAIL || "").trim();
 const BACKEND = `127.0.0.1:${env.BACKEND_PORT || 3100}`;
-const BOT = `127.0.0.1:${env.BOT_PORT || 8001}`;
 
 // Caddy NO corre como root dentro del contenedor, así que escucha en puertos
 // altos; el compose publica 80/443 hacia ellos.
@@ -95,13 +94,11 @@ const HOST_API = hostOf("HOST_API");
 const frontHosts = FRONTS.map((f) => ({ ...f, host: hostOf(f.envKey) })).filter((f) => f.host);
 const anyHost = Boolean(HOST_API) || frontHosts.length > 0;
 
-// ── Basic Auth de los paneles admin y del bot ──
-// Por defecto AMBOS protegidos (el bot consume crédito de DeepSeek y ninguna
-// interfaz lo consume hoy; si lo conectas a un front, ajusta PROTECT_BOT).
+// ── Basic Auth de los paneles admin ──
+// El bot NO se publica aquí: el backend lo proxya en /bot por loopback.
 const PROTECT_ADMIN = String(env.PROTECT_ADMIN ?? "true").toLowerCase() !== "false";
-const PROTECT_BOT = String(env.PROTECT_BOT ?? "true").toLowerCase() !== "false";
 let basicAuth = "";
-if (PROTECT_ADMIN || PROTECT_BOT) {
+if (PROTECT_ADMIN) {
   let hash = (env.ADMIN_PASSWORD_HASH || "").trim();
   if (!hash && env.ADMIN_PASSWORD) {
     const r = spawnSync("caddy", ["hash-password", "--plaintext", env.ADMIN_PASSWORD], {
@@ -113,8 +110,8 @@ if (PROTECT_ADMIN || PROTECT_BOT) {
     basicAuth = `\tbasic_auth {\n\t\t${env.ADMIN_USER || "admin"} ${hash}\n\t}\n`;
   } else {
     console.warn(
-      "⚠️  PROTECT_ADMIN/PROTECT_BOT activos pero falta ADMIN_PASSWORD/ADMIN_PASSWORD_HASH " +
-        "(o el binario caddy); NO se protegen los paneles ni /bot.",
+      "⚠️  PROTECT_ADMIN activo pero falta ADMIN_PASSWORD/ADMIN_PASSWORD_HASH " +
+        "(o el binario caddy); NO se protegen los paneles.",
     );
   }
 }
@@ -137,11 +134,7 @@ const headerBlock = `\theader {\n${headerLines.join("\n")}\n\t}\n`;
 // construir URLs absolutas), así que se fija X-Forwarded-Proto=https.
 const protoUp = TLS ? "" : " {\n\t\theader_up X-Forwarded-Proto https\n\t}";
 
-const botAuthBlock = PROTECT_BOT && basicAuth ? basicAuth : "";
 const apiBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
-	handle_path /bot/* {
-${botAuthBlock}\t\treverse_proxy ${BOT}${protoUp}
-	}
 	handle {
 		reverse_proxy ${BACKEND}${protoUp}
 	}`;

@@ -20,6 +20,7 @@ import { StatusGateway } from './modules/status/status.gateway';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { isLanOrigin } from './utils/origins';
 import { MediaUrlInterceptor } from './common/interceptors/media-url.interceptor';
+import { createBotProxyMiddleware } from './common/middleware/bot-proxy.middleware';
 import { resolveMediaStaticRoot } from './utils/media-static';
 import * as path from 'path';
 
@@ -110,6 +111,12 @@ async function bootstrap() {
   app.use(compression());
   app.use(httpLoggerMiddleware());
   app.use(cookieParser());
+
+  // ✅ Proxy interno del bot (`/bot/*` → 127.0.0.1:8001). El bot ya no se
+  // publica en Caddy: solo es alcanzable a través del backend, que reenvía
+  // por loopback dentro del contenedor. Debe ir después de los body parsers
+  // para poder reenviar el JSON tal cual.
+  app.use('/bot', createBotProxyMiddleware());
 
   // ✅ 6. Rate limit (endpoints de autenticación). Opt-in por env para no
   // afectar entornos que no están detrás de proxy.

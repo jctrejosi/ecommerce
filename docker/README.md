@@ -64,7 +64,7 @@ cd docker/edge && docker compose up -d
 - **El contenedor no corre como root** (usuario `merc`); Caddy escucha en `8080`/`8443`.
 - BD en la red `mercaldas_internal` (`internal: true`), nunca publicada.
 - TLS Let's Encrypt + HSTS + `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`, `Content-Security-Policy`; se oculta `Server`.
-- `PROTECT_ADMIN=true` **por defecto** (fail-closed si falta la contraseña) y `PROTECT_BOT=true` para `/bot`.
+- `PROTECT_ADMIN=true` **por defecto** (fail-closed si falta la contraseña). El bot no se publica en Caddy: el backend proxya `/bot/*` por loopback.
 - **Rate limit** en `/auth/*` y `/customer-auth/*` (backend) y en `/chat`/`/cart*` (bot), por IP.
 - `TLS=false` exige `ALLOW_INSECURE=true`; `MAX_REQUEST_BODY` acota el cuerpo; API de admin de Caddy desactivada.
 - Certificados persistentes en los volúmenes `mercaldas_caddy_data`/`mercaldas_caddy_config`; medios locales en `mercaldas_media`.

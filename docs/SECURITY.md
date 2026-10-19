@@ -102,10 +102,10 @@ Notas de por qué es así:
     **no arranca**.
   - La contraseña se hashea con bcrypt (`caddy hash-password`); se prefiere
     `ADMIN_PASSWORD_HASH` para no dejar la clave en claro en el `.env`.
-- **Bot** (`/bot/*`): Basic Auth por defecto (`PROTECT_BOT=true`, mismas
-  credenciales). Consume crédito de DeepSeek y **ninguna interfaz de este repo
-  lo consume hoy**; si se conecta un front al bot, poner `PROTECT_BOT=false` o
-  enviar credenciales.
+- **Bot** (`/bot/*`): **no se publica en Caddy**. El backend NestJS proxya
+  `/bot/*` hacia el loopback del bot (`127.0.0.1:8001`) dentro del contenedor,
+  así que el bot solo es alcanzable a través del backend. Su rate limit y CORS
+  interno siguen aplicando; las cabeceras CORS finales las pone el backend.
 - **Validación de entrada**: `ValidationPipe` con `whitelist` y
   `forbidNonWhitelisted` (rechaza campos no declarados en los DTO).
 
@@ -245,7 +245,6 @@ algún `429`.
 | `ALLOW_INSECURE` | `false` | Acepta explícitamente servir en HTTP (no usar en producción) |
 | `ACME_EMAIL` | — | Correo para Let's Encrypt |
 | `PROTECT_ADMIN` | `true` | Basic Auth en los paneles; **fail-closed** sin contraseña |
-| `PROTECT_BOT` | `true` | Basic Auth en `/bot/*` |
 | `ADMIN_USER` | `admin` | Usuario del Basic Auth |
 | `ADMIN_PASSWORD` / `ADMIN_PASSWORD_HASH` | — | Credencial (se prefiere el hash bcrypt) |
 | `CSP_POLICY` | (política por defecto) | CSP a medida; `off` la desactiva |
