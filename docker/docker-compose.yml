@@ -20,9 +20,9 @@ services:
       args:
         # Debe coincidir con https://${HOST_API}. Se hornea en los fronts.
         VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-        # URL pública del bot (p. ej. https://api.dominio.com/bot). Si se deja
-        # vacía, el front usa window.location.origin (no sirve en producción).
-        VITE_BOT_API_URL: ${VITE_BOT_API_URL:-http://localhost:8000}
+        # Opcional. Si se deja vacía, el front deriva la URL del bot desde
+        # VITE_API_URL + /bot (mismo host del backend).
+        VITE_BOT_API_URL: ${VITE_BOT_API_URL:-}
     image: mercaldas/app:latest
     # Nombre fijo: el edge compartido (docker/edge/) alcanza este contenedor por
     # nombre en la red `shared_edge`.

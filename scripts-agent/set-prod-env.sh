@@ -47,7 +47,6 @@ set_key EPAYCO_TEST "false"
 # El chat de la tienda llama a /bot/* desde el navegador: no puede enviar Basic
 # Auth. El bot ya aplica su propio rate limit y CORS restringido a CORS_ORIGIN.
 set_key PROTECT_BOT "false"
-set_key VITE_BOT_API_URL "https://api.mercaldas.jcti.xyz/bot"
 # El bot se enlaza con --port "$BOT_PORT" (compose lo fija en 8001); se deja
 # también esta clave para cualquier lectura interna.
 set_key BOT_API_PORT "8001"
