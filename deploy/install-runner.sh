@@ -56,6 +56,7 @@ if ! id "$RUNNER_USER" >/dev/null 2>&1; then
   log "Creando usuario de servicio $RUNNER_USER…"
   useradd --system --create-home --shell /bin/bash "$RUNNER_USER"
 fi
+install -d -m 700 -o "$RUNNER_USER" -g "$RUNNER_USER" "/home/$RUNNER_USER/.ssh"
 
 if getent group docker >/dev/null 2>&1; then
   usermod -aG docker "$RUNNER_USER"

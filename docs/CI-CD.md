@@ -67,6 +67,21 @@ En GitHub → Settings → Actions → Runners debe aparecer **Idle**.
 > `docs/VPS-WINDOWS.md`. Si el runner no vuelve tras reiniciar Windows, revisa
 > esa tarea.
 
+### Clave SSH para el `git fetch`
+
+El `.git/config` del checkout del VPS quedó apuntando al `ssh.exe` de Git para
+Windows, que no existe dentro de WSL. `deploy/deploy.sh` usa una clave propia
+solo para su proceso (no cambia la config de Windows):
+
+```bash
+install -d -m 755 /etc/mercaldas
+install -m 600 -o ghrunner -g ghrunner \
+  /mnt/c/Users/Desarrolo4/.ssh/id_ed25519_deploy \
+  /etc/mercaldas/deploy_key
+```
+
+Puedes sobreescribir la ruta con `GIT_SSH_KEY=/otra/clave`.
+
 ## 3. Primera promoción a `master`
 
 La ruleset actual impide el push directo. Desde GitHub:

@@ -33,6 +33,14 @@ command -v git    >/dev/null || die "git no está instalado"
 command -v docker >/dev/null || die "docker no está en PATH"
 docker info >/dev/null 2>&1 || die "Docker no responde (revisa systemctl status docker)"
 
+# El .git/config de este checkout apunta al ssh.exe de Windows (heredado), que
+# no existe dentro de WSL. Si está disponible la clave de despliegue, se usa
+# solo para este proceso; la configuración de Git de Windows no se modifica.
+GIT_SSH_KEY="${GIT_SSH_KEY:-/etc/mercaldas/deploy_key}"
+if [[ -r "$GIT_SSH_KEY" ]]; then
+  export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -i $GIT_SSH_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new}"
+fi
+
 # El checkout de producción puede pertenecer a otro usuario de Windows; se le
 # indica a git que ese directorio es de confianza solo para estos comandos.
 git_here() { git -c safe.directory="$ROOT" -C "$ROOT" "$@"; }
