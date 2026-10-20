@@ -47,6 +47,9 @@ services:
       XDG_DATA_HOME: /data
       XDG_CONFIG_HOME: /config
       CADDYFILE_OUT: /config/Caddyfile.generated
+      # Motor de rutas por calles del delivery (OSRM, ver servicio `osrm`).
+      # Se resuelve por DNS interno; no se publica ningún puerto.
+      OSRM_URL: "http://mercaldas_osrm:5000"
     # ── Puertos publicados en el host ──────────────────────────────────────
     # Por defecto SOLO en loopback y en puertos propios (30180/30181), para no
     # chocar con 80/443 ni con servicios «genéricos» (8080, 8443…). Pensados
@@ -86,6 +89,27 @@ services:
         max-size: "10m"
         max-file: "5"
     restart: unless-stopped
+
+  # ── Motor de rutas OSRM (delivery) ──────────────────────────────────────────
+  # Calcula rutas por calles para el mapa de flota. Los datos se preparan con
+  # delivery-routing/prepare.sh y viven en delivery-routing/data (no versionados).
+  # Solo está en la red interna: el backend lo consume por DNS, nunca internet.
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: mercaldas_osrm
+    restart: unless-stopped
+    command: ["osrm-routed", "--algorithm", "mld", "/data/manizales.osrm"]
+    volumes:
+      - ../delivery-routing/data:/data
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 networks:
   edge:

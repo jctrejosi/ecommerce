@@ -35,6 +35,9 @@ docker compose -f db/docker/docker-compose.yml up -d
 docker network connect mercaldas_internal ecommerce_postgres
 
 docker compose -f docker/docker-compose.yml up -d
+# Rutas por calles del delivery: el servicio `osrm` arranca con el compose y
+# queda solo en la red interna. Requiere los datos de delivery-routing/data
+# (no versionados; si faltan, ejecuta ./delivery-routing/prepare.sh).
 docker compose -f docker/docker-compose.yml ps
 
 # Edge compartido: publica 80/443 y hace TLS para todos los dominios

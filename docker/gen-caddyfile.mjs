@@ -68,6 +68,9 @@ const DEFAULT_CSP = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https:",
   "connect-src 'self' https: wss:",
+  // MapLibre GL crea su worker desde un blob: (los paneles de delivery/picking
+  // pintan mapas). Sin worker-src explícito cae en script-src y se bloquea.
+  "worker-src 'self' blob:",
   "frame-src 'self' https:",
   "object-src 'none'",
   "base-uri 'self'",
