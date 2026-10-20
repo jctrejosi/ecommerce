@@ -59,7 +59,7 @@ export default function LoginScreen({ onLogin }: Props) {
                 className="mx-auto mb-5 h-10 w-auto object-contain"
               />
             )}
-            <h1 className="text-2xl font-bold text-white">Mercaldas Delivery</h1>
+            <h1 className="text-2xl font-bold text-ink">Mercaldas Delivery</h1>
             <p className="mt-1 text-sm text-ink-faint">
               Panel administrativo de repartidores
             </p>
