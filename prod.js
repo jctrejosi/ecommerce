@@ -259,9 +259,10 @@ function printDns(cfg) {
   line(`${C.dim}   (levanta db/docker y conecta ecommerce_postgres a mercaldas_internal)${C.reset}`);
 
   console.log(bar);
-  line(`${C.cyan}4) OSRM — rutas de delivery (opcional):${C.reset}`);
-  line(`   docker compose -f delivery-routing/docker-compose.yml up -d`);
-  line(`   docker network connect mercaldas_internal delivery_osrm`);
+  line(`${C.cyan}4) OSRM — rutas de delivery:${C.reset}`);
+  line(`   Incluido en docker/docker-compose.yml (servicio osrm, solo red interna).`);
+  line(`   Requiere los datos en delivery-routing/data/manizales.osrm*`);
+  line(`${C.dim}   (si faltan: ./delivery-routing/prepare.sh)${C.reset}`);
 
   if (edge) {
     console.log(bar);
