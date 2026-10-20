@@ -188,8 +188,7 @@ const API_PATHS = [
 
 // Caché de estáticos: el HTML nunca se cachea (un index viejo apunta a
 // bundles viejos); los assets con hash son inmutables.
-const cacheHeaders = `\t@html path /index.html
-\theader @html Cache-Control "no-cache"
+const cacheHeaders = `\theader Cache-Control "no-cache"
 \t@assets path /assets/*
 \theader @assets Cache-Control "public, max-age=31536000, immutable"
 `;
