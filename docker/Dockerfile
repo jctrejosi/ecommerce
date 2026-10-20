@@ -36,8 +36,14 @@ RUN yarn build \
 FROM node:20-bookworm-slim AS fronts
 ARG VITE_API_URL=http://localhost:3000
 ARG VITE_BOT_API_URL=
+# Client ID público de Google OAuth. Se pasa como build-arg para no depender
+# de un .env.production local (que no se versiona y no llega al CI).
+ARG VITE_GOOGLE_CLIENT_ID=
+ARG VITE_GOOGLE_REDIRECT_URI=
 ENV VITE_API_URL=${VITE_API_URL} \
     VITE_BOT_API_URL=${VITE_BOT_API_URL} \
+    VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID} \
+    VITE_GOOGLE_REDIRECT_URI=${VITE_GOOGLE_REDIRECT_URI} \
     CI=true
 RUN corepack enable
 WORKDIR /fronts

@@ -73,6 +73,9 @@ const CONFIG_TEMPLATE = {
   publicIp: "<IP_PUBLICA_DEL_SERVIDOR>",
   acmeEmail: "admin@tudominio.com",
   tls: true,
+  // Client ID público de Google OAuth (opcional). Se hornea en el front.
+  googleClientId: "",
+  googleRedirectUri: "",
   edgePorts: { http: "127.0.0.1:30180", https: "127.0.0.1:30181" },
   hosts: {
     web: "tudominio.com",
@@ -164,6 +167,8 @@ function syncEnvFile(cfg) {
   for (const [key, envKey] of FRONTS) {
     if (cfg.hosts[key]) pairs[envKey] = cfg.hosts[key];
   }
+  if (cfg.googleClientId) pairs.VITE_GOOGLE_CLIENT_ID = cfg.googleClientId;
+  if (cfg.googleRedirectUri) pairs.VITE_GOOGLE_REDIRECT_URI = cfg.googleRedirectUri;
 
   fs.writeFileSync(ENV_FILE, setEnvKeys(text, pairs));
   try {

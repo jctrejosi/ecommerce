@@ -6,6 +6,8 @@
   "localIp": "",
   "acmeEmail": "admin@jcti.xyz",
   "tls": true,
+  "googleClientId": "1099001809876-38mg3haog48h9r2376q5ho7lvjad6847.apps.googleusercontent.com",
+  "googleRedirectUri": "https://mercaldas.jcti.xyz",
   "edgePorts": {
     "http": "127.0.0.1:30180",
     "https": "127.0.0.1:30181"

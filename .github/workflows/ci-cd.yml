@@ -42,6 +42,8 @@ jobs:
           build-args: |
             VITE_API_URL=${{ vars.PUBLIC_APP_URL || 'https://mercaldas.jcti.xyz' }}
             VITE_BOT_API_URL=
+            VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
+            VITE_GOOGLE_REDIRECT_URI=${{ vars.VITE_GOOGLE_REDIRECT_URI }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

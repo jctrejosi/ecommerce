@@ -181,6 +181,8 @@ En `docker/.env` configura, como mínimo:
 | `HOST_API` | `api.tudominio.com` | **opcional**: alias solo para `/webhooks/*` |
 | `TLS` / `ACME_EMAIL` | `true` / `admin@…` | Let's Encrypt |
 | `VITE_API_URL` | `https://client.tudominio.com` | debe coincidir con `HOST_WEB` |
+| `VITE_GOOGLE_CLIENT_ID` | `123-abc.apps.googleusercontent.com` | client ID público; sin él el botón de Google queda deshabilitado |
+| `VITE_GOOGLE_REDIRECT_URI` | `https://client.tudominio.com` | opcional; por defecto usa el origen HTTPS actual |
 | `DATABASE_URL` | `postgres://…` | externa o contenedor de `db/docker` |
 | `JWT_SECRET`, `CLOUDINARY_*`, `DEEPSEEK_API_KEY` | — | secretos |
 | `PROTECT_ADMIN` | `true` | Basic Auth en los paneles (**por defecto true**, fail-closed) |
