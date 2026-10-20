@@ -4,14 +4,28 @@ export const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as
   | undefined;
 
 /**
- * `redirect_uri` del flujo de código. Se usa `http://localhost:4173` (modo
- * *loopback*): Google lo permite por HTTP sin exigir `device_id`, y es el valor
- * registrado en Google Cloud Console ("URIs de redireccionamiento autorizados").
+ * `redirect_uri` del flujo de código.
  *
- * En el navegador (PC) la redirección cae en el propio servidor del cliente; en
- * la APK el WebView **intercepta** esa navegación y entrega el `code` a la web.
+ * En producción la web se sirve por HTTPS en su propio dominio, así que se usa
+ * ese origen (p. ej. https://mercaldas.jcti.xyz). Google debe tenerlo registrado
+ * en "URIs de redireccionamiento autorizados".
+ *
+ * En desarrollo/LAN por HTTP se mantiene `http://localhost:4173` (modo loopback
+ * autorizado); en la APK el WebView intercepta esa navegación y la reescribe al
+ * origen real desde el que está cargada la web.
+ *
+ * `VITE_GOOGLE_REDIRECT_URI` permite forzar un valor concreto (útil si el
+ * redirect vive en otro host/path).
  */
-export const GOOGLE_REDIRECT_URI = "http://localhost:4173";
+const CONFIGURED_REDIRECT_URI = (
+  import.meta.env.VITE_GOOGLE_REDIRECT_URI as string | undefined
+)?.trim();
+
+export const GOOGLE_REDIRECT_URI =
+  CONFIGURED_REDIRECT_URI ||
+  (typeof window !== "undefined" && window.location.protocol === "https:"
+    ? window.location.origin
+    : "http://localhost:4173");
 
 const PENDING_KEY = "mercaldas-google-oauth-state";
 const AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
