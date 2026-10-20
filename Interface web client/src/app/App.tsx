@@ -63,6 +63,9 @@ type CatalogProductsQuery = {
 
 let initialDataLoaded = false;
 
+/** Clave del carrito del invitado en `localStorage` (el backend exige sesión para `/cart`). */
+const CART_STORAGE_KEY = "mercaldas_cart_v1";
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -503,31 +506,71 @@ export default function App() {
     }
   };
 
+  // Carrito persistente. Invitado → `localStorage` (el backend exige sesión para
+  // `/cart`). Usuario logueado → el servidor es la fuente de verdad; al iniciar
+  // sesión se migra el carrito de invitado y se limpia la copia local.
+  const localHydratedRef = useRef(false);
+
   useEffect(() => {
     if (customerLoading) return;
-    if (!customer) {
-      setCartHydrated(true);
+
+    if (customer) {
+      // Con sesión, la copia local del invitado ya no aplica.
+      try {
+        localStorage.removeItem(CART_STORAGE_KEY);
+      } catch {
+        /* almacenamiento no disponible */
+      }
+
+      void cartService
+        .getCart()
+        .then((r) => {
+          setCartItems((prev) => {
+            const m = new Map<number, CartItem>();
+            r.items
+              .filter((i) => i.id && Number(i.id) > 0)
+              .forEach((i) => m.set(i.id, { ...i }));
+            prev.forEach((i) => {
+              const e = m.get(i.id);
+              if (e) m.set(i.id, { ...e, quantity: e.quantity + i.quantity });
+              else m.set(i.id, i);
+            });
+            return [...m.values()];
+          });
+          setCartHydrated(true);
+        })
+        .catch(() => setCartHydrated(true));
       return;
     }
-    void cartService
-      .getCart()
-      .then((r) => {
-        setCartItems((prev) => {
-          const m = new Map<number, CartItem>();
-          r.items
-            .filter((i) => i.id && Number(i.id) > 0)
-            .forEach((i) => m.set(i.id, { ...i }));
-          prev.forEach((i) => {
-            const e = m.get(i.id);
-            if (e) m.set(i.id, { ...e, quantity: e.quantity + i.quantity });
-            else m.set(i.id, i);
-          });
-          return [...m.values()];
-        });
-        setCartHydrated(true);
-      })
-      .catch(() => setCartHydrated(true));
+
+    // Invitado: restaurar el carrito guardado una sola vez por carga de página.
+    if (!localHydratedRef.current) {
+      localHydratedRef.current = true;
+      try {
+        const raw = localStorage.getItem(CART_STORAGE_KEY);
+        if (raw) {
+          const items = (JSON.parse(raw) as CartItem[]).filter(
+            (i) => i && Number(i.id) > 0 && Number(i.quantity) > 0,
+          );
+          setCartItems(items);
+        }
+      } catch {
+        /* carrito guardado corrupto: se ignora */
+      }
+    }
+    setCartHydrated(true);
   }, [customer, customerLoading]);
+
+  // Persistir el carrito del invitado en cada cambio (solo tras hidratar).
+  useEffect(() => {
+    if (!cartHydrated || customerLoading || customer) return;
+    try {
+      localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(cartItems));
+    } catch {
+      /* almacenamiento no disponible */
+    }
+  }, [cartItems, cartHydrated, customer, customerLoading]);
+
   useEffect(() => {
     if (customer && cartHydrated) {
       const valid = cartItems.filter((i) => i.id && Number(i.id) > 0);
