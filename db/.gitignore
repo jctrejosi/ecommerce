@@ -21,7 +21,16 @@
 # dumps de la réplica de analytics (grandes, no se versionan en git)
 /backups/analytics/
 
-# imágenes estáticas locales (grandes; los productos se regeneran desde JPG2.zip)
-/images_products/
+# imágenes estáticas locales: un único directorio (grandes; los productos se
+# regeneran desde JPG2.zip). Contiene `products/` (fotos TID) y `media/`
+# (subidas del ecommerce, marcas, avatares, banners...).
 /images_static/
 /JPG2.zip
+
+# legado: las fotos TID vivían aquí antes de consolidarse en /images_static
+/images_products/
+
+# artefactos de la migración de estáticos (no son estáticos ni código)
+/Ean.bat
+/dedupe_report.json
+/duplicate_images.json

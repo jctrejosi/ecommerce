@@ -21,7 +21,7 @@ dotenv.config({ path: path.join(ROOT, 'backend', '.env.development.local') });
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ecommerce';
-const IMG_DIR = path.join(ROOT, 'db', 'images_products');
+const IMG_DIR = path.join(ROOT, 'db', 'images_static', 'products');
 const MIME = /\.(jpe?g|png|webp|gif)$/i;
 
 const files = process.argv.slice(2).filter((a) => !a.startsWith('--'));

@@ -13,7 +13,7 @@ const { Client } = require('pg');
   `);
   for (const row of r.rows) {
     const rel = row.path.slice('/static/products/'.length);
-    process.stdout.write(`images_products/${rel}\n`);
+    process.stdout.write(`db/images_static/products/${rel}\n`);
   }
   await client.end();
 })().catch((e) => {

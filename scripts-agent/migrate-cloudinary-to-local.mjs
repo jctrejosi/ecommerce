@@ -34,7 +34,7 @@ cloudinary.config({
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ecommerce';
-const OUT_DIR = fileURLToPath(new URL('../db/images_static/', import.meta.url));
+const OUT_DIR = fileURLToPath(new URL('../db/images_static/media/', import.meta.url));
 
 const DRY = process.argv.includes('--dry-run');
 const CONCURRENCY = 6;

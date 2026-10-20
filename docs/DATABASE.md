@@ -91,7 +91,7 @@ Filas por tabla (conteo exacto al momento de generar):
 | `menu_items` | 0 | Contenido / CMS |
 | `popups` | 1 | Contenido / CMS |
 | `store` | 1 | Contenido / CMS |
-| `media` | 15.705 | Contenido / CMS |
+| `media` | 13.902 | Contenido / CMS |
 | `featured_product_tabs` | 4 | Contenido / CMS |
 | `featured_product_assignments` | 96 | Contenido / CMS |
 | `campaigns` | 10 | Marketing y notificaciones |
@@ -104,7 +104,7 @@ Filas por tabla (conteo exacto al momento de generar):
 | `notifications` | 40 | Marketing y notificaciones |
 | `background_jobs` | 0 | Infraestructura |
 | `spatial_ref_sys` | 8.500 | Sistema (PostGIS) |
-| `product_images` | 15.597 | (sin clasificar) |
+| `product_images` | 13.862 | (sin clasificar) |
 
 ## Convenciones del modelo
 
@@ -137,6 +137,39 @@ erDiagram
   DELIVERY_DRIVERS ||--o{ DELIVERY_ASSIGNMENTS : reparte
   BRANCHES ||--o{ ORDERS : despacha
 ```
+
+## Almacenamiento de estáticos (imágenes)
+
+Todos los estáticos viven en **un único directorio** del repo: `db/images_static/`
+(gitignored). La BD **no guarda binarios ni URLs absolutas**: `media.path`
+guarda una ruta relativa `/static/...` y el backend la resuelve contra ese
+directorio.
+
+```
+db/images_static/
+├── products/                       → /static/products/...
+│   ├── <EAN|PLU>.jpeg              fotos TID (lote JPG2.zip)
+│   └── _sin_producto/              fotos que no cruzaron con ningún producto
+└── media/                          → /static/media/...
+    ├── products/<id>/              subidas del ecommerce (prod_*.jpg)
+    ├── brands/                     logos de marca
+    ├── delivery/drivers/<id>/      avatares de repartidores
+    ├── picking/users/<id>/         avatares de pickers
+    └── uploads/                    subidas nuevas (CloudinaryService en modo local)
+```
+
+- **Servido**: `backend/src/main.ts` monta `express.static(<db>/images_static)` en
+  `/static`. Las URLs públicas no cambiaron (`/static/products/...` y
+  `/static/media/...`).
+- **URL absoluta por cliente**: `MediaUrlInterceptor` prefija el host de la
+  petición (o `PUBLIC_MEDIA_BASE_URL`) a cualquier string que empiece por
+  `/static/`.
+- **Deduplicación**: los archivos idénticos (MD5) se colapsan en un canónico y
+  las referencias de `media`, `delivery_drivers.avatar_url` y
+  `settings.value->url` se repuntan. Scripts:
+  `scripts-agent/dedupe-static-images.mjs` y
+  `scripts-agent/consolidate-static-layout.mjs`.
+- **Se regenera** extrayendo `db/JPG2.zip` en `db/images_static/products/`.
 
 ## Diagramas de relaciones
 
@@ -2220,7 +2253,7 @@ Datos de la tienda/tenant (información de la empresa).
 **Índices:**
 - `UNIQUE public.store USING btree (tax_id)`
 
-#### `media` — 15.705 filas
+#### `media` — 13.902 filas
 
 Medios (imágenes). Guarda `provider` (local/cloudinary), `path`/`url`; la URL original de Cloudinary queda en `metadata.cloudinary_url`.
 
@@ -2536,7 +2569,7 @@ Tabla de sistema de PostGIS: catálogo de sistemas de referencia espacial (SRID)
 
 ### Otras tablas
 
-#### `product_images` — 15.597 filas
+#### `product_images` — 13.862 filas
 
 Imágenes de un producto: enlaza `product_id` con `media`. `sort_order` define el orden y la portada.
 

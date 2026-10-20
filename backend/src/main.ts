@@ -125,20 +125,14 @@ async function bootstrap() {
     console.log('🛡️  Rate limit activo en:', DEFAULT_RATE_LIMIT_RULES.map((r) => r.name).join(', '));
   }
 
-  // ✅ 5. Estáticos locales: imágenes de productos (`db/images_products`) y
-  // media subida desde disco (`db/images_static`). Las rutas que guarda la BD
+  // ✅ 5. Estáticos locales: un único directorio (`db/images_static`) sirve
+  // tanto `/static/products/...` (fotos TID) como `/static/media/...`
+  // (subidas del ecommerce, marcas, avatares...). Las rutas que guarda la BD
   // son relativas (`/static/...`); el interceptor las vuelve absolutas para
   // cada cliente, así funciona igual en local, LAN y móviles.
   const staticRoot = resolveMediaStaticRoot();
   app.use(
-    '/static/products',
-    express.static(path.join(staticRoot, 'images_products'), {
-      index: false,
-      maxAge: '7d',
-    }),
-  );
-  app.use(
-    '/static/media',
+    '/static',
     express.static(path.join(staticRoot, 'images_static'), {
       index: false,
       maxAge: '7d',

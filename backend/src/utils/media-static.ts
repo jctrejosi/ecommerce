@@ -15,7 +15,7 @@ export function resolveMediaStaticRoot(): string {
 
 /**
  * Normaliza una ruta tipo `delivery/drivers/12` para usarla como subcarpeta
- * segura (sin `..`, sin caracteres raros) bajo `images_static/uploads`.
+ * seguro (sin `..`, sin caracteres raros) bajo `images_static/media/uploads`.
  */
 export function sanitizeMediaFolder(folder: string): string {
   return folder
