@@ -14,7 +14,16 @@ logs/
 backend/logs/
 JPG/
 test_db/
-db/backups/
+db/
+
+# Apps y servicios que NO van dentro de la imagen (el contexto es la raíz):
+# apps móviles Expo (se compilan aparte a APK/IPA), datos de OSRM y scripts
+# internos del agente. Sin esto el contexto del build pasa de 80 GB.
+Interface movil client/
+Interface movil delivery/
+Interface movil picking/
+delivery-routing/
+scripts-agent/
 
 # Git
 .git

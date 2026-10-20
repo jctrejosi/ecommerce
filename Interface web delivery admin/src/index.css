@@ -57,8 +57,8 @@
   --t-invert-ink: #ffffff;
   --t-overlay: rgba(2, 6, 23, 0.6);
   --t-scroll: color-mix(in srgb, var(--t-accent) 22%, #cbd5e1);
-  /* Fondo del login: oscuro en ambos temas (identidad del acceso). */
-  --t-login-bg: color-mix(in srgb, var(--t-accent) 10%, #020617);
+  /* Fondo del login: se adapta al tema (claro en claro, oscuro en oscuro). */
+  --t-login-bg: color-mix(in srgb, var(--t-accent) 12%, #eef2f8);
   --t-footer-bg: color-mix(in srgb, var(--t-accent) 5%, #ffffff);
   /* Acento por defecto: ámbar. */
   --t-accent: #fbbf24;
@@ -129,7 +129,7 @@
   background: var(--t-footer-bg);
 }
 
-/* Pantalla de login: fondo casi negro en claro; coherente con el tema en oscuro. */
+/* Pantalla de login: fondo claro u oscuro según el tema activo. */
 .login-bg {
   background: var(--t-login-bg);
 }

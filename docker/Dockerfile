@@ -3,10 +3,11 @@
 # Imagen ÚNICA (un solo contenedor) del stack Mercaldas:
 #   backend NestJS + bot FastAPI + las interfaces web (Vite) + Caddy.
 #
-# Caddy expone :80/:443 (único publicado) y enruta por dominio/host a cada
-# interfaz; backend y bot escuchan solo en 127.0.0.1 (red interna). Los
-# dominios/hosts se configuran por variables de entorno en runtime
-# (ver docker/gen-caddyfile.mjs y docker/docker-compose.yml).
+# Caddy expone el puerto público y enruta por dominio/host a cada interfaz;
+# backend y bot escuchan solo en 127.0.0.1 (red interna). El proceso corre como
+# usuario SIN privilegios y Caddy escucha en :8080/:8443 (el compose los publica
+# como 80/443). Los dominios/hosts se configuran por variables de entorno en
+# runtime (ver docker/gen-caddyfile.mjs y docker/docker-compose.yml).
 #
 # Construir: docker compose -f docker/docker-compose.yml build
 # El contexto de build es la raíz del repo.
@@ -34,7 +35,15 @@ RUN yarn build \
 # pública del API (p. ej. https://api.tudominio.com).
 FROM node:20-bookworm-slim AS fronts
 ARG VITE_API_URL=http://localhost:3000
+ARG VITE_BOT_API_URL=
+# Client ID público de Google OAuth. Se pasa como build-arg para no depender
+# de un .env.production local (que no se versiona y no llega al CI).
+ARG VITE_GOOGLE_CLIENT_ID=
+ARG VITE_GOOGLE_REDIRECT_URI=
 ENV VITE_API_URL=${VITE_API_URL} \
+    VITE_BOT_API_URL=${VITE_BOT_API_URL} \
+    VITE_GOOGLE_CLIENT_ID=${VITE_GOOGLE_CLIENT_ID} \
+    VITE_GOOGLE_REDIRECT_URI=${VITE_GOOGLE_REDIRECT_URI} \
     CI=true
 RUN corepack enable
 WORKDIR /fronts
@@ -55,8 +64,11 @@ ENV NODE_ENV=production \
     PYTHONDONTWRITEBYTECODE=1 \
     BACKEND_PORT=3100 \
     BOT_PORT=8001 \
+    HTTP_PORT=8080 \
+    HTTPS_PORT=8443 \
     XDG_DATA_HOME=/data \
-    XDG_CONFIG_HOME=/config
+    XDG_CONFIG_HOME=/config \
+    CADDYFILE_OUT=/config/Caddyfile.generated
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
       python3 python3-venv \
@@ -64,7 +76,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Caddy: reverse proxy (TLS automático) y servidor de estáticos.
-ARG CADDY_VERSION=2.9.1
+ARG CADDY_VERSION=2.11.7
 RUN curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" \
       | tar -xz -C /usr/local/bin caddy \
     && chmod +x /usr/local/bin/caddy
@@ -92,11 +104,18 @@ RUN python3 -m venv /opt/bot-venv \
 # Proxy + arranque.
 COPY docker/entrypoint.sh ./entrypoint.sh
 COPY docker/gen-caddyfile.mjs ./gen-caddyfile.mjs
-# Normaliza CRLF (el repo puede clonarse/trabajarse en Windows), da permisos y
-# crea los directorios persistentes de Caddy (certificados ACME en /data).
+# Normaliza CRLF (el repo puede clonarse/trabajarse en Windows), da permisos,
+# crea los directorios persistentes (certificados ACME en /data y medios locales
+# del backend en /app/db) y un usuario SIN privilegios con el que se ejecuta todo.
 RUN sed -i 's/\r$//' ./entrypoint.sh \
  && chmod +x ./entrypoint.sh \
- && mkdir -p /data /config
+ && mkdir -p /data /config /app/db /app/backend/logs \
+ && groupadd --system --gid 10001 merc \
+ && useradd --system --uid 10001 --gid merc --home-dir /app --shell /usr/sbin/nologin merc \
+ && chown -R merc:merc /data /config /app/db /app/backend/logs
 
-EXPOSE 80 443
+# No root: Caddy escucha en 8080/8443 (el host publica 80/443).
+USER merc
+
+EXPOSE 8080 8443
 CMD ["./entrypoint.sh"]

@@ -1,0 +1,48 @@
+# Generado por prod.js desde prod.config.json — NO editar a mano.
+# Ejecuta: caddy run --config deploy/Caddyfile --adapter caddyfile
+
+{
+	email admin@jcti.xyz
+}
+
+mercaldas.jcti.xyz {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:5173
+}
+
+admin.mercaldas.jcti.xyz {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8443
+}
+
+picking.mercaldas.jcti.xyz {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8445
+}
+
+picking-admin.mercaldas.jcti.xyz {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8446
+}
+
+delivery-admin.mercaldas.jcti.xyz {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:8447
+}
+
+api.mercaldas.jcti.xyz {
+	encode zstd gzip
+	handle_path /bot/* {
+		reverse_proxy 127.0.0.1:8000
+	}
+	handle {
+		reverse_proxy 127.0.0.1:3000
+	}
+}
+
+# Requiere Astaroth corriendo en 127.0.0.1:10001 (proyecto aparte).
+ml.mercaldas.jcti.xyz {
+	encode zstd gzip
+	reverse_proxy 127.0.0.1:10001
+}
+

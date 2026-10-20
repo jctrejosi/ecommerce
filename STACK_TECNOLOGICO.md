@@ -3,7 +3,7 @@
 > Inventario de herramientas y tecnologías realmente usadas en este monorepo.
 > Fuentes: `package.json` de cada interfaz, `requirements.txt`, `Dockerfile`,
 > `docker-compose.yml`, `Caddyfile`, `render.yaml`, `dev.js`, `prod.js`,
-> `AGENTS.md` y los `README.md` de cada servicio.
+> `prod-local.js`, `AGENTS.md` y los `README.md` de cada servicio.
 > Última revisión: 2026-09-21.
 
 Monorepo con **múltiples interfaces web**, **3 apps móviles**, un **backend
@@ -17,7 +17,7 @@ NestJS**, un **bot de compras** y un **servicio de IA**, desplegados como un
 | Elemento | Detalle | Para qué |
 |---|---|---|
 | **Linux** | Máquina de desarrollo (`/home/jk/Proyectos/dsi/ecommerce`) | SO donde corre el desarrollo |
-| **Bash** | Shell por defecto | `dev.js`/`prod.js`, `docker-entrypoint.sh`, scripts |
+| **Bash** | Shell por defecto | `dev.js`/`prod.js`/`prod-local.js`, `docker-entrypoint.sh`, scripts |
 | **Zed** | Editor con IA generativa integrada | Entorno de desarrollo asistido (guía `AGENTS.md`) |
 | **Node.js 20+** | Backend en contenedor `node:20-bookworm-slim`; móviles Node 20+ | Backend NestJS, build de los fronts, scripts `.mjs`, orquestadores |
 | **pnpm 10.34.3** | `packageManager` en los frontends y apps | Gestor de paquetes de interfaces y apps |
@@ -34,8 +34,10 @@ NestJS**, un **bot de compras** y un **servicio de IA**, desplegados como un
 OSRM `5000`, PostgreSQL `5432`, backends de apps `8081`/`8082`.
 
 Arranque: `node dev.js` (instala dependencias faltantes, levanta PostgreSQL +
-servicios + apps Expo en segundo plano y libera la terminal). Producción:
-`node prod.js --build`. `dev.js --help` lista todos los comandos.
+servicios + apps Expo en segundo plano y libera la terminal). Producción en
+**contenedor** (el servidor): `node prod.js` (ver `docker/` y `docs/DESPLIEGUE-DOCKER.md`).
+Producción **bare-metal** (compila con npm/pnpm aquí): `node prod-local.js --build`.
+`dev.js --help` lista todos los comandos.
 
 ---
 
@@ -153,7 +155,7 @@ Común: **React Native 0.86**, **Expo**, **TypeScript**, `expo-secure-store` /
 | **OSRM** (`osrm/osrm-backend`) | Motor de rutas por calles auto-hospedado (perfil `car`, algoritmo MLD), puerto 5000 |
 | **OpenStreetMap / Geofabrik + osmium** | Datos de calles (extracto de Manizales recortado con `osmium extract`) |
 | **Nominatim (OSM)** | Geocodificación de direcciones en el checkout (módulo `geocoding`, 1 req/s con caché) |
-| **`dev.js` / `prod.js`** | Orquestadores propios (dev y producción bare-metal) |
+| **`dev.js` / `prod.js` / `prod-local.js`** | Orquestadores propios: dev local; producción en contenedor (`prod.js` + `docker/`, lanzador con DNS/firewall) y bare-metal (`prod-local.js`) |
 | **Cloudinary** | CDN de imágenes |
 | **Resend** | Envío de correos |
 | **Scripts `scripts-agent/*`** | Utilidades de operación/QA: inspección de BD, seeds, pruebas E2E, generación de íconos/sonidos, validación de APIs |

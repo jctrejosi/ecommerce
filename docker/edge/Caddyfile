@@ -1,0 +1,79 @@
+# Edge compartido — Caddyfile (se edita a mano, NO lo genera gen-caddyfile.mjs).
+#
+# Un bloque por proyecto. Todos los dominios listados deben:
+#   1. existir en el DNS (registro A → IP pública del servidor), y
+#   2. estar configurados en el proyecto correspondiente (HOST_* en su .env).
+# El Host se conserva al reenviar, así que el Caddy interno de cada contenedor
+# enruta al vhost correcto.
+
+{
+	email admin@jcti.xyz
+	# Producción explícita: evita el emisor ZeroSSL por defecto y cualquier
+	# intento contra el endpoint de staging (certs no confiables).
+	acme_ca https://acme-v02.api.letsencrypt.org/directory
+}
+
+# Cabeceras que aporta el edge (TLS/HSTS). El resto (CSP, X-Frame-Options,
+# Permissions-Policy…) ya las añade el Caddy interno de cada contenedor.
+(edge_headers) {
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		-Server
+	}
+}
+
+# ── Ecommerce (contenedor `mercaldas_app`, Caddy interno en :8080 sin TLS) ──
+mercaldas.jcti.xyz, api.mercaldas.jcti.xyz, admin.mercaldas.jcti.xyz,
+picking-admin.mercaldas.jcti.xyz, delivery-admin.mercaldas.jcti.xyz {
+	import edge_headers
+
+	# Log de acceso a stdout (visible con `docker logs edge_caddy`). Permite
+	# diagnosticar 4xx/5xx y auditar tráfico. No loguea cuerpos ni credenciales.
+	log {
+		output stdout
+		format json
+	}
+
+	# Emisor explícito. Caddy, por defecto, reintenta contra el CA de
+	# *staging* (`test_ca`) si el primario falla; eso puede dejar un
+	# certificado no confiable. Fijamos ambos al CA de producción.
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			test_dir https://acme-v02.api.letsencrypt.org/directory
+		}
+	}
+
+	reverse_proxy mercaldas_app:8080
+}
+
+# ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
+# Descomenta cuando el CRM esté desplegado. Si se deja activo sin el contenedor
+# ni DNS, Caddy acumula reintentos de ACME y errores de upstream.
+crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			test_dir https://acme-v02.api.letsencrypt.org/directory
+		}
+	}
+
+	reverse_proxy mercaldas_crm_app:8080
+}
+
+# ── Opcional: Astaroth (APIs de ML) — contenedor `mercaldas_astaroth_app` ──
+# El CRM ya lo consume por la red interna `shared_edge` (sin pasar por aquí).
+# Descomenta SOLO si quieres exponer las APIs ML a internet: crea el registro
+# DNS y revisa antes Astaroth/docs/SECURITY.md (superficie sensible).
+# ml.mercaldas.jcti.xyz {
+# 	import edge_headers
+# 	reverse_proxy mercaldas_astaroth_app:8080
+# }

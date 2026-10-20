@@ -1,7 +1,24 @@
 {
-  "baseDomain": "tudominio.com",
-  "publicIp": "",
-  "localIp": "192.168.0.132",
-  "acmeEmail": "admin@tudominio.com",
-  "tls": true
+  "mode": "edge",
+  "dnsZone": "jcti.xyz",
+  "baseDomain": "mercaldas.jcti.xyz",
+  "publicIp": "170.254.229.68",
+  "localIp": "",
+  "acmeEmail": "admin@jcti.xyz",
+  "tls": true,
+  "googleClientId": "1099001809876-38mg3haog48h9r2376q5ho7lvjad6847.apps.googleusercontent.com",
+  "googleRedirectUri": "https://mercaldas.jcti.xyz",
+  "edgePorts": {
+    "http": "127.0.0.1:30180",
+    "https": "127.0.0.1:30181"
+  },
+  "hosts": {
+    "web": "mercaldas.jcti.xyz",
+    "admin": "admin.mercaldas.jcti.xyz",
+    "picking": "picking.mercaldas.jcti.xyz",
+    "picking-admin": "picking-admin.mercaldas.jcti.xyz",
+    "delivery-admin": "delivery-admin.mercaldas.jcti.xyz",
+    "api": "api.mercaldas.jcti.xyz",
+    "ml": "ml.mercaldas.jcti.xyz"
+  }
 }

@@ -66,7 +66,7 @@ async function writeStoredUrl(url: string): Promise<void> {
  * ¿Hay un backend nuestro respondiendo en `url`?
  * Se prueba `GET /discovery` (ligero, sin BD) y, como respaldo, `/api-status`.
  */
-export async function pingServer(url: string, timeoutMs = 900): Promise<boolean> {
+export async function pingServer(url: string, timeoutMs = 3000): Promise<boolean> {
   const base = normalizeUrl(url);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -192,7 +192,8 @@ export async function resolveServer(): Promise<ResolveResult> {
 
   const ip = await deviceIpv4();
   const prefix = ip ? subnetPrefix(ip) : null;
-  if (prefix) {
+  // Producción (HTTPS): no barrer la LAN; el servidor está en internet.
+  if (prefix && !/^https:\/\//i.test(BUILD_HINT)) {
     tried.push(`${prefix}*:${DEFAULT_PORT} (escaneo)`);
     const found = await scanSubnet(prefix);
     if (found) {
