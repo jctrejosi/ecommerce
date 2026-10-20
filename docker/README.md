@@ -61,6 +61,7 @@ cd docker/edge && docker compose up -d
 ## Seguridad (resumen)
 
 - Solo el edge publica `80`/`443`; el contenedor publica `127.0.0.1:30180/30181` (loopback) y `3100`/`8001` escuchan en `127.0.0.1` dentro del contenedor.
+- El **API se sirve en el mismo origen que `HOST_WEB`** (`/catalog/*`, `/orders`, `/static/*`, `/socket.io/*`, `/bot/*`, …). `HOST_API` queda como alias **solo para `/webhooks/*`**.
 - **El contenedor no corre como root** (usuario `merc`); Caddy escucha en `8080`/`8443`.
 - BD en la red `mercaldas_internal` (`internal: true`), nunca publicada.
 - TLS Let's Encrypt + HSTS + `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`, `Content-Security-Policy`; se oculta `Server`.

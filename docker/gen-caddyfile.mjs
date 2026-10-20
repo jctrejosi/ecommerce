@@ -13,7 +13,11 @@
  *   solo proxya al backend (útil como smoke-test del contenedor).
  *
  * Variables:
- *   HOST_API            dominio del API (backend; /bot lo proxya el backend) [opcional]
+ *   HOST_API            alias solo para webhooks de pasarelas (/webhooks/*)
+ *                        cuando HOST_WEB está definido. Si no hay HOST_WEB,
+ *                        mantiene el comportamiento anterior (API completa).
+ *   HOST_WEB            cliente web; además proxya el API en el mismo origen
+ *                        (rutas /catalog/*, /orders, /static/*, /bot/*, …)
  *   HOST_WEB            cliente web          → /srv/web
  *   HOST_ADMIN          admin                → /srv/admin
  *   HOST_PICKING_ADMIN  picking admin        → /srv/picking-admin
@@ -91,6 +95,7 @@ const FRONTS = [
 
 const hostOf = (k) => (env[k] || "").trim();
 const HOST_API = hostOf("HOST_API");
+const HOST_WEB = hostOf("HOST_WEB");
 const frontHosts = FRONTS.map((f) => ({ ...f, host: hostOf(f.envKey) })).filter((f) => f.host);
 const anyHost = Boolean(HOST_API) || frontHosts.length > 0;
 
@@ -139,6 +144,72 @@ const apiBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
 		reverse_proxy ${BACKEND}${protoUp}
 	}`;
 
+// ── Rutas del API servidas desde el mismo origen que la web ──
+// Espejo de scripts-agent/serve-webclient.mjs más las rutas que usan los
+// paneles y las apps móviles. La web del cliente solo tiene las páginas `/`,
+// `/catalog` y `/account*`, así que estos prefijos no colisionan.
+const API_PATHS = [
+  "/api-status",
+  "/discovery",
+  "/banners",
+  "/cart",
+  "/orders",
+  "/notifications",
+  "/featured",
+  "/filters",
+  "/payments/methods",
+  "/socket.io",
+  "/bot",
+  "/admin/*",
+  "/auth/*",
+  "/banners/*",
+  "/bot/*",
+  "/cart/*",
+  "/catalog/*",
+  "/customer-auth/*",
+  "/delivery/*",
+  "/featured/*",
+  "/filters/*",
+  "/geocode/*",
+  "/landing/*",
+  "/newsletter/*",
+  "/notifications/*",
+  "/orders/*",
+  "/payments/*",
+  "/picking/*",
+  "/picking-admin/*",
+  "/popups/*",
+  "/qr/*",
+  "/socket.io/*",
+  "/static/*",
+  "/upload/*",
+  "/webhooks/*",
+];
+
+// Con HOST_WEB el API se sirve en el MISMO origen que la web del cliente
+// (como en local con serve-webclient.mjs). El resto de fronts lo consume
+// cross-origin; CORS ya los autoriza.
+const webClientBlock = (dir) => `${headerBlock}${bodyLimit}\tencode zstd gzip
+	@api path ${API_PATHS.join(" ")}
+	handle @api {
+		reverse_proxy ${BACKEND}${protoUp}
+	}
+	handle {
+		root * ${dir}
+		try_files {path} /index.html
+		file_server
+	}`;
+
+// Host del API cuando ya existe HOST_WEB: solo webhooks (Wompi, etc.), para
+// no publicar otra vez toda la superficie del backend.
+const webhookBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
+	handle /webhooks/* {
+		reverse_proxy ${BACKEND}${protoUp}
+	}
+	handle {
+		respond 404
+	}`;
+
 const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
 	root * ${dir}
 	try_files {path} /index.html
@@ -164,10 +235,16 @@ if (anyHost) {
   }
   out += `{\n${opts.join("\n")}\n}\n`;
 
-  if (HOST_API) out += `\n${siteAddr(HOST_API)} {\n${apiBlock}\n}\n`;
+  if (HOST_API && HOST_API !== HOST_WEB) {
+    out += `\n${siteAddr(HOST_API)} {\n${HOST_WEB ? webhookBlock : apiBlock}\n}\n`;
+  }
   for (const f of frontHosts) {
     const withAuth = PROTECT_ADMIN && Boolean(f.admin) && Boolean(basicAuth);
-    out += `\n${siteAddr(f.host)} {\n${staticBlock(f.dir, withAuth)}\n}\n`;
+    const block =
+      f.envKey === "HOST_WEB"
+        ? webClientBlock(f.dir)
+        : staticBlock(f.dir, withAuth);
+    out += `\n${siteAddr(f.host)} {\n${block}\n}\n`;
   }
 } else {
   // Sin dominios configurados: vhost mínimo en el puerto HTTP (solo API).

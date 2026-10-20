@@ -44,6 +44,8 @@ set_key CUSTOMER_JWT_EXPIRES_IN "7d"
 set_key CUSTOMER_JWT_REFRESH_EXPIRES_IN "30d"
 set_key WOMPI_REDIRECT_URL "https://mercaldas.jcti.xyz"
 set_key EPAYCO_TEST "false"
+# El API se sirve en el mismo origen que la web del cliente (consolidado).
+set_key VITE_API_URL "https://mercaldas.jcti.xyz"
 # El bot ya NO se publica en Caddy: el backend lo proxya en /bot por loopback
 # dentro del contenedor. El propio bot aplica su rate limit y CORS interno.
 # El bot se enlaza con --port "$BOT_PORT" (compose lo fija en 8001); se deja

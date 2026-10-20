@@ -195,22 +195,24 @@ curl -sS -m 3 http://<IP>:8001/ || echo "OK: 8001 cerrado"
 curl -sS -m 3 http://<IP>:5432/ || echo "OK: 5432 cerrado"
 
 # 3. Cabeceras y TLS
-curl -I https://<HOST_API>/api-status
 curl -I https://<HOST_WEB>/
+curl -I https://<HOST_WEB>/api-status
+curl -I https://<HOST_WEB>/discovery
 
-# 4. Paneles y bot exigen credenciales (401 sin ellas)
+# 4. Paneles protegidos y bot solo por el backend
 curl -I https://<HOST_ADMIN>/          # espera 401
 curl -I https://<HOST_ADMIN>/ -u admin:clave   # espera 200
-curl -I https://<HOST_API>/bot/health  # espera 401
-curl -I https://<HOST_API>/bot/health -u admin:clave
+curl -I https://<HOST_WEB>/bot/health  # espera 200 (vía backend)
+# El alias HOST_API solo debe servir webhooks
+curl -I https://<HOST_API>/auth/login  # espera 404
 
 # 5. Rate limit activo (ráfaga de logins → 429)
 for i in $(seq 1 20); do curl -s -o /dev/null -w "%{http_code} " \
-  -X POST https://<HOST_API>/auth/login -H 'Content-Type: application/json' \
+  -X POST https://<HOST_WEB>/auth/login -H 'Content-Type: application/json' \
   -d '{"identifier":"x","password":"y"}'; done; echo
 
 # 6. Config del proxy válida (antes de arrancar)
-HOST_API=api.ejemplo.com HOST_WEB=web.ejemplo.com PROTECT_ADMIN=true \
+HOST_WEB=web.ejemplo.com HOST_ADMIN=admin.ejemplo.com PROTECT_ADMIN=true \
   ADMIN_PASSWORD=secreto CADDYFILE_OUT=/tmp/Caddyfile \
   node docker/gen-caddyfile.mjs
 docker run --rm -v /tmp/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2.11.7 \
@@ -235,7 +237,7 @@ algún `429`.
 | 7 | **Sistema de ficheros escribible** dentro del contenedor | `read_only: true` + `tmpfs` requiere antes mover `MEDIA_STATIC_DIR` a un volumen |
 | 8 | **Sin alertas ni monitorización** | Alertas de caída y de picos de 401/429/5xx; fail2ban en el host |
 | 9 | **Secretos sin rotación automática** | Rotación programada y tras cualquier incidente |
-| 10 | **Apps móviles** (Expo) fuera del contenedor | Compilar el APK apuntando a `HOST_API` por HTTPS; no repartir builds de depuración |
+| 10 | **Apps móviles** (Expo) fuera del contenedor | Compilar el APK apuntando a `HOST_WEB` por HTTPS; no repartir builds de depuración |
 
 ## 12. Variables de seguridad (referencia rápida)
 

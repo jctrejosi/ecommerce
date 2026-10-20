@@ -16,7 +16,8 @@ Interfaces incluidas (build Vite): `Interface web client` (`HOST_WEB`),
 `Interface web admin` (`HOST_ADMIN`), `Interface web picking admin`
 (`HOST_PICKING_ADMIN`) y `Interface web delivery admin`
 (`HOST_DELIVERY_ADMIN`). Las apps **Expo** (delivery/picking móvil) no se sirven
-en este contenedor: se compilan a APK/IPA apuntando a `HOST_API`.
+en este contenedor: se compilan a APK/IPA apuntando a `HOST_WEB`, que sirve el
+API en el mismo origen (y también `/discovery`).
 
 > Nota: `Interface web picking/` y `Interface web analytics/` existen en el repo
 > pero **no tienen proyecto** (solo `node_modules`/`.vite` rastreados por error);
@@ -48,9 +49,11 @@ en este contenedor: se compilan a APK/IPA apuntando a `HOST_API`.
   `NET_BIND_SERVICE` (necesaria para escuchar en <1024).
 - **Certificados persistentes** en los volúmenes `mercaldas_caddy_data` /
   `mercaldas_caddy_config` (no se re-emiten en cada `up`).
-- El **API sí es público** (en `HOST_API`): los fronts son SPA y llaman al
-  backend desde el navegador. Se protege con TLS y con el firewall, no con un
-  puerto abierto.
+- El **API es público**, pero se sirve en el **mismo origen que `HOST_WEB`**
+  (rutas `/catalog/*`, `/orders`, `/static/*`, `/socket.io/*`, `/bot/*`, …).
+  Los paneles lo consumen cross-origin y CORS solo autoriza sus orígenes.
+  `HOST_API` queda como alias **solo para `/webhooks/*`** (pasarelas de pago);
+  no publica el resto del backend.
 
 Además (endurecimiento por defecto):
 
@@ -158,9 +161,9 @@ New-NetFirewallRule -DisplayName "Mercaldas HTTPS" -Direction Inbound -Protocol 
 cd <repo>
 cp docker/.env.example docker/.env         # edita dominios, TLS y secretos
 
-# VITE_API_URL se hornea en los fronts: pásalo igual que en docker/.env
+# VITE_API_URL se hornea en los fronts: es el MISMO origen del cliente web.
 docker compose -f docker/docker-compose.yml build \
-  --build-arg VITE_API_URL=https://api.tudominio.com
+  --build-arg VITE_API_URL=https://client.tudominio.com
 
 docker compose -f docker/docker-compose.yml up -d
 docker compose -f docker/docker-compose.yml ps
@@ -171,13 +174,13 @@ En `docker/.env` configura, como mínimo:
 
 | Variable | Ejemplo | Notas |
 |---|---|---|
-| `HOST_API` | `api.tudominio.com` | URL del API |
-| `HOST_WEB` | `client.tudominio.com` | interfaz cliente |
+| `HOST_WEB` | `client.tudominio.com` | interfaz cliente **y API same-origin** |
 | `HOST_ADMIN` | `admin.tudominio.com` | panel admin |
 | `HOST_PICKING_ADMIN` | `picking-admin.tudominio.com` | picking admin |
 | `HOST_DELIVERY_ADMIN` | `delivery-admin.tudominio.com` | delivery admin |
+| `HOST_API` | `api.tudominio.com` | **opcional**: alias solo para `/webhooks/*` |
 | `TLS` / `ACME_EMAIL` | `true` / `admin@…` | Let's Encrypt |
-| `VITE_API_URL` | `https://api.tudominio.com` | debe coincidir con `HOST_API` |
+| `VITE_API_URL` | `https://client.tudominio.com` | debe coincidir con `HOST_WEB` |
 | `DATABASE_URL` | `postgres://…` | externa o contenedor de `db/docker` |
 | `JWT_SECRET`, `CLOUDINARY_*`, `DEEPSEEK_API_KEY` | — | secretos |
 | `PROTECT_ADMIN` | `true` | Basic Auth en los paneles (**por defecto true**, fail-closed) |
@@ -205,7 +208,7 @@ Registros para este despliegue (`jcti.xyz` en GoDaddy, TTL 600):
 | Tipo | Nombre | Valor |
 |---|---|---|
 | A | `mercaldas` | `170.254.229.68` |
-| A | `api.mercaldas` | `170.254.229.68` |
+| A | `api.mercaldas` | `170.254.229.68` | *(solo si usas webhooks)* |
 | A | `admin.mercaldas` | `170.254.229.68` |
 | A | `picking-admin.mercaldas` | `170.254.229.68` |
 | A | `delivery-admin.mercaldas` | `170.254.229.68` |
@@ -275,10 +278,14 @@ curl -I --resolve client.tudominio.com:443:<IP_DEL_SERVIDOR> https://client.tudo
 `docker/entrypoint.sh` genera el Caddyfile en runtime con
 `docker/gen-caddyfile.mjs` a partir de los `HOST_*`:
 
-- `HOST_API` → `/bot/*` al bot (`127.0.0.1:8001`) y el resto al backend
-  (`127.0.0.1:3100`).
-- Cada `HOST_<APP>` → estáticos del front correspondiente (`/srv/<app>`) con
-  *fallback* SPA a `index.html`.
+- `HOST_WEB` → estáticos del cliente (`/srv/web`) **y** proxy same-origin de
+  las rutas del API (`/catalog/*`, `/orders`, `/static/*`, `/socket.io/*`,
+  `/bot/*`, `/discovery`, …) al backend (`127.0.0.1:3100`).
+- `HOST_API` → **solo `/webhooks/*`** al backend (pasarelas de pago); el resto
+  responde `404`. Si no defines `HOST_API`, no se publica ese alias.
+- Cada `HOST_<APP>` restante → estáticos del front (`/srv/<app>`) con
+  *fallback* SPA a `index.html`. Los paneles llaman al API en `HOST_WEB`
+  (cross-origin autorizado por `CORS_ORIGIN`).
 
 Con `TLS=false` los vhosts se generan como `http://<host>` (si no, un hostname
 sin esquema haría que Caddy asuma HTTPS y escuche en `:443` en lugar de `:80`).
@@ -286,7 +293,7 @@ sin esquema haría que Caddy asuma HTTPS y escuche en `:443` en lugar de `:80`).
 Regenerar/validar sin arrancar todo:
 
 ```bash
-HOST_API=api.example.com HOST_WEB=client.example.com \
+HOST_WEB=client.example.com HOST_ADMIN=admin.example.com \
   PROTECT_ADMIN=true ADMIN_PASSWORD=secreto \
   CADDYFILE_OUT=/tmp/Caddyfile node docker/gen-caddyfile.mjs
 docker run --rm -v /tmp/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2.9.1 \
@@ -319,7 +326,7 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 | Bucle de reinicio del contenedor | Falta `CLOUDINARY_*` (obligatorias) u otro secreto; revisa `logs -f app`. |
 | `entrypoint.sh: /usr/bin/env: 'bash\r'` | El clon quedó en CRLF. La imagen lo normaliza con `sed`, pero si editas el `.sh` en Windows, guárdalo con **LF**. |
 | Caddy no emite certificados | 80/443 no llegan al host (firewall/router) o el DNS no apunta a la IP. Revisa `docker compose … logs app`. |
-| Un front no carga | Falta su `HOST_*` o `VITE_API_URL` no coincide con `HOST_API` al compilar. |
+| Un front no carga | Falta su `HOST_*` o `VITE_API_URL` no coincide con `HOST_WEB` al compilar. |
 | El navegador da CORS | `CORS_ORIGIN` debe incluir las URLs de las interfaces (se deriva solo de los `HOST_*` si lo dejas vacío). |
 | No conecta a la BD | `DATABASE_URL` incorrecta o el contenedor de BD no está en `mercaldas_internal`. |
 | Docker no responde | En este servidor: `wsl -d Ubuntu -u root -- systemctl status docker` y comprueba la tarea `MercaldasDockerEngine`. Docker Desktop está deshabilitado a propósito. |
@@ -335,7 +342,9 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 - [ ] `build` + `up -d` sin errores.
 - [ ] `docker port mercaldas_app` muestra solo `127.0.0.1:30180` (nada en `0.0.0.0`).
 - [ ] Edge levantado (`docker/edge/`) y `docker port edge_caddy` publica 80 y 443.
-- [ ] `https://<HOST_API>/api-status` responde.
+- [ ] `https://<HOST_WEB>/api-status` responde.
+- [ ] `https://<HOST_WEB>/discovery` devuelve `mercaldas-backend`.
+- [ ] `https://<HOST_API>/auth/login` responde `404` (solo `/webhooks/*`).
 - [ ] Cada interfaz carga y llama al API sin errores de CORS.
 - [ ] Paneles de administración protegidos (`PROTECT_ADMIN=true` + `ADMIN_PASSWORD`).
 - [ ] `/bot/health` responde a través del backend (el bot ya no está expuesto por Caddy).
