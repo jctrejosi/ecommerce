@@ -186,6 +186,14 @@ const API_PATHS = [
   "/webhooks/*",
 ];
 
+// Caché de estáticos: el HTML nunca se cachea (un index viejo apunta a
+// bundles viejos); los assets con hash son inmutables.
+const cacheHeaders = `\t@html path /index.html
+\theader @html Cache-Control "no-cache"
+\t@assets path /assets/*
+\theader @assets Cache-Control "public, max-age=31536000, immutable"
+`;
+
 // Con HOST_WEB el API se sirve en el MISMO origen que la web del cliente
 // (como en local con serve-webclient.mjs). El resto de fronts lo consume
 // cross-origin; CORS ya los autoriza.
@@ -195,7 +203,7 @@ const webClientBlock = (dir) => `${headerBlock}${bodyLimit}\tencode zstd gzip
 		reverse_proxy ${BACKEND}${protoUp}
 	}
 	handle {
-		root * ${dir}
+${cacheHeaders}		root * ${dir}
 		try_files {path} /index.html
 		file_server
 	}`;
@@ -211,7 +219,7 @@ const webhookBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
 	}`;
 
 const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
-	root * ${dir}
+${cacheHeaders}	root * ${dir}
 	try_files {path} /index.html
 	file_server`;
 
