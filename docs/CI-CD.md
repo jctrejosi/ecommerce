@@ -5,7 +5,7 @@ Pipeline único en `.github/workflows/ci-cd.yml`:
 ```mermaid
 flowchart LR
     A[PR a master] --> C[CI: docker build]
-    B[Push a prod] --> C
+    B[Push a dev] --> C
     D[Push a master] --> C
     C -->|solo push/manual en master| E[Runner self-hosted]
     E --> F[git checkout master]
@@ -29,7 +29,7 @@ flowchart LR
 1. **Rama por defecto:** `master` (Settings → General → Default branch).
 2. **Ruleset de `master`:** hoy exige Pull Request. El push directo a `master`
    queda bloqueado (`GH013`). Dos opciones:
-   - Mantener la regla y **mergear siempre por PR** (`prod` → `master`), o
+   - Mantener la regla y **mergear siempre por PR** (`dev` → `master`), o
    - Settings → Rules → Rulesets → regla de `master` → permitir *bypass* al
      administrador del repositorio.
 3. **Runner:** Settings → Actions → Runners → **New self-hosted runner**
@@ -86,7 +86,7 @@ Puedes sobreescribir la ruta con `GIT_SSH_KEY=/otra/clave`.
 
 La ruleset actual impide el push directo. Desde GitHub:
 
-1. **Pull requests → New pull request**: `prod` → `master`.
+1. **Pull requests → New pull request**: `dev` → `master`.
 2. Espera el check **CI / Build de la imagen**.
 3. **Merge pull request**.
 

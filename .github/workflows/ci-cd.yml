@@ -1,12 +1,12 @@
 name: CI/CD
 
-# CI valida cualquier cambio que vaya a master (PR o push). El despliegue solo
-# corre en un push/manual sobre master y siempre después de que CI pase.
+# CI valida cualquier cambio en dev y master (push o PR hacia master). El
+# despliegue solo corre en push/manual sobre master, después de que CI pase.
 on:
   pull_request:
     branches: [master]
   push:
-    branches: [master, prod]
+    branches: [master, dev]
   workflow_dispatch:
 
 permissions:
