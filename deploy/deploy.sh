@@ -43,7 +43,12 @@ fi
 
 # El checkout de producción puede pertenecer a otro usuario de Windows; se le
 # indica a git que ese directorio es de confianza solo para estos comandos.
-git_here() { git -c safe.directory="$ROOT" -C "$ROOT" "$@"; }
+# Se desactivan los hooks: el hook de Git LFS falla si git-lfs no está instalado
+# en WSL y haría fallar el checkout sin motivo (el repo no usa LFS para el
+# despliegue).
+git_here() {
+  git -c safe.directory="$ROOT" -c core.hooksPath=/nonexistent -C "$ROOT" "$@"
+}
 
 log "Repositorio: $ROOT"
 log "Objetivo   : $TARGET"
