@@ -140,6 +140,8 @@ export interface DeliveryOrder {
   pickedUpAt?: string | null;
   completedAt?: string | null;
   rejectReason?: string | null;
+  /** false si el pedido es de otro repartidor (solo lectura en la app). */
+  assignedToMe?: boolean;
 }
 
 export interface HistoryEntry extends DeliveryOrder {

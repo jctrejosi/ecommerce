@@ -13,17 +13,21 @@ import {
   Moon,
   Package,
   RefreshCw,
+  Store,
   Sun,
   Truck,
+  User,
   Users,
   Wifi,
   WifiOff,
 } from 'lucide-react';
 import type {
   AuthUser,
+  Branch,
   DriverConversation,
   DriverFilter,
   FleetDriver,
+  FleetOrder,
 } from './types';
 import { api, ApiError, getToken, setToken } from './services/api';
 import {
@@ -45,6 +49,7 @@ import {
 } from './services/browserNotifications';
 import LoginScreen from './components/LoginScreen';
 import AppFooter from './components/AppFooter';
+import ProfileModal from './components/ProfileModal';
 // El logo del header es el de DSI; el del icono de las notificaciones sigue
 // siendo delivery.png.
 import headerLogo from './assets/logo.png';
@@ -107,6 +112,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('map');
   /** Menú del usuario (avatar): cambiador de temas. */
   const [userMenu, setUserMenu] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [theme, setTheme] = useTheme();
   const [accent, setAccent] = useAccent();
 
@@ -116,7 +122,16 @@ export default function App() {
   const [connected, setConnected] = useState(false);
   const [lastSync, setLastSync] = useState<Date | null>(null);
 
+  // ── Sucursal: filtro transversal (mapa, repartidores y pedidos) ──
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [branchId, setBranchId] = useState<number | null>(null);
+
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  /**
+   * Pedido entregado enfocado en el mapa: se pintan su domicilio, la sucursal de
+   * salida y la ruta histórica (tienda → domicilio) con su tiempo.
+   */
+  const [focusedOrder, setFocusedOrder] = useState<FleetOrder | null>(null);
   const [hiddenIds, setHiddenIds] = useState<Set<number>>(new Set());
   const [statusFilter, setStatusFilter] = useState<DriverFilter>('all');
   const [search, setSearch] = useState('');
@@ -156,6 +171,8 @@ export default function App() {
       .me()
       .then((profile) => {
         setUser(profile);
+        // El admin de sucursal queda fijado a su sucursal.
+        if (profile.branchId != null) setBranchId(profile.branchId);
         setBooting(false);
       })
       .catch(() => {
@@ -164,13 +181,31 @@ export default function App() {
       });
   }, []);
 
+  // ── Sucursales del selector (el backend ya aplica el alcance del admin) ──
+  useEffect(() => {
+    if (!user) return;
+    api
+      .branches()
+      .then((bs) => {
+        setBranches(bs);
+        if (user.branchId != null) setBranchId(user.branchId);
+      })
+      .catch(() => undefined);
+  }, [user]);
+
+  // Al cambiar de sucursal se limpia la selección (puede quedar fuera del filtro).
+  useEffect(() => {
+    setSelectedId(null);
+    setHiddenIds(new Set());
+  }, [branchId]);
+
   // ── Carga de datos ──
   // Los pedidos los carga la propia pestaña "Pedidos" (paginados, de a 20);
   // aquí solo se refresca la flota. Los sockets avisan al panel vía `lastSync`.
   const refresh = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     try {
-      const d = await api.drivers();
+      const d = await api.drivers(branchId);
       setDrivers(d);
       setLastSync(new Date());
       setError(null);
@@ -184,7 +219,7 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [branchId]);
 
   useEffect(() => {
     if (!user) return;
@@ -307,6 +342,7 @@ export default function App() {
   const handleLogin = useCallback((token: string, u: AuthUser) => {
     setToken(token);
     setUser(u);
+    if (u.branchId != null) setBranchId(u.branchId);
   }, []);
 
   const handleLogout = useCallback(() => {
@@ -315,6 +351,8 @@ export default function App() {
     setUser(null);
     setDrivers([]);
     setSelectedId(null);
+    setFocusedOrder(null);
+    setBranchId(null);
   }, []);
 
   const changeDriverColor = useCallback(
@@ -342,9 +380,23 @@ export default function App() {
   );
 
   const locateDriver = useCallback((driverId: number) => {
+    setFocusedOrder(null);
     setSelectedId(driverId);
     setStatusFilter('all');
     setHiddenIds(new Set());
+    setTab('map');
+  }, []);
+
+  /**
+   * Muestra en el mapa el recorrido de un pedido entregado: su domicilio, la
+   * sucursal de salida y la ruta (tienda → domicilio) con su tiempo. No ubica a
+   * ningún repartidor en vivo (el pedido ya está cerrado).
+   */
+  const viewOrderOnMap = useCallback((order: FleetOrder) => {
+    setSelectedId(null);
+    setStatusFilter('all');
+    setHiddenIds(new Set());
+    setFocusedOrder(order);
     setTab('map');
   }, []);
 
@@ -381,6 +433,9 @@ export default function App() {
     [unreadByDriver],
   );
 
+  // Alcance del admin: si tiene sucursal asignada, el selector queda fijado.
+  const scopedBranchId = user?.branchId ?? null;
+
   if (booting) {
     return (
       <div className="flex h-full items-center justify-center bg-surface-3">
@@ -395,8 +450,13 @@ export default function App() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* ── Topbar ── */}
-      <header className="z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2">
+      {/* ── Topbar ──
+          El header es un flex item y por tanto crea su propio contexto de
+          apilamiento (z-index aplica aunque position sea static). Debe quedar
+          POR ENCIMA del contenido (los encabezados sticky de las tablas usan
+          z-10 y los overlays del mapa z-500/600) pero por DEBAJO de los modales
+          (z-1000); si no, el dropdown del usuario queda tapado por las tablas. */}
+      <header className="z-900 flex min-h-14 shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-line bg-surface px-4 py-2">
         {/* Marca: el logo ocupa el ancho del título (w-full sobre el texto) */}
         <div className="flex shrink-0 flex-col items-center justify-center gap-1">
           <img
@@ -428,6 +488,37 @@ export default function App() {
             );
           })}
         </nav>
+
+        {/* Filtro por sucursal: aplica al mapa, a los repartidores y a los pedidos. */}
+        {branches.length > 0 && (
+          <label
+            className="flex shrink-0 items-center gap-1.5"
+            title={
+              scopedBranchId != null
+                ? 'Solo puedes ver tu sucursal'
+                : 'Filtrar por sucursal'
+            }
+          >
+            <Store className="h-4 w-4 text-ink-faint" />
+            <select
+              value={branchId ?? ''}
+              onChange={(e) =>
+                setBranchId(e.target.value ? Number(e.target.value) : null)
+              }
+              disabled={scopedBranchId != null}
+              className="cursor-pointer rounded-xl border border-line bg-surface-2 px-2.5 py-1.5 text-xs font-semibold text-ink-soft outline-none transition hover:bg-surface-3 focus:border-accent disabled:cursor-default disabled:opacity-70"
+            >
+              {scopedBranchId == null && (
+                <option value="">Todas las sucursales</option>
+              )}
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="ml-auto flex items-center gap-2">
           {/* Las cifras de la flota (entregas / pedidos / desconectados) se
@@ -487,7 +578,7 @@ export default function App() {
             )}
           </button>
 
-          <div className="relative ml-1 flex items-center gap-2 border-l border-line pl-3">
+          <div className="relative ml-1 flex items-center border-l border-line pl-3">
             <button
               onClick={() => setUserMenu((v) => !v)}
               title="Cuenta y tema"
@@ -495,8 +586,12 @@ export default function App() {
               aria-expanded={userMenu}
               className="flex items-center gap-2 rounded-xl px-1.5 py-1 text-left transition-colors hover:bg-surface-3"
             >
-              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-invert text-xs font-bold text-invert-ink">
-                {initials(user.fullName || user.username)}
+              <div className="flex h-8 w-8 items-center justify-center overflow-hidden rounded-full bg-invert text-xs font-bold text-invert-ink">
+                {user.avatarUrl ? (
+                  <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  initials(user.fullName || user.username)
+                )}
               </div>
               <div className="hidden leading-tight md:block">
                 <p className="text-xs font-semibold text-ink">
@@ -510,15 +605,8 @@ export default function App() {
                 }`}
               />
             </button>
-            <button
-              onClick={handleLogout}
-              title="Cerrar sesión"
-              className="flex h-8 w-8 items-center justify-center rounded-lg text-ink-faint hover:bg-rose-50 hover:text-rose-600"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
 
-            {/* Menú del usuario: temas del panel. */}
+            {/* Menú de cuenta: perfil, sesión y tema del panel. */}
             {userMenu && (
               <>
                 <div
@@ -526,18 +614,46 @@ export default function App() {
                   onClick={() => setUserMenu(false)}
                   aria-hidden
                 />
-                <div className="absolute right-0 top-full z-30 mt-2 w-60 overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
-                  <div className="border-b border-line px-4 py-3">
-                    <p className="truncate text-xs font-bold text-ink">
-                      {user.fullName || user.username}
-                    </p>
-                    <p className="truncate text-[11px] text-ink-faint">{user.email}</p>
+                <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-2xl border border-line bg-surface shadow-2xl">
+                  <div className="flex items-center gap-3 border-b border-line px-4 py-3">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-invert text-xs font-bold text-invert-ink">
+                      {user.avatarUrl ? (
+                        <img src={user.avatarUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        initials(user.fullName || user.username)
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-xs font-bold text-ink">
+                        {user.fullName || user.username}
+                      </p>
+                      <p className="truncate text-[11px] text-ink-faint">{user.email}</p>
+                    </div>
                   </div>
-                  <div className="p-2">
-                    <p className="px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+
+                  <div className="p-1.5">
+                    <button
+                      onClick={() => {
+                        setUserMenu(false);
+                        setProfileOpen(true);
+                      }}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold text-ink-soft transition-colors hover:bg-surface-2"
+                    >
+                      <User className="h-4 w-4 text-ink-faint" /> Mi perfil
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-semibold text-rose-600 transition-colors hover:bg-rose-500/10"
+                    >
+                      <LogOut className="h-4 w-4" /> Cerrar sesión
+                    </button>
+                  </div>
+
+                  <div className="border-t border-line p-3">
+                    <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                       Tema
                     </p>
-                    <div className="flex items-center gap-2 px-2 pb-1.5 pt-0.5">
+                    <div className="flex items-center gap-2 px-1 pb-2 pt-0.5">
                       {THEMES.map((t) => {
                         const Icon = t.icon;
                         const active = theme === t.key;
@@ -567,10 +683,10 @@ export default function App() {
                         );
                       })}
                     </div>
-                    <p className="mt-2 px-2 pb-1.5 pt-1 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
+                    <p className="px-1 pb-1.5 text-[10px] font-bold uppercase tracking-wider text-ink-faint">
                       Color
                     </p>
-                    <div className="flex items-center gap-2 px-2 pb-1.5 pt-0.5">
+                    <div className="flex items-center gap-2 px-1 pt-0.5">
                       {ACCENTS.map((a) => {
                         const active = accent === a.key;
                         return (
@@ -632,6 +748,8 @@ export default function App() {
             hiddenIds={hiddenIds}
             selectedId={selectedId}
             onSelect={setSelectedId}
+            focusedOrder={focusedOrder}
+            onClearFocused={() => setFocusedOrder(null)}
           />
 
           {/* Cifras de la flota sobre el mapa (esquina superior derecha).
@@ -700,7 +818,14 @@ export default function App() {
 
       {tab === 'orders' && (
         <main className="min-h-0 flex-1">
-          <OrdersPanel onLocate={locateDriver} reloadTick={lastSync?.getTime() ?? 0} />
+          <OrdersPanel
+            branchId={branchId}
+            onLocate={locateDriver}
+            onViewOrderOnMap={viewOrderOnMap}
+            reloadTick={lastSync?.getTime() ?? 0}
+            drivers={drivers}
+            onChat={openChat}
+          />
         </main>
       )}
 
@@ -718,6 +843,8 @@ export default function App() {
           }
           onClose={() => setModal(null)}
           onSaved={handleSaved}
+          branches={branches}
+          lockedBranchId={scopedBranchId}
         />
       )}
 
@@ -728,6 +855,14 @@ export default function App() {
           liveTick={chatTick}
           onClose={() => setChatOpen(false)}
           onRefreshChats={() => void refreshChats()}
+        />
+      )}
+
+      {profileOpen && user && (
+        <ProfileModal
+          user={user}
+          onClose={() => setProfileOpen(false)}
+          onSaved={(u) => setUser(u)}
         />
       )}
     </div>

@@ -9,6 +9,9 @@
  *  - `/ofm/*`                    → tiles de OpenFreeMap (mapa de rastreo).
  *  - API (`/catalog/…`, `/landing/…`, `/orders`, `/cart`, `/customer-auth/…`,
  *    `/socket.io/*`, …)          → proxy a 127.0.0.1:3000 (backend NestJS).
+ *  - `/static/*`                 → imágenes locales del catálogo (mismo proxy al
+ *                                  backend), para que las URLs que devuelve el API
+ *                                  (`/static/...`) carguen sin salir de este origen.
  *  - Bot (`/chat…`)              → proxy a 127.0.0.1:8000 (FastAPI del bot).
  *  - Resto                       → estáticos de `dist` con SPA fallback.
  *
@@ -55,6 +58,7 @@ const API_EXACT = new Set([
 const API_PREFIXES = [
   "/catalog/",
   "/landing/",
+  "/static/",
   "/geocode/",
   "/popups/",
   "/featured/",
@@ -72,6 +76,34 @@ const API_PREFIXES = [
 
 /** Prefijos del bot de compras (FastAPI). */
 const BOT_PREFIXES = ["/chat"];
+
+/**
+ * Rutas exactas que son SIEMPRE del bot (no existen en el backend NestJS).
+ * Ojo: los endpoints de carrito del bot (`/cart/...`) colisionan con el `/cart`
+ * de la página, así que se distinguen aquí.
+ */
+const BOT_EXACT = [
+  "/cart/items",
+  "/cart/items/set",
+  "/cart/suggest",
+  "/catalog/search",
+  "/catalog/suggestions",
+];
+
+/**
+ * ¿La ruta pertenece al bot?
+ *  - `/chat…`        → bot.
+ *  - rutas BOT_EXACT → bot.
+ *  - `GET /cart` con `session_id` (carrito del bot) → bot; sin él es el carrito
+ *    de la página (backend).
+ */
+function isBotPath(pathname, searchParams) {
+  if (BOT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`)))
+    return true;
+  if (BOT_EXACT.includes(pathname)) return true;
+  if (pathname === "/cart" && searchParams.has("session_id")) return true;
+  return false;
+}
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -104,18 +136,16 @@ function cacheHeaders(pathname) {
   return { "Cache-Control": "no-cache" };
 }
 
-function isApiPath(pathname) {
+function isApiPath(pathname, searchParams) {
   return (
     API_EXACT.has(pathname) ||
     API_PREFIXES.some((p) => pathname.startsWith(p)) ||
-    BOT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+    isBotPath(pathname, searchParams)
   );
 }
 
-function upstreamFor(pathname) {
-  return BOT_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
-    ? BOT
-    : BACKEND;
+function upstreamFor(pathname, searchParams) {
+  return isBotPath(pathname, searchParams) ? BOT : BACKEND;
 }
 
 /** Proxy HTTP simple hacia el backend/bot. */
@@ -128,6 +158,12 @@ function proxyHttp(req, res, target) {
     headers: {
       ...req.headers,
       host: `${target.host}:${target.port}`,
+      // El backend arma las URLs absolutas de medios (`/static/...`) con el host
+      // de la petición: se le pasa el host del cliente (el WebView) para que
+      // apunten a ESTE servidor y no a 127.0.0.1:3000 (que en el celular es el
+      // propio teléfono). Ver MediaUrlInterceptor.
+      "x-forwarded-host": req.headers.host || `${target.host}:${target.port}`,
+      "x-forwarded-proto": "http",
     },
   };
   const up = http.request(opts, (ur) => {
@@ -196,8 +232,8 @@ const server = http.createServer(async (req, res) => {
     return proxyOfm(req, res, pathname.replace(/^\/ofm/, ""));
   }
 
-  if (isApiPath(pathname)) {
-    return proxyHttp(req, res, upstreamFor(pathname));
+  if (isApiPath(pathname, url.searchParams)) {
+    return proxyHttp(req, res, upstreamFor(pathname, url.searchParams));
   }
 
   let filePath = normalize(

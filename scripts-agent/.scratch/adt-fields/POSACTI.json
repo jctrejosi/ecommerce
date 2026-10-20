@@ -1,0 +1,51 @@
+{
+  "table": "POSACTI",
+  "source": "db/ADD_ANALITICA/POSACTI.ADT",
+  "bytes": 2608,
+  "recordCount": 8,
+  "recordLength": 151,
+  "headerLength": 1400,
+  "fieldCount": 5,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "DESCRIP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 7,
+      "length": 120,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 127,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAF",
+      "type": 10,
+      "typeName": "double",
+      "offset": 135,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CANTI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 143,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

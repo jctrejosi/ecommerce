@@ -10,6 +10,7 @@ export type UserProfile = {
   lastName: string | null;
   fullName: string;
   phone: string | null;
+  avatarUrl?: string | null;
   isSuperuser: boolean;
   isActive: boolean;
   lastLoginAt: string | null;
@@ -53,12 +54,13 @@ export const authService = {
     }).catch(() => {});
   },
 
-  /** Actualiza el perfil del usuario autenticado (nombre, teléfono, email). */
+  /** Actualiza el perfil del usuario autenticado (nombre, teléfono, email, avatar). */
   async updateProfile(data: {
     firstName?: string;
     lastName?: string;
     phone?: string;
     email?: string;
+    avatarUrl?: string | null;
   }): Promise<UserProfile> {
     return fetchJson<UserProfile>(`${API_BASE_URL}/auth/me`, {
       method: "PATCH",

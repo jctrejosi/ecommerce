@@ -3,11 +3,13 @@
  * Mercaldas — lanzador de servicios.
  *
  * Uso:
- *   node dev.js            # DEV: instala dependencias faltantes, levanta
- *                          #   PostgreSQL + los servicios (y las apps Expo) en
- *                          #   segundo plano, espera a que el backend esté listo,
- *                          #   imprime las URLs y termina (la terminal queda
- *                          #   libre: se puede cerrar sin matar Metro).
+ *   node dev.js            # SOLO monta los servicios ya instalados (PostgreSQL +
+ *                          #   backend + webs + bot + OSRM + delivery) en segundo
+ *                          #   plano, espera a que el backend esté listo, imprime
+ *                          #   las URLs y termina (la terminal queda libre).
+ *   node dev.js --init     # Primer arranque: instala dependencias, compila todo
+ *                          #   y migra la BD (PostgreSQL) desde el respaldo; luego
+ *                          #   monta los servicios.
  *   node dev.js <flags>    # Solo los aplicativos pedidos (p. ej. --delivery-admin).
  *   node dev.js --fg       # Las apps Expo (delivery/picking) se quedan en
  *                          #   primer plano mostrando el QR (bloquea la terminal).
@@ -22,9 +24,20 @@
  * Logs: un archivo por servicio en logs/ (logs/<servicio>.log).
  *
  * La BD (docker) queda corriendo al salir; se detiene con
- * `cd db/docker && docker compose stop`.
+ * `cd db/docker && docker compose stop`. Junto a PostgreSQL se levanta también
+ * Advantage/OpenADS (la BD del ERP, db/ads/openads) salvo con `--no-advantage`.
  */
-const { spawn, spawnSync } = require("node:child_process");
+const cp = require("node:child_process");
+// `windowsHide` oculta la consola de los hijos en Windows (en otros SO se
+// ignora), pero NO basta junto a `detached`: ese flag implica DETACHED_PROCESS y
+// Windows ignora CREATE_NO_WINDOW, asignando al hijo su PROPIA consola → aparece
+// una ventana de cmd por servicio. Por eso en Windows NO se usa `detached`.
+const spawn = (cmd, args, opts = {}) => cp.spawn(cmd, args, { windowsHide: true, ...opts });
+const spawnSync = (cmd, args, opts = {}) => cp.spawnSync(cmd, args, { windowsHide: true, ...opts });
+// POSIX: detached ⇒ grupo propio, para matarlo entero con `kill -pid`.
+// Windows: sin detached el hijo queda SIN consola (ni ventana) y aun así
+// sobrevive al cierre de la terminal; `--stop` lo mata con taskkill /T por PID.
+const DETACHED = process.platform !== "win32";
 const fs = require("node:fs");
 const net = require("node:net");
 const os = require("node:os");
@@ -41,11 +54,23 @@ const PICKING_MOBILE_PORT = 8082;
 const OSRM_DIR = path.join(ROOT, "delivery-routing");
 const OSRM_PORT = 5000;
 
-// BD principal (db/docker/docker-compose.yml) y respaldo versionado en
-// db/backups/ecommerce (troceado en ecommerce.dump.part-000, ...) para GitHub.
+// BD principal (db/docker/docker-compose.yml) y respaldos versionados en
+// db/backups/ecommerce/backup_<fecha>/ (troceados en ecommerce.dump.part-000,
+// ...) para GitHub. Se restaura el subdirectorio con la fecha más reciente.
 const DB_CONTAINER = "ecommerce_postgres";
 const DB_NAME = "ecommerce";
 const DB_BACKUP_DIR = path.join(ROOT, "db", "backups", "ecommerce");
+
+// Advantage (OpenADS): la BD del ERP, montada en Docker (db/ads/openads).
+// La consume el conector ERP ⇄ Postgres (scripts-agent/erp). No es dependencia
+// del ecommerce, así que si falta imagen/datos se avisa pero NO se aborta.
+const ADV_DIR = path.join(ROOT, "db", "ads", "openads");
+const ADV_IMAGE = "mercaldas/openads:1.09.73";
+const ADV_CONTAINER = "openads-img";
+const ADV_DATA = path.join(ADV_DIR, "data"); // copia ESCRIBIBLE que se monta
+const ADV_DATA_SEED = path.join(ADV_DIR, "data-test"); // copia ya validada
+const ADV_WIRE_PORT = 16262; // protocolo wire ADS (ace*.dll)
+const ADV_HTTP_PORT = 18080; // consola Studio / REST / SQL
 
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
@@ -58,6 +83,19 @@ const FORCE = ARGS.includes("--force");
 // Las apps móviles (Expo) corren desacopladas por defecto: así la terminal queda
 // libre y se puede cerrar sin matar Metro. Con --fg se muestra el QR aquí mismo.
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
+// `--no-advantage`: no levantar el contenedor de la BD del ERP (OpenADS).
+const NO_ADVANTAGE = ARGS.includes("--no-advantage");
+// `--init`: primer arranque — instala dependencias, compila todo y migra la BD
+// (PostgreSQL) desde el respaldo; luego monta los servicios.
+const INIT = ARGS.includes("--init");
+// `--erp-sync`: además, deja corriendo la SALIDA Postgres → ERP en bucle
+// (scripts-agent/erp/sync-out.mjs --apply). `--erp-interval=<seg>` lo ajusta.
+const ERP_SYNC = ARGS.includes("--erp-sync");
+const ERP_INTERVAL = (() => {
+  const raw = ARGS.find((a) => a.toLowerCase().startsWith("--erp-interval="));
+  const n = raw ? Number(raw.split("=")[1]) : Number(process.env.ERP_SYNC_INTERVAL || 30);
+  return Number.isFinite(n) && n >= 5 ? Math.floor(n) : 30;
+})();
 
 // Dependencias por servicio: `marker` es lo que se comprueba para saber si ya
 // están instaladas; `install` son los comandos que las instalan si faltan.
@@ -83,19 +121,63 @@ const PNPM_DEPS = {
   markerType: "dir",
   installers: PM_INSTALLERS,
 };
-const PYTHON_DEPS = {
-  marker: [".venv", "bin", "python"],
-  markerType: "file",
-  install: [
-    ["python3", "-m", "venv", ".venv"],
-    [".venv", "bin", "pip", "install", "-r", "requirements.txt"],
-  ],
-};
 
 function hasBin(cmd) {
   const r = spawnSync(cmd, ["--version"], { stdio: "ignore", shell: PM_SHELL });
   return r.status === 0;
 }
+
+// ── Python (bot) ────────────────────────────────────────────
+// En Windows `python3` no existe (es el alias de la Microsoft Store, que
+// falla): el lanzador real es `python` o `py`. Además ahí el venv guarda el
+// intérprete en Scripts\ en vez de bin/.
+const PY_VENV_BIN =
+  process.platform === "win32"
+    ? [".venv", "Scripts", "python.exe"]
+    : [".venv", "bin", "python"];
+const PY_VENV_PY = PY_VENV_BIN.join(path.sep);
+
+/** Candidatos a intérprete: PATH primero, luego ubicaciones típicas de Windows. */
+function pythonCandidates() {
+  const list = [["python3"], ["python"], ["py", "-3"]];
+  if (process.platform === "win32") {
+    for (const root of [
+      path.join(process.env.LOCALAPPDATA || "", "Programs", "Python"),
+      path.join(process.env.ProgramFiles || "", "Python"),
+    ]) {
+      try {
+        for (const dir of fs.readdirSync(root)) {
+          if (/^Python3/.test(dir)) list.push([path.join(root, dir, "python.exe")]);
+        }
+      } catch {
+        /* carpeta inexistente */
+      }
+    }
+  }
+  return list;
+}
+
+/** Intérprete base disponible (python3 → python → py -3 → instalaciones Windows). */
+function findPython() {
+  for (const cmd of pythonCandidates()) {
+    const r = spawnSync(cmd[0], [...cmd.slice(1), "--version"], { stdio: "ignore" });
+    if (r.status === 0) return cmd;
+  }
+  return null;
+}
+
+const PY_BASE = findPython();
+const PYTHON_DEPS = {
+  marker: PY_VENV_BIN,
+  markerType: "file",
+  // null ⇒ no hay Python instalado; `ensureDeps` lo reporta y omite el servicio.
+  install: PY_BASE
+    ? [
+        [...PY_BASE, "-m", "venv", ".venv"],
+        [PY_VENV_PY, "-m", "pip", "install", "-r", "requirements.txt"],
+      ]
+    : null,
+};
 
 const C = {
   db: "\x1b[36m",
@@ -103,13 +185,13 @@ const C = {
   web: "\x1b[32m",
   webclient: "\x1b[36m",
   admin: "\x1b[34m",
-  picking: "\x1b[95m",
   "picking-admin": "\x1b[91m",
   "delivery-admin": "\x1b[93m",
   bot: "\x1b[35m",
   delivery: "\x1b[92m",
   "picking-mobile": "\x1b[94m",
   osrm: "\x1b[90m",
+  advantage: "\x1b[33m",
   reset: "\x1b[0m",
 };
 
@@ -120,6 +202,7 @@ const SERVICES = [
     url: "http://localhost:3000",
     dev: ["npm", "run", "dev"],
     prod: ["npm", "run", "start:prod"],
+    build: [["npm", "run", "build"]],
     deps: NPM_DEPS,
   },
   {
@@ -131,6 +214,9 @@ const SERVICES = [
     url: "http://localhost:4173",
     dev: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
     prod: ["node", "scripts-agent/serve-webclient.mjs", "4173"],
+    // El webclient sirve `Interface web client/dist`: --init lo compila.
+    buildDir: "Interface web client",
+    build: [[PM, "install"], [PM, "run", "build"]],
     // Escucha en 0.0.0.0 y resuelve el API en su propio origen, así que se
     // puede abrir tal cual desde el celular (es la URL que usa el APK).
     lan: true,
@@ -146,6 +232,7 @@ const SERVICES = [
     url: "http://localhost:8443",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    build: [[PM, "run", "build"]],
     // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local, así
     // que el panel se puede abrir desde el celular con la IP del equipo. El
     // cliente resuelve el API contra el host que sirvió la página
@@ -154,19 +241,12 @@ const SERVICES = [
     deps: PNPM_DEPS,
   },
   {
-    name: "picking",
-    dir: "Interface web picking",
-    url: "http://localhost:8445",
-    dev: [PM, "run", "dev"],
-    prod: [PM, "run", "preview"],
-    deps: PNPM_DEPS,
-  },
-  {
     name: "picking-admin",
     dir: "Interface web picking admin",
     url: "http://localhost:8446",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    build: [[PM, "run", "build"]],
     // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local
     // (`CORS_ALLOW_LAN`), así que se puede abrir desde el celular con la IP del
     // equipo. El cliente resuelve el API contra el host que sirvió la página.
@@ -179,6 +259,7 @@ const SERVICES = [
     url: "http://localhost:8447",
     dev: [PM, "run", "dev"],
     prod: [PM, "run", "preview"],
+    build: [[PM, "run", "build"]],
     // Vite escucha en 0.0.0.0 y el backend acepta orígenes de la red local
     // (`CORS_ALLOW_LAN`), así que el panel se puede abrir desde el celular con
     // la IP del equipo (la que imprime `dev.js`). El cliente resuelve el API
@@ -190,7 +271,7 @@ const SERVICES = [
     name: "bot",
     dir: "bot",
     url: "http://localhost:8000",
-    dev: ["bash", "dev.sh"],
+    dev: null, // se resuelve en resolveCmd() (intérprete del venv)
     prod: null, // se resuelve en resolveCmd()
     deps: PYTHON_DEPS,
   },
@@ -205,7 +286,6 @@ const APP_ALIASES = {
   "client-apk": "webclient",
   backend: "backend",
   admin: "admin",
-  picking: "picking",
   "picking-admin": "picking-admin",
   "delivery-admin": "delivery-admin",
   bot: "bot",
@@ -219,9 +299,9 @@ const APP_DEPENDS = {
   backend: ["db"],
   webclient: ["backend"], // sirve la web del cliente (APK/WebView) y proxy del API
   admin: ["backend"],
-  picking: ["backend"],
   "picking-admin": ["backend"],
-  "delivery-admin": ["backend"],
+  // El panel de delivery pinta rutas por calles (OSRM) en el mapa de flota.
+  "delivery-admin": ["backend", "osrm"],
   bot: ["backend"],
   delivery: ["backend", "osrm"], // API real: backend (+BD) + OSRM para rutas
   "picking-mobile": ["backend"], // app móvil de picking (Expo, QR)
@@ -238,6 +318,10 @@ const NO_SELECTOR_FLAGS = new Set([
   "--all",
   "--fg",
   "--foreground",
+  "--no-advantage",
+  "--init",
+  "--erp-sync",
+  "--erp-interval",
 ]);
 
 /** Flags `--x` no reconocidos. Si hay alguno, el launcher no ejecuta nada. */
@@ -247,13 +331,18 @@ function unknownFlags() {
       f.toLowerCase(),
     ),
   );
-  return ARGS.filter((a) => a.startsWith("--") && !valid.has(a.toLowerCase()));
+  return ARGS.filter((a) => {
+    if (!a.startsWith("--")) return false;
+    return !valid.has(a.toLowerCase().split("=")[0]); // admite --flag=valor
+  });
 }
 
 /** null ⇒ levantar todo (comportamiento por defecto). */
 function resolveSelection() {
-  const requested = ARGS.filter((a) => a.startsWith("--") && !NO_SELECTOR_FLAGS.has(a))
-    .map((a) => a.slice(2).toLowerCase());
+  const requested = ARGS.filter((a) => a.startsWith("--"))
+    .map((a) => a.toLowerCase().split("=")[0])
+    .filter((k) => !NO_SELECTOR_FLAGS.has(k))
+    .map((k) => k.slice(2));
   if (requested.length === 0) return null;
   const names = requested.map((r) => APP_ALIASES[r]).filter((n) => n !== undefined);
   if (names.length === 0) return null;
@@ -424,9 +513,31 @@ function dbIsInitialized() {
   return (r.stdout || "").trim() === "t";
 }
 
-function loadBackup() {
+/**
+ * Directorio del respaldo a usar: el subdirectorio `backup_<fecha>` más
+ * reciente dentro de db/backups/ecommerce/ (o la propia carpeta si todavía
+ * tiene las partes sueltas — formato antiguo).
+ */
+function resolveBackupDir() {
   if (!fs.existsSync(DB_BACKUP_DIR)) return null;
-  const files = fs.readdirSync(DB_BACKUP_DIR);
+  const entries = fs.readdirSync(DB_BACKUP_DIR, { withFileTypes: true });
+  const dated = entries
+    .filter((e) => e.isDirectory() && /^backup_\d{4}-\d{2}-\d{2}$/.test(e.name))
+    .map((e) => e.name)
+    .sort();
+  if (dated.length) return path.join(DB_BACKUP_DIR, dated[dated.length - 1]);
+  const flat = entries.some(
+    (e) =>
+      e.isFile() &&
+      (e.name === "ecommerce.dump" || /^ecommerce\.dump\.part-\d+$/.test(e.name)),
+  );
+  return flat ? DB_BACKUP_DIR : null;
+}
+
+function loadBackup() {
+  const dir = resolveBackupDir();
+  if (!dir) return null;
+  const files = fs.readdirSync(dir);
   const single = files.includes("ecommerce.dump");
   const parts = files
     .filter((f) => /^ecommerce\.dump\.part-\d+$/.test(f))
@@ -434,9 +545,9 @@ function loadBackup() {
   if (!single && parts.length === 0) return null;
   const names = single ? ["ecommerce.dump"] : parts;
   const buffer = Buffer.concat(
-    names.map((n) => fs.readFileSync(path.join(DB_BACKUP_DIR, n))),
+    names.map((n) => fs.readFileSync(path.join(dir, n))),
   );
-  return { names, buffer };
+  return { dir, names, buffer };
 }
 
 function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
@@ -444,7 +555,7 @@ function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
   if (!backup) {
     if (explicit) {
       console.warn(
-        `${C.db}[db]${C.reset} ⚠️  No hay respaldo en ${path.relative(ROOT, DB_BACKUP_DIR)} (faltan las partes ecommerce.dump.part-*).`,
+        `${C.db}[db]${C.reset} ⚠️  No hay respaldo en ${path.relative(ROOT, DB_BACKUP_DIR)} (falta un subdirectorio backup_<fecha> con las partes ecommerce.dump.part-*).`,
       );
     }
     return false;
@@ -467,7 +578,7 @@ function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
   }
 
   // Integridad: si existe el hash del volcado completo, se valida antes de restaurar.
-  const shaFile = path.join(DB_BACKUP_DIR, "ecommerce.dump.sha256");
+  const shaFile = path.join(backup.dir, "ecommerce.dump.sha256");
   if (fs.existsSync(shaFile)) {
     const expected = fs.readFileSync(shaFile, "utf8").trim();
     const actual = crypto.createHash("sha256").update(backup.buffer).digest("hex");
@@ -591,6 +702,104 @@ function startOsrm() {
   return false;
 }
 
+// ── Advantage / OpenADS (BD del ERP, Docker) ──────────────────
+
+/** ¿Existe la imagen Docker localmente? */
+function dockerImageExists(img) {
+  return spawnSync("docker", ["image", "inspect", img], { stdio: "ignore" }).status === 0;
+}
+
+/** ¿Existe el contenedor (corriendo o parado)? */
+function dockerContainerExists(name) {
+  return spawnSync("docker", ["container", "inspect", name], { stdio: "ignore" }).status === 0;
+}
+
+/** ¿Está corriendo ese contenedor? */
+function dockerContainerRunning(name) {
+  const r = spawnSync("docker", ["inspect", "-f", "{{.State.Running}}", name], {
+    encoding: "utf8",
+  });
+  return r.status === 0 && (r.stdout || "").trim() === "true";
+}
+
+/**
+ * Prepara el directorio de datos Advantage que se monta en el contenedor.
+ * NUNCA se monta el original (db/ADD_ANALITICA): el motor escribe locks y
+ * journal, así que la copia de trabajo debe ser escribible. Si no existe
+ * `db/ads/openads/data` se siembra desde la copia ya validada `data-test`
+ * (o, si el usuario la dejó ahí, desde db/ADD_ANALITICA).
+ */
+function ensureAdvantageData() {
+  if (dirHasContent(ADV_DATA)) return true;
+  const seeds = [ADV_DATA_SEED, path.join(ROOT, "db", "ADD_ANALITICA")];
+  for (const seed of seeds) {
+    if (!dirHasContent(seed)) continue;
+    try {
+      fs.mkdirSync(ADV_DATA, { recursive: true });
+      fs.cpSync(seed, ADV_DATA, { recursive: true });
+      if (dirHasContent(ADV_DATA)) return true;
+    } catch {
+      /* intenta la siguiente semilla */
+    }
+  }
+  return false;
+}
+
+/** Levanta el contenedor de Advantage (OpenADS) en segundo plano. */
+function startAdvantage() {
+  const { fd } = openLog("advantage");
+  const run = (args) =>
+    spawnSync("docker", args, { stdio: ["ignore", fd, fd], timeout: 120000 });
+
+  const alreadyExists = dockerContainerExists(ADV_CONTAINER);
+
+  if (!alreadyExists) {
+    if (!dockerImageExists(ADV_IMAGE)) {
+      fs.closeSync(fd);
+      console.warn(`${C.advantage}[adv]${C.reset} ⚠️  Falta la imagen ${ADV_IMAGE} (BD del ERP).`);
+      console.warn(
+        `${C.advantage}[adv]${C.reset} 💡 Constrúyela una vez:\n` +
+          `      bash db/ads/openads/build.sh\n` +
+          `      docker build -t ${ADV_IMAGE} -f db/ads/openads/Dockerfile db/ads/openads`,
+      );
+      return false;
+    }
+    if (!ensureAdvantageData()) {
+      fs.closeSync(fd);
+      console.warn(
+        `${C.advantage}[adv]${C.reset} ⚠️  No hay tablas Advantage en ${path.relative(ROOT, ADV_DATA)}.`,
+      );
+      console.warn(
+        `${C.advantage}[adv]${C.reset} 💡 Copia el ERP ahí: cp -r db/ADD_ANALITICA/. ${path.relative(ROOT, ADV_DATA)}/`,
+      );
+      return false;
+    }
+    run([
+      "run", "-d", "--name", ADV_CONTAINER,
+      "-p", `${ADV_WIRE_PORT}:6262`, "-p", `${ADV_HTTP_PORT}:8080`,
+      "-v", `${ADV_DATA}:/data`,
+      "-e", "OPENADS_ERROR_LOG_PATH=/var/log/openads",
+      ADV_IMAGE,
+      "--data", "/data", "--host", "0.0.0.0", "--port", "6262",
+      "--http_port", "8080", "--auth_user", "dsi:dsi", "--http_user", "dsi:dsi",
+    ]);
+  } else if (!dockerContainerRunning(ADV_CONTAINER)) {
+    run(["start", ADV_CONTAINER]); // sobre uno ya corriendo devuelve !=0: no es error
+  }
+  fs.closeSync(fd);
+
+  if (!dockerContainerRunning(ADV_CONTAINER)) {
+    console.warn(
+      `${C.advantage}[adv]${C.reset} ⚠️  No se pudo arrancar Advantage (detalle en logs/advantage.log).`,
+    );
+    return false;
+  }
+  console.log(
+    `${C.advantage}[adv]${C.reset} 🛒 Advantage (ERP) → Studio http://localhost:${ADV_HTTP_PORT} (dsi/dsi)`,
+  );
+  return true;
+}
+
 // ── Dependencias ───────────────────────────────────────────
 
 function dirHasContent(p) {
@@ -634,6 +843,13 @@ function ensureDeps(svc) {
     return false;
   }
 
+  if (!svc.deps.install) {
+    console.error(
+      `${color}[${svc.name}]${C.reset} ✘ no se encontró Python (python3/python/py); instálalo y reintenta — se omite este servicio`,
+    );
+    return false;
+  }
+
   for (const step of svc.deps.install) {
     const r = spawnSync(step[0], step.slice(1), {
       cwd,
@@ -651,20 +867,75 @@ function ensureDeps(svc) {
   return true;
 }
 
+/**
+ * Compila un servicio si declara `build` (backend: `npm run build`; fronts:
+ * `PM run build`). Solo lo usa `--init`; un fallo no bloquea el arranque dev.
+ */
+function buildService(svc) {
+  if (!Array.isArray(svc.build) || svc.build.length === 0) return true;
+  const color = C[svc.name] || "";
+  const cwd = path.join(ROOT, svc.buildDir || svc.dir);
+  console.log(`${color}[${svc.name}]${C.reset} 🔨 compilando...`);
+  for (const step of svc.build) {
+    const r = spawnSync(step[0], step.slice(1), {
+      cwd,
+      stdio: "inherit",
+      shell: PM_SHELL && PKG_MANAGERS.has(step[0]),
+    });
+    if (r.status !== 0) {
+      console.warn(
+        `${color}[${svc.name}]${C.reset} ⚠️  falló el build: ${step.join(" ")} (se continúa; en dev no hace falta para el servidor de desarrollo)`,
+      );
+      return false;
+    }
+  }
+  console.log(`${color}[${svc.name}]${C.reset} ✅ build listo`);
+  return true;
+}
+
+// ── Plantillas de entorno (bootstrap de --init) ─────────────
+// Si falta el archivo destino, se copia la plantilla (NUNCA sobrescribe). Los
+// valores de las plantillas son de ejemplo/local; revisa los secretos.
+const ENV_BOOTSTRAP = [
+  { dest: ["backend", ".env.development.local"], tpl: [".env.example"] },
+  { dest: ["bot", ".env"], tpl: ["bot", ".env.example"] },
+  { dest: ["Interface web admin", ".env"], tpl: ["Interface web admin", ".env.example"] },
+  {
+    dest: ["Interface movil delivery", ".env"],
+    tpl: ["Interface movil delivery", ".env.example"],
+  },
+];
+
+function ensureEnvFiles() {
+  for (const { dest, tpl } of ENV_BOOTSTRAP) {
+    const destPath = path.join(ROOT, ...dest);
+    const tplPath = path.join(ROOT, ...tpl);
+    if (fs.existsSync(destPath) || !fs.existsSync(tplPath)) continue;
+    fs.copyFileSync(tplPath, destPath);
+    console.log(
+      `${C.db}[env]${C.reset} 📄 ${dest.join("/")} creado desde ${tpl.join("/")} — revisa los valores y secretos`,
+    );
+  }
+}
+
 // ── Arranque de servicios ───────────────────────────────────
 
 function resolveCmd(svc) {
-  if (svc.name === "bot" && MODE === "prod") {
-    const py = path.join(ROOT, "bot", ".venv", "bin", "python");
+  if (svc.name === "bot") {
+    // Se invoca el intérprete del venv directamente en vez de `bash dev.sh`:
+    // así funciona igual en Linux/macOS y en Windows (venv en Scripts\).
+    const py = path.join(ROOT, svc.dir, PY_VENV_PY);
     if (!fs.existsSync(py)) {
+      const base = (PY_BASE || ["python3"]).join(" ");
       console.warn(
         `${C.bot}[bot]${C.reset} ⚠️  bot/.venv no existe — crealo con: ` +
-          `python3 -m venv bot/.venv && bot/.venv/bin/pip install -r bot/requirements.txt`,
+          `${base} -m venv bot/.venv && ${path.join("bot", PY_VENV_PY)} -m pip install -r bot/requirements.txt`,
       );
       return null;
     }
-    // Producción: uvicorn sin --reload
-    return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
+    const base = [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
+    // Dev: uvicorn con --reload; prod: sin él.
+    return MODE === "prod" ? base : [...base, "--reload"];
   }
   return MODE === "prod" ? svc.prod : svc.dev;
 }
@@ -691,7 +962,7 @@ function startService(svc) {
   const child = spawn(cmd[0], cmd.slice(1), {
     cwd: path.join(ROOT, svc.dir),
     stdio: ["ignore", fd, fd],
-    detached: true, // su propio grupo de procesos: sobrevive a la terminal
+    detached: DETACHED, // POSIX: grupo propio · Windows: sin consola (sin ventana)
     shell: process.platform === "win32",
   });
 
@@ -699,6 +970,36 @@ function startService(svc) {
     console.error(`${color}[${svc.name}]${C.reset} ✘ no se pudo arrancar: ${err.message}`);
   });
   child.unref(); // no mantener vivo al padre por el hijo
+  fs.closeSync(fd); // el hijo heredó su propio fd al archivo
+  return child.pid;
+}
+
+/**
+ * Deja corriendo la SALIDA Postgres → ERP en bucle (`sync-out.mjs --apply`).
+ * Requiere Postgres y Advantage arriba. Registra su pid para `--stop`.
+ */
+function startErpSync() {
+  const script = path.join(ROOT, "scripts-agent", "erp", "sync-out.mjs");
+  if (!fs.existsSync(script)) {
+    console.warn(
+      `${C.advantage}[erp-sync]${C.reset} ⚠️  No existe ${path.relative(ROOT, script)}; se omite.`,
+    );
+    return null;
+  }
+  console.log(
+    `${C.advantage}[erp-sync]${C.reset} 🔄 salida PG→ERP cada ${ERP_INTERVAL}s (log: logs/erp-sync.log)`,
+  );
+  const { fd } = openLog("erp-sync");
+  const child = spawn("node", [script, "--apply", `--loop=${ERP_INTERVAL}`], {
+    cwd: ROOT,
+    stdio: ["ignore", fd, fd],
+    detached: DETACHED, // POSIX: grupo propio · Windows: sin consola (sin ventana)
+    shell: process.platform === "win32",
+  });
+  child.on("error", (err) => {
+    console.error(`${C.advantage}[erp-sync]${C.reset} ✘ no se pudo arrancar: ${err.message}`);
+  });
+  child.unref();
   fs.closeSync(fd); // el hijo heredó su propio fd al archivo
   return child.pid;
 }
@@ -749,7 +1050,7 @@ function asLanHostname(ip) {
   return ip ? `${ip.replace(/\./g, "-")}.${LAN_ALIAS_DOMAIN}` : null;
 }
 
-function printUrls(services, showDb, showOsrm) {
+function printUrls(services, showDb, showOsrm, showAdvantage) {
   const ip = lanIp();
   console.log("\n━━━━━━━━━━━━━ Mercaldas — URLs ━━━━━━━━━━━━━");
   for (const svc of services) {
@@ -769,6 +1070,7 @@ function printUrls(services, showDb, showOsrm) {
   }
   if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
   if (showOsrm) console.log("  OSRM           → Rutas http://localhost:5000 (docker, Manizales)");
+  if (showAdvantage) console.log("  ADVANTAGE      → ERP http://localhost:18080 (docker, OpenADS/Studio · dsi/dsi)");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   const started = services.map((s) => s.name).join(", ");
   console.log(`Logs: logs/*.log  (${started || "sin servicios"}).`);
@@ -872,7 +1174,7 @@ async function startExpoAppBackground({ dir, port, color, label, title, hints = 
   const child = spawn(PM, ["exec", "expo", "start", "--lan", ...extraArgs], {
     cwd: dir,
     stdio: ["ignore", fd, fd],
-    detached: true, // su propio grupo: sobrevive al cierre de la terminal
+    detached: DETACHED, // POSIX: grupo propio · Windows: sin consola (sin ventana)
     env: { ...process.env, EXPO_NO_TELEMETRY: "1" },
     shell: process.platform === "win32",
   });
@@ -989,6 +1291,12 @@ function stopAll() {
   // OSRM corre como contenedor (no como proceso node): se detiene aparte.
   spawnSync("docker", ["compose", "stop"], { cwd: OSRM_DIR, stdio: "ignore" });
 
+  // Advantage (BD del ERP): contenedor propio.
+  if (dockerContainerRunning(ADV_CONTAINER)) {
+    spawnSync("docker", ["stop", ADV_CONTAINER], { stdio: "ignore" });
+    console.log(`⏹  Advantage (${ADV_CONTAINER})`);
+  }
+
   try {
     fs.unlinkSync(PIDS_FILE);
   } catch {
@@ -1003,7 +1311,6 @@ const APP_LABELS = {
   backend: "API backend (NestJS)",
   webclient: "Cliente web (servidor del cliente / APK WebView)",
   admin: "Panel admin web",
-  picking: "Picking web",
   "picking-admin": "Picking admin web",
   "delivery-admin": "Delivery admin web",
   bot: "Bot (Python)",
@@ -1030,7 +1337,6 @@ function helpDeps(name) {
 const APP_ORDER = [
   "webclient",
   "admin",
-  "picking",
   "picking-admin",
   "delivery-admin",
   "backend",
@@ -1042,10 +1348,14 @@ function printHelp() {
   out.push("🧪 Mercaldas launcher — comandos implementados (node dev.js en la raíz)");
   out.push("");
   out.push("USO");
-  out.push("  node dev.js                     → levanta TODO (BDs + backend + todos los web + bot + OSRM + delivery)");
+  out.push("  node dev.js                     → SOLO monta los servicios ya instalados (no instala ni compila)");
+  out.push("  node dev.js --init              → primer arranque: instala, compila y migra la BD (PostgreSQL)");
   out.push("  node dev.js <flags>             → solo los aplicativos pedidos (+ sus dependencias)");
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
   out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
+  out.push("  node dev.js --no-advantage      → no levantar la BD del ERP (OpenADS/Advantage)");
+  out.push("  node dev.js --erp-sync          → deja la salida PG→ERP en bucle (requiere Advantage)");
+  out.push("  node dev.js --erp-sync --erp-interval=15  → igual, cada 15 s (def. 30)");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
   out.push("  node dev.js --migrate           → restaura la BD desde db/backups/ecommerce y sale");
   out.push("  node dev.js --migrate --force   → ídem, sobrescribiendo una BD con datos");
@@ -1085,15 +1395,21 @@ function printHelp() {
   out.push("");
   out.push("BASES DE DATOS");
   out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
+  out.push("  Advantage/OpenADS (:18080 Studio · :16262 wire) — BD del ERP de Mercaldas, en Docker.");
+  out.push("    Se levanta junto a PostgreSQL (omítela con --no-advantage). Imagen: mercaldas/openads:1.09.73.");
+  out.push("    Datos: db/ads/openads/data (copia escribible). Detalle: db/ads/openads/README.md");
   out.push("  Respaldo versionado: db/backups/ecommerce (troceado) — restaurar: node dev.js --migrate");
+  out.push("  Sync ERP (conector scripts-agent/erp): `node dev.js --erp-sync` deja corriendo la salida");
+  out.push("    PG→ERP en bucle (push-customers/push-catalog/push-orders/reconcile cada 30 s). Ver docs/RUNBOOK-ERP.md");
   out.push("  Para detenerla:   cd db/docker && docker compose stop");
   out.push("                    cd delivery-routing && docker compose stop  (OSRM)");
+  out.push("                    docker stop openads-img                        (Advantage/ERP)");
   out.push("");
   out.push("EJEMPLOS");
-  out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + BD");
+  out.push("  node dev.js --delivery-admin    → panel de delivery admin + backend + OSRM + BD (rutas del mapa)");
   out.push("  node dev.js --delivery          → API real (backend + OSRM + BD) y la app delivery (Metro en background)");
   out.push("  node dev.js --picking-mobile    → app picking (Metro en background) + backend + BD");
-  out.push("  node dev.js --admin --picking   → combina aplicativos");
+  out.push("  node dev.js --admin --picking-admin   → combina aplicativos");
   out.push("  node dev.js --prod --delivery-admin");
   out.push("  node dev.js --migrate            → clon nuevo: deja la BD lista desde el respaldo");
   out.push("");
@@ -1120,7 +1436,10 @@ function printCommands() {
   rows.push(["node dev.js --prod", "modo producción (requiere builds previos)"]);
   rows.push(["node dev.js --fg", "apps Expo con el QR en la terminal (bloquea)"]);
   rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
+  rows.push(["node dev.js --init", "primer arranque: instala + compila + migra la BD (PostgreSQL)"]);
   rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
+  rows.push(["node dev.js --no-advantage", "no levantar la BD del ERP (OpenADS)"]);
+  rows.push(["node dev.js --erp-sync", "deja la salida PG→ERP en bucle (requiere Advantage)"]);
   rows.push(["node dev.js --help", "esta ayuda"]);
 
   const w = Math.max(...rows.map((r) => r[0].length));
@@ -1130,6 +1449,7 @@ function printCommands() {
   console.log("Bases de datos (docker compose stop):");
   console.log("  cd db/docker            → PostgreSQL :5432");
   console.log("  cd delivery-routing     → OSRM :5000");
+  console.log("  docker stop openads-img → Advantage/OpenADS :18080 (ERP)");
 }
 
 // ── Main ─────────────────────────────────────────────────────
@@ -1155,6 +1475,8 @@ async function main() {
   const plan = resolveSelection(); // null ⇒ todo
   const wantDb = plan === null || plan.includes("db");
   const wantOsrm = plan === null || plan.includes("osrm");
+  // Advantage (BD del ERP, OpenADS) acompaña a PostgreSQL; `--no-advantage` lo omite.
+  const wantAdvantage = wantDb && !NO_ADVANTAGE;
   const svcNames =
     plan === null
       ? SERVICES.map((s) => s.name)
@@ -1171,16 +1493,28 @@ async function main() {
   );
   if (PM === "npm")
     console.warn(
-      `${C.picking}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes en los fronts.`,
+      `${C.bot}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm como gestor de paquetes en los fronts.`,
     );
   console.log("");
 
-  // 1. Instalar dependencias faltantes de los servicios elegidos.
+  // Por defecto `node dev.js` SOLO monta los servicios (no instala, no compila
+  // ni migra la BD). El primer arranque desde cero se hace con `--init`.
   const sinDeps = new Set();
-  for (const svc of services) {
-    if (!ensureDeps(svc)) sinDeps.add(svc.name);
+  if (INIT) {
+    console.log(`🧱 --init: primer arranque → instalando dependencias y compilando...\n`);
+    ensureEnvFiles();
+    for (const svc of services) {
+      if (!ensureDeps(svc)) sinDeps.add(svc.name);
+    }
+    for (const svc of services) {
+      if (!sinDeps.has(svc.name)) buildService(svc);
+    }
+    console.log("");
+  } else {
+    console.log(
+      `ℹ️  Se montan los servicios ya instalados (primer arranque desde cero: node dev.js --init).\n`,
+    );
   }
-  console.log("");
 
   if (wantDb) {
     startDatabase();
@@ -1189,13 +1523,25 @@ async function main() {
       console.warn(
         `${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`,
       );
+    } else if (INIT) {
+      // Primer arranque: monta el respaldo versionado en PostgreSQL (solo la BD).
+      restoreDatabaseIfNeeded({ force: FORCE, explicit: true });
     } else {
-      // Clon nuevo (BD sin tabla `products`): monta el respaldo versionado.
-      restoreDatabaseIfNeeded();
+      console.log(
+        `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD (usa --init, o node dev.js --migrate).`,
+      );
     }
   }
   if (!wantDb)
     console.log(`${C.db}[db]${C.reset} 🚫 PostgreSQL no iniciado (esta selección no lo necesita).`);
+
+  if (wantAdvantage) {
+    if (startAdvantage() && !(await waitForPort(ADV_HTTP_PORT, 90000))) {
+      console.warn(
+        `${C.advantage}[adv]${C.reset} ⚠️  Advantage no responde en :${ADV_HTTP_PORT} (revisa logs/advantage.log).`,
+      );
+    }
+  }
 
   if (wantOsrm) {
     startOsrm();
@@ -1222,6 +1568,18 @@ async function main() {
     }
   }
 
+  // Salida Postgres → ERP en bucle, opcional con --erp-sync (necesita Advantage).
+  if (ERP_SYNC) {
+    if (!wantAdvantage) {
+      console.warn(
+        `${C.advantage}[erp-sync]${C.reset} ⚠️  --erp-sync necesita Advantage; se omite (--no-advantage).`,
+      );
+    } else {
+      const pid = startErpSync();
+      if (pid) registerPid("erp-sync", pid);
+    }
+  }
+
   // No liberar la terminal hasta que el backend esté montado: si se cierra
   // antes, el usuario no puede ver si arrancó bien o falló al revisar logs.
   const backendSvc = services.find((s) => s.name === "backend");
@@ -1240,7 +1598,7 @@ async function main() {
     }
   }
 
-  printUrls(services, wantDb, wantOsrm);
+  printUrls(services, wantDb, wantOsrm, wantAdvantage);
 
   if (MODE === "dev") {
     if (wantDelivery) {
@@ -1291,4 +1649,9 @@ async function main() {
   process.exit(0); // cierra el script; los servicios siguen en segundo plano
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+// Exportado solo para pruebas (dev.js se ejecuta como script).
+module.exports = { startAdvantage, ensureAdvantageData };

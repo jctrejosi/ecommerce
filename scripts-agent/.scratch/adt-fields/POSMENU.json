@@ -1,0 +1,51 @@
+{
+  "table": "POSMENU",
+  "source": "db/ADD_ANALITICA/POSMENU.ADT",
+  "bytes": 11440,
+  "recordCount": 251,
+  "recordLength": 40,
+  "headerLength": 1400,
+  "fieldCount": 5,
+  "fields": [
+    {
+      "name": "OPCION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 9,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "NIVEL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 34,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "USUARIO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 35,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "SALE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 39,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

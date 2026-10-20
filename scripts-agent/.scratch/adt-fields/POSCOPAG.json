@@ -1,0 +1,107 @@
+{
+  "table": "POSCOPAG",
+  "source": "db/ADD_ANALITICA/POSCOPAG.ADT",
+  "bytes": 3872,
+  "recordCount": 8,
+  "recordLength": 134,
+  "headerLength": 2800,
+  "fieldCount": 12,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 7,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "NIT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 37,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "DIREC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 52,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "TELEF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 82,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CODDCTO1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 102,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "DCTO1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 104,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CODDCTO2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 112,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "DCTO2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 114,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 122,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "LISTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 132,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "FRACCION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 133,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

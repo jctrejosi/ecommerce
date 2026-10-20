@@ -29,7 +29,7 @@ dotenv.config({ path: path.join(backendDir, '.env.development.local') });
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ecommerce';
-const IMG_DIR = path.join(ROOT, 'db', 'images_products');
+const IMG_DIR = path.join(ROOT, 'db', 'images_static', 'products', '_sin_producto');
 const ADT = path.join(ROOT, 'db', 'ADD_CONTAB', 'TIDSAL.adt');
 
 const APPLY = process.argv.includes('--apply');

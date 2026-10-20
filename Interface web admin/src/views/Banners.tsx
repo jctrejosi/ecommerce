@@ -4,7 +4,7 @@ import {
   Plus, Edit, SquarePen, Trash2, X, Loader2, Filter, GripVertical,
   Image, Type, Palette, Link, Calendar, Eye, ChevronLeft, ChevronRight,
   LayoutTemplate, SlidersHorizontal, Zap, Truck, ShieldCheck, Clock, Megaphone,
-  Layers, Search, Package, ArrowUp, ArrowDown, Check, Save, AlertTriangle, Tag, Store, Star,
+  Search, Package, ArrowUp, ArrowDown, Check, Save, AlertTriangle, Tag, Store, Star,
 } from "lucide-react";
 import {
   bannersService,
@@ -2828,234 +2828,6 @@ function FooterLandingManager({ onSaved }: { onSaved?: () => void }) {
   );
 }
 
-// ── Product Types Selector ──
-interface LandingProductType { id: number; code: string; name: string; count: number; isActive: boolean; selected: boolean; }
-
-function ProductTypeEditor({
-  productTypes,
-  onSaved,
-}: {
-  productTypes: LandingProductType[];
-  onSaved: () => void;
-}) {
-  const [items, setItems] = useState(productTypes);
-  const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
-  const [sortKey, setSortKey] = useState<"name" | "count">("name");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
-  const [filterActive, setFilterActive] = useState(true);
-  const [filterInactive, setFilterInactive] = useState(true);
-  const [batchBusy, setBatchBusy] = useState(false);
-  const [deleteConfirm, setDeleteConfirm] = useState(false);
-  const API_BASE = resolveApiBaseUrl();
-
-  const toggleSelected = (code: string) => {
-    setItems((prev) => prev.map((t) => (t.code === code ? { ...t, selected: !t.selected } : t)));
-  };
-
-  const toggleActive = async (pt: LandingProductType) => {
-    const newActive = !pt.isActive;
-    try {
-      await fetch(`${API_BASE}/admin/landing/product-types/${pt.id}/active`, {
-        method: "PATCH", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ isActive: newActive }),
-      });
-      setItems((prev) => prev.map((t) => (t.id === pt.id ? { ...t, isActive: newActive } : t)));
-    } catch (e) { console.error(e); }
-  };
-
-  const allSelected = items.length > 0 && items.every((t) => t.selected);
-  const selectedItems = items.filter((t) => t.selected);
-
-  const toggleSelectAll = () => {
-    setItems((prev) => prev.map((t) => ({ ...t, selected: !allSelected })));
-  };
-
-  const setSelectedActive = async (isActive: boolean) => {
-    const targets = items.filter((t) => t.selected);
-    if (targets.length === 0) return;
-    setBatchBusy(true);
-    try {
-      for (const pt of targets) {
-        await fetch(`${API_BASE}/admin/landing/product-types/${pt.id}/active`, {
-          method: "PATCH", credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ isActive }),
-        });
-        setItems((prev) => prev.map((t) => (t.id === pt.id ? { ...t, isActive } : t)));
-      }
-    } catch (e) { console.error(e); }
-    finally { setBatchBusy(false); }
-  };
-
-  const deleteSelected = async () => {
-    const targets = items.filter((t) => t.selected);
-    if (targets.length === 0) return;
-    setBatchBusy(true);
-    try {
-      for (const pt of targets) {
-        await fetch(`${API_BASE}/admin/catalog/product-types/${pt.id}`, {
-          method: "DELETE", credentials: "include",
-        });
-      }
-      setItems((prev) => prev.filter((t) => !t.selected));
-      setDeleteConfirm(false);
-    } catch (e) { console.error(e); }
-    finally { setBatchBusy(false); }
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    try {
-      const codes = items.filter((t) => t.selected).map((t) => t.code);
-      const API_BASE = resolveApiBaseUrl();
-      await fetch(`${API_BASE}/admin/landing/product-types`, {
-        method: "PUT", credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ codes }),
-      });
-      onSaved();
-    } catch (e) { console.error(e); }
-    finally { setSaving(false); }
-  };
-
-  const q = search.trim().toLowerCase();
-  const filtered = items
-    .filter((t) => {
-      const matchesSearch = !q || t.name.toLowerCase().includes(q) || t.code.toLowerCase().includes(q);
-      const matchesStatus =
-        (!filterActive && !filterInactive) ||
-        (filterActive && t.isActive) ||
-        (filterInactive && !t.isActive);
-      return matchesSearch && matchesStatus;
-    })
-    .sort((a, b) => {
-      if (sortKey === "count") {
-        return sortDir === "desc" ? b.count - a.count : a.count - b.count;
-      }
-      return a.name.localeCompare(b.name, "es");
-    });
-
-  return (
-    <div className="flex-1 min-h-0 flex flex-col">
-        <div className="px-6 pt-4 pb-1 space-y-3 shrink-0">
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar tipo de producto..."
-              className="w-full pl-9 pr-3 py-2 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <select
-              value={`${sortKey}-${sortDir}`}
-              onChange={(e) => {
-                const [k, d] = e.target.value.split("-");
-                setSortKey(k as "name" | "count");
-                setSortDir(d as "asc" | "desc");
-              }}
-              className="flex-1 px-3 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-amber-300"
-            >
-              <option value="name-asc">Orden: Nombre (A–Z)</option>
-              <option value="count-desc">Más productos primero</option>
-              <option value="count-asc">Menos productos primero</option>
-            </select>
-            <div className="flex items-center gap-3 px-3 py-2 bg-white border border-gray-200 rounded-lg shrink-0">
-              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={filterActive}
-                  onChange={(e) => setFilterActive(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-gray-300 accent-green-500"
-                />
-                Activos
-              </label>
-              <label className="flex items-center gap-1.5 text-xs text-gray-600 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={filterInactive}
-                  onChange={(e) => setFilterInactive(e.target.checked)}
-                  className="w-3.5 h-3.5 rounded border-gray-300 accent-red-500"
-                />
-                Inactivos
-              </label>
-            </div>
-          </div>
-        </div>
-        <div className="flex items-center justify-between px-6 py-2 border-t border-gray-100 shrink-0">
-          <label className="flex items-center gap-2 text-xs text-gray-500 cursor-pointer select-none">
-            <input type="checkbox" checked={allSelected} onChange={toggleSelectAll} className="w-3.5 h-3.5 rounded border-gray-300 text-amber-500" />
-            Seleccionar todos
-          </label>
-          {selectedItems.length > 0 && (
-            <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-semibold text-amber-700 mr-1">{selectedItems.length} seleccionados</span>
-              <button onClick={() => setSelectedActive(true)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50">Activar</button>
-              <button onClick={() => setSelectedActive(false)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 disabled:opacity-50">Inactivar</button>
-              <button onClick={() => setDeleteConfirm(true)} disabled={batchBusy} className="px-2 py-1 text-[11px] font-semibold text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 disabled:opacity-50">Eliminar</button>
-            </div>
-          )}
-        </div>
-        <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-1">
-          {filtered.map((t) => (
-            <div key={t.code} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-colors">
-              <label className="flex items-center gap-3 flex-1 cursor-pointer">
-                <input type="checkbox" checked={t.selected} onChange={() => toggleSelected(t.code)} className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300" />
-                <span className={`flex-1 text-sm ${t.isActive ? 'text-gray-700' : 'text-gray-300 line-through'}`}>{t.name}</span>
-                <span className="text-xs text-gray-400">{t.count} productos</span>
-              </label>
-              {/* isActive toggle switch */}
-              <button
-                onClick={(e) => { e.stopPropagation(); toggleActive(t); }}
-                className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 cursor-pointer ${t.isActive ? 'bg-green-500' : 'bg-red-400'}`}
-              >
-                <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${t.isActive ? 'left-4' : 'left-0.5'}`} />
-              </button>
-            </div>
-          ))}
-          {filtered.length === 0 && (
-            <p className="text-center text-xs text-gray-400 py-8">Sin resultados</p>
-          )}
-        </div>
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 shrink-0">
-          <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl">
-            {saving && <Loader2 size={14} className="animate-spin" />}Guardar selección
-          </button>
-        </div>
-
-      {/* Confirmación de eliminación masiva */}
-      {deleteConfirm && (
-        <>
-          <div className="fixed inset-0 z-[60] bg-black/40" onClick={() => setDeleteConfirm(false)} />
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-full bg-amber-50 flex items-center justify-center">
-                  <AlertTriangle size={18} className="text-amber-500" />
-                </div>
-                <div><h3 className="font-bold text-sm text-gray-900">Eliminar tipos seleccionados</h3></div>
-              </div>
-              <p className="text-sm text-gray-600 mb-2">
-                ¿Eliminar <span className="font-semibold">{selectedItems.length}</span> tipo(s) de producto?
-              </p>
-              <p className="text-xs text-gray-500 mb-5">
-                Los productos asociados quedarán sin tipo asignado. Esta acción no se puede deshacer.
-              </p>
-              <div className="flex gap-2">
-                <button onClick={() => setDeleteConfirm(false)} disabled={batchBusy} className="flex-1 py-2.5 rounded-xl text-sm font-semibold border border-gray-200 hover:bg-gray-50 transition-colors text-gray-500">Cancelar</button>
-                <button onClick={deleteSelected} disabled={batchBusy} className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-red-500 text-white hover:bg-red-600 transition-colors disabled:opacity-50">Eliminar</button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
 // ── Featured Products Manager ──
 function FeaturedProductsManager() {
   const [tabs, setTabs] = useState<FeaturedTab[]>([]);
@@ -3392,7 +3164,6 @@ function useHomeData() {
   const [promos, setPromos] = useState<Banner[]>([]);
   const [benefits, setBenefits] = useState<Banner[]>([]);
   const [filters, setFilters] = useState<FilterConfig[]>([]);
-  const [landingTypes, setLandingTypes] = useState<LandingProductType[]>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
@@ -3408,17 +3179,13 @@ function useHomeData() {
       setPromos(p);
       setBenefits(b);
       setFilters(f);
-
-      const API_BASE = resolveApiBaseUrl();
-      const res = await fetch(`${API_BASE}/admin/landing/product-types`, { credentials: "include" });
-      if (res.ok) setLandingTypes(await res.json());
     } catch (e) { console.error(e); }
     finally { setLoading(false); }
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  return { slides, promos, benefits, filters, landingTypes, loading, fetchData };
+  return { slides, promos, benefits, filters, loading, fetchData };
 }
 
 function HomeLoading() {
@@ -3492,24 +3259,6 @@ export function HomePromosSection() {
         </div>
       }>
       <PromoManager slides={promos} filters={filters} onSaved={fetchData} />
-    </HomeSection>
-  );
-}
-
-export function HomeProductTypesSection() {
-  const { landingTypes, loading, fetchData } = useHomeData();
-  if (loading) return <HomeLoading />;
-  return (
-    <HomeSection icon={Layers} iconClass="bg-purple-100 text-purple-600" title="Tipos de Producto" subtitle="Selecciona cuáles mostrar en la landing"
-      fill
-      stats={
-        <div className="flex gap-6 text-sm">
-          <div><span className="font-bold text-gray-900">{landingTypes.length}</span> <span className="text-gray-400 text-xs">tipos</span></div>
-          <div><span className="font-bold text-green-600">{landingTypes.filter((t) => t.isActive).length}</span> <span className="text-gray-400 text-xs">activos</span></div>
-          <div><span className="font-bold text-red-500">{landingTypes.filter((t) => !t.isActive).length}</span> <span className="text-gray-400 text-xs">inactivos</span></div>
-        </div>
-      }>
-      <ProductTypeEditor productTypes={landingTypes} onSaved={fetchData} />
     </HomeSection>
   );
 }

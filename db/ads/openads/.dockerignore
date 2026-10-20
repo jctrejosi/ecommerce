@@ -1,0 +1,6 @@
+build/
+data-test/
+data/
+*.log
+*.json
+!insert-domdia.json

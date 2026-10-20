@@ -216,8 +216,45 @@ export class CustomerAuthService {
     return this.buildAuthResponse(customer);
   }
 
-  /** `redirect_uri` registrado en Google Cloud Console para el flujo `code`. */
-  private static readonly GOOGLE_REDIRECT_URI = 'http://localhost:4173';
+  /**
+   * Resuelve y valida el `redirect_uri` del flujo `code`.
+   *
+   * Debe coincidir exactamente con el enviado a Google en la autorización. Se
+   * aceptan el valor configurado (`GOOGLE_REDIRECT_URI`), la lista extra
+   * (`GOOGLE_REDIRECT_URIS`, separada por comas), el loopback de desarrollo
+   * (`http://localhost:4173`) y el origen de la propia petición (la web se
+   * sirve en el mismo origen que el API).
+   */
+  private resolveGoogleRedirectUri(
+    requested: string | undefined,
+    requestOrigin: string | undefined,
+  ): string {
+    const fallback = 'http://localhost:4173';
+    const configured = (
+      this.configService.get<string>('GOOGLE_REDIRECT_URI') || ''
+    ).trim();
+    const extra = (this.configService.get<string>('GOOGLE_REDIRECT_URIS') || '')
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const origin = (() => {
+      if (!requestOrigin) return '';
+      try {
+        return new URL(requestOrigin).origin;
+      } catch {
+        return '';
+      }
+    })();
+    const allowed = new Set(
+      [fallback, configured, ...extra, origin].filter(Boolean),
+    );
+    const candidate = (requested || configured || fallback).trim();
+    if (!allowed.has(candidate)) {
+      this.logger.warn(`Google redirect_uri no permitido: ${candidate}`);
+      throw new BadRequestException('redirect_uri no permitido');
+    }
+    return candidate;
+  }
 
   /**
    * Login con Google por **flujo de código**: el cliente devuelve el `code` que
@@ -226,6 +263,7 @@ export class CustomerAuthService {
    */
   async socialLoginWithGoogleCode(
     dto: CustomerGoogleCodeDto,
+    requestOrigin?: string,
   ): Promise<CustomerAuthResponse> {
     const clientId = this.configService.get<string>('GOOGLE_CLIENT_ID');
     const clientSecret = this.configService.get<string>('GOOGLE_CLIENT_SECRET');
@@ -239,8 +277,10 @@ export class CustomerAuthService {
       code: dto.code,
       client_id: clientId,
       client_secret: clientSecret,
-      redirect_uri:
-        dto.redirectUri ?? CustomerAuthService.GOOGLE_REDIRECT_URI,
+      redirect_uri: this.resolveGoogleRedirectUri(
+        dto.redirectUri,
+        requestOrigin,
+      ),
       grant_type: 'authorization_code',
     });
 

@@ -1,0 +1,83 @@
+{
+  "table": "NOMCALEN",
+  "source": "db/ADD_ANALITICA/NOMCALEN.ADT",
+  "bytes": 255343,
+  "recordCount": 2557,
+  "recordLength": 99,
+  "headerLength": 2200,
+  "fieldCount": 9,
+  "fields": [
+    {
+      "name": "DIA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "NOMDIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "OBSERVA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 22,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "FESTIVO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 72,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CIERRE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 73,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CANT1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 74,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PROM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 82,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "SEMANA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 83,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "SEMANA2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 91,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

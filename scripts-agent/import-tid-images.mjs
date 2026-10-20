@@ -30,7 +30,7 @@ dotenv.config({ path: path.join(backendDir, '.env.development.local') });
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ecommerce';
-const IMG_DIR = fileURLToPath(new URL('../db/images_products/', import.meta.url));
+const IMG_DIR = fileURLToPath(new URL('../db/images_static/products/', import.meta.url));
 
 const DRY = process.argv.includes('--dry-run');
 const limitArg = process.argv.find((a) => a.startsWith('--limit='));

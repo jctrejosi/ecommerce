@@ -3447,6 +3447,8 @@ export const userBranches = pgTable(
       columns: [table.userId, table.branchId],
       name: 'user_branches_pkey',
     }),
+    // Un picker pertenece a una sola sucursal: se impone unicidad por usuario.
+    uniqueIndex('user_branches_user_id_key').on(table.userId),
   ],
 );
 

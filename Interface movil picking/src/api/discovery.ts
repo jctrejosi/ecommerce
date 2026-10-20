@@ -6,8 +6,10 @@ const PROBE_PATH = "/api-status";
 
 /**
  * Prueba si en `url` responde el backend (GET /api-status → { status: "ok" }).
+ * El timeout es holgado porque en producción la URL es HTTPS por internet
+ * (handshake TLS + latencia móvil pueden superar 1 s).
  */
-export async function probeBackend(url: string, timeoutMs = 700): Promise<boolean> {
+export async function probeBackend(url: string, timeoutMs = 3000): Promise<boolean> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {

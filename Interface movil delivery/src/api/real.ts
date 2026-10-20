@@ -66,6 +66,17 @@ export const realApi: DeliveryApi = {
     }
   },
 
+  async getAvailableOrders() {
+    try {
+      const res = await http.get("/orders/available");
+      return unwrap<DeliveryOrder[]>(res.data);
+    } catch (err) {
+      throw new Error(
+        apiErrorMessage(err, "No se pudieron cargar los pedidos nuevos."),
+      );
+    }
+  },
+
   async getOrder(id) {
     try {
       const res = await http.get(`/orders/${id}`);

@@ -16,6 +16,7 @@ import {
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { SendPickerMessageDto } from './dto/send-picker-message.dto';
 import { PickerChatService } from './picker-chat.service';
 import { PickingService } from './picking.service';
@@ -30,15 +31,22 @@ export class PickingController {
 
   /** Cola de picking: pedidos que entran al alistamiento (o filtrados por estado). */
   @Get('orders')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Cola de pedidos para picking (nuevo|preparando|completado|todos)' })
-  async queue(@Query('status') status?: string) {
-    return this.pickingService.queue(status);
+  async queue(
+    @CurrentUser('sub') userId: bigint | null,
+    @Query('status') status?: string,
+  ) {
+    return this.pickingService.queue(status, userId != null ? Number(userId) : undefined);
   }
 
   @Get('orders/unreviewed-count')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Cantidad de pedidos sin revisar en la cola' })
-  async unreviewedCount() {
-    return this.pickingService.unreviewedCount();
+  async unreviewedCount(@CurrentUser('sub') userId: bigint | null) {
+    return this.pickingService.unreviewedCount(
+      userId != null ? Number(userId) : undefined,
+    );
   }
 
   /** Historial del picker autenticado (pedidos que alistó), paginado de 10. */
@@ -96,6 +104,21 @@ export class PickingController {
     } catch (e) {
       if (e instanceof NotFoundException || e instanceof ConflictException) throw e;
       throw new BadRequestException(e instanceof Error ? e.message : 'Error al escanear');
+    }
+  }
+
+  /** Confirmación manual: marca el item como alistado sin escanear (check). */
+  @Post('orders/:id/items/:itemId/pick')
+  @ApiOperation({ summary: 'Marcar un item como alistado sin escanear (check manual)' })
+  async pickItem(
+    @Param('id', ParseIntPipe) id: number,
+    @Param('itemId', ParseIntPipe) itemId: number,
+  ) {
+    try {
+      return await this.pickingService.pickItem(id, itemId);
+    } catch (e) {
+      if (e instanceof NotFoundException || e instanceof ConflictException) throw e;
+      throw new BadRequestException(e instanceof Error ? e.message : 'Error al confirmar');
     }
   }
 

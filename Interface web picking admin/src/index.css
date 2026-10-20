@@ -5,7 +5,8 @@
  * Temas del panel de picking.
  *
  * Todo el color se resuelve con estas variables CSS y se cambia con
- * `document.documentElement.dataset.theme = "<preset>"` (ver `src/theme.ts`).
+ * `document.documentElement.dataset.theme = "<color>"` y
+ * `dataset.mode = "light|dark"` (ver `src/theme.ts`).
  * Para no tocar cientos de clases, se re-mapean los utilitarios que ya usa el
  * panel en el bloque `@theme inline`:
  *   - `white/NN` → tinta del tema (`--ink`), que en claro es oscura.
@@ -26,6 +27,8 @@
   --success: #22c55e;
   --success-text: #4ade80;
   --scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  /* Banda del footer de copyright: oscura en temas oscuros. */
+  --footer-bg: #111827;
 }
 
 [data-theme='blue'] {
@@ -46,19 +49,35 @@
   --on-accent: #ffffff;
 }
 
-[data-theme='light'] {
+/*
+ * Modo claro: se combina con el color elegido (`data-theme`). Re-mapea las
+ * superficies e ink a claro y CONSERVA el acento, así que "Ámbar + Claro" y
+ * "Azul + Claro" son temas distintos. Va después de los colores para ganar en
+ * el orden de cascada (misma especificidad).
+ */
+[data-mode='light'] {
   --ink: #111827;
   --app: #f4f5f7;
   --surface: #ffffff;
   --surface-alt: #eef0f3;
-  --accent: #f59e0b;
-  --accent-soft: #d97706;
-  --on-accent: #1f2937;
   --danger: #dc2626;
   --danger-text: #dc2626;
   --success: #16a34a;
   --success-text: #15803d;
   --scrollbar-thumb: rgba(0, 0, 0, 0.18);
+  /* En claro la banda del footer también va clara (texto oscuro encima). */
+  --footer-bg: #e4e7ec;
+}
+
+/* Sobre blanco, el acento "soft" (texto/hover) necesita oscurecerse. */
+[data-mode='light'][data-theme='amber'] {
+  --accent-soft: #b45309;
+}
+[data-mode='light'][data-theme='blue'] {
+  --accent-soft: #2563eb;
+}
+[data-mode='light'][data-theme='violet'] {
+  --accent-soft: #7c3aed;
 }
 
 /* Tokens semánticos expuestos a Tailwind. `inline` hace que las utilidades
@@ -122,4 +141,20 @@ body,
 }
 ::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/* Estantería resaltada en la miniatura del mapa (producto seleccionado). */
+@keyframes shelf-blink {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.95), 0 0 10px 2px rgba(251, 191, 36, 0.55);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 0 6px rgba(251, 191, 36, 0);
+  }
+}
+.shelf-blink {
+  animation: shelf-blink 1s ease-in-out infinite;
 }

@@ -10,6 +10,7 @@ import {
   HttpCode,
   HttpStatus,
   Res,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -22,7 +23,7 @@ import {
   ApiConflictResponse,
   ApiBadRequestResponse,
 } from '@nestjs/swagger';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import { CustomerAuthService } from './customer-auth.service';
 import { CustomerLoginDto } from './dto/customer-login.dto';
 import { CustomerRegisterDto } from './dto/customer-register.dto';
@@ -114,10 +115,13 @@ export class CustomerAuthController {
   @ApiUnauthorizedResponse({ description: 'Código inválido o expirado' })
   async socialLoginGoogleCode(
     @Body() dto: CustomerGoogleCodeDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
   ) {
-    const result =
-      await this.customerAuthService.socialLoginWithGoogleCode(dto);
+    const result = await this.customerAuthService.socialLoginWithGoogleCode(
+      dto,
+      request.headers.origin,
+    );
     this.setAuthCookies(response, result.accessToken, result.refreshToken);
     return result;
   }

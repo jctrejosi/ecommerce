@@ -187,7 +187,7 @@ export class ShelvesService {
   }
 
   /** Categorías activas para asociar a las estanterías (selector del admin). */
-  async categories() {
+  async categories(branchId?: number | null) {
     const rows = await this.db
       .select({
         id: categories.id,
@@ -200,26 +200,56 @@ export class ShelvesService {
       .orderBy(asc(categories.displayOrder), asc(categories.name));
 
     const ids = rows.map((r) => Number(r.id));
-    const countRows =
-      ids.length > 0
-        ? await this.db
-            .select({
-              categoryId: productCategories.categoryId,
-              n: sql<number>`COUNT(*)::int`,
-            })
-            .from(productCategories)
-            .where(inArray(productCategories.categoryId, ids))
-            .groupBy(productCategories.categoryId)
-        : [];
-    const countBy = new Map(countRows.map((c) => [Number(c.categoryId), c.n]));
 
-    return rows.map((r) => ({
+    // Con sucursal: cuenta solo los productos de la categoría con inventario en
+    // esa sucursal (su surtido). Sin sucursal: cuenta global del catálogo.
+    let countBy: Map<number, number>;
+    if (ids.length > 0 && branchId != null) {
+      const countRows = await this.db
+        .select({
+          categoryId: productCategories.categoryId,
+          n: sql<number>`COUNT(DISTINCT ${productCategories.productId})::int`,
+        })
+        .from(productCategories)
+        .innerJoin(
+          productVariants,
+          eq(productVariants.productId, productCategories.productId),
+        )
+        .innerJoin(
+          inventory,
+          and(
+            eq(inventory.productVariantId, productVariants.id),
+            eq(inventory.branchId, branchId),
+            sql`${inventory.stock} > 0`,
+          ),
+        )
+        .where(inArray(productCategories.categoryId, ids))
+        .groupBy(productCategories.categoryId);
+      countBy = new Map(countRows.map((c) => [Number(c.categoryId), c.n]));
+    } else if (ids.length > 0) {
+      const countRows = await this.db
+        .select({
+          categoryId: productCategories.categoryId,
+          n: sql<number>`COUNT(*)::int`,
+        })
+        .from(productCategories)
+        .where(inArray(productCategories.categoryId, ids))
+        .groupBy(productCategories.categoryId);
+      countBy = new Map(countRows.map((c) => [Number(c.categoryId), c.n]));
+    } else {
+      countBy = new Map();
+    }
+
+    const mapped = rows.map((r) => ({
       id: Number(r.id),
       name: r.name,
       parentId: r.parentId != null ? Number(r.parentId) : null,
       level: r.level ?? 0,
       productCount: countBy.get(Number(r.id)) ?? 0,
     }));
+
+    // Con sucursal: solo las categorías que tienen productos en esa sucursal.
+    return branchId != null ? mapped.filter((c) => c.productCount > 0) : mapped;
   }
 
   /**
@@ -280,11 +310,13 @@ export class ShelvesService {
             eq(productVariants.productId, productCategories.productId),
           )
           .innerJoin(products, eq(products.id, productVariants.productId))
-          .leftJoin(
+          // Solo productos del surtido de la sucursal (con inventario ahí).
+          .innerJoin(
             inventory,
             and(
               eq(inventory.productVariantId, productVariants.id),
               eq(inventory.branchId, branchId),
+              sql`${inventory.stock} > 0`,
             ),
           )
           .leftJoin(
@@ -551,16 +583,39 @@ export class ShelvesService {
    * categoría es la que se asocia a las estanterías. La vista de Productos es
    * informativa, así que aquí se resuelve esa relación.
    */
-  async listProducts(branchId: number, search?: string) {
+  async listProducts(
+    branchId: number,
+    search?: string,
+    limit = 60,
+    offset = 0,
+  ) {
     await this.assertBranchExists(branchId);
 
-    const conditions: SQL[] = [];
+    const lim = Math.min(Math.max(limit, 1), 300);
+    const off = Math.max(offset, 0);
+
+    const conditions: SQL[] = [sql`${inventory.stock} > 0`];
     if (search && search.trim()) {
       const q = `%${search.trim()}%`;
       conditions.push(
         sql`(${products.name} ILIKE ${q} OR ${productVariants.sku} ILIKE ${q} OR ${productVariants.barcode} ILIKE ${q})`,
       );
     }
+    const where = and(...conditions);
+
+    // Total del surtido de la sucursal (independiente de la página).
+    const [countRow] = await this.db
+      .select({ total: sql<number>`COUNT(*)::int` })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .innerJoin(
+        inventory,
+        and(
+          eq(inventory.productVariantId, productVariants.id),
+          eq(inventory.branchId, branchId),
+        ),
+      )
+      .where(where);
 
     const rows = await this.db
       .select({
@@ -573,16 +628,19 @@ export class ShelvesService {
       })
       .from(productVariants)
       .innerJoin(products, eq(products.id, productVariants.productId))
-      .leftJoin(
+      // Solo productos con inventario en la sucursal: el catálogo completo es
+      // global, pero cada sucursal maneja su propio surtido.
+      .innerJoin(
         inventory,
         and(
           eq(inventory.productVariantId, productVariants.id),
           eq(inventory.branchId, branchId),
         ),
       )
-      .where(conditions.length > 0 ? and(...conditions) : undefined)
-      .orderBy(asc(products.name))
-      .limit(2000);
+      .where(where)
+      .orderBy(asc(products.name), asc(productVariants.id))
+      .limit(lim)
+      .offset(off);
 
     const productIds = [...new Set(rows.map((r) => Number(r.productId)))];
 
@@ -644,25 +702,28 @@ export class ShelvesService {
       }
     }
 
-    return rows.map((r) => {
-      const pid = Number(r.productId);
-      const cats = catsByProduct.get(pid) ?? [];
-      // Estanterías derivadas: unión de las de sus categorías, sin repetir.
-      const shelfMap = new Map<number, { id: number; code: string; name: string; color: string }>();
-      for (const c of cats) {
-        for (const s of shelvesByCategory.get(c.id) ?? []) shelfMap.set(s.id, s);
-      }
-      return {
-        productVariantId: Number(r.productVariantId),
-        productId: pid,
-        productName: r.productName,
-        sku: r.sku,
-        barcode: r.barcode,
-        stock: r.stock ?? 0,
-        categories: cats,
-        shelves: [...shelfMap.values()],
-      };
-    });
+    return {
+      total: countRow?.total ?? 0,
+      products: rows.map((r) => {
+        const pid = Number(r.productId);
+        const cats = catsByProduct.get(pid) ?? [];
+        // Estanterías derivadas: unión de las de sus categorías, sin repetir.
+        const shelfMap = new Map<number, { id: number; code: string; name: string; color: string }>();
+        for (const c of cats) {
+          for (const s of shelvesByCategory.get(c.id) ?? []) shelfMap.set(s.id, s);
+        }
+        return {
+          productVariantId: Number(r.productVariantId),
+          productId: pid,
+          productName: r.productName,
+          sku: r.sku,
+          barcode: r.barcode,
+          stock: r.stock ?? 0,
+          categories: cats,
+          shelves: [...shelfMap.values()],
+        };
+      }),
+    };
   }
 
   /** Asignar (upsert) la ubicación de un producto en una sucursal. */

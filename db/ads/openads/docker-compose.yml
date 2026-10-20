@@ -1,0 +1,44 @@
+# Mercaldas — OpenADS en Docker
+#
+# Monta la base Advantage (tablas .adt/.dbf) con un servidor compatible ADS
+# open-source, sin depender del instalador de SAP (descontinuado).
+#
+#   docker compose build        # compila OpenADS (una vez, ~5-10 min)
+#   docker compose up -d
+#   curl -u dsi:dsi http://localhost:18080/api/health
+#
+name: mercaldas-openads
+
+services:
+  openads:
+    build:
+      context: .
+      args:
+        OPENADS_WITH_TLS: "OFF"      # ON si se quiere tls:// (vendoriza mbedtls)
+        OPENADS_WITH_HTTP: "ON"      # consola web Studio
+    image: mercaldas/openads:1.09.73
+    container_name: mercaldas_openads
+    restart: unless-stopped
+    ports:
+      - "16262:6262"   # protocolo wire de ADS (para clientes con ace*.dll)
+      - "18080:8080"   # consola web Studio (REST + SQL)
+    volumes:
+      # Copia ESCRIBIBLE de las tablas: el motor crea locks y journal.
+      # NUNCA montar aquí el directorio original en solo-lectura.
+      - ./data:/data
+    environment:
+      # El motor no tiene env para la auth: se pasa por command.
+      OPENADS_ERROR_LOG_PATH: /var/log/openads
+    command:
+      - "--data"
+      - "/data"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "6262"
+      - "--http_port"
+      - "8080"
+      - "--auth_user"
+      - "dsi:dsi"
+      - "--http_user"
+      - "dsi:dsi"

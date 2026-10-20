@@ -78,7 +78,7 @@ export function OrdersPanel({
           onSelectOrder(null);
         }}
       />
-      <div className="relative ml-auto w-full max-w-md bg-white h-full flex flex-col shadow-2xl">
+      <div className="relative ml-auto w-full max-w-md bg-white h-full flex flex-col shadow-2xl pb-[var(--safe-bottom)]">
         <div className="px-5 py-4 border-b border-border flex items-center gap-3">
           {selectedOrder && (
             <button

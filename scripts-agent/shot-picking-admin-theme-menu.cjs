@@ -96,24 +96,24 @@ async function main() {
       return true;
     })()`);
     for (let i = 0; i < 60; i++) {
-      if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+      if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
       await sleep(300);
     }
 
-    for (const theme of ['amber', 'blue', 'violet', 'light']) {
+    for (const theme of ['amber', 'blue', 'violet', 'light', 'amber:system']) {
       await evaluate(`localStorage.setItem('picking-admin-theme', ${JSON.stringify(theme)}); location.reload();`);
       await sleep(1200);
       for (let i = 0; i < 40; i++) {
-        if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+        if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
         await sleep(250);
       }
-      await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+      await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
       await sleep(300);
       const shot = await send('Page.captureScreenshot', { format: 'png' });
       fs.mkdirSync('scripts-agent/.scratch', { recursive: true });
       fs.writeFileSync(`scripts-agent/.scratch/picking-admin-menu-${theme}.png`, Buffer.from(shot.data, 'base64'));
       // Cierra el menú antes del siguiente ciclo.
-      await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+      await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
       await sleep(200);
     }
     console.log('capturas: scripts-agent/.scratch/picking-admin-menu-*.png');

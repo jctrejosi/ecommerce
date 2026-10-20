@@ -53,6 +53,8 @@ export interface DeliveryApi {
 
   // pedidos
   getActiveOrders(): Promise<DeliveryOrder[]>;
+  /** Pedidos nuevos (recién salidos de picking) de todos los repartidores. */
+  getAvailableOrders(): Promise<DeliveryOrder[]>;
   getOrder(id: number | string): Promise<DeliveryOrder>;
   getHistory(): Promise<HistoryEntry[]>;
 

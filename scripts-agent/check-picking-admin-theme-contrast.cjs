@@ -18,7 +18,9 @@ const bcrypt = requireFromBackend('bcryptjs');
 const PANEL_URL = process.env.PANEL_URL || 'http://127.0.0.1:8446/';
 const DEBUG_PORT = 9359;
 const ADMIN = { username: 'qa-contrast-admin', password: 'qa-contrast-1234' };
-const PRESETS = ['amber', 'blue', 'violet', 'light'];
+// El último es "color:modo" explícito para cubrir el modo claro (el preset
+// antiguo "light" migraría igual, pero así queda claro qué se está probando).
+const PRESETS = ['amber', 'blue', 'violet', 'amber:light'];
 const MIN = 3.0; // AA para texto en negrita/grande; buscamos muy por encima.
 
 let checks = 0;
@@ -67,20 +69,18 @@ const CONTRAST_BY_TEXT = (label) => `(() => {
   return { fg, bg, ratio: Math.round(((Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)) * 100) / 100 };
 })()`;
 
-// La opción activa del menú de temas es la que tiene fondo opaco.
+// La opción activa del menú de temas es el botón de modo (Claro/Oscuro) con
+// fondo opaco; el color activo también lo tiene, pero es un swatch sin texto.
 const ACTIVE_THEME_ITEM = `(() => {
-  const labels = ['Ámbar', 'Azul', 'Violeta', 'Claro'];
-  const items = [...document.querySelectorAll('button')].filter((x) => labels.includes(x.textContent.replace(/(Ámbar|Azul|Violeta|Claro|Oscuro|Claro)/g, '').trim()) || labels.some((l) => x.textContent.startsWith(l)));
-  const cv = document.createElement('canvas'); cv.width = cv.height = 1; const ctx = cv.getContext('2d');
-  const alphaOf = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); return ctx.getImageData(0, 0, 1, 1).data[3]; };
-  const toRgb = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2]]; };
-  const item = items.find((x) => alphaOf(getComputedStyle(x).backgroundColor) > 128);
+  const item = document.querySelector('button[aria-label^="Modo "][aria-pressed="true"]');
   if (!item) return null;
+  const cv = document.createElement('canvas'); cv.width = cv.height = 1; const ctx = cv.getContext('2d');
+  const toRgb = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2]]; };
   const cs = getComputedStyle(item);
   const fg = toRgb(cs.color); const bg = toRgb(cs.backgroundColor);
   const lum = (rgb) => { const f = rgb.map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }); return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]; };
   const L1 = lum(fg); const L2 = lum(bg);
-  return { label: item.textContent, fg, bg, ratio: Math.round(((Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)) * 100) / 100 };
+  return { label: item.getAttribute('aria-label'), fg, bg, ratio: Math.round(((Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05)) * 100) / 100 };
 })()`;
 
 async function main() {
@@ -139,7 +139,7 @@ async function main() {
       return true;
     })()`);
     for (let i = 0; i < 60; i++) {
-      if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+      if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
       await sleep(300);
     }
 
@@ -148,7 +148,7 @@ async function main() {
       await evaluate(`localStorage.setItem('picking-admin-theme', ${JSON.stringify(preset)}); location.reload();`);
       await sleep(1200);
       for (let i = 0; i < 40; i++) {
-        if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+        if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
         await sleep(250);
       }
 
@@ -174,11 +174,11 @@ async function main() {
       check(`filtro activo de Pedidos "${preset}" legible`, chip2 && chip2.ratio >= MIN, chip2 ? `ratio ${chip2.ratio} (fg ${chip2.fg} / bg ${chip2.bg})` : 'no encontrado');
 
       // Opción activa del menú de temas.
-      await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+      await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
       await sleep(300);
       const item = await evaluate(ACTIVE_THEME_ITEM);
       check(`opción activa del menú "${preset}" legible`, item && item.ratio >= MIN, item ? `ratio ${item.ratio} (fg ${item.fg} / bg ${item.bg})` : 'no encontrada');
-      await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+      await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
       await sleep(200);
     }
   } finally {

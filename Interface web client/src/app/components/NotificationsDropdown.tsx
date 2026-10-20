@@ -43,7 +43,7 @@ export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead
     <div className="absolute right-0 top-full mt-2 w-80 max-h-[70vh] bg-white rounded-2xl border border-border shadow-2xl z-50 flex flex-col">
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="flex items-center gap-2">
-          <Bell className="w-4 h-4" style={{ color: '#1A1A2E' }} />
+          <Bell className="w-4 h-4" style={{ color: 'var(--foreground)' }} />
           <span className="font-bold text-sm text-foreground">Notificaciones</span>
           {unreadCount > 0 && (
             <span className="text-xs font-bold px-2 py-0.5 rounded-full" style={{ background: '#FFF200', color: '#1A1A2E' }}>
@@ -84,9 +84,9 @@ export function NotificationsDropdown({ notifications, unreadCount, onMarkAsRead
               >
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5"
-                  style={{ background: n.isRead ? '#F4F4F6' : color + '15' }}
+                  style={{ background: n.isRead ? 'var(--muted)' : color + '15' }}
                 >
-                  <Icon className="w-3.5 h-3.5" style={{ color: n.isRead ? '#9CA3AF' : color }} />
+                  <Icon className="w-3.5 h-3.5" style={{ color: n.isRead ? 'var(--muted-foreground)' : color }} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">

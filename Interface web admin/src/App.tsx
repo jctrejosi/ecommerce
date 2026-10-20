@@ -35,6 +35,10 @@ import {
   Clock,
   Star,
   CreditCard,
+  Sun,
+  Moon,
+  Palette,
+  Check,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
@@ -45,7 +49,6 @@ import HomepageEditor from "./views/HomepageEditor";
 import {
   HomeHeroSection,
   HomePromosSection,
-  HomeProductTypesSection,
   HomeBenefitsBarSection,
   HomeFeaturedSection,
   HomeDealsSection,
@@ -68,6 +71,11 @@ import Popups from "./views/Popups";
 import Login from "./views/Login";
 import AppFooter from "./components/AppFooter";
 import ProfileModal from "./components/ProfileModal";
+import {
+  useTheme,
+  THEME_MODES,
+  THEME_ACCENTS,
+} from "./lib/theme";
 import Newsletter from "./views/Newsletter";
 
 export type ViewId =
@@ -83,7 +91,6 @@ export type ViewId =
   | "homepage"
   | "homeHero"
   | "homePromos"
-  | "homeProductTypes"
   | "homeBenefitsBar"
   | "homeFeatured"
   | "homeDeals"
@@ -133,7 +140,6 @@ const NAV: NavSection[] = [
     title: "Contenido",
     items: [
       { id: "homeHero", label: "Banners publicitarios", icon: LayoutTemplate },
-      { id: "homeProductTypes", label: "Tipos de Producto", icon: Layers },
       { id: "homeBenefitsBar", label: "Barra de Beneficios", icon: Zap },
       { id: "homeFeatured", label: "Productos Destacados", icon: Package },
       { id: "homePromos", label: "Banners Promocionales", icon: Megaphone },
@@ -169,7 +175,6 @@ const VIEW_PATHS: Record<string, ViewId> = {
   "homepage-editor": "homepage",
   "home/hero": "homeHero",
   "home/promos": "homePromos",
-  "home/product-types": "homeProductTypes",
   "home/benefits-bar": "homeBenefitsBar",
   "home/featured": "homeFeatured",
   "home/deals": "homeDeals",
@@ -198,7 +203,6 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   homepage: "homepage-editor",
   homeHero: "home/hero",
   homePromos: "home/promos",
-  homeProductTypes: "home/product-types",
   homeBenefitsBar: "home/benefits-bar",
   homeFeatured: "home/featured",
   homeDeals: "home/deals",
@@ -267,7 +271,6 @@ const LABELS: Record<ViewId, string> = {
   homepage: "Editor de Inicio",
   homeHero: "Banners publicitarios",
   homePromos: "Banners Promocionales",
-  homeProductTypes: "Tipos de Producto",
   homeBenefitsBar: "Barra de Beneficios",
   homeFeatured: "Productos Destacados",
   homeDeals: "Ofertas del Día",
@@ -494,11 +497,11 @@ function Sidebar({
 }) {
   return (
     <aside
-      className="flex flex-col h-full border-r border-white/[0.06] transition-all duration-300 [&_button:not(:disabled)]:cursor-pointer"
-      style={{ background: "#0C0C0D", width: collapsed ? 56 : 240 }}
+      className="flex flex-col h-full border-r border-[color:var(--chrome-border)] transition-all duration-300 [&_button:not(:disabled)]:cursor-pointer"
+      style={{ background: "var(--chrome-bg)", width: collapsed ? 56 : 240 }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/[0.06] shrink-0">
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-[color:var(--chrome-border)] shrink-0">
         <img
           src={sidebarLogo}
           alt="Mercaldas"
@@ -506,10 +509,10 @@ function Sidebar({
         />
         {!collapsed && (
           <div>
-            <p className="text-white font-bold text-sm leading-tight">
+            <p className="text-[color:var(--chrome-text)] font-bold text-sm leading-tight">
               Mercaldas
             </p>
-            <p className="text-white/60 text-xs">Admin Panel</p>
+            <p className="text-[color:var(--chrome-text-faint)] text-xs">Admin Panel</p>
           </div>
         )}
       </div>
@@ -519,7 +522,7 @@ function Sidebar({
         {NAV.map((section) => (
           <div key={section.title} className="mb-4">
             {!collapsed && (
-              <p className="text-white/50 text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
+              <p className="text-[color:var(--chrome-text-faint)] text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
                 {section.title}
               </p>
             )}
@@ -533,8 +536,8 @@ function Sidebar({
                   title={collapsed ? item.label : undefined}
                   className={`w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm font-medium transition-all mb-0.5 group relative ${
                     active
-                      ? "bg-white/10 text-amber-400"
-                      : "text-white/70 hover:bg-white/[0.06] hover:text-white"
+                      ? "bg-[var(--chrome-hover)] text-[color:var(--chrome-active-text)]"
+                      : "text-[color:var(--chrome-text-muted)] hover:bg-[var(--chrome-hover)] hover:text-[color:var(--chrome-text)]"
                   }`}
                 >
                   <item.icon size={15} className="shrink-0" />
@@ -577,6 +580,7 @@ function TopBar({
   const [notifOpen, setNotifOpen] = useState(false);
   const [userOpen, setUserOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const { mode, accent, setMode, setAccent } = useTheme();
 
   useEffect(() => {
     const handler = () => {
@@ -650,25 +654,33 @@ function TopBar({
             }}
             className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-lg hover:bg-gray-100 transition-colors"
           >
-            <div className="w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
-              <span className="text-xs font-bold text-white">{initials}</span>
+            <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xs font-bold text-white">{initials}</span>
+              )}
             </div>
             <ChevronDown size={13} className="text-gray-400" />
           </button>
           {userOpen && (
             <div
-              className="absolute right-0 top-full mt-2 w-60 rounded-xl shadow-xl border border-white/[0.08] py-1.5 z-40 overflow-hidden"
-              style={{ background: "#0C0C0D" }}
+              className="absolute right-0 top-full mt-2 w-60 rounded-xl shadow-xl border border-[color:var(--chrome-border)] py-1.5 z-40 overflow-y-auto max-h-[calc(100vh-4.5rem)]"
+              style={{ background: "var(--chrome-bg)" }}
             >
-              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-white/[0.06]">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
-                  <span className="text-xs font-bold text-white">{initials}</span>
+              <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[color:var(--chrome-border)]">
+                <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-xs font-bold text-white">{initials}</span>
+                  )}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white/90 truncate">
+                  <p className="text-sm font-semibold text-[color:var(--chrome-text)] truncate">
                     {displayName}
                   </p>
-                  <p className="text-xs text-white/50 truncate">{displayEmail}</p>
+                  <p className="text-xs text-[color:var(--chrome-text-faint)] truncate">{displayEmail}</p>
                 </div>
               </div>
               <div className="pt-1">
@@ -684,14 +696,72 @@ function TopBar({
                         setProfileOpen(true);
                       }
                     }}
-                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-white/70 hover:bg-white/[0.06] hover:text-white transition-colors"
+                    className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-[color:var(--chrome-text-muted)] hover:bg-[var(--chrome-hover)] hover:text-[color:var(--chrome-text)] transition-colors"
                   >
-                    <item.icon size={14} className="text-white/40" />
+                    <item.icon size={14} className="text-[color:var(--chrome-text-faint)]" />
                     {item.label}
                   </button>
                 ))}
               </div>
-              <div className="border-t border-white/[0.06] mt-1 pt-1">
+              {/* Tema: modo (claro/oscuro) y color de acento */}
+              <div className="border-t border-[color:var(--chrome-border)] mt-1 pt-3 px-4 pb-3 space-y-3">
+                <div>
+                  <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[color:var(--chrome-text-faint)] mb-1.5">
+                    <Palette size={11} /> Tema
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {THEME_MODES.map((m) => {
+                      const active = mode === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          onClick={() => setMode(m.id)}
+                          className={`flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            active
+                              ? "bg-[var(--chrome-hover)] text-[color:var(--chrome-text)]"
+                              : "text-[color:var(--chrome-text-muted)] hover:bg-[var(--chrome-hover)] hover:text-[color:var(--chrome-text)]"
+                          }`}
+                        >
+                          {m.id === "claro" ? <Sun size={13} /> : <Moon size={13} />}
+                          {m.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-[color:var(--chrome-text-faint)] mb-1.5">
+                    Color
+                  </p>
+                  <div className="flex items-center gap-2.5">
+                    {THEME_ACCENTS.map((a) => {
+                      const active = accent === a.id;
+                      return (
+                        <button
+                          key={a.id}
+                          onClick={() => setAccent(a.id)}
+                          title={a.label}
+                          aria-label={a.label}
+                          aria-pressed={active}
+                          className={`w-6 h-6 rounded-full flex items-center justify-center transition-transform ${
+                            active
+                              ? "ring-2 ring-[color:var(--chrome-text)] ring-offset-2 ring-offset-[var(--chrome-bg)] scale-105"
+                              : "hover:scale-110"
+                          }`}
+                          style={{ backgroundColor: a.swatch }}
+                        >
+                          {active && (
+                            <Check size={13} className="text-white drop-shadow" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-[color:var(--chrome-border)] mt-1 pt-1">
                 <button
                   onClick={onLogout}
                   className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-red-400 hover:bg-red-500/10 transition-colors"
@@ -744,8 +814,6 @@ function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProf
       return <HomeHeroSection />;
     case "homePromos":
       return <HomePromosSection />;
-    case "homeProductTypes":
-      return <HomeProductTypesSection />;
     case "homeBenefitsBar":
       return <HomeBenefitsBarSection />;
     case "homeFeatured":

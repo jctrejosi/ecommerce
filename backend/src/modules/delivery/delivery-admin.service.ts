@@ -5,13 +5,15 @@ import {
   NotFoundException,
   UnprocessableEntityException,
 } from '@nestjs/common';
-import { and, desc, eq, isNull, or } from 'drizzle-orm';
+import { and, asc, desc, eq, isNull, or } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
+  branches,
   deliveryAssignments,
   deliveryDrivers,
   shipments,
+  userBranches,
   users,
 } from '../../../drizzle/schema';
 import { parsePoint, DeliveryService } from './delivery.service';
@@ -88,6 +90,8 @@ interface DriverRow {
   username: string | null;
   first_name: string | null;
   last_name: string | null;
+  driver_branch_id: string | null;
+  driver_branch_name: string | null;
   assignment_id: string | null;
   assignment_status: string | null;
   assigned_at: string | null;
@@ -150,6 +154,7 @@ SELECT
   d.is_available, d.is_active,
   d.current_location, d.last_location_at, d.last_seen_at, d.avatar_url, d.created_at,
   u.id AS auth_user_id, u.username, u.first_name, u.last_name,
+  ub.branch_id AS driver_branch_id, br.name AS driver_branch_name,
   a.id AS assignment_id, a.status::text AS assignment_status,
   a.assigned_at, a.accepted_at, a.picked_up_at, a.in_delivery_at,
   s.order_id,
@@ -158,6 +163,8 @@ SELECT
   b.name AS branch_name, b.location AS branch_location
 FROM delivery_drivers d
 LEFT JOIN users u ON u.id = d.auth_user_id
+LEFT JOIN user_branches ub ON ub.user_id = d.auth_user_id
+LEFT JOIN branches br ON br.id = ub.branch_id
 LEFT JOIN LATERAL (
   SELECT * FROM delivery_assignments
   WHERE driver_id = d.id
@@ -205,6 +212,10 @@ export class DeliveryAdminService {
       // panel decide conectado/desconectado con esta marca).
       lastSeenAt: row.last_seen_at ?? row.last_location_at,
       avatarUrl: row.avatar_url,
+      // Sucursal asignada (una sola); null si el repartidor no tiene sucursal.
+      branchId:
+        row.driver_branch_id == null ? null : Number(row.driver_branch_id),
+      branchName: row.driver_branch_name ?? null,
       createdAt: row.created_at,
       activeAssignment: row.assignment_id
         ? {
@@ -229,11 +240,19 @@ export class DeliveryAdminService {
   }
 
   /** Lista la flota completa (repartidores no eliminados) con estado en vivo. */
-  async listDrivers() {
+  async listDrivers(branchId?: number | null) {
+    const params: unknown[] = [];
+    const conds: string[] = ['d.deleted_at IS NULL'];
+    // Filtro por sucursal del repartidor (user_branches de su cuenta de acceso).
+    if (branchId != null) {
+      params.push(branchId);
+      conds.push(`ub.branch_id = $${params.length}`);
+    }
     const rows = await this.drizzle.execute<DriverRow>(
       `${DRIVERS_SELECT}
-       WHERE d.deleted_at IS NULL
+       WHERE ${conds.join(' AND ')}
        ORDER BY d.id ASC`,
+      params,
     );
     // Cupo comprometido de toda la flota en una sola consulta.
     const loads = new Map(
@@ -308,6 +327,59 @@ export class DeliveryAdminService {
   }
 
   /**
+   * Asigna (o quita) la sucursal única de la cuenta de acceso del repartidor.
+   * Se guarda en `user_branches`, la misma tabla que usan los usuarios de
+   * picking: un usuario pertenece a una sola sucursal.
+   */
+  private async setBranch(userId: number, branchId: number | null) {
+    await this.db.delete(userBranches).where(eq(userBranches.userId, userId));
+    if (branchId != null) {
+      const [branch] = await this.db
+        .select({ id: branches.id })
+        .from(branches)
+        .where(eq(branches.id, BigInt(branchId)))
+        .limit(1);
+      if (!branch) throw new BadRequestException('La sucursal no existe.');
+      await this.db.insert(userBranches).values({ userId, branchId });
+    }
+  }
+
+  /** Sucursal (branchId) de un repartidor, o `null` si no tiene asignada. */
+  async driverBranch(driverId: number): Promise<number | null> {
+    const rows = await this.drizzle.execute<{ branch_id: string | null }>(
+      `SELECT ub.branch_id
+       FROM delivery_drivers d
+       LEFT JOIN user_branches ub ON ub.user_id = d.auth_user_id
+       WHERE d.id = $1
+       LIMIT 1`,
+      [driverId],
+    );
+    const b = rows[0]?.branch_id;
+    return b == null ? null : Number(b);
+  }
+
+  /** Sucursales activas para el selector del panel (scope ya lo filtra). */
+  async branches() {
+    const rows = await this.db
+      .select({
+        id: branches.id,
+        code: branches.code,
+        name: branches.name,
+        city: branches.city,
+      })
+      .from(branches)
+      .where(and(isNull(branches.deletedAt), eq(branches.isActive, true)))
+      .orderBy(asc(branches.priority), asc(branches.name));
+
+    return rows.map((r) => ({
+      id: Number(r.id),
+      code: r.code,
+      name: r.name,
+      city: r.city,
+    }));
+  }
+
+  /**
    * Crea la cuenta de acceso (users) y el perfil de repartidor en una
    * transacción. El login en la app móvil es /delivery/auth/login con el
    * username/contraseña definidos aquí.
@@ -343,7 +415,7 @@ export class DeliveryAdminService {
       .filter((c): c is string => Boolean(c));
     const routeColor = pickRouteColor(usedColors);
 
-    const driverId = await this.drizzle.transaction(async (tx) => {
+    const created = await this.drizzle.transaction(async (tx) => {
       const [user] = await tx
         .insert(users)
         .values({
@@ -377,10 +449,13 @@ export class DeliveryAdminService {
         })
         .returning({ id: deliveryDrivers.id });
 
-      return Number(driver.id);
+      return { driverId: Number(driver.id), authUserId: Number(user.id) };
     });
 
-    return this.getDriver(driverId);
+    // Sucursal única de la cuenta de acceso (user_branches).
+    await this.setBranch(created.authUserId, dto.branchId ?? null);
+
+    return this.getDriver(created.driverId);
   }
 
   async updateDriver(id: number, dto: UpdateDriverDto) {
@@ -445,6 +520,11 @@ export class DeliveryAdminService {
       }
     }
 
+    // Sucursal única: si viene en el DTO se reemplaza (null la quita).
+    if (dto.branchId !== undefined && driver.authUserId != null) {
+      await this.setBranch(Number(driver.authUserId), dto.branchId);
+    }
+
     return this.getDriver(id);
   }
 
@@ -474,12 +554,15 @@ export class DeliveryAdminService {
    * a poco. `status` filtra por estado y `q` busca por código, repartidor,
    * cliente o dirección.
    */
-  async listOrders(opts: {
-    limit?: number;
-    offset?: number;
-    status?: string;
-    q?: string;
-  } = {}) {
+  async listOrders(
+    opts: {
+      limit?: number;
+      offset?: number;
+      status?: string;
+      q?: string;
+      branchId?: number | null;
+    } = {},
+  ) {
     const limit = Math.min(
       Math.max(Number(opts.limit) || ORDERS_PAGE_SIZE, 1),
       ORDERS_MAX_PAGE_SIZE,
@@ -488,6 +571,12 @@ export class DeliveryAdminService {
 
     const conds: string[] = ['d.deleted_at IS NULL'];
     const params: unknown[] = [];
+
+    // Filtro por sucursal del pedido (el admin de sucursal queda forzado aquí).
+    if (opts.branchId != null) {
+      params.push(opts.branchId);
+      conds.push(`o.branch_id = $${params.length}`);
+    }
 
     const status = (opts.status ?? '').trim().toUpperCase();
     if (status && status !== 'ALL') {

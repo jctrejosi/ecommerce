@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
-import { AlertTriangle, KeyRound, Loader2, Package, X } from 'lucide-react';
-import type { FleetDriver } from '../types';
+import { AlertTriangle, KeyRound, Loader2, Package, Store, X } from 'lucide-react';
+import type { Branch, FleetDriver } from '../types';
 import { api, ApiError } from '../services/api';
 import { driverVisual } from '../lib/status';
 import { ActiveOrderCard } from './DriverBits';
@@ -10,6 +10,10 @@ interface Props {
   driver?: FleetDriver | null;
   onClose: () => void;
   onSaved: (driver: FleetDriver) => void;
+  /** Sucursales disponibles para asignar (el backend ya aplica el alcance). */
+  branches?: Branch[];
+  /** Si el admin es de sucursal: se fuerza esa sucursal y el selector se bloquea. */
+  lockedBranchId?: number | null;
 }
 
 interface FormState {
@@ -23,6 +27,8 @@ interface FormState {
   vehicleBrand: string;
   vehicleModel: string;
   vehicleColor: string;
+  /** Sucursal asignada ('' = sin sucursal). */
+  branchId: string;
   /** Capacidad de carga del vehículo, en litros (en la BD se guarda en cm³). */
   cargoLiters: string;
 }
@@ -40,6 +46,7 @@ const EMPTY: FormState = {
   vehicleBrand: '',
   vehicleModel: '',
   vehicleColor: '',
+  branchId: '',
   cargoLiters: '',
 };
 
@@ -66,7 +73,14 @@ function Field({
   );
 }
 
-export default function DriverFormModal({ mode, driver, onClose, onSaved }: Props) {
+export default function DriverFormModal({
+  mode,
+  driver,
+  onClose,
+  onSaved,
+  branches = [],
+  lockedBranchId = null,
+}: Props) {
   const [form, setForm] = useState<FormState>(EMPTY);
   const [isAvailable, setIsAvailable] = useState(true);
   const [isActive, setIsActive] = useState(true);
@@ -129,12 +143,18 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
         vehicleBrand: driver.vehicleBrand ?? '',
         vehicleModel: driver.vehicleModel ?? '',
         vehicleColor: driver.vehicleColor ?? '',
+        branchId:
+          driver.branchId != null
+            ? String(driver.branchId)
+            : lockedBranchId != null
+              ? String(lockedBranchId)
+              : '',
         cargoLiters: driver.cargoVolumeCm3 ? String(driver.cargoVolumeCm3 / 1000) : '',
       });
       setIsAvailable(driver.isAvailable);
       setIsActive(driver.isActive);
     }
-  }, [driver]);
+  }, [driver, lockedBranchId]);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -155,6 +175,14 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
     }
     const cargoVolumeCm3 = cargoRaw ? Math.round(Number(cargoRaw) * 1000) : null;
 
+    // Sucursal: el admin de sucursal la tiene forzada; el global elige (o ninguna).
+    const branchIdValue =
+      lockedBranchId != null
+        ? lockedBranchId
+        : form.branchId
+          ? Number(form.branchId)
+          : null;
+
     try {
       if (mode === 'create') {
         const created = await api.createDriver({
@@ -169,6 +197,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
           vehicleModel: form.vehicleModel.trim() || undefined,
           vehicleColor: form.vehicleColor.trim() || undefined,
           cargoVolumeCm3: cargoVolumeCm3 ?? undefined,
+          branchId: branchIdValue,
         });
         onSaved(created);
       } else if (driver) {
@@ -185,6 +214,7 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
           cargoVolumeCm3,
           isAvailable,
           isActive,
+          branchId: branchIdValue,
         });
         onSaved(updated);
       }
@@ -334,6 +364,34 @@ export default function DriverFormModal({ mode, driver, onClose, onSaved }: Prop
               </span>
             </Field>
           )}
+
+          <Field label="Sucursal">
+            {lockedBranchId != null ? (
+              <div className={`${inputCls} flex items-center justify-between`}>
+                <span className="flex items-center gap-1.5 text-ink-soft">
+                  <Store className="h-3.5 w-3.5 text-ink-faint" />
+                  {branches.find((b) => b.id === lockedBranchId)?.name ??
+                    `Sucursal ${lockedBranchId}`}
+                </span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-ink-faint">
+                  Fija
+                </span>
+              </div>
+            ) : (
+              <select
+                className={`${inputCls} cursor-pointer`}
+                value={form.branchId}
+                onChange={(e) => set('branchId', e.target.value)}
+              >
+                <option value="">Sin sucursal</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
+            )}
+          </Field>
 
           <div>
             <p className="mb-2 text-xs font-semibold text-ink-soft">Vehículo</p>

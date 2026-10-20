@@ -16,7 +16,7 @@ export interface UploadImageOptions {
   removeBg?: boolean;
   /**
    * Carpeta destino: en Cloudinary `products/<code>` por defecto; en modo local
-   * es la subcarpeta bajo `db/images_static/uploads`.
+   * es la subcarpeta bajo `db/images_static/media/uploads`.
    */
   folder?: string;
   /** Lado máximo en px (recorte cuadrado). Útil para avatares. */
@@ -60,7 +60,7 @@ export class CloudinaryService {
     }
 
     this.logger.log(
-      `Media storage: local (${resolveMediaStaticRoot()}/images_static/uploads)`,
+      `Media storage: local (${resolveMediaStaticRoot()}/images_static/media/uploads)`,
     );
   }
 
@@ -142,6 +142,7 @@ export class CloudinaryService {
     const dir = path.join(
       resolveMediaStaticRoot(),
       'images_static',
+      'media',
       'uploads',
       folder,
     );

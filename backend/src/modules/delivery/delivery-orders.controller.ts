@@ -43,10 +43,18 @@ export class DeliveryOrdersController {
     );
   }
 
+  /** Pedidos "nuevos" de todos los repartidores (pestaña Nuevos de la app). */
+  @Get('orders/available')
+  available(@CurrentUser('sub') userId: bigint) {
+    return this.delivery.resolveDriver(Number(userId)).then((driver) =>
+      this.orders.listAvailable(Number(driver.id)),
+    );
+  }
+
   @Get('orders/:id')
   get(@CurrentUser('sub') userId: bigint, @Param('id') id: string) {
     return this.delivery.resolveDriver(Number(userId)).then((driver) =>
-      this.orders.getOrder(Number(driver.id), Number(id)),
+      this.orders.getVisibleOrder(Number(driver.id), Number(id)),
     );
   }
 

@@ -122,23 +122,23 @@ async function main() {
       return true;
     })()`);
     for (let i = 0; i < 60; i++) {
-      if (await evaluate(`!!document.querySelector('button[aria-label="Cambiar tema"]')`)) break;
+      if (await evaluate(`!!document.querySelector('button[aria-label="Opciones del usuario"]')`)) break;
       await sleep(300);
     }
 
     // Aplica el tema Claro por la UI.
-    await evaluate(`document.querySelector('button[aria-label="Cambiar tema"]').click()`);
+    await evaluate(`document.querySelector('button[aria-label="Opciones del usuario"]').click()`);
     await sleep(200);
     await evaluate(`(() => {
-      const b = [...document.querySelectorAll('button')].find((x) => x.textContent.includes('Claro'));
+      const b = document.querySelector('button[aria-label="Modo Claro"]');
       b?.click(); return !!b;
     })()`);
     await sleep(300);
     const theme = await evaluate(`document.documentElement.dataset.theme`);
-    check('el tema activo es light', theme === 'light', theme);
+    const mode = await evaluate(`document.documentElement.dataset.mode`);
+    check('el modo activo es claro (light)', mode === 'light', `${theme}/${mode}`);
 
-    // El footer es una banda institucional fija (#111827) en todos los temas, así
-    // que en claro debe conservar ese fondo, con texto claro encima (contraste ok).
+    // En claro el footer también va claro: fondo claro y texto oscuro encima.
     const footer = await evaluate(`(() => {
       const f = document.querySelector('footer');
       if (!f) return null;
@@ -152,13 +152,13 @@ async function main() {
     })()`);
     const lum = (rgb) => rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
     check(
-      'el footer conserva el fondo institucional #111827 en claro',
-      footer && footer.bg.join(',') === '17,24,39',
-      `rgb(${footer?.bg})`,
+      'el footer tiene fondo claro en modo claro',
+      footer && lum(footer.bg) > 150,
+      `rgb(${footer?.bg}) (lum ${Math.round(lum(footer?.bg ?? [0, 0, 0]))})`,
     );
     check(
-      'el texto del footer es claro (contrasta con la banda oscura)',
-      footer && lum(footer.fg) > 100,
+      'el texto del footer es oscuro (contrasta con el fondo claro)',
+      footer && lum(footer.fg) < 120,
       `rgb(${footer?.fg}) (lum ${Math.round(lum(footer?.fg ?? [0, 0, 0]))})`,
     );
 

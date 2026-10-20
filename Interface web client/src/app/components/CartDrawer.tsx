@@ -220,7 +220,7 @@ export function CartDrawer({
       />
       <div
         ref={panelRef}
-        className="relative w-full max-w-sm sm:max-w-lg bg-white flex flex-col h-full shadow-2xl"
+        className="relative w-full max-w-sm sm:max-w-lg bg-white flex flex-col h-full shadow-2xl pb-[var(--safe-bottom)]"
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">

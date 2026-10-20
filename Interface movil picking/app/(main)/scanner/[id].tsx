@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Modal,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   Vibration,
   View,
 } from "react-native";
@@ -19,12 +21,13 @@ import {
 import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import type { ScanResult } from "@/api";
 import { isItemDone } from "@/picking/status";
-import { useOrder, useScan } from "@/picking/queries";
+import { useConfirmItem, useLocations, useOrder, useScan, useShelves } from "@/picking/queries";
 import { saveSession } from "@/picking/sessionStore";
 import { Header } from "@/ui/Header";
 import { Button } from "@/ui/Button";
 import { ErrorBox } from "@/ui/ErrorBox";
 import { ProductImage } from "@/ui/ProductImage";
+import { PickingMap, type MapSpot } from "@/ui/PickingMap";
 
 const BARCODE_TYPES = [
   "ean13",
@@ -47,9 +50,11 @@ export default function ScannerScreen() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ id: string; itemId?: string }>();
   const orderId = Number(params.id);
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const { data: order, error, refetch } = useOrder(orderId);
   const scan = useScan(orderId);
+  const confirmItem = useConfirmItem(orderId);
   const [permission, requestPermission] = useCameraPermissions();
 
   const items = order?.items ?? [];
@@ -62,6 +67,8 @@ export default function ScannerScreen() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successName, setSuccessName] = useState("");
   const [qty, setQty] = useState(0);
+  // Miniatura de la estantería del producto activo.
+  const [shelfOpen, setShelfOpen] = useState(false);
   const processingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<TextInput>(null);
@@ -69,6 +76,25 @@ export default function ScannerScreen() {
   // Ítem activo: el del parámetro o el primer pendiente.
   const activeItem =
     items.find((i) => i.id === activeItemId) ?? items.find((i) => !isItemDone(i)) ?? items[0];
+
+  // Ubicación del ítem activo (solo se consulta al abrir la miniatura).
+  const branchId = order?.branchId;
+  const activeVariantId = activeItem?.productVariantId ?? null;
+  const shelvesQuery = useShelves(shelfOpen ? branchId : undefined);
+  const locationsQuery = useLocations(
+    shelfOpen ? branchId : undefined,
+    shelfOpen && activeVariantId != null ? [activeVariantId] : [],
+  );
+  const activeSpot = useMemo<MapSpot | undefined>(() => {
+    if (activeVariantId == null) return undefined;
+    const loc = (locationsQuery.data ?? []).find(
+      (l) => l.productVariantId === activeVariantId,
+    );
+    return loc ? { shelfId: loc.shelfId, rowNumber: loc.rowNumber } : undefined;
+  }, [locationsQuery.data, activeVariantId]);
+  const shelfLoading = shelvesQuery.isLoading || locationsQuery.isLoading;
+  const thumbWidth = Math.min(windowWidth - spacing(12), 300);
+  const thumbMaxHeight = Math.min(windowHeight * 0.42, 340);
 
   // Inicializa el picker de ítem y la cantidad restante al abrir/cambiar de ítem.
   useEffect(() => {
@@ -156,6 +182,28 @@ export default function ScannerScreen() {
     },
     [activeItem?.barcode, activeItem?.plu, advance, scan],
   );
+
+  // Confirma el ítem activo como válido sin escanear el código de barras.
+  const handleConfirm = useCallback(async () => {
+    if (!activeItem || processingRef.current) return;
+    processingRef.current = true;
+    setScanState("idle");
+    setErrorMsg("");
+    try {
+      const result = await confirmItem.mutateAsync(activeItem.id);
+      Vibration.vibrate(60);
+      setSuccessName(result.name);
+      setScanState("success");
+      scheduleReset(() => advance(result), 800);
+    } catch {
+      Vibration.vibrate([120, 60, 120]);
+      setErrorMsg("No se pudo marcar el producto como válido");
+      setScanState("error");
+      scheduleReset(() => setScanState("idle"), 1800);
+    } finally {
+      processingRef.current = false;
+    }
+  }, [activeItem, advance, confirmItem]);
 
   const onBarcodeScanned = useCallback(
     (res: BarcodeScanningResult) => {
@@ -289,6 +337,17 @@ export default function ScannerScreen() {
                 {activeItem.barcode ? ` · ${activeItem.barcode}` : ""}
               </Text>
             </View>
+
+            {/* Ver la estantería del producto en una miniatura del mapa. */}
+            <Pressable
+              onPress={() => setShelfOpen(true)}
+              style={({ pressed }) => [styles.shelfBtn, pressed && { opacity: 0.8 }]}
+              accessibilityRole="button"
+              accessibilityLabel="Ver estantería"
+            >
+              <Ionicons name="location-outline" size={18} color={colors.accent} />
+              <Text style={styles.shelfBtnText}>Estantería</Text>
+            </Pressable>
           </View>
         ) : (
           <Text style={styles.noItem}>Este pedido no tiene productos pendientes.</Text>
@@ -322,7 +381,73 @@ export default function ScannerScreen() {
             disabled={!input.trim()}
           />
         </View>
+
+        {/* Check manual: marca el ítem activo como válido sin escanear el código. */}
+        <Button
+          label="Marcar como válido (sin escanear)"
+          variant="success"
+          icon="checkmark-circle"
+          onPress={() => void handleConfirm()}
+          disabled={!activeItem || scanState !== "idle"}
+        />
       </View>
+
+      {/* Miniatura de la estantería del producto activo (la fila titila). */}
+      <Modal
+        visible={shelfOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShelfOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setShelfOpen(false)}>
+          <Pressable style={styles.modalCard} onPress={() => undefined}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle} numberOfLines={1}>
+                Ubicación en bodega
+              </Text>
+              <Pressable onPress={() => setShelfOpen(false)} hitSlop={10}>
+                <Ionicons name="close" size={22} color={colors.textMuted} />
+              </Pressable>
+            </View>
+
+            {activeItem ? (
+              <Text style={styles.modalShelf} numberOfLines={2}>
+                {activeItem.name}
+              </Text>
+            ) : null}
+
+            {shelfLoading ? (
+              <View style={styles.modalCenter}>
+                <ActivityIndicator color={colors.accent} />
+              </View>
+            ) : !activeSpot ? (
+              <View style={styles.modalCenter}>
+                <Text style={styles.modalEmpty}>
+                  Este producto no tiene una ubicación asignada en la bodega.
+                </Text>
+              </View>
+            ) : (
+              <View style={styles.mapWrap}>
+                <Text style={styles.modalCode}>
+                  {activeItem?.shelfCode ?? "Estantería"}
+                  {activeItem?.rowNumber ? ` · Fila ${activeItem.rowNumber}` : ""}
+                </Text>
+                <PickingMap
+                  shelves={shelvesQuery.data ?? []}
+                  active={activeSpot}
+                  width={thumbWidth}
+                  maxHeight={thumbMaxHeight}
+                />
+                <Text style={styles.modalHint}>
+                  La franja verde titila en la fila donde está el producto.
+                </Text>
+              </View>
+            )}
+
+            <Button label="Cerrar" variant="secondary" onPress={() => setShelfOpen(false)} />
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -411,6 +536,44 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   },
   pluText: { color: "#C4B5FD", fontSize: 10, fontWeight: "700" },
   productSku: { color: colors.textHint, fontSize: 11, fontWeight: "500" },
+  shelfBtn: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 2,
+    minWidth: 58,
+    paddingHorizontal: spacing(2),
+    paddingVertical: spacing(2),
+    borderRadius: radius.md,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  shelfBtnText: { color: colors.textMuted, fontSize: 10, fontWeight: "700" },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.65)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: spacing(4),
+  },
+  modalCard: {
+    width: "100%",
+    maxWidth: 380,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.lg,
+    padding: spacing(4),
+    gap: spacing(3),
+  },
+  modalHeader: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
+  modalTitle: { color: colors.text, fontSize: 16, fontWeight: "800", flex: 1 },
+  modalShelf: { color: colors.text, fontSize: 14, fontWeight: "700" },
+  modalCode: { color: colors.accent, fontSize: 14, fontWeight: "800" },
+  modalHint: { color: colors.textFaint, fontSize: 12, fontWeight: "500", textAlign: "center" },
+  modalCenter: { alignItems: "center", justifyContent: "center", paddingVertical: spacing(6) },
+  modalEmpty: { color: colors.textMuted, fontSize: 14, fontWeight: "600", textAlign: "center" },
+  mapWrap: { alignItems: "center", gap: spacing(2) },
   noItem: { color: colors.textFaint, fontSize: 14, fontWeight: "600" },
   inputRow: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
   input: {

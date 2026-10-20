@@ -9,7 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleService } from '../../database/drizzle.service';
-import { users, userRefreshTokens } from '../../../drizzle/schema';
+import { users, userRefreshTokens, userBranches, branches } from '../../../drizzle/schema';
 import { eq, and, or, ne } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -38,6 +38,9 @@ export interface LoginResponse {
     phone?: string | null;
     /** Foto de perfil (Cloudinary); null si no tiene. */
     avatarUrl?: string | null;
+    /** Sucursal asignada (define el alcance del admin de sucursal). */
+    branchId?: number | null;
+    branchName?: string | null;
   };
 }
 
@@ -194,6 +197,14 @@ export class AuthService {
       [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
       'Usuario';
 
+    // Sucursal asignada (una sola): define el alcance del admin de sucursal.
+    const [loginBranch] = await this.db
+      .select({ id: branches.id, name: branches.name })
+      .from(userBranches)
+      .innerJoin(branches, eq(branches.id, userBranches.branchId))
+      .where(eq(userBranches.userId, Number(user.id)))
+      .limit(1);
+
     return {
       accessToken,
       refreshToken: refreshTokenString,
@@ -209,6 +220,8 @@ export class AuthService {
         isActive: user.isActive,
         phone: user.phone,
         avatarUrl: user.avatarUrl ?? null,
+        branchId: loginBranch ? Number(loginBranch.id) : null,
+        branchName: loginBranch?.name ?? null,
       },
     };
   }
@@ -330,6 +343,14 @@ export class AuthService {
       [user.firstName, user.lastName].filter(Boolean).join(' ').trim() ||
       'Usuario';
 
+    // Sucursal asignada (una sola): define el alcance del admin de sucursal.
+    const [branch] = await this.db
+      .select({ id: branches.id, name: branches.name })
+      .from(userBranches)
+      .innerJoin(branches, eq(branches.id, userBranches.branchId))
+      .where(eq(userBranches.userId, Number(user.id)))
+      .limit(1);
+
     return {
       id: Number(user.id),
       email: user.email,
@@ -341,6 +362,8 @@ export class AuthService {
       avatarUrl: user.avatarUrl ?? null,
       isSuperuser: user.isSuperuser,
       isActive: user.isActive,
+      branchId: branch ? Number(branch.id) : null,
+      branchName: branch?.name ?? null,
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
@@ -357,6 +380,7 @@ export class AuthService {
       lastName?: string;
       phone?: string;
       email?: string;
+      avatarUrl?: string | null;
     },
   ) {
     const patch: Partial<typeof users.$inferInsert> = {
@@ -366,6 +390,8 @@ export class AuthService {
     if (body.firstName !== undefined) patch.firstName = body.firstName.trim();
     if (body.lastName !== undefined) patch.lastName = body.lastName.trim();
     if (body.phone !== undefined) patch.phone = body.phone.trim() || null;
+    if (body.avatarUrl !== undefined)
+      patch.avatarUrl = this.toStoredAvatarPath(body.avatarUrl);
 
     if (body.email !== undefined) {
       const email = body.email.trim().toLowerCase();
@@ -385,6 +411,30 @@ export class AuthService {
       .set(patch)
       .where(eq(users.id, BigInt(userId)));
     return this.getProfile(userId);
+  }
+
+  /**
+   * Normaliza la imagen de perfil antes de guardarla.
+   *
+   * La API expone las rutas locales de media como URLs absolutas (ver
+   * `MediaUrlInterceptor`), pero en la BD se guardan relativas (`/static/...`)
+   * para no depender del host/IP. Aquí se revierte ese prefijo: si la URL
+   * apunta a nuestro propio `/static/`, se guarda su ruta; las URLs externas
+   * (Cloudinary, etc.) se conservan tal cual.
+   */
+  private toStoredAvatarPath(url: string | null | undefined): string | null {
+    if (url == null) return null;
+    const trimmed = url.trim();
+    if (!trimmed) return null;
+    try {
+      const parsed = new URL(trimmed);
+      return parsed.pathname.startsWith('/static/')
+        ? parsed.pathname
+        : trimmed;
+    } catch {
+      // Ya es una ruta relativa (p. ej. `/static/...`).
+      return trimmed;
+    }
   }
 
   /**

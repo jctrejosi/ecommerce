@@ -8,8 +8,8 @@ services:
 
     restart: unless-stopped
 
-    ports:
-      - "5432:5432"
+    # Sin `ports`: la BD solo se consume desde la red interna
+    # (mercaldas_internal), nunca desde el host ni desde internet.
 
     environment:
       POSTGRES_USER: postgres
@@ -25,6 +25,14 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+
+    networks:
+      - default
+      - mercaldas_internal
+
+networks:
+  mercaldas_internal:
+    external: true
 
 volumes:
   postgres_data:

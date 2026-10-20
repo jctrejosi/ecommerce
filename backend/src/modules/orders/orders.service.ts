@@ -23,6 +23,7 @@ import {
   deliveryAssignments,
   deliveryDrivers,
   guestSessions,
+  inventory,
   media,
   orderItems,
   orders,
@@ -45,7 +46,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { PushService } from '../notifications/push.service';
 import { OrdersGateway } from './orders.gateway';
 import { toIsoTimestamp } from '../../utils/date-utils';
-import { parsePointText } from '../../utils/geolocation';
+import { parsePointText, calculateDistance } from '../../utils/geolocation';
 
 const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
 
@@ -192,7 +193,6 @@ export class OrdersService {
 
     this.validatePaymentDetails(dto);
 
-    const branch = await this.getDefaultBranch();
     const shippingCost = dto.shippingType === 'express' ? 9900 : 4900;
 
     const productIds = dto.items.map((item) => item.productId);
@@ -250,6 +250,11 @@ export class OrdersService {
         subtotal,
       };
     });
+
+    // Sucursal del pedido: la más cercana a la dirección que tenga todo el
+    // pedido disponible en stock (si no, la siguiente más cercana; si ninguna
+    // lo tiene completo, la más cercana en general).
+    const branch = await this.resolveOrderBranch(normalizedItems, dto.address);
 
     const subtotal = normalizedItems.reduce(
       (sum, item) => sum + item.subtotal,
@@ -1263,6 +1268,92 @@ export class OrdersService {
     }
 
     return result[0];
+  }
+
+  /**
+   * Elige la sucursal del pedido: la más cercana a la dirección de entrega que
+   * tenga TODO el pedido con stock disponible (stock - reservado); si ninguna lo
+   * tiene completo, la más cercana. Sin coordenadas de destino, cae a la
+   * sucursal por defecto (por prioridad).
+   */
+  private async resolveOrderBranch(
+    items: { productVariantId: number; quantity: number }[],
+    address: { lat?: number | null; lng?: number | null },
+  ): Promise<{ id: number; name: string }> {
+    const branchRows = await this.db
+      .select({
+        id: branches.id,
+        name: branches.name,
+        location: branches.location,
+      })
+      .from(branches)
+      .where(and(eq(branches.isActive, true), isNull(branches.deletedAt)))
+      .orderBy(asc(branches.priority), asc(branches.id));
+
+    if (!branchRows.length) {
+      throw new NotFoundException('No hay sucursales activas configuradas');
+    }
+
+    const { lat, lng } = address;
+    if (lat == null || lng == null) {
+      // Sin coordenadas no se puede ordenar por cercanía.
+      const fallback = branchRows[0];
+      return { id: Number(fallback.id), name: fallback.name };
+    }
+
+    // Orden por cercanía (haversine). Los empates conservan el orden por
+    // prioridad del `orderBy` (Array.sort es estable).
+    const ranked = branchRows
+      .map((b) => {
+        const point = parsePointText(b.location);
+        return {
+          id: Number(b.id),
+          name: b.name,
+          distanceM: point
+            ? calculateDistance(lat, lng, point.lat, point.lng)
+            : Number.POSITIVE_INFINITY,
+        };
+      })
+      .sort((a, b) => a.distanceM - b.distanceM);
+
+    // Stock disponible (stock - reservado) por sucursal y variante del pedido.
+    const branchIds = ranked.map((b) => b.id);
+    const variantIds = items.map((i) => i.productVariantId);
+    const stockRows = await this.db
+      .select({
+        branchId: inventory.branchId,
+        productVariantId: inventory.productVariantId,
+        available: sql<number>`(${inventory.stock} - ${inventory.reservedStock})`,
+      })
+      .from(inventory)
+      .where(
+        and(
+          inArray(inventory.branchId, branchIds),
+          inArray(inventory.productVariantId, variantIds),
+        ),
+      );
+
+    const availableByBranch = new Map<number, Map<number, number>>();
+    for (const row of stockRows) {
+      const branchId = Number(row.branchId);
+      if (!availableByBranch.has(branchId)) {
+        availableByBranch.set(branchId, new Map());
+      }
+      availableByBranch
+        .get(branchId)!
+        .set(Number(row.productVariantId), Number(row.available ?? 0));
+    }
+
+    const canFulfill = (branchId: number) => {
+      const available = availableByBranch.get(branchId);
+      if (!available) return false;
+      return items.every(
+        (item) => (available.get(item.productVariantId) ?? 0) >= item.quantity,
+      );
+    };
+
+    const chosen = ranked.find((b) => canFulfill(b.id)) ?? ranked[0];
+    return { id: chosen.id, name: chosen.name };
   }
 
   private buildReferenceCode() {

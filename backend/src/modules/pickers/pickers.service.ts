@@ -22,9 +22,11 @@ import type { SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
+  branches,
   orders,
   orderStatusHistory,
   orderItems,
+  userBranches,
   users,
 } from '../../../drizzle/schema';
 
@@ -51,8 +53,11 @@ export class PickersService {
   /**
    * Usuarios que pueden iniciar sesión en la app de picking: activos, sin
    * borrar y marcados explícitamente como pickers desde el panel.
+   *
+   * Con `branchId` solo devuelve los pickers de esa sucursal (alcance del admin
+   * de sucursal).
    */
-  async list() {
+  async list(branchId?: number | null) {
     const rows = await this.db
       .select({
         id: users.id,
@@ -64,11 +69,13 @@ export class PickersService {
         avatarUrl: users.avatarUrl,
       })
       .from(users)
+      .leftJoin(userBranches, eq(userBranches.userId, users.id))
       .where(
         and(
           eq(users.isActive, true),
           eq(users.isPicker, true),
           isNull(users.deletedAt),
+          branchId != null ? eq(userBranches.branchId, branchId) : undefined,
         ),
       )
       .orderBy(asc(users.firstName), asc(users.lastName));
@@ -108,6 +115,8 @@ export class PickersService {
     isActive: boolean;
     isSuperuser: boolean;
     isPicker: boolean;
+    branchId?: number | null;
+    branchName?: string | null;
   }) {
     return {
       id: Number(u.id),
@@ -119,7 +128,24 @@ export class PickersService {
       isActive: u.isActive,
       isSuperuser: u.isSuperuser,
       isPicker: u.isPicker,
+      // Sucursal asignada (una sola); null si el picker no tiene sucursal.
+      branchId: u.branchId ?? null,
+      branchName: u.branchName ?? null,
     };
+  }
+
+  /** Asigna (o quita) la sucursal única del usuario. */
+  private async setBranch(userId: number, branchId: number | null) {
+    await this.db.delete(userBranches).where(eq(userBranches.userId, userId));
+    if (branchId != null) {
+      const [branch] = await this.db
+        .select({ id: branches.id })
+        .from(branches)
+        .where(eq(branches.id, BigInt(branchId)))
+        .limit(1);
+      if (!branch) throw new BadRequestException('La sucursal no existe.');
+      await this.db.insert(userBranches).values({ userId, branchId });
+    }
   }
 
   // ─── Perfil del propio picker (app móvil) ──────────────────────────────────
@@ -185,11 +211,22 @@ export class PickersService {
   }
 
   /** Todos los usuarios (incluye inactivos) para la gestión desde el panel. */
-  async listAll() {
+  async listAll(branchId?: number | null) {
     const rows = await this.db
-      .select(this.pickerColumns)
+      .select({
+        ...this.pickerColumns,
+        branchId: userBranches.branchId,
+        branchName: branches.name,
+      })
       .from(users)
-      .where(isNull(users.deletedAt))
+      .leftJoin(userBranches, eq(userBranches.userId, users.id))
+      .leftJoin(branches, eq(branches.id, userBranches.branchId))
+      .where(
+        and(
+          isNull(users.deletedAt),
+          branchId != null ? eq(userBranches.branchId, branchId) : undefined,
+        ),
+      )
       .orderBy(asc(users.firstName), asc(users.lastName));
 
     return rows.map((u) => this.toPicker(u));
@@ -197,8 +234,14 @@ export class PickersService {
 
   private async findRow(id: number) {
     const rows = await this.db
-      .select(this.pickerColumns)
+      .select({
+        ...this.pickerColumns,
+        branchId: userBranches.branchId,
+        branchName: branches.name,
+      })
       .from(users)
+      .leftJoin(userBranches, eq(userBranches.userId, users.id))
+      .leftJoin(branches, eq(branches.id, userBranches.branchId))
       .where(and(eq(users.id, BigInt(id)), isNull(users.deletedAt)))
       .limit(1);
     if (!rows.length) throw new NotFoundException('Usuario no encontrado');
@@ -212,6 +255,8 @@ export class PickersService {
     email: string;
     phone?: string;
     password: string;
+    branchId?: number | null;
+    isSuperuser?: boolean;
   }) {
     const email = dto.email.trim().toLowerCase();
     const username = dto.username.trim();
@@ -238,15 +283,17 @@ export class PickersService {
         firstName: parts[0] || dto.fullName.trim(),
         lastName: parts.slice(1).join(' '),
         phone: dto.phone?.trim() || null,
-        isSuperuser: false,
+        isSuperuser: dto.isSuperuser ?? false,
         isActive: true,
         // Los usuarios creados desde el panel nacen como pickers.
         isPicker: true,
       })
-      .returning(this.pickerColumns);
+      .returning({ id: users.id });
+
+    await this.setBranch(Number(row.id), dto.branchId ?? null);
 
     this.logger.log(`Usuario de picking creado: ${username}`);
-    return this.toPicker(row);
+    return this.toPicker(await this.findRow(Number(row.id)));
   }
 
   /** Actualiza los datos de un usuario de picking. */
@@ -259,6 +306,8 @@ export class PickersService {
       phone?: string;
       isActive?: boolean;
       isPicker?: boolean;
+      branchId?: number | null;
+      isSuperuser?: boolean;
     },
     actingUserId?: number,
   ) {
@@ -301,14 +350,19 @@ export class PickersService {
     if (dto.phone !== undefined) patch.phone = dto.phone.trim() || null;
     if (dto.isActive !== undefined) patch.isActive = dto.isActive;
     if (dto.isPicker !== undefined) patch.isPicker = dto.isPicker;
+    if (dto.isSuperuser !== undefined) patch.isSuperuser = dto.isSuperuser;
 
-    const [row] = await this.db
+    await this.db
       .update(users)
       .set(patch)
-      .where(eq(users.id, BigInt(id)))
-      .returning(this.pickerColumns);
+      .where(eq(users.id, BigInt(id)));
 
-    return this.toPicker(row);
+    // Sucursal única: si viene en el DTO se reemplaza (null la quita).
+    if (dto.branchId !== undefined) {
+      await this.setBranch(id, dto.branchId);
+    }
+
+    return this.toPicker(await this.findRow(id));
   }
 
   /**
@@ -367,8 +421,8 @@ export class PickersService {
    *  - entregados hoy por picker
    *  - total despachado por picker
    */
-  async metrics() {
-    const pickers = await this.list();
+  async metrics(branchId?: number | null) {
+    const pickers = await this.list(branchId);
     if (pickers.length === 0) return [];
 
     const ids = pickers.map((p) => p.id);

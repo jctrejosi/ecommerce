@@ -1,0 +1,331 @@
+{
+  "table": "POSDCTOS",
+  "source": "db/ADD_ANALITICA/POSDCTOS.ADT",
+  "bytes": 1750558,
+  "recordCount": 5566,
+  "recordLength": 313,
+  "headerLength": 8400,
+  "fieldCount": 40,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "PROVEE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 24,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 34,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 64,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 72,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAI",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 80,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAF",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 84,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "MONTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 88,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 96,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "TARJETA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 111,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ACLI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 112,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 113,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "HORAI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 121,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "HORAF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 127,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "DWEB",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 133,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "BORRA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 134,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN4",
+      "type": 10,
+      "typeName": "double",
+      "offset": 135,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "REDON",
+      "type": 10,
+      "typeName": "double",
+      "offset": 143,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "HORAI2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 151,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "HORAF2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 157,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "PAGOPTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 163,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTOSPTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 171,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPOFCH",
+      "type": 4,
+      "typeName": "char",
+      "offset": 179,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DNOMDIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 189,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DUSU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 199,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "DFECHAP",
+      "type": 3,
+      "typeName": "?3",
+      "offset": 203,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "DHORAP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 207,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DTIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 217,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CLIVINO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 219,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN5",
+      "type": 10,
+      "typeName": "double",
+      "offset": 220,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPOTDA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 228,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "REGISTRO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 238,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "PORCENP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 258,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CODACTI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 266,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CODEMPRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 268,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "POREMPRE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 271,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CONTROL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 279,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "ID",
+      "type": 15,
+      "typeName": "?15",
+      "offset": 299,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CODDOMI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 303,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "PORDOMI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 305,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

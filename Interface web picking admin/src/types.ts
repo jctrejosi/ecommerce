@@ -256,6 +256,9 @@ export interface PickerChatConversation {
   username: string;
   email: string;
   isActive: boolean;
+  /** Sucursal del picker (null si no tiene asignada). */
+  branchId: number | null;
+  branchName: string | null;
   unread: number;
   lastMessage: { body: string; senderType: 'picker' | 'admin'; createdAt: string | null } | null;
 }

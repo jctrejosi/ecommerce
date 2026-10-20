@@ -22,7 +22,7 @@ dotenv.config({ path: path.join(ROOT, 'backend', '.env.development.local') });
 
 const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/ecommerce';
-const IMG_DIR = path.join(ROOT, 'db', 'images_products');
+const IMG_DIR = path.join(ROOT, 'db', 'images_static', 'products', '_sin_producto');
 const OUT_FILE = path.join(ROOT, 'db', 'images_products_unlinked.json');
 const MIME = /\.(jpe?g|png|webp|gif)$/i;
 
@@ -78,7 +78,7 @@ images.sort((a, b) => a.file.localeCompare(b.file));
 
 const payload = {
   generated_at: new Date().toISOString(),
-  source_dir: 'db/images_products',
+  source_dir: 'db/images_static/products/_sin_producto',
   total_images: all.length,
   linked_images: all.length - unlinked.length,
   unlinked_images: unlinked.length,

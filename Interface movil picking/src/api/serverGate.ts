@@ -52,8 +52,14 @@ export const useServerGate = create<ServerGateState>((set) => ({
       }
 
       // 2) Cambió la red o el servidor: vuelve a buscarlo en la subred actual.
+      //    Si la URL configurada es HTTPS pública (producción), no tiene sentido
+      //    barrer la LAN: se informa que no responde y se reintenta luego.
       set({ status: "checking" });
       const previous = getApiUrl();
+      if (/^https:\/\//i.test(previous)) {
+        set({ status: "missing", url: previous });
+        return;
+      }
       const found = await sweepLocalNetwork();
       if (!found) {
         set({ status: "missing", url: previous });

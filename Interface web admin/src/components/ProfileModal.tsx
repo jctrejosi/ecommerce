@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Loader2, X, User as UserIcon, KeyRound, CheckCircle } from "lucide-react";
+import { useRef, useState } from "react";
+import { Loader2, X, User as UserIcon, KeyRound, CheckCircle, Camera, Trash2 } from "lucide-react";
 import { authService, type UserProfile } from "../services/auth.service";
+import { resolveApiBaseUrl } from "../lib/api";
 
 const inputCls =
   "w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300";
@@ -28,6 +29,58 @@ export default function ProfileModal({
   const [repeat, setRepeat] = useState("");
   const [savingPwd, setSavingPwd] = useState(false);
   const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const [avatarUrl, setAvatarUrl] = useState(user.avatarUrl ?? "");
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarMsg, setAvatarMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadAvatar = async (file: File) => {
+    setUploadingAvatar(true);
+    setAvatarMsg(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("code", `avatar_${user.id}`);
+      fd.append("resize", "512");
+      const res = await fetch(`${resolveApiBaseUrl()}/upload/image`, {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
+      if (!res.ok) throw new Error("No se pudo subir la imagen");
+      const { url } = (await res.json()) as { url: string };
+      const updated = await authService.updateProfile({ avatarUrl: url });
+      setAvatarUrl(url);
+      onSaved(updated);
+      setAvatarMsg({ ok: true, text: "Imagen de perfil actualizada" });
+    } catch (e) {
+      setAvatarMsg({
+        ok: false,
+        text: e instanceof Error ? e.message : "Error al subir la imagen",
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
+
+  const removeAvatar = async () => {
+    setUploadingAvatar(true);
+    setAvatarMsg(null);
+    try {
+      const updated = await authService.updateProfile({ avatarUrl: "" });
+      setAvatarUrl("");
+      onSaved(updated);
+      setAvatarMsg({ ok: true, text: "Imagen de perfil eliminada" });
+    } catch (e) {
+      setAvatarMsg({
+        ok: false,
+        text: e instanceof Error ? e.message : "Error al eliminar la imagen",
+      });
+    } finally {
+      setUploadingAvatar(false);
+    }
+  };
 
   const initials = [firstName, lastName]
     .filter(Boolean)
@@ -90,14 +143,64 @@ export default function ProfileModal({
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-3 px-5 py-4 border-b border-gray-100">
-          <div className="w-11 h-11 rounded-full bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
-            <span className="text-sm font-bold text-white">{initials}</span>
+          <div className="relative shrink-0">
+            <div className="w-14 h-14 rounded-full overflow-hidden bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="Imagen de perfil" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-base font-bold text-white">{initials}</span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => avatarInputRef.current?.click()}
+              disabled={uploadingAvatar}
+              title="Cambiar imagen de perfil"
+              className="absolute -bottom-0.5 -right-0.5 w-5 h-5 rounded-full bg-white border border-gray-200 shadow flex items-center justify-center text-gray-500 hover:text-amber-600 disabled:opacity-50"
+            >
+              {uploadingAvatar ? (
+                <Loader2 size={11} className="animate-spin" />
+              ) : (
+                <Camera size={11} />
+              )}
+            </button>
+            <input
+              ref={avatarInputRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadAvatar(f);
+                e.target.value = "";
+              }}
+            />
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-sm font-bold text-gray-900 truncate">{user.fullName}</p>
             <p className="text-xs text-gray-400 truncate">
               {user.username} · {user.email}
             </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <button
+                type="button"
+                onClick={() => avatarInputRef.current?.click()}
+                disabled={uploadingAvatar}
+                className="text-[11px] font-semibold text-amber-600 hover:text-amber-700 disabled:opacity-50"
+              >
+                {avatarUrl ? "Cambiar foto" : "Añadir foto"}
+              </button>
+              {avatarUrl && (
+                <button
+                  type="button"
+                  onClick={removeAvatar}
+                  disabled={uploadingAvatar}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-gray-400 hover:text-red-500 disabled:opacity-50"
+                >
+                  <Trash2 size={11} /> Quitar
+                </button>
+              )}
+            </div>
           </div>
           <button
             onClick={onClose}
@@ -106,6 +209,14 @@ export default function ProfileModal({
             <X size={16} />
           </button>
         </div>
+
+        {avatarMsg && (
+          <p
+            className={`px-5 pt-2 text-xs ${avatarMsg.ok ? "text-green-600" : "text-red-500"}`}
+          >
+            {avatarMsg.text}
+          </p>
+        )}
 
         {/* Tabs */}
         <div className="flex border-b border-gray-100">

@@ -1,4 +1,5 @@
 /ADDT
+/ADD_ANALITICA/
 
 # tablas ADS del sistema TID (ADD_CONTAB): datos crudos, no se versionan
 /ADD_CONTAB/
@@ -7,10 +8,29 @@
 /ads/installers/
 /ads/data/
 
+# Extración de datos de tablas de postgres
+
+/extract_data_pg/
+
+# OpenADS (reimplementación open-source de ADS): código clonado y build local
+/ads/openads/src/
+/ads/openads/build/
+/ads/openads/data/
+/ads/openads/data-test/
+
 # dumps de la réplica de analytics (grandes, no se versionan en git)
 /backups/analytics/
 
-# imágenes estáticas locales (grandes; los productos se regeneran desde JPG2.zip)
-/images_products/
+# imágenes estáticas locales: un único directorio (grandes; los productos se
+# regeneran desde JPG2.zip). Contiene `products/` (fotos TID) y `media/`
+# (subidas del ecommerce, marcas, avatares, banners...).
 /images_static/
 /JPG2.zip
+
+# legado: las fotos TID vivían aquí antes de consolidarse en /images_static
+/images_products/
+
+# artefactos de la migración de estáticos (no son estáticos ni código)
+/Ean.bat
+/dedupe_report.json
+/duplicate_images.json

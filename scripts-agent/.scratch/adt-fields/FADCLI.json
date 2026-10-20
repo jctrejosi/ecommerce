@@ -1,0 +1,827 @@
+{
+  "table": "FADCLI",
+  "source": "db/ADD_ANALITICA/FADCLI.ADT",
+  "bytes": 158134660,
+  "recordCount": 122190,
+  "recordLength": 1294,
+  "headerLength": 20800,
+  "fieldCount": 102,
+  "fields": [
+    {
+      "name": "CCODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CODIGO2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CDIGITO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 25,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CCODCIU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 26,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "CNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 31,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "CNOM1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 91,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CNOM2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 111,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CAPE1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 131,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CAPE2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 151,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CDIREC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 171,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "CCIUDAD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 196,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CTELEF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 208,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "CZONA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 223,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CEMAIL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 225,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "CPROPIETAR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 285,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CCUPO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 315,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CVENDED",
+      "type": 4,
+      "typeName": "char",
+      "offset": 323,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAZO",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 325,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTIPOCLI",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 327,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CLISTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 329,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CESTADO",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 330,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CMOTIVO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 332,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CRETEN",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 362,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CBLOQUE",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 364,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CPROFESION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 366,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "CDIROFI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 391,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "CTELOFI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 416,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "CCUMPLE",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 431,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CCONYUGE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 433,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CPROFEC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 463,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "CCUMPLEC",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 488,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CDIROFIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 490,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "CTELOFIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 515,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "CTIPEMP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 530,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTIPPAG",
+      "type": 4,
+      "typeName": "char",
+      "offset": 532,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAZO1",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 534,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CDCTO1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 536,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAZO2",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 544,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CDCTO2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 546,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAZO3",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 554,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CDCTO3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 556,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAZO4",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 564,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CDCTO4",
+      "type": 10,
+      "typeName": "double",
+      "offset": 566,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAZO5",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 574,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CDCTO5",
+      "type": 10,
+      "typeName": "double",
+      "offset": 576,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAZO6",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 584,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CDCTO6",
+      "type": 10,
+      "typeName": "double",
+      "offset": 586,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CMODIFI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 594,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CFACTU",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 595,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CINVE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 596,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CCXP",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 597,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CDCTOFAC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 598,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CCONDICION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 606,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CFCHCREA",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 626,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CTIPDOC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 630,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CCODBE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 632,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CBENEFI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 642,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CDIASROT",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 692,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CSOCIAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 694,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "CODICEN",
+      "type": 4,
+      "typeName": "char",
+      "offset": 754,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "BCOCTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 767,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "OPELOGIS",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 827,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VLRLOGIS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 828,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PORLOGIS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 836,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DEBLOGIS",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 844,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CSALDO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 845,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CNIT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 853,
+      "length": 11,
+      "decimals": 0
+    },
+    {
+      "name": "CBANMAIL",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 864,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTCIFIN",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 865,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CCARNET",
+      "type": 4,
+      "typeName": "char",
+      "offset": 866,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CDIASMOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 870,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CAUTMORA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 878,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CSEXO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 882,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CFCHMOD",
+      "type": 10,
+      "typeName": "double",
+      "offset": 883,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CCELU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 891,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CDIRCORRES",
+      "type": 4,
+      "typeName": "char",
+      "offset": 911,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "DCTOC1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 961,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DCTOC2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 969,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DCTOC3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 977,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DIASC1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 985,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DIASC2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 993,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DIASC3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1001,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CACTIVI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1009,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "CFCHACTI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1014,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "NOVEDAD",
+      "type": 5,
+      "typeName": "?5",
+      "offset": 1022,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "CRETACTI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1031,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CEMAILFE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1033,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "CEMAILFB",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1093,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "CPORRETI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1193,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CBASERETI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1201,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CMETCOMP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1209,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CFCHVIGMC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1217,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CPLAENTRE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1225,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CFRECUVIS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1233,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CDIASEM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1241,
+      "length": 9,
+      "decimals": 0
+    },
+    {
+      "name": "CSEMA1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1250,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "CSEMA2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1255,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "CSEMA3",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1260,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "CSEMA4",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1265,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "CTIPCROSS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1270,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CINIAGEN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1278,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CFRECUVIS2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1286,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

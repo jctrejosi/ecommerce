@@ -1,11 +1,18 @@
 # Mercaldas — ADS (Advantage Database Server) en Docker
 
-Corre la base **Publidata** (`db/ADDT`) con el servidor ADS en un contenedor.
+> ✅ **Resuelto sin el instalador de SAP: usar `db/ads/openads/`.**
+> El instalador `adslinux-11.10.0.24.tar.gz` no existe públicamente (producto
+> descontinuado por SAP en dic-2022), pero **OpenADS** (reimplementación
+> open-source, Apache-2.0) lee/escribe los `.adt` nativos de forma
+> byte-compatible y corre en Linux. Ya está validado contra `db/ADD_ANALITICA`:
+> ver `docs/OPENADS-VALIDACION.md` y `db/ads/openads/README.md`.
+>
+> Lo que sigue en este documento es el **plan original** (servidor oficial de
+> SAP), conservado solo como contexto histórico.
 
-> ⚠️ **Estado: pendiente del instalador.** El producto está descontinuado por
-> SAP y el instalador `adslinux-11.10.0.24.tar.gz` (20 MB) no se encuentra en
-> ninguna fuente pública. Hay que conseguirlo del proveedor del sistema
-> VISADS, de la máquina Windows original o de quien tenga el producto.
+## Plan original (obsoleto): servidor ADS oficial de SAP
+
+Corre la base **Publidata** (`db/ADDT`) con el servidor ADS en un contenedor.
 
 ## 1. Preparar los datos (una vez)
 

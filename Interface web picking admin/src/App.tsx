@@ -9,6 +9,8 @@ import type {
 } from './types'
 import type { Branch, CatalogProduct, Category, Shelf, ShelfType } from './types'
 import MapView from './MapView'
+import ProductDetailModal from './ProductDetailModal'
+import { CategoryTree } from './categoryTree'
 import { useCategoryChangeConfirm, CategoryChangeConfirm } from './shelfCategories'
 import UsersView from './UsersView'
 import OrdersView from './OrdersView'
@@ -16,7 +18,7 @@ import { PickerChatDrawer } from './PickerChat'
 import { useChatAlerts } from './useChatAlerts'
 import { NotificationsBell } from './NotificationsBell'
 import { requestNotificationPermission } from './services/browserNotifications'
-import { getStoredTheme, setStoredTheme, THEME_PRESETS, type ThemePreset } from './theme'
+import { getStoredTheme, setStoredTheme, THEME_COLORS, THEME_MODES, type ThemeState } from './theme'
 // Logo corporativo (DSI): lo comparten el header del panel y el pie de copyright.
 import logo from './assets/logo.png'
 // Marca de la app de picking: se conserva al pie de la pantalla de login.
@@ -51,6 +53,8 @@ export default function App() {
   const [shelves, setShelves] = useState<Shelf[]>([])
   const [categories, setCategories] = useState<Category[]>([])
   const [products, setProducts] = useState<CatalogProduct[]>([])
+  const [productsTotal, setProductsTotal] = useState(0)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [search, setSearch] = useState('')
   const [appliedSearch, setAppliedSearch] = useState('')
   const [loading, setLoading] = useState(false)
@@ -61,9 +65,13 @@ export default function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Bandeja de chat del header (un hilo por picker).
   const [chatOpen, setChatOpen] = useState(false)
-  // Tema activo (preset) y su menú desplegable en las opciones del usuario.
-  const [theme, setTheme] = useState<ThemePreset>(() => getStoredTheme())
-  const [themeMenu, setThemeMenu] = useState(false)
+  // Tema activo (color + modo) y el menú desplegable de opciones del usuario.
+  const [theme, setTheme] = useState<ThemeState>(() => getStoredTheme())
+  const [userMenu, setUserMenu] = useState(false)
+  const changeTheme = (next: ThemeState) => {
+    setStoredTheme(next)
+    setTheme(next)
+  }
   // Logo de la tienda configurado en el admin general (endpoint público).
   const [storeLogo, setStoreLogo] = useState<string | null>(null)
 
@@ -104,6 +112,8 @@ export default function App() {
       .then((u) => {
         setAuthUser(u)
         setAuthState('in')
+        // El admin de sucursal queda fijado a su sucursal.
+        if (u.branchId != null) setBranchId(u.branchId)
       })
       .catch(() => setAuthState('out'))
   }, [])
@@ -137,13 +147,13 @@ export default function App() {
       .catch((e) => setError(e instanceof ApiError ? e.message : 'No se pudieron cargar las sucursales'))
   }, [])
 
-  // Categorías (para asociar a las estanterías)
+  // Categorías (para asociar a las estanterías) — del surtido de la sucursal.
   useEffect(() => {
     api
-      .categories()
+      .categories(branchId ?? undefined)
       .then(setCategories)
       .catch(() => undefined)
-  }, [])
+  }, [branchId])
 
   // Estanterías de la sucursal seleccionada
   useEffect(() => {
@@ -159,11 +169,29 @@ export default function App() {
   const loadProducts = useCallback((branch: number, q: string) => {
     setLoading(true)
     api
-      .products(branch, q)
-      .then(setProducts)
+      .products(branch, q, 0, INFINITE_STEP)
+      .then((res) => {
+        setProducts(res.products)
+        setProductsTotal(res.total)
+      })
       .catch((e) => setError(e instanceof ApiError ? e.message : 'Error cargando productos'))
       .finally(() => setLoading(false))
   }, [])
+
+  // Siguiente página de productos (lazy load).
+  const loadMoreProducts = useCallback(() => {
+    if (!branchId || loadingMore) return
+    if (products.length >= productsTotal) return
+    setLoadingMore(true)
+    api
+      .products(branchId, appliedSearch, products.length, INFINITE_STEP)
+      .then((res) => {
+        setProducts((cur) => [...cur, ...res.products])
+        setProductsTotal(res.total)
+      })
+      .catch((e) => setError(e instanceof ApiError ? e.message : 'Error cargando productos'))
+      .finally(() => setLoadingMore(false))
+  }, [branchId, appliedSearch, products.length, productsTotal, loadingMore])
 
   // Productos al cambiar de sucursal
   useEffect(() => {
@@ -174,6 +202,8 @@ export default function App() {
   }, [branchId, loadProducts])
 
   const branch = branches.find((b) => b.id === branchId) ?? null
+  // Alcance del admin: si tiene sucursal asignada, no puede cambiarla.
+  const scopedBranchId = authUser?.branchId ?? null
 
   if (authState === 'checking') {
     return (
@@ -256,75 +286,100 @@ export default function App() {
                 ) : null}
               </button>
 
-              {/* Opciones del usuario: tema + sesión. */}
-              <div className="flex items-center gap-2.5">
-              {/* Cambio de tema (preset) — opción del usuario. */}
+              {/* Opciones del usuario: menú desplegable con tema (color + modo). */}
               <div className="relative">
                 <button
-                  onClick={() => setThemeMenu((v) => !v)}
-                  title="Cambiar tema"
-                  aria-label="Cambiar tema"
-                  className="shrink-0 w-11 h-11 rounded-full bg-white/5 border border-white/10 text-white/70 hover:bg-white/10 hover:text-white transition-all flex items-center justify-center"
+                  onClick={() => setUserMenu((v) => !v)}
+                  title="Opciones del usuario"
+                  aria-label="Opciones del usuario"
+                  aria-expanded={userMenu}
+                  className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-full pl-1 pr-3 py-1 hover:bg-white/10 transition-all"
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
-                    <path d="M12 3a9 9 0 1 0 0 18h1.5a2.5 2.5 0 0 0 0-5H13a1 1 0 0 1 0-2h4a4 4 0 0 0 4-4A7 7 0 0 0 12 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                    <circle cx="7.5" cy="12" r="1.2" fill="currentColor" />
-                    <circle cx="10" cy="8" r="1.2" fill="currentColor" />
-                    <circle cx="14" cy="7.5" r="1.2" fill="currentColor" />
+                  <span className="w-8 h-8 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold text-sm">
+                    {(authUser?.fullName ?? authUser?.username ?? '?').charAt(0).toUpperCase()}
+                  </span>
+                  <span className="leading-tight text-left">
+                    <span className="block text-white/90 text-xs font-bold truncate max-w-[160px]">
+                      {authUser?.fullName ?? authUser?.username}
+                    </span>
+                    <span className="block text-white/40 text-[10px] font-semibold">Administrador</span>
+                  </span>
+                  <svg
+                    width="14" height="14" viewBox="0 0 24 24" fill="none"
+                    className={`text-white/40 transition-transform ${userMenu ? 'rotate-180' : ''}`}
+                  >
+                    <path d="m6 9 6 6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
                 </button>
-                {themeMenu ? (
+                {userMenu ? (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => setThemeMenu(false)} />
-                    <div className="absolute right-0 top-full mt-2 z-50 w-48 bg-surface border border-white/10 rounded-xl p-1.5 shadow-xl">
-                      <p className="px-2.5 py-1.5 text-white/40 text-[10px] font-bold uppercase tracking-wider">
-                        Tema
+                    <div className="fixed inset-0 z-40" onClick={() => setUserMenu(false)} />
+                    <div className="absolute right-0 top-full mt-2 z-50 w-60 bg-surface border border-white/10 rounded-xl p-3 shadow-xl">
+                      {/* Color del tema: swatches circulares. */}
+                      <p className="px-1 pb-1.5 text-white/40 text-[10px] font-bold uppercase tracking-wider">
+                        Color
                       </p>
-                      {THEME_PRESETS.map((p) => {
-                        const active = p.id === theme
-                        return (
-                          <button
-                            key={p.id}
-                            onClick={() => {
-                              setStoredTheme(p.id)
-                              setTheme(p.id)
-                              setThemeMenu(false)
-                            }}
-                            className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg text-sm font-bold transition-colors ${
-                              active ? 'bg-amber-400 text-on-accent' : 'text-white/70 hover:bg-white/5'
-                            }`}
-                          >
-                            <span
-                              className="w-4 h-4 rounded-full border border-white/20"
-                              style={{ background: p.swatch }}
+                      <div className="flex items-center gap-2 px-1 pb-3">
+                        {THEME_COLORS.map((c) => {
+                          const active = c.id === theme.color
+                          return (
+                            <button
+                              key={c.id}
+                              onClick={() => changeTheme({ ...theme, color: c.id })}
+                              title={c.label}
+                              aria-label={`Color ${c.label}`}
+                              aria-pressed={active}
+                              className={`w-7 h-7 rounded-full border-2 transition-transform ${
+                                active ? 'border-white scale-110' : 'border-white/20 hover:scale-105'
+                              }`}
+                              style={{ background: c.swatch }}
                             />
-                            <span className="flex-1 text-left">{p.label}</span>
-                            <span
-                              className={`text-[10px] font-semibold ${
-                                active ? 'text-on-accent/70' : 'text-white/35'
+                          )
+                        })}
+                      </div>
+
+                      {/* Modo claro/oscuro: botones circulares con ícono (sol / luna). */}
+                      <p className="px-1 pb-1.5 text-white/40 text-[10px] font-bold uppercase tracking-wider">
+                        Modo
+                      </p>
+                      <div className="flex items-center gap-2 px-1">
+                        {THEME_MODES.map((m) => {
+                          const active = m.id === theme.mode
+                          return (
+                            <button
+                              key={m.id}
+                              onClick={() => changeTheme({ ...theme, mode: m.id })}
+                              title={m.label}
+                              aria-label={`Modo ${m.label}`}
+                              aria-pressed={active}
+                              className={`w-9 h-9 rounded-full border flex items-center justify-center transition-all ${
+                                active
+                                  ? 'bg-amber-400 text-on-accent border-amber-400'
+                                  : 'bg-white/5 text-white/60 border-white/10 hover:text-white hover:bg-white/10'
                               }`}
                             >
-                              {p.hint}
-                            </span>
-                          </button>
-                        )
-                      })}
+                              {m.id === 'dark' ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                  <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                </svg>
+                              ) : m.id === 'light' ? (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                  <circle cx="12" cy="12" r="4" stroke="currentColor" strokeWidth="2" />
+                                  <path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                              ) : (
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                                  <rect x="2.5" y="4" width="19" height="13" rx="2" stroke="currentColor" strokeWidth="2" />
+                                  <path d="M8 21h8M12 17v4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                                </svg>
+                              )}
+                            </button>
+                          )
+                        })}
+                      </div>
                     </div>
                   </>
                 ) : null}
-              </div>
-
-              <div className="flex items-center gap-2.5 bg-white/5 border border-white/10 rounded-full pl-1 pr-3.5 py-1">
-                <span className="w-8 h-8 rounded-full bg-amber-400 text-on-accent flex items-center justify-center font-extrabold text-sm">
-                  {(authUser?.fullName ?? authUser?.username ?? '?').charAt(0).toUpperCase()}
-                </span>
-                <div className="leading-tight">
-                  <p className="text-white/90 text-xs font-bold truncate max-w-[160px]">
-                    {authUser?.fullName ?? authUser?.username}
-                  </p>
-                  <p className="text-white/40 text-[10px] font-semibold">Administrador</p>
-                </div>
-              </div>
               </div>
               <button
                 onClick={handleLogout}
@@ -341,32 +396,46 @@ export default function App() {
 
           {/* Fila inferior: selector de sucursales */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">Sucursales</span>
-            {/* "Todas": solo lo aprovechan las vistas que no dependen de una
-                sucursal (Pedidos); las de estantería piden elegir una. */}
-            <button
-              onClick={() => setBranchId(null)}
-              className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-                branchId === null
-                  ? 'bg-amber-400 text-on-accent border-amber-400'
-                  : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
-              }`}
-            >
-              Todas
-            </button>
-            {branches.map((b) => (
-              <button
-                key={b.id}
-                onClick={() => setBranchId(b.id)}
-                className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
-                  branchId === b.id
-                    ? 'bg-amber-400 text-on-accent border-amber-400'
-                    : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
-                }`}
-              >
-                {b.name}
-              </button>
-            ))}
+            {scopedBranchId != null ? (
+              // Admin de sucursal: sucursal fija, sin selector.
+              <>
+                <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">
+                  Sucursal
+                </span>
+                <span className="px-3.5 py-2 rounded-xl text-xs font-bold bg-amber-400/15 text-amber-400 border border-amber-400/40">
+                  {branch?.name ?? authUser?.branchName ?? `Sucursal ${scopedBranchId}`}
+                </span>
+              </>
+            ) : (
+              <>
+                <span className="text-white/40 text-xs font-bold uppercase tracking-wider mr-1">Sucursales</span>
+                {/* "Todas": solo lo aprovechan las vistas que no dependen de una
+                    sucursal (Pedidos); las de estantería piden elegir una. */}
+                <button
+                  onClick={() => setBranchId(null)}
+                  className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                    branchId === null
+                      ? 'bg-amber-400 text-on-accent border-amber-400'
+                      : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
+                  }`}
+                >
+                  Todas
+                </button>
+                {branches.map((b) => (
+                  <button
+                    key={b.id}
+                    onClick={() => setBranchId(b.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all border ${
+                      branchId === b.id
+                        ? 'bg-amber-400 text-on-accent border-amber-400'
+                        : 'bg-white/5 text-white/50 border-white/10 hover:text-white/80'
+                    }`}
+                  >
+                    {b.name}
+                  </button>
+                ))}
+              </>
+            )}
           </div>
         </div>
       </header>
@@ -377,7 +446,7 @@ export default function App() {
         <div className="shrink-0 pr-[var(--app-scrollbar)]">
           <div className="w-full max-w-6xl mx-auto px-5 pt-4 pb-3">
             <div className="flex gap-2 flex-wrap">
-              {(['shelves', 'categories', 'map', 'products', 'orders', 'users', 'schedule'] as const).map((t) => (
+              {(['map', 'shelves', 'categories', 'products', 'orders', 'users', 'schedule'] as const).map((t) => (
                 <button
                   key={t}
                   onClick={() => setTab(t)}
@@ -442,14 +511,18 @@ export default function App() {
         ) : tab === 'orders' ? (
           <OrdersView branchId={branchId} branchName={branch?.name ?? ''} notify={notify} />
         ) : tab === 'users' ? (
-          <UsersView notify={notify} currentUserId={authUser?.id ?? null} />
+          <UsersView notify={notify} currentUserId={authUser?.id ?? null} branchId={branchId} />
         ) : tab === 'schedule' ? (
           <ScheduleView branchId={branchId} branches={branches} notify={notify} />
         ) : (
           <ProductsView
             branchId={branchId}
+            shelves={shelves}
             products={products}
+            total={productsTotal}
             loading={loading}
+            loadingMore={loadingMore}
+            onLoadMore={loadMoreProducts}
             search={search}
             setSearch={setSearch}
             appliedSearch={appliedSearch}
@@ -464,7 +537,12 @@ export default function App() {
       <CopyrightFooter />
 
       {/* Bandeja de chat (bandeja de pickers + hilo) */}
-      <PickerChatDrawer open={chatOpen} onClose={() => setChatOpen(false)} />
+      <PickerChatDrawer
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+        branches={branches}
+        lockedBranchId={scopedBranchId}
+      />
     </div>
   )
 }
@@ -473,17 +551,19 @@ export default function App() {
 
 /** Pie de copyright, compartido por el panel y la pantalla de login. */
 function CopyrightFooter() {
+  // La banda sigue el tema (oscura en oscuro, clara en claro) y el texto usa la
+  // tinta del tema (`white/NN` → `--ink`), así contrasta en ambos modos.
   return (
-    <footer className="shrink-0" style={{ background: '#111827' }}>
+    <footer className="shrink-0" style={{ background: 'var(--footer-bg)' }}>
       <div className="flex flex-col md:flex-row items-center justify-center gap-x-3 gap-y-0.5 px-3 py-1.5 text-center">
         <a href="https://dsi.com.co" target="_blank" rel="noopener noreferrer" className="flex items-center hover:opacity-80 transition-opacity">
           {/* Mismo logo (y tamaño) que el footer del admin general. */}
           <img src={logo} alt="Mercaldas" className="h-[26px] w-auto object-contain" />
         </a>
-        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.4)' }}>
-          © 2026 Desarrollado por <span className="font-bold" style={{ color: 'rgba(255,255,255,0.7)' }}>DSI SA</span> · Todos los derechos reservados
+        <p className="text-[11px] text-white/40">
+          © 2026 Desarrollado por <span className="font-bold text-white/70">DSI SA</span> · Todos los derechos reservados
         </p>
-        <p className="text-[11px]" style={{ color: 'rgba(255,255,255,0.3)' }}>
+        <p className="text-[11px] text-white/30">
           Manizales, Caldas, Colombia
         </p>
       </div>
@@ -603,12 +683,14 @@ function ShelvesView({
                 <div className="flex gap-1.5 shrink-0">
                   <button
                     onClick={() => { setCreating(false); setEditing(s) }}
-                    className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center hover:bg-white/10"
+                    className="h-8 px-2.5 rounded-lg bg-white/5 border border-white/10 flex items-center gap-1.5 text-xs font-bold text-white/70 hover:bg-white/10 hover:text-white transition-colors"
                     title="Editar"
+                    aria-label={`Editar ${s.code}`}
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
+                      <path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
+                    Editar
                   </button>
                   <button
                     onClick={() => setDeleting(s)}
@@ -676,6 +758,8 @@ function ShelfModal({
     categoryIds: (initial?.categories ?? []).map((c) => c.id),
   }))
   const [catSearch, setCatSearch] = useState('')
+  // El cambio de código se confirma aparte (ver `submit`).
+  const [confirmCode, setConfirmCode] = useState(false)
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }))
@@ -700,12 +784,19 @@ function ShelfModal({
       })),
   })
 
-  const catNorm = catSearch.trim().toLowerCase()
-  const filteredCategories = catNorm
-    ? categories.filter((c) => c.name.toLowerCase().includes(catNorm))
-    : categories
+
 
   const valid = form.code.trim().length > 0
+  // El código es el identificador de la estantería: al editarlo se pide confirmación.
+  const codeChanged = initial != null && form.code.trim() !== initial.code
+  function submit() {
+    if (!valid) return
+    if (codeChanged) {
+      setConfirmCode(true)
+      return
+    }
+    onSave(form)
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 p-0 sm:p-6" onClick={onClose}>
@@ -720,7 +811,7 @@ function ShelfModal({
           </h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
@@ -799,38 +890,13 @@ function ShelfModal({
                 })}
               </div>
             )}
-            <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5 [scrollbar-gutter:stable]">
-              {filteredCategories.map((c) => {
-                const checked = form.categoryIds.includes(c.id)
-                return (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => requestCategoryChange(c.id, c.name)}
-                    className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-white/5 ${
-                      checked ? 'text-amber-300' : 'text-white/70'
-                    }`}
-                  >
-                    <span
-                      className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                        checked ? 'bg-amber-400 border-amber-400 text-on-accent' : 'border-white/25'
-                      }`}
-                    >
-                      {checked ? (
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                          <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                        </svg>
-                      ) : null}
-                    </span>
-                    <span style={{ paddingLeft: Math.max(0, c.level) * 12 }} className="truncate">
-                      {c.name}
-                    </span>
-                  </button>
-                )
-              })}
-              {filteredCategories.length === 0 && (
-                <p className="px-3 py-4 text-center text-white/30 text-xs">Sin resultados.</p>
-              )}
+            <div className="mt-2 max-h-44 overflow-y-auto rounded-xl border border-white/10 py-1 [scrollbar-gutter:stable]">
+              <CategoryTree
+                categories={categories}
+                selectedIds={form.categoryIds}
+                onToggle={(c) => requestCategoryChange(c.id, c.name)}
+                query={catSearch}
+              />
             </div>
             <span className="text-white/25 text-[11px] font-medium mt-1 block">
               Una estantería puede agrupar varias categorías.
@@ -885,7 +951,7 @@ function ShelfModal({
             Cancelar
           </button>
           <button
-            onClick={() => valid && onSave(form)}
+            onClick={submit}
             disabled={!valid}
             className="flex-1 py-3 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40"
           >
@@ -895,6 +961,60 @@ function ShelfModal({
       </div>
 
       {pending && <CategoryChangeConfirm pending={pending} onConfirm={confirm} onCancel={cancel} />}
+      {confirmCode && initial && (
+        <ShelfCodeChangeConfirm
+          oldCode={initial.code}
+          newCode={form.code.trim()}
+          onCancel={() => setConfirmCode(false)}
+          onConfirm={() => onSave(form)}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Confirmación al cambiar el código de una estantería: es su identificador en el
+ * panel y en la app, así que se evita cambiarlo por un descuido.
+ */
+function ShelfCodeChangeConfirm({
+  oldCode,
+  newCode,
+  onCancel,
+  onConfirm,
+}: {
+  oldCode: string
+  newCode: string
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/70 p-6" onClick={onCancel}>
+      <div
+        className="w-full max-w-sm bg-surface border border-white/10 rounded-2xl p-5"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="font-extrabold text-base">Cambiar código</h3>
+        <p className="text-white/60 text-sm mt-2 leading-relaxed">
+          Vas a cambiar el código de <span className="font-bold text-white/80">«{oldCode}»</span> a{' '}
+          <span className="font-bold text-white/80">«{newCode}»</span>. Es su identificador en el panel y
+          en la app móvil. ¿Deseas continuar?
+        </p>
+        <div className="flex gap-3 mt-4">
+          <button
+            onClick={onCancel}
+            className="flex-1 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm font-bold"
+          >
+            Cancelar
+          </button>
+          <button
+            onClick={onConfirm}
+            className="flex-1 py-2.5 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold"
+          >
+            Cambiar código
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -944,7 +1064,7 @@ function DeleteShelfModal({
           <h2 className="font-extrabold text-lg text-red-400">Eliminar estantería</h2>
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center" title="Cerrar">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-              <path d="M18 6L6 18M6 6l12 12" stroke="white" strokeWidth="2" strokeLinecap="round" />
+              <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
             </svg>
           </button>
         </div>
@@ -998,55 +1118,59 @@ function DeleteShelfModal({
 
 function ProductsView({
   branchId,
+  shelves,
   products,
+  total,
   loading,
+  loadingMore,
+  onLoadMore,
   search,
   setSearch,
   appliedSearch,
   onSearch,
 }: {
   branchId: number | null
+  shelves: Shelf[]
   products: CatalogProduct[]
+  total: number
   loading: boolean
+  loadingMore: boolean
+  onLoadMore: () => void
   search: string
   setSearch: (s: string) => void
   appliedSearch: string
   onSearch: () => void
 }) {
-  const [visibleCount, setVisibleCount] = useState(INFINITE_STEP)
+  // Producto abierto en el detalle (con la miniatura del mapa).
+  const [selected, setSelected] = useState<CatalogProduct | null>(null)
   const sentinelRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => {
-    setVisibleCount(INFINITE_STEP)
-  }, [branchId, appliedSearch])
-
-  const visible = products.slice(0, visibleCount)
   const withoutShelf = useMemo(
     () => products.filter((p) => p.shelves.length === 0).length,
     [products],
   )
+  const hasMore = products.length < total
 
-  // Lazy load infinito: cuando el sentinel entra en pantalla, cargar más
+  // Lazy load: cuando el sentinel entra en pantalla, pedir la siguiente página.
   useEffect(() => {
     const el = sentinelRef.current
-    if (!el || visible.length >= products.length) return
+    if (!el || !hasMore) return
     const obs = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setVisibleCount((v) => Math.min(products.length, v + INFINITE_STEP))
-        }
+        if (entries[0]?.isIntersecting) onLoadMore()
       },
       { rootMargin: '400px' },
     )
     obs.observe(el)
     return () => obs.disconnect()
-  }, [products.length, visible.length])
+  }, [hasMore, onLoadMore, products.length])
 
   if (!branchId) {
     return <p className="text-white/40 text-sm">Selecciona una sucursal.</p>
   }
 
   return (
+    <>
     <div className="flex flex-col" style={{ height: 'calc(100dvh - 210px)', minHeight: 320 }}>
       {/* Filtros y encabezados — fijos (no hacen scroll) */}
       <div className="shrink-0">
@@ -1066,7 +1190,9 @@ function ProductsView({
         </div>
 
         <p className="text-white/40 text-xs font-medium mb-1">
-          {loading ? 'Cargando…' : `${products.length} producto(s)`}
+          {loading
+            ? 'Cargando…'
+            : `${products.length} de ${total} producto(s) de esta sucursal`}
           {appliedSearch ? ` para “${appliedSearch}”` : ''}
         </p>
         <p className="text-white/30 text-[11px] font-medium mb-3 leading-relaxed">
@@ -1077,10 +1203,13 @@ function ProductsView({
 
       {/* Lista — único elemento con scroll */}
       <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pr-1 pb-4">
-        {visible.map((p) => (
-          <div
+        {products.map((p) => (
+          <button
             key={p.productVariantId}
-            className="bg-surface border border-white/10 rounded-xl px-4 py-3"
+            type="button"
+            onClick={() => setSelected(p)}
+            title="Ver detalle y ubicación en el mapa"
+            className="w-full text-left bg-surface border border-white/10 rounded-xl px-4 py-3 hover:border-amber-400/60 hover:bg-white/5 transition-colors"
           >
             <p className="font-bold text-sm truncate">{p.productName}</p>
             <p className="text-white/35 text-xs font-medium truncate">
@@ -1118,20 +1247,31 @@ function ProductsView({
                 </span>
               )}
             </div>
-          </div>
+          </button>
         ))}
-        {visible.length === 0 && !loading && (
+        {products.length === 0 && !loading && (
           <p className="text-white/30 text-sm text-center py-10">Sin resultados.</p>
         )}
         {/* Sentinel del lazy load infinito */}
-        {visible.length < products.length && (
+        {hasMore && (
           <div ref={sentinelRef} className="flex items-center justify-center gap-2 py-4">
             <div className="w-4 h-4 rounded-full border-2 border-white/15 border-t-amber-400 animate-spin" />
-            <span className="text-white/30 text-xs font-semibold">Cargando más…</span>
+            <span className="text-white/30 text-xs font-semibold">
+              {loadingMore ? 'Cargando más…' : 'Desplázate para ver más'}
+            </span>
           </div>
         )}
       </div>
     </div>
+
+    {selected && (
+      <ProductDetailModal
+        product={selected}
+        shelves={shelves}
+        onClose={() => setSelected(null)}
+      />
+    )}
+    </>
   )
 }
 
@@ -1142,8 +1282,9 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
   const [password, setPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // Logo de la tienda configurado en el admin general (endpoint público).
+  // Logo y nombre de la tienda configurados en el admin general (endpoint público).
   const [storeLogo, setStoreLogo] = useState<string | null>(null)
+  const [storeName, setStoreName] = useState('Mercaldas')
   const passwordRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -1151,7 +1292,9 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
     api
       .storeInfo()
       .then((d) => {
-        if (!cancelled) setStoreLogo(resolveAssetUrl(d.url))
+        if (cancelled) return
+        setStoreLogo(resolveAssetUrl(d.url))
+        setStoreName(d.title?.trim() || 'Mercaldas')
       })
       .catch(() => undefined)
     return () => {
@@ -1218,7 +1361,7 @@ function LoginScreen({ onSuccess }: { onSuccess: (user: AuthUser) => void }) {
           >
             <div className="text-center mb-1">
               <h1 className="text-2xl font-extrabold tracking-tight text-white">
-                Picking <span className="text-amber-400">Admin</span>
+                {storeName} <span className="text-amber-400">Picking</span>
               </h1>
               <p className="text-white/40 text-xs font-medium mt-1">
                 Inicia sesión con tu usuario administrador
@@ -1448,8 +1591,13 @@ function CategoriesView({
   const [assignShelfId, setAssignShelfId] = useState<number | null>(null)
 
   useEffect(() => {
-    api.categories().then(setCategories).catch(() => undefined)
-  }, [])
+    api
+      .categories(branchId ?? undefined)
+      .then(setCategories)
+      .catch(() => undefined)
+    setSelectedId(null)
+    setOrg(null)
+  }, [branchId])
 
   const loadOrg = useCallback(async (categoryId: number) => {
     if (!branchId) return

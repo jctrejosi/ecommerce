@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api, ApiError } from './services/api'
+import { CategoryTree } from './categoryTree'
 import { useCategoryChangeConfirm, CategoryChangeConfirm } from './shelfCategories'
 import type { Category, Shelf } from './types'
 
@@ -700,8 +701,8 @@ export default function MapView({
 // ─── Modal: contenido (categorías) de una estantería ─────────────────────────
 
 /**
- * Gestión del contenido de una estantería desde el mapa: se le asocian las
- * categorías de productos que guarda (relación N:M).
+ * Editor de una estantería desde el mapa: permite cambiar su nombre y asociarle
+ * las categorías de productos que guarda (relación N:M).
  */
 function ShelfCategoriesModal({
   shelf,
@@ -718,6 +719,7 @@ function ShelfCategoriesModal({
   onClose: () => void
   onSaved: () => void
 }) {
+  const [name, setName] = useState(shelf.name)
   const [selectedIds, setSelectedIds] = useState<number[]>(shelf.categories.map((c) => c.id))
   const [search, setSearch] = useState('')
   const [saving, setSaving] = useState(false)
@@ -737,19 +739,21 @@ function ShelfCategoriesModal({
       ),
   })
 
-  const norm = search.trim().toLowerCase()
-  const filtered = norm ? categories.filter((c) => c.name.toLowerCase().includes(norm)) : categories
-
   async function save() {
+    const trimmed = name.trim()
+    if (!trimmed) {
+      setError('El nombre de la estantería no puede estar vacío')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
-      await api.updateShelf(shelf.id, { categoryIds: selectedIds })
-      notify(`Categorías de ${shelf.code} actualizadas`)
+      await api.updateShelf(shelf.id, { name: trimmed, categoryIds: selectedIds })
+      notify(`${shelf.code} actualizada`)
       onSaved()
       onClose()
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'No se pudieron guardar las categorías')
+      setError(e instanceof ApiError ? e.message : 'No se pudo guardar la estantería')
       setSaving(false)
     }
   }
@@ -765,9 +769,9 @@ function ShelfCategoriesModal({
       >
         <div className="shrink-0 px-5 pt-4 pb-3 border-b border-white/8 flex items-center justify-between">
           <div>
-            <h2 className="font-extrabold text-lg">Contenido de {shelf.code}</h2>
+            <h2 className="font-extrabold text-lg">Editar {shelf.code}</h2>
             <p className="text-white/40 text-xs font-medium mt-0.5">
-              Asocia las categorías de productos que guarda esta estantería.
+              Cambia el nombre y asocia las categorías de productos de la estantería.
             </p>
           </div>
           <button
@@ -782,6 +786,16 @@ function ShelfCategoriesModal({
         </div>
 
         <div className="p-5 space-y-3 overflow-y-auto">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-white/40 text-[11px] font-bold uppercase tracking-wider">Nombre</span>
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nombre de la estantería"
+              className="w-full bg-app border border-white/10 rounded-xl px-3 py-2 text-sm outline-none focus:border-amber-400"
+            />
+          </label>
+
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -809,38 +823,14 @@ function ShelfCategoriesModal({
             </div>
           )}
 
-          <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10 divide-y divide-white/5 [scrollbar-gutter:stable]">
-            {filtered.map((c) => {
-              const checked = selectedIds.includes(c.id)
-              return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => requestCategoryChange(c.id, c.name)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 text-left text-sm hover:bg-white/5 ${
-                    checked ? 'text-amber-300' : 'text-white/70'
-                  }`}
-                >
-                  <span
-                    className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${
-                      checked ? 'bg-amber-400 border-amber-400 text-on-accent' : 'border-white/25'
-                    }`}
-                  >
-                    {checked ? (
-                      <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                        <path d="M5 13l4 4L19 7" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span style={{ paddingLeft: Math.max(0, c.level) * 12 }} className="truncate">
-                    {c.name}
-                  </span>
-                </button>
-              )
-            })}
-            {filtered.length === 0 && (
-              <p className="text-white/30 text-sm text-center py-6">Sin categorías.</p>
-            )}
+          <div className="max-h-64 overflow-y-auto rounded-xl border border-white/10 py-1 [scrollbar-gutter:stable]">
+            <CategoryTree
+              categories={categories}
+              selectedIds={selectedIds}
+              onToggle={(c) => requestCategoryChange(c.id, c.name)}
+              query={search}
+              emptyLabel="Sin categorías."
+            />
           </div>
 
           {error && <p className="text-red-400 text-xs font-medium">{error}</p>}
@@ -858,7 +848,7 @@ function ShelfCategoriesModal({
             disabled={saving}
             className="flex-1 py-3 rounded-xl bg-amber-400 text-on-accent text-sm font-extrabold disabled:opacity-40"
           >
-            {saving ? 'Guardando…' : 'Guardar categorías'}
+            {saving ? 'Guardando…' : 'Guardar cambios'}
           </button>
         </div>
       </div>

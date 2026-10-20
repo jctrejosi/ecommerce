@@ -1,0 +1,267 @@
+{
+  "table": "POSDCTO2",
+  "source": "db/ADD_ANALITICA/POSDCTO2.ADT",
+  "bytes": 1116832,
+  "recordCount": 4664,
+  "recordLength": 238,
+  "headerLength": 6800,
+  "fieldCount": 32,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "PROVEE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 24,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 34,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 64,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 72,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAI",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 80,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAF",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 84,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "MONTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 88,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 96,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "TARJETA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 109,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ACLI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 110,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 111,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "HORAI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 119,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "HORAF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 125,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "DWEB",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 131,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "BORRA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 132,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN4",
+      "type": 10,
+      "typeName": "double",
+      "offset": 133,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "REDON",
+      "type": 10,
+      "typeName": "double",
+      "offset": 141,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "HORAI2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 149,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "HORAF2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 155,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "PAGOPTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 161,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTOSPTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 169,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPOFCH",
+      "type": 4,
+      "typeName": "char",
+      "offset": 177,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DNOMDIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 187,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DUSU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 197,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "DFECHAP",
+      "type": 3,
+      "typeName": "?3",
+      "offset": 201,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "DHORAP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 205,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DTIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 215,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CLIVINO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 217,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PORCEN5",
+      "type": 10,
+      "typeName": "double",
+      "offset": 218,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPOTDA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 226,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CODACTI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 236,
+      "length": 2,
+      "decimals": 0
+    }
+  ]
+}

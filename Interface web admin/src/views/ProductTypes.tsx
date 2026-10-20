@@ -9,6 +9,7 @@ import {
   Layers,
   Eye,
   EyeOff,
+  Globe,
   AlertTriangle,
 } from "lucide-react";
 
@@ -62,11 +63,15 @@ function ProductTypeRow({
   onEdit,
   onDelete,
   onToggleActive,
+  onLanding,
+  onToggleLanding,
 }: {
   t: AdminProductType;
   onEdit: (t: AdminProductType) => void;
   onDelete: (id: number) => void;
   onToggleActive: (id: number, isActive: boolean) => void;
+  onLanding: boolean;
+  onToggleLanding: (t: AdminProductType) => void;
 }) {
   return (
     <div className="divide-y divide-gray-50">
@@ -100,6 +105,25 @@ function ProductTypeRow({
             Inactivo
           </span>
         )}
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleLanding(t);
+          }}
+          className={`flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-semibold transition-colors shrink-0 ${
+            onLanding
+              ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+              : "bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+          }`}
+          title={
+            onLanding
+              ? "Quitar de la landing"
+              : "Mostrar en la landing"
+          }
+        >
+          <Globe size={11} />
+          {onLanding ? "En landing" : "Landing"}
+        </button>
         <span className="text-xs text-gray-400 w-16 text-right font-medium">
           {t.productCount} prod.
         </span>
@@ -185,9 +209,50 @@ export default function ProductTypes() {
     }
   }, []);
 
+  // Curación de la landing: qué tipos se muestran y en qué orden.
+  // (Antes vivía en /Contenido › Tipos de Producto; ahora es la única vista.)
+  const [landingCodes, setLandingCodes] = useState<Set<string>>(new Set());
+
+  const loadLanding = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/landing/product-types`, {
+        credentials: "include",
+      });
+      if (res.ok) {
+        const data: { code: string; selected: boolean }[] = await res.json();
+        setLandingCodes(
+          new Set(data.filter((d) => d.selected).map((d) => d.code)),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  const toggleLanding = async (t: AdminProductType) => {
+    const prev = landingCodes;
+    const next = new Set(prev);
+    if (next.has(t.code)) next.delete(t.code);
+    else next.add(t.code);
+    setLandingCodes(next);
+    try {
+      const res = await fetch(`${API_BASE_URL}/admin/landing/product-types`, {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codes: Array.from(next) }),
+      });
+      if (!res.ok) throw new Error("Error al actualizar la landing");
+    } catch (e) {
+      console.error(e);
+      setLandingCodes(prev);
+    }
+  };
+
   useEffect(() => {
     void loadTypes();
-  }, [loadTypes]);
+    void loadLanding();
+  }, [loadTypes, loadLanding]);
 
   // ── Debounced search del listado ──
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -438,7 +503,7 @@ export default function ProductTypes() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Tipos de Producto</h1>
           <p className="text-sm text-gray-500 mt-0.5">
-            Clasifica los productos por tipo para la landing y el catálogo
+            Clasifica los productos por tipo y elige cuáles mostrar en la landing
           </p>
         </div>
         <button
@@ -529,6 +594,8 @@ export default function ProductTypes() {
                     if (target) confirmDelete(target);
                   }}
                   onToggleActive={toggleActive}
+                  onLanding={landingCodes.has(t.code)}
+                  onToggleLanding={toggleLanding}
                 />
               ))}
             </div>

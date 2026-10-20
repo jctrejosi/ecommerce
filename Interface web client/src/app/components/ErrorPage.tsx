@@ -117,7 +117,7 @@ export function ErrorPage({ statusCode, onRetry, onGoHome }: ErrorPageProps) {
               onClick={() => window.history.back()}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2"
               style={{
-                background: "#F3F4F6",
+                background: "var(--muted)",
                 color: "var(--foreground)",
                 outlineColor: "var(--foreground)",
               }}

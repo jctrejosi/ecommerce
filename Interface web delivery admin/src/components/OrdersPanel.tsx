@@ -1,14 +1,27 @@
 import { Loader2, LocateFixed, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type UIEvent } from 'react';
-import type { AssignmentStatus, FleetOrder } from '../types';
+import type { AssignmentStatus, FleetDriver, FleetOrder } from '../types';
 import { api, ApiError } from '../services/api';
 import { STATUS_META } from '../lib/status';
 import { formatDateTime, formatMoney, formatVolume } from '../lib/format';
+import OrderDetailModal from './OrderDetailModal';
 
 interface Props {
   /** Sube con cada aviso en vivo (socket / refresco periódico) para recargar. */
   reloadTick: number;
   onLocate: (driverId: number) => void;
+  /** Sucursal seleccionada en el panel (null = todas). */
+  branchId?: number | null;
+  /** Flota cargada, para resolver foto/estado del repartidor en el detalle. */
+  drivers?: FleetDriver[];
+  /** Abre el chat con el repartidor del pedido. */
+  onChat?: (driverId: number) => void;
+  /**
+   * Muestra en el mapa el recorrido de un pedido ENTRETADO (domicilio +
+   * sucursal + ruta con su tiempo). Si no se provee, los entregados caen a
+   * `onLocate` (posible repartidor sin pedido activo).
+   */
+  onViewOrderOnMap?: (order: FleetOrder) => void;
 }
 
 /** Cuántos pedidos se cargan por página (lazyload). */
@@ -50,8 +63,26 @@ const TIMELINE: { label: string; key: TimelineKey }[] = [
  * cancelados) con lazyload de 20 en 20. El filtro y la búsqueda los resuelve el
  * backend, así que aplican sobre el total y no solo sobre lo ya cargado.
  */
-export default function OrdersPanel({ reloadTick, onLocate }: Props) {
+export default function OrdersPanel({
+  reloadTick,
+  onLocate,
+  branchId = null,
+  drivers = [],
+  onChat,
+  onViewOrderOnMap,
+}: Props) {
   const [orders, setOrders] = useState<FleetOrder[]>([]);
+  /** Pedido abierto en el modal de detalle (null = cerrado). */
+  const [selected, setSelected] = useState<FleetOrder | null>(null);
+
+  /**
+   * Pedidos entregados → recorrido histórico en el mapa; el resto → ubicar al
+   * repartidor en vivo.
+   */
+  const viewOnMap = (order: FleetOrder) => {
+    if (order.status === 'DELIVERED' && onViewOrderOnMap) onViewOrderOnMap(order);
+    else onLocate(order.driverId);
+  };
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -96,6 +127,7 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
           offset,
           status: filter === 'all' ? undefined : filter,
           q: query || undefined,
+          branchId,
         });
         setOrders((prev) => (mode === 'more' ? [...prev, ...page.items] : page.items));
         setTotal(page.total);
@@ -113,7 +145,7 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
         setLoadingMore(false);
       }
     },
-    [filter, query],
+    [filter, query, branchId],
   );
 
   // Filtro o búsqueda nuevos: recarga desde cero.
@@ -184,21 +216,34 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="mx-5 flex-1 overflow-auto rounded-2xl border border-line bg-surface"
+        className="mx-5 flex-1 overflow-auto rounded-2xl border border-line bg-surface scrollbar-gutter-stable"
       >
-        <table className="w-full">
+        <table className="w-full table-fixed">
           <thead>
             <tr className="sticky top-0 z-10 border-b border-line bg-surface-2 text-left">
-              {['Pedido', 'Repartidor', 'Estado', 'Cliente', 'Dirección', 'Pago', 'Tiempos', 'Total', 'Volumen', ''].map(
-                (h) => (
-                  <th
-                    key={h}
-                    className="whitespace-nowrap px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-ink-faint"
-                  >
-                    {h}
-                  </th>
-                ),
-              )}
+              {/* Anchos fijos: sin esto, las columnas se redistribuyen según el
+                  contenido de cada filtro y la tabla "baila" al cambiarlo. */}
+              {(
+                [
+                  ['Pedido', 'w-[9.5%]'],
+                  ['Repartidor', 'w-[10%]'],
+                  ['Estado', 'w-[10.5%]'],
+                  ['Cliente', 'w-[9.5%]'],
+                  ['Dirección', 'w-[15%]'],
+                  ['Pago', 'w-[9.5%]'],
+                  ['Tiempos', 'w-[19%]'],
+                  ['Total', 'w-[7%]'],
+                  ['Volumen', 'w-[6%]'],
+                  ['', 'w-[4%]'],
+                ] as const
+              ).map(([h, w]) => (
+                <th
+                  key={h}
+                  className={`whitespace-nowrap px-4 py-2.5 text-[11px] font-bold uppercase tracking-wider text-ink-faint ${w}`}
+                >
+                  {h}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody className="divide-y divide-line">
@@ -219,13 +264,17 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
             {orders.map((o) => {
               const meta = STATUS_META[o.status];
               return (
-                <tr key={o.assignmentId} className="transition-colors hover:bg-surface-2">
+                <tr
+                  key={o.assignmentId}
+                  onClick={() => setSelected(o)}
+                  className="cursor-pointer transition-colors hover:bg-surface-2"
+                >
                   <td className="px-4 py-3">
-                    <p className="font-mono text-xs font-bold text-ink">{o.referenceCode}</p>
+                    <p className="truncate font-mono text-xs font-bold text-ink">{o.referenceCode}</p>
                     <p className="text-[11px] text-ink-faint">#{o.orderId}</p>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-ink-soft">{o.driverName}</p>
+                    <p className="truncate text-xs font-semibold text-ink-soft">{o.driverName}</p>
                     <p className="text-[11px] text-ink-faint">{o.driverPlate ?? 'sin placa'}</p>
                   </td>
                   <td className="px-4 py-3">
@@ -237,7 +286,7 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <p className="text-xs font-semibold text-ink-soft">{o.customerName ?? '—'}</p>
+                    <p className="truncate text-xs font-semibold text-ink-soft">{o.customerName ?? '—'}</p>
                     <p className="text-[11px] text-ink-faint">{o.customerPhone ?? ''}</p>
                   </td>
                   <td className="max-w-[220px] px-4 py-3">
@@ -287,8 +336,15 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
                   </td>
                   <td className="px-4 py-3">
                     <button
-                      onClick={() => onLocate(o.driverId)}
-                      title="Ubicar en el mapa"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        viewOnMap(o);
+                      }}
+                      title={
+                        o.status === 'DELIVERED'
+                          ? 'Ver el recorrido en el mapa'
+                          : 'Ubicar en el mapa'
+                      }
                       className="flex h-7 w-7 items-center justify-center rounded-lg text-sky-500 hover:bg-sky-50"
                     >
                       <LocateFixed className="h-3.5 w-3.5" />
@@ -314,6 +370,35 @@ export default function OrdersPanel({ reloadTick, onLocate }: Props) {
           </tbody>
         </table>
       </div>
+
+      {selected && (
+        <OrderDetailModal
+          order={selected}
+          driver={drivers.find((d) => d.id === selected.driverId) ?? null}
+          onClose={() => setSelected(null)}
+          onLocate={(driverId) => {
+            setSelected(null);
+            onLocate(driverId);
+          }}
+          onShowRoute={
+            onViewOrderOnMap
+              ? () => {
+                  const o = selected;
+                  setSelected(null);
+                  onViewOrderOnMap(o);
+                }
+              : undefined
+          }
+          onChat={
+            onChat
+              ? (driverId) => {
+                  setSelected(null);
+                  onChat(driverId);
+                }
+              : undefined
+          }
+        />
+      )}
     </div>
   );
 }

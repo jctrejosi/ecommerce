@@ -1,6 +1,7 @@
 import {
   IsBoolean,
   IsEmail,
+  IsInt,
   IsOptional,
   IsString,
   MaxLength,
@@ -31,6 +32,16 @@ export class CreatePickerDto {
   @MinLength(8)
   @MaxLength(100)
   password!: string;
+
+  /** Sucursal asignada (una sola). Opcional: puede quedar sin asignar. */
+  @IsOptional()
+  @IsInt()
+  branchId?: number | null;
+
+  /** Crear como administrador (superusuario). */
+  @IsOptional()
+  @IsBoolean()
+  isSuperuser?: boolean;
 }
 
 /** Actualiza un usuario de picking. Todos los campos son opcionales. */
@@ -63,6 +74,16 @@ export class UpdatePickerDto {
   @IsOptional()
   @IsBoolean()
   isPicker?: boolean;
+
+  /** Sucursal asignada (una sola). null la quita. */
+  @IsOptional()
+  @IsInt()
+  branchId?: number | null;
+
+  /** Marcar/quitar como administrador (superusuario). */
+  @IsOptional()
+  @IsBoolean()
+  isSuperuser?: boolean;
 }
 
 /** Restablece la contraseña de un usuario de picking. */

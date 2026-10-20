@@ -21,6 +21,7 @@ import {
   productVariants,
   products,
   users,
+  userBranches,
   media,
   productImages,
   productLocations,
@@ -143,8 +144,12 @@ export class PickingService {
     });
   }
 
-  /** Cola de picking (la "cola" vive en la BD: orders por estado + reviewedAt). */
-  async queue(status?: string) {
+  /** Cola de picking (la "cola" vive en la BD: orders por estado + reviewedAt).
+   *
+   * Cuando llega `userId` (picker autenticado con sucursal asignada) la cola se
+   * limita a los pedidos de **su sucursal**. Los pedidos sin sucursal/usuarios
+   * sin sucursal no se filtran (compatibilidad). */
+  async queue(status?: string, userId?: number) {
     const tab: QueueTab =
       status === 'nuevo' || status === 'preparando' || status === 'completado'
         ? status
@@ -164,6 +169,12 @@ export class PickingService {
       where = inArray(orders.status, ['ready', 'shipped', 'delivered']);
     } else {
       where = inArray(orders.status, QUEUE_STATUSES);
+    }
+
+    // Filtro por sucursal del picker autenticado (si tiene una asignada).
+    const branchId = userId != null ? await this.branchOfUser(userId) : null;
+    if (branchId != null) {
+      where = and(where, eq(orders.branchId, branchId));
     }
 
     const rows = await this.db
@@ -226,17 +237,30 @@ export class PickingService {
     });
   }
 
-  async unreviewedCount() {
+  async unreviewedCount(userId?: number) {
+    const base = and(
+      isNull(orders.reviewedAt),
+      inArray(orders.status, ['created', 'payment_pending', 'paid', 'preparing']),
+    );
+    // El conteo sigue la misma sucursal que la cola del picker.
+    const branchId = userId != null ? await this.branchOfUser(userId) : null;
     const [row] = await this.db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(orders)
       .where(
-        and(
-          isNull(orders.reviewedAt),
-          inArray(orders.status, ['created', 'payment_pending', 'paid', 'preparing']),
-        ),
+        branchId != null ? and(base, eq(orders.branchId, branchId)) : base,
       );
     return { count: row?.count ?? 0 };
+  }
+
+  /** Sucursal asignada a un picker (una sola) o null si no tiene. */
+  private async branchOfUser(userId: number): Promise<number | null> {
+    const [row] = await this.db
+      .select({ branchId: userBranches.branchId })
+      .from(userBranches)
+      .where(eq(userBranches.userId, userId))
+      .limit(1);
+    return row ? Number(row.branchId) : null;
   }
 
   /**
@@ -589,11 +613,87 @@ export class PickingService {
       });
     }
 
-    const newPicked = matched.pickedQty + 1;
+    return this.commitPick(id, order, items, matched, matched.pickedQty + 1);
+  }
 
-    // ¿Con este escaneo quedan todos los items alistados? La app lo usa para
-    // llevar al picker a la verificación final, pero NO cambia el estado: el
-    // pedido pasa a "listo" solo al confirmar "entregado en caja" (complete).
+  /**
+   * Marca un item como alistado por completo SIN escanear (confirmación manual
+   * desde la app). Sirve cuando el lector no está disponible o el código no está
+   * impreso. Aplica los mismos efectos que un escaneo (progreso, estado, historial).
+   */
+  async pickItem(id: number, itemId: number) {
+    const [order] = await this.db
+      .select({
+        id: orders.id,
+        status: orders.status,
+        referenceCode: orders.referenceCode,
+        pickerId: orders.pickerId,
+        customerId: orders.customerId,
+      })
+      .from(orders)
+      .where(eq(orders.id, BigInt(id)))
+      .limit(1);
+
+    if (!order) {
+      throw new NotFoundException(`No existe el pedido ${id}`);
+    }
+    if (!isPickingTrigger(order.status) && order.status !== 'preparing') {
+      throw new ConflictException('Este pedido no está en alistamiento');
+    }
+
+    const items = await this.db
+      .select({
+        id: orderItems.id,
+        name: orderItems.productName,
+        quantity: orderItems.quantity,
+        pickedQty: orderItems.pickedQty,
+        barcode: productVariants.barcode,
+        plu: products.plu,
+      })
+      .from(orderItems)
+      .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
+      .leftJoin(products, eq(products.id, productVariants.productId))
+      .where(eq(orderItems.orderId, Number(id)))
+      .orderBy(asc(orderItems.id));
+
+    const matched = items.find((i) => Number(i.id) === Number(itemId));
+    if (!matched) {
+      throw new NotFoundException('El producto no pertenece a este pedido');
+    }
+
+    // Completa lo que falte del item (si ya estaba completo no cambia nada).
+    return this.commitPick(id, order, items, matched, Math.max(matched.pickedQty, matched.quantity));
+  }
+
+  /** Efectos comunes al alistar unidades (escaneo o confirmación manual). */
+  private async commitPick(
+    id: number,
+    order: {
+      status: typeof orders.$inferSelect.status;
+      referenceCode: string | null;
+      pickerId: number | null;
+      customerId: number | null;
+    },
+    items: {
+      id: bigint;
+      name: string;
+      quantity: number;
+      pickedQty: number;
+      barcode: string | null;
+      plu: string | null;
+    }[],
+    matched: {
+      id: bigint;
+      name: string;
+      quantity: number;
+      barcode: string | null;
+      plu: string | null;
+    },
+    newPicked: number,
+  ) {
+    // ¿Quedan todos los items alistados? La app lo usa para llevar al picker a la
+    // verificación final, pero NO cambia el estado: el pedido pasa a "listo" solo
+    // al confirmar "entregado en caja" (complete).
     const allDone = items.every((i) =>
       i.id === matched.id ? newPicked >= i.quantity : i.pickedQty >= i.quantity,
     );

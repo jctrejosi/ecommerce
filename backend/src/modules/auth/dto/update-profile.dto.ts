@@ -45,4 +45,17 @@ export class UpdateProfileDto {
     message: 'El email no puede exceder los 255 caracteres',
   })
   email?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'URL de la imagen de perfil (avatar). Cadena vacía o null para quitarla.',
+    example: 'https://res.cloudinary.com/demo/image/upload/avatar_1.webp',
+    nullable: true,
+  })
+  @IsOptional()
+  @IsString({ message: 'La imagen de perfil debe ser un texto' })
+  @MaxLength(1024, {
+    message: 'La URL de la imagen no puede exceder los 1024 caracteres',
+  })
+  avatarUrl?: string | null;
 }

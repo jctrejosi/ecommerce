@@ -503,7 +503,7 @@ export function CatalogPage({
                   </div>
                   <div
                     className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[12px] leading-none"
-                    style={{ background: cat.bg ?? "#F3F4F6" }}
+                    style={{ background: cat.bg ?? "var(--muted)" }}
                   >
                     {icon}
                   </div>
@@ -1042,7 +1042,7 @@ export function CatalogPage({
                           }
                           onMouseEnter={(e) => {
                             if (!active) {
-                              e.currentTarget.style.background = "#F4F4F6";
+                              e.currentTarget.style.background = "var(--muted)";
                             }
                           }}
                           onMouseLeave={(e) => {
@@ -1188,7 +1188,7 @@ export function CatalogPage({
             onClick={() => setMobileFiltersOpen(false)}
           />
           <div
-            className={`relative ml-auto w-72 bg-white h-full flex flex-col shadow-2xl transition-transform duration-300 ease-out ${
+            className={`relative ml-auto w-72 bg-white h-full flex flex-col shadow-2xl transition-transform duration-300 ease-out pb-[var(--safe-bottom)] ${
               filtersActive ? "translate-x-0" : "translate-x-full"
             }`}
           >

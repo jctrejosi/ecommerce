@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component<Props, State> {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#fff",
+            background: "var(--background)",
             fontFamily: "'Inter', sans-serif",
           }}
         >
@@ -42,7 +42,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 width: 64,
                 height: 64,
                 borderRadius: 16,
-                background: "#F3F4F6",
+                background: "var(--muted)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",

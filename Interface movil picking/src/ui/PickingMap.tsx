@@ -17,6 +17,8 @@ interface PickingMapProps {
   active?: MapSpot;
   others?: MapSpot[];
   width: number;
+  /** Altura máxima: reduce la celda para que el mapa entre completo (miniatura). */
+  maxHeight?: number;
 }
 
 /** Franja de fila que titila (verde = ítem activo, rojo = otras ubicaciones). */
@@ -51,15 +53,37 @@ function BlinkBand({
   );
 }
 
+/** Marco pulsante sobre la estantería que contiene el ítem activo. */
+function BlinkFrame() {
+  const styles = useStyles();
+  const opacity = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(opacity, { toValue: 0.15, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 1, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [opacity]);
+
+  return <Animated.View pointerEvents="none" style={[styles.activeFrame, { opacity }]} />;
+}
+
 /** Mapa de bodega (solo lectura): dibuja las estanterías y resalta ubicaciones. */
-export function PickingMap({ shelves, active, others = [], width }: PickingMapProps) {
+export function PickingMap({ shelves, active, others = [], width, maxHeight }: PickingMapProps) {
   const styles = useStyles();
   const { colors } = useTheme();
-  const cellPx = width / GRID_W;
+  const cellPx = maxHeight
+    ? Math.min(width / GRID_W, maxHeight / GRID_H)
+    : width / GRID_W;
+  const canvasWidth = cellPx * GRID_W;
   const height = GRID_H * cellPx;
 
   return (
-    <View style={[styles.canvas, { width, height }]}>
+    <View style={[styles.canvas, { width: canvasWidth, height }]}>
       {shelves.map((shelf) => {
         const rotated = shelf.rotation === 90;
         const wCells = shelf.width || 3;
@@ -116,6 +140,8 @@ export function PickingMap({ shelves, active, others = [], width }: PickingMapPr
                 );
               })}
             </View>
+
+            {activeHere ? <BlinkFrame /> : null}
           </View>
         );
       })}
@@ -146,4 +172,14 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   rowsArea: { flex: 1, position: "relative" },
   rowBand: { position: "absolute", left: 0, right: 0 },
   band: { position: "absolute", left: 0, right: 0 },
+  activeFrame: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderWidth: 2,
+    borderColor: "rgba(34,197,94,0.95)",
+    borderRadius: radius.sm,
+  },
 }));

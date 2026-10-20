@@ -1,0 +1,276 @@
+#!/usr/bin/env node
+/**
+ * Genera el Caddyfile del contenedor único de Mercaldas a partir de variables
+ * de entorno, de modo que los dominios/hosts NO queden horneados en la imagen.
+ *
+ * Modo multi-host (recomendado): define `HOST_API` y, por cada interfaz que
+ *   quieras publicar, su `HOST_<APP>` (p. ej. HOST_WEB=client.tudominio.com).
+ *   Cada interfaz se sirve en su propio subdominio y el API (backend) en
+ *   HOST_API. El backend y el bot solo escuchan en 127.0.0.1 dentro del
+ *   contenedor; Caddy solo publica el backend, y este proxya /bot internamente.
+ *
+ * Si no defines ningún HOST_*, se genera un único vhost en el puerto HTTP que
+ *   solo proxya al backend (útil como smoke-test del contenedor).
+ *
+ * Variables:
+ *   HOST_API            alias solo para webhooks de pasarelas (/webhooks/*)
+ *                        cuando HOST_WEB está definido. Si no hay HOST_WEB,
+ *                        mantiene el comportamiento anterior (API completa).
+ *   HOST_WEB            cliente web; además proxya el API en el mismo origen
+ *                        (rutas /catalog/*, /orders, /static/*, /bot/*, …)
+ *   HOST_WEB            cliente web          → /srv/web
+ *   HOST_ADMIN          admin                → /srv/admin
+ *   HOST_PICKING_ADMIN  picking admin        → /srv/picking-admin
+ *   HOST_DELIVERY_ADMIN delivery admin       → /srv/delivery-admin
+ *   TLS                 "true" (def.) | "false"  (false ⇒ HTTP, pensado para ir
+ *                       detrás del edge compartido que hace TLS; requiere ALLOW_INSECURE)
+ *   ACME_EMAIL          email para Let's Encrypt (avisos de expiración)
+ *   PROTECT_ADMIN       "true" (def.) ⇒ Basic Auth en los paneles de administración
+ *   ADMIN_USER          usuario del Basic Auth           (def. admin)
+ *   ADMIN_PASSWORD      contraseña en claro (se hashea con caddy bcrypt)
+ *   ADMIN_PASSWORD_HASH hash bcrypt ya calculado (tiene prioridad)
+ *   BACKEND_PORT        puerto interno del backend  (def. 3100)
+ *   BOT_PORT            puerto interno del bot (lo usa el backend para su proxy) (def. 8001)
+ *   HTTP_PORT           puerto HTTP interno de Caddy  (def. 8080; el compose publica 80)
+ *   HTTPS_PORT          puerto HTTPS interno de Caddy (def. 8443; el compose publica 443)
+ *   MAX_REQUEST_BODY    tamaño máximo de cuerpo (def. 50MB; "0" ⇒ sin límite)
+ *   CSP_POLICY          política CSP ("off"/"" ⇒ sin cabecera; por defecto una segura)
+ *   CADDYFILE_OUT       ruta de salida (def. /config/Caddyfile.generated)
+ */
+import fs from "node:fs";
+import { spawnSync } from "node:child_process";
+
+const env = process.env;
+const TLS = String(env.TLS ?? "true").toLowerCase() !== "false";
+const EMAIL = (env.ACME_EMAIL || "").trim();
+const BACKEND = `127.0.0.1:${env.BACKEND_PORT || 3100}`;
+
+// Caddy NO corre como root dentro del contenedor, así que escucha en puertos
+// altos; el compose publica 80/443 hacia ellos.
+const HTTP_PORT = String(env.HTTP_PORT || "8080").trim();
+const HTTPS_PORT = String(env.HTTPS_PORT || "8443").trim();
+
+// Límite de tamaño de cuerpo en el borde: evita que un cliente envíe cargas
+// enormes (el backend acepta hasta 50 MB de JSON). "0"/vacío ⇒ sin límite.
+const MAX_BODY = String(env.MAX_REQUEST_BODY ?? "50MB").trim();
+const bodyLimit =
+  MAX_BODY && MAX_BODY !== "0"
+    ? `\trequest_body {\n\t\tmax_size ${MAX_BODY}\n\t}\n`
+    : "";
+
+// CSP por defecto: permite lo que ya usan las SPAs (MapLibre, Cloudinary,
+// Google OAuth y el <script> inline de next-themes) pero cierra <object>,
+// <base> inyectado y el framing. Endurécela con CSP_POLICY según cada app.
+const DEFAULT_CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' https:",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https:",
+  "connect-src 'self' https: wss:",
+  // MapLibre GL crea su worker desde un blob: (los paneles de delivery/picking
+  // pintan mapas). Sin worker-src explícito cae en script-src y se bloquea.
+  "worker-src 'self' blob:",
+  "frame-src 'self' https:",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "frame-ancestors 'self'",
+  // Los pagos (Wompi/Epayco) hacen POST a otro origen: `form-action 'self'`
+  // los rompería, por eso se permite https:.
+  "form-action 'self' https:",
+].join("; ");
+const cspEnv = env.CSP_POLICY;
+const CSP =
+  cspEnv === undefined
+    ? DEFAULT_CSP
+    : /^(off|none|false|0|)$/i.test(cspEnv.trim())
+      ? ""
+      : cspEnv.trim();
+
+// Interfaz → variable de entorno del host y directorio dentro de la imagen.
+// `admin: true` ⇒ es un panel de administración (candidato a Basic Auth).
+const FRONTS = [
+  { envKey: "HOST_WEB", dir: "/srv/web" },
+  { envKey: "HOST_ADMIN", dir: "/srv/admin", admin: true },
+  { envKey: "HOST_PICKING_ADMIN", dir: "/srv/picking-admin", admin: true },
+  { envKey: "HOST_DELIVERY_ADMIN", dir: "/srv/delivery-admin", admin: true },
+];
+
+const hostOf = (k) => (env[k] || "").trim();
+const HOST_API = hostOf("HOST_API");
+const HOST_WEB = hostOf("HOST_WEB");
+const frontHosts = FRONTS.map((f) => ({ ...f, host: hostOf(f.envKey) })).filter((f) => f.host);
+const anyHost = Boolean(HOST_API) || frontHosts.length > 0;
+
+// ── Basic Auth de los paneles admin ──
+// El bot NO se publica aquí: el backend lo proxya en /bot por loopback.
+const PROTECT_ADMIN = String(env.PROTECT_ADMIN ?? "true").toLowerCase() !== "false";
+let basicAuth = "";
+if (PROTECT_ADMIN) {
+  let hash = (env.ADMIN_PASSWORD_HASH || "").trim();
+  if (!hash && env.ADMIN_PASSWORD) {
+    const r = spawnSync("caddy", ["hash-password", "--plaintext", env.ADMIN_PASSWORD], {
+      encoding: "utf8",
+    });
+    if (r.status === 0) hash = (r.stdout || "").trim();
+  }
+  if (hash) {
+    basicAuth = `\tbasic_auth {\n\t\t${env.ADMIN_USER || "admin"} ${hash}\n\t}\n`;
+  } else {
+    console.warn(
+      "⚠️  PROTECT_ADMIN activo pero falta ADMIN_PASSWORD/ADMIN_PASSWORD_HASH " +
+        "(o el binario caddy); NO se protegen los paneles.",
+    );
+  }
+}
+
+// ── Cabeceras de seguridad comunes a todos los vhosts ───────
+const headerLines = [
+  `\tX-Content-Type-Options "nosniff"`,
+  `\tX-Frame-Options "SAMEORIGIN"`,
+  `\tReferrer-Policy "strict-origin-when-cross-origin"`,
+  `\tCross-Origin-Opener-Policy "same-origin-allow-popups"`,
+  `\tPermissions-Policy "camera=(self), microphone=(self), geolocation=(self), payment=(self)"`,
+  `\t-Server`,
+];
+if (CSP) headerLines.push(`\tContent-Security-Policy "${CSP}"`);
+if (TLS) headerLines.unshift(`\tStrict-Transport-Security "max-age=31536000; includeSubDomains"`);
+const headerBlock = `\theader {\n${headerLines.join("\n")}\n\t}\n`;
+
+// Con TLS desactivado este Caddy va detrás de un edge que SÍ hace TLS (modo
+// edge compartido): el backend debe ver el esquema público real (p. ej. para
+// construir URLs absolutas), así que se fija X-Forwarded-Proto=https.
+const protoUp = TLS ? "" : " {\n\t\theader_up X-Forwarded-Proto https\n\t}";
+
+const apiBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
+	handle {
+		reverse_proxy ${BACKEND}${protoUp}
+	}`;
+
+// ── Rutas del API servidas desde el mismo origen que la web ──
+// Espejo de scripts-agent/serve-webclient.mjs más las rutas que usan los
+// paneles y las apps móviles. La web del cliente solo tiene las páginas `/`,
+// `/catalog` y `/account*`, así que estos prefijos no colisionan.
+const API_PATHS = [
+  "/api-status",
+  "/discovery",
+  "/banners",
+  "/cart",
+  "/orders",
+  "/notifications",
+  "/featured",
+  "/filters",
+  "/payments/methods",
+  "/socket.io",
+  "/bot",
+  "/admin/*",
+  "/auth/*",
+  "/banners/*",
+  "/bot/*",
+  "/cart/*",
+  "/catalog/*",
+  "/customer-auth/*",
+  "/delivery/*",
+  "/featured/*",
+  "/filters/*",
+  "/geocode/*",
+  "/landing/*",
+  "/newsletter/*",
+  "/notifications/*",
+  "/orders/*",
+  "/payments/*",
+  "/picking/*",
+  "/picking-admin/*",
+  "/popups/*",
+  "/qr/*",
+  "/socket.io/*",
+  "/static/*",
+  "/upload/*",
+  "/webhooks/*",
+];
+
+// Caché de estáticos: el HTML nunca se cachea (un index viejo apunta a
+// bundles viejos); los assets con hash son inmutables.
+const cacheHeaders = `\t@assets path /assets/*
+\theader @assets Cache-Control "public, max-age=31536000, immutable"
+\t@notAssets not path /assets/*
+\theader @notAssets Cache-Control "no-cache"
+`;
+
+// Con HOST_WEB el API se sirve en el MISMO origen que la web del cliente
+// (como en local con serve-webclient.mjs). El resto de fronts lo consume
+// cross-origin; CORS ya los autoriza.
+const webClientBlock = (dir) => `${headerBlock}${bodyLimit}\tencode zstd gzip
+	@api path ${API_PATHS.join(" ")}
+	handle @api {
+		reverse_proxy ${BACKEND}${protoUp}
+	}
+	handle {
+${cacheHeaders}		root * ${dir}
+		try_files {path} /index.html
+		file_server
+	}`;
+
+// Host del API cuando ya existe HOST_WEB: solo webhooks (Wompi, etc.), para
+// no publicar otra vez toda la superficie del backend.
+const webhookBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
+	# Wompi puede estar configurado con la raíz del host: se reescribe al
+	# endpoint real del backend.
+	handle / {
+		rewrite * /webhooks/wompi
+		reverse_proxy ${BACKEND}${protoUp}
+	}
+	handle /webhooks/* {
+		reverse_proxy ${BACKEND}${protoUp}
+	}
+	handle {
+		respond 404
+	}`;
+
+const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
+${cacheHeaders}	root * ${dir}
+	try_files {path} /index.html
+	file_server`;
+
+let out = "";
+
+// Con TLS desactivado hay que forzar el esquema `http://`: un hostname sin
+// esquema hace que Caddy asuma HTTPS (y escucharía en :443, no en :80).
+const siteAddr = (host) => (TLS ? host : `http://${host}`);
+
+if (anyHost) {
+  // Opciones globales: sin API de administración, puertos altos (no root),
+  // email ACME y HTTP puro si TLS=false.
+  const opts = ["\tadmin off", `\thttp_port ${HTTP_PORT}`, `\thttps_port ${HTTPS_PORT}`];
+  if (EMAIL) opts.push(`\temail ${EMAIL}`);
+  if (!TLS) {
+    opts.push("\tauto_https off");
+    // Detrás del edge compartido: el edge es un proxy de confianza (red Docker
+    // privada) y envía el X-Forwarded-For del cliente; sin esto Caddy lo
+    // reemplazaría por la IP del edge y el rate limit sería un único cubo.
+    opts.push("\tservers {\n\t\ttrusted_proxies static private_ranges\n\t}");
+  }
+  out += `{\n${opts.join("\n")}\n}\n`;
+
+  if (HOST_API && HOST_API !== HOST_WEB) {
+    out += `\n${siteAddr(HOST_API)} {\n${HOST_WEB ? webhookBlock : apiBlock}\n}\n`;
+  }
+  for (const f of frontHosts) {
+    const withAuth = PROTECT_ADMIN && Boolean(f.admin) && Boolean(basicAuth);
+    const block =
+      f.envKey === "HOST_WEB"
+        ? webClientBlock(f.dir)
+        : staticBlock(f.dir, withAuth);
+    out += `\n${siteAddr(f.host)} {\n${block}\n}\n`;
+  }
+} else {
+  // Sin dominios configurados: vhost mínimo en el puerto HTTP (solo API).
+  out +=
+    `# ⚠️  No definiste ningún HOST_* — vhost mínimo (solo API).\n` +
+    `#     Define HOST_API y HOST_WEB/HOST_ADMIN/... para publicar las interfaces.\n` +
+    `:${HTTP_PORT} {\n${apiBlock}\n}\n`;
+}
+
+const dest = env.CADDYFILE_OUT || "/config/Caddyfile.generated";
+fs.writeFileSync(dest, out);
+process.stdout.write(`Caddyfile generado en ${dest}:\n${out}`);

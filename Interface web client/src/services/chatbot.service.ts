@@ -1,4 +1,9 @@
-const BOT_API_URL = (import.meta.env.VITE_BOT_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000"));
+// El bot vive detrás del MISMO host del backend, en la ruta /bot (el Caddy
+// interno lo proxyfica a 127.0.0.1:8001). Así no hace falta configurar un
+// host/URL aparte: se deriva de VITE_API_URL. VITE_BOT_API_URL queda como
+// override opcional para despliegues especiales.
+const API_URL = (import.meta.env.VITE_API_URL || (typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"));
+const BOT_API_URL = (import.meta.env.VITE_BOT_API_URL || `${API_URL.replace(/\/+$/, "")}/bot`);
 
 export type BotProduct = {
   product_id: number;

@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from . import config, database, deepseek, tools, cart
+from .rate_limit import rate_limit_middleware
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
 log = logging.getLogger("bot.main")
@@ -47,6 +48,10 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+# Limitador de tasa propio (ver app/rate_limit.py). Se registra ANTES que CORS
+# para que CORS quede por fuera y las respuestas 429 lleven cabeceras CORS.
+app.middleware("http")(rate_limit_middleware)
 
 app.add_middleware(
     CORSMiddleware,

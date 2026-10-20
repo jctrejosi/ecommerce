@@ -50,6 +50,8 @@ function normalizeUrl(url: string): string {
   const withScheme = /^https?:\/\//i.test(trimmed)
     ? trimmed
     : `http://${trimmed}`;
+  // HTTPS usa el puerto 443 por defecto: nunca se le añade 4173.
+  if (/^https:\/\//i.test(withScheme)) return withScheme;
   return /^https?:\/\/[^/]+:\d+/i.test(withScheme)
     ? withScheme
     : `${withScheme}:${DEFAULT_PORT}`;
@@ -77,20 +79,33 @@ async function writeStoredUrl(url: string): Promise<void> {
 
 /**
  * ¿Hay un servidor nuestro respondiendo en `url`?
- * Se prueba `GET /discovery` y se valida el identificador de servicio.
+ * En LAN se valida el identificador de `/discovery`. En producción el front es
+ * estático y no expone `/discovery`, pero un origen HTTPS que responde la raíz
+ * es suficiente (la URL viene de la pista de compilación, no de un escaneo).
  */
-export async function pingServer(url: string, timeoutMs = 900): Promise<boolean> {
+export async function pingServer(url: string, timeoutMs = 3000): Promise<boolean> {
   const base = normalizeUrl(url);
   if (!base) return false;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetch(`${base}/discovery`, { signal: controller.signal });
-    if (!res.ok) return false;
-    const data = (await res.json().catch(() => null)) as
-      | { service?: string }
-      | null;
-    return data?.service === SERVICE_ID;
+    if (res.ok) {
+      const data = (await res.json().catch(() => null)) as
+        | { service?: string }
+        | null;
+      if (
+        data?.service === SERVICE_ID ||
+        data?.service === "mercaldas-backend"
+      ) {
+        return true;
+      }
+    }
+    if (/^https:\/\//i.test(base)) {
+      const root = await fetch(`${base}/`, { signal: controller.signal });
+      return root.ok;
+    }
+    return false;
   } catch {
     return false;
   } finally {

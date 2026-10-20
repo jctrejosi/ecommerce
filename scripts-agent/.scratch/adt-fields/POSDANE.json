@@ -1,0 +1,27 @@
+{
+  "table": "POSDANE",
+  "source": "db/ADD_ANALITICA/POSDANE.ADT",
+  "bytes": 74915,
+  "recordCount": 1647,
+  "recordLength": 45,
+  "headerLength": 800,
+  "fieldCount": 2,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 20,
+      "length": 25,
+      "decimals": 0
+    }
+  ]
+}

@@ -59,6 +59,17 @@ export interface FleetDriver {
   lastSeenAt: string | null;
   createdAt: string;
   activeAssignment: ActiveAssignment | null;
+  /** Sucursal asignada (una sola); null si el repartidor no tiene. */
+  branchId: number | null;
+  branchName: string | null;
+}
+
+/** Sucursal para el selector del panel (filtro de flota, pedidos y repartidores). */
+export interface Branch {
+  id: number;
+  code: string;
+  name: string;
+  city: string | null;
 }
 
 export interface FleetOrder {
@@ -123,8 +134,16 @@ export interface AuthUser {
   email: string;
   username: string;
   fullName: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  phone?: string | null;
+  /** Foto de perfil (Cloudinary); null si no tiene. */
+  avatarUrl?: string | null;
   isSuperuser: boolean;
   isActive: boolean;
+  /** Sucursal asignada (define el alcance del admin de sucursal). */
+  branchId?: number | null;
+  branchName?: string | null;
 }
 
 export interface LoginResponse {

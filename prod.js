@@ -1,981 +1,410 @@
 #!/usr/bin/env node
 /**
- * prod.js — despliegue de PRODUCCIÓN de Mercaldas (bare-metal, sin contenedores
- * de aplicación; solo las bases de datos y OSRM corren en Docker).
+ * prod.js — despliegue de PRODUCCIÓN de Mercaldas en CONTENEDOR (docker/).
  *
- * Es la contraparte de `dev.js` para producción:
- *   - compila los artefactos (backend NestJS + los 5 fronts Vite) con `--build`
- *   - sirve los fronts ya compilados con `vite preview` (estático, no dev server)
- *   - levanta backend y bot en modo producción
- *   - mantiene la base de datos (5432) y OSRM (5000) vía Docker
+ * Independiente del entorno local: no compila nada con npm/pnpm/python en esta
+ * máquina — todo se construye dentro de la imagen. Solo necesita `docker`
+ * (+ `node` para correr este launcher).
  *
- * NO arranca las apps móviles (Expo): en producción se compilan a APK/IPA y
- * apuntan al backend por `EXPO_PUBLIC_API_URL`; aquí no se sirve un dev server.
+ * `node prod.js` sincroniza `docker/.env` desde `prod.config.json` (dominios,
+ * TLS y puertos — sin pisar secretos), valida lo que el contenedor necesita
+ * para no entrar en bucle de reinicio y construye/levanta.
  *
- * El siguiente paso para exponerlo con dominios (HTTPS) es un Caddy por delante
- * que rutee cada dominio → estos puertos internos; eso se monta aparte.
+ * ¿Modo bare-metal (compilar y servir desde esta máquina)? Ese es `prod-local.js`.
  *
- * Configuración: `prod.config.json` (o el que pases con --config) define los
- * dominios/IP. prod.js deriva de ahí `VITE_API_URL` (build de los fronts) y
- * `CORS_ORIGIN` (backend), y al terminar imprime los registros DNS a crear.
- *
- * Uso rápido:
- *   node prod.js --init-config     → crea prod.config.json (plantilla)
- *   node prod.js --dns             → imprime los registros DNS a configurar
- *   node prod.js --build           → compila TODO y levanta
- *   node prod.js                   → levanta TODO (usa los dist ya existentes)
- *   node prod.js --web --backend   → solo cliente web + API (+ sus dependencias)
- *   node prod.js --stop            → detiene los servicios de prod.js
- *   node prod.js --help            → ayuda
+ * Uso:
+ *   node prod.js --init-config   → crea prod.config.json (plantilla)
+ *   node prod.js --dns           → imprime los registros DNS/red a configurar
+ *   node prod.js                 → sincroniza, construye y levanta
+ *   node prod.js --no-build      → levanta sin reconstruir la imagen
+ *   node prod.js --with-db       → además levanta db/docker y la conecta a la red
+ *   node prod.js --stop          → detiene el contenedor (down)
+ *   node prod.js --logs          → logs en vivo
+ *   node prod.js --status        → estado del contenedor
+ *   node prod.js --config <ruta> → usa otro prod.config.json
+ *   node prod.js --help
  */
-
-const { spawn, spawnSync } = require("child_process");
+const cp = require("child_process");
 const fs = require("fs");
-const net = require("net");
 const path = require("path");
 
 const ROOT = __dirname;
-const LOGS_DIR = path.join(ROOT, "logs");
-const PIDS_FILE = path.join(LOGS_DIR, ".pids.prod.json");
-const OSRM_DIR = path.join(ROOT, "delivery-routing");
-const OSRM_PORT = 5000;
+const DOCKER_DIR = path.join(ROOT, "docker");
+const COMPOSE_APP = path.join(DOCKER_DIR, "docker-compose.yml");
+const COMPOSE_DB = path.join(ROOT, "db", "docker", "docker-compose.yml");
+const ENV_FILE = path.join(DOCKER_DIR, ".env");
+const ENV_EXAMPLE = path.join(DOCKER_DIR, ".env.example");
 
 const ARGS = process.argv.slice(2);
-const STOP = ARGS.includes("--stop");
-const HELP = ARGS.includes("--help");
-const BUILD = ARGS.includes("--build");
-const NO_BUILD = ARGS.includes("--no-build");
-const DNS_ONLY = ARGS.includes("--dns");
-const INIT_CONFIG = ARGS.includes("--init-config");
+const has = (f) => ARGS.includes(f);
 const CONFIG_IDX = ARGS.indexOf("--config");
 const CONFIG_PATH =
   CONFIG_IDX >= 0 && ARGS[CONFIG_IDX + 1]
     ? path.resolve(ROOT, ARGS[CONFIG_IDX + 1])
     : path.join(ROOT, "prod.config.json");
 
-// ── Gestor de paquetes ──────────────────────────────────────
-// Los fronts del ecommerce usan pnpm (pnpm-lock.yaml). Si no está instalado,
-// se cae a npm: los scripts build/preview existen igual.
-function hasBin(cmd) {
-  const r = spawnSync(cmd, ["--version"], { stdio: "ignore" });
-  return r.status === 0;
-}
-const PM = hasBin("pnpm") ? "pnpm" : "npm";
-
-// Dependencias por servicio (mismo criterio que dev.js).
-const NPM_DEPS = {
-  marker: ["node_modules"],
-  markerType: "dir",
-  install: [["npm", "install"]],
-};
-const PNPM_DEPS = {
-  marker: ["node_modules"],
-  markerType: "dir",
-  install: [[PM, "install"]],
-};
-const PYTHON_DEPS = {
-  marker: [".venv", "bin", "python"],
-  markerType: "file",
-  install: [
-    ["python3", "-m", "venv", ".venv"],
-    [".venv", "bin", "pip", "install", "-r", "requirements.txt"],
-  ],
-};
-
-// Colores de terminal (igual que dev.js).
 const C = {
-  db: "\x1b[36m",
-  backend: "\x1b[31m",
-  web: "\x1b[32m",
-  admin: "\x1b[34m",
-  picking: "\x1b[95m",
-  "picking-admin": "\x1b[91m",
-  "delivery-admin": "\x1b[93m",
-  bot: "\x1b[35m",
+  ok: "\x1b[32m",
+  err: "\x1b[31m",
+  warn: "\x1b[33m",
+  cyan: "\x1b[36m",
+  dim: "\x1b[2m",
   reset: "\x1b[0m",
 };
+const rel = (p) => path.relative(ROOT, p) || ".";
+const die = (msg) => {
+  console.error(`\n${C.err}✘ ${msg}${C.reset}\n`);
+  process.exit(1);
+};
 
-// Binario local de un paquete instalado (vite / tsc), sin depender de npx.
-function localBin(dir, name) {
-  const bin = path.join(dir, "node_modules", ".bin", name);
-  return process.platform === "win32" ? bin + ".cmd" : bin;
-}
-
-/**
- * Servicios de producción.
- * - `url`  → puerto interno en el que escucha (killPort + printUrls + waitForPort).
- * - `build`→ pasos de compilación (vacío/omitido = no compila, p. ej. Python).
- * - El comando de ejecución se resuelve en `resolveCmd()` (puertos fijos, no `vite preview` por defecto).
- */
-const SERVICES = [
-  {
-    name: "backend",
-    dir: "backend",
-    url: "http://localhost:3000",
-    deps: NPM_DEPS,
-  },
-  {
-    name: "web",
-    dir: "Interface web client",
-    url: "http://localhost:5173",
-    build: [[PM, "run", "build"]],
-    deps: PNPM_DEPS,
-  },
-  {
-    name: "admin",
-    dir: "Interface web admin",
-    url: "http://localhost:8443",
-    build: [[PM, "run", "build"]],
-    deps: PNPM_DEPS,
-  },
-  {
-    name: "picking",
-    dir: "Interface web picking",
-    url: "http://localhost:8445",
-    build: [[PM, "run", "build"]],
-    deps: PNPM_DEPS,
-  },
-  {
-    name: "picking-admin",
-    dir: "Interface web picking admin",
-    url: "http://localhost:8446",
-    build: [[PM, "run", "build"]],
-    deps: PNPM_DEPS,
-  },
-  {
-    name: "delivery-admin",
-    dir: "Interface web delivery admin",
-    url: "http://localhost:8447",
-    build: [[PM, "run", "build"]],
-    deps: PNPM_DEPS,
-  },
-  {
-    name: "bot",
-    dir: "bot",
-    url: "http://localhost:8000",
-    deps: PYTHON_DEPS,
-  },
+// ── Configuración ───────────────────────────────────────────
+/** Interfaz web → clave en hosts y variable del .env del contenedor. */
+const FRONTS = [
+  ["web", "HOST_WEB"],
+  ["admin", "HOST_ADMIN"],
+  ["picking-admin", "HOST_PICKING_ADMIN"],
+  ["delivery-admin", "HOST_DELIVERY_ADMIN"],
 ];
 
-const APP_ALIASES = {
-  client: "web",
-  web: "web",
-  backend: "backend",
-  admin: "admin",
-  picking: "picking",
-  "picking-admin": "picking-admin",
-  "delivery-admin": "delivery-admin",
-  bot: "bot",
-  osrm: "osrm",
+const CONFIG_TEMPLATE = {
+  mode: "edge",
+  dnsZone: "tudominio.com",
+  baseDomain: "tudominio.com",
+  publicIp: "<IP_PUBLICA_DEL_SERVIDOR>",
+  acmeEmail: "admin@tudominio.com",
+  tls: true,
+  // Client ID público de Google OAuth (opcional). Se hornea en el front.
+  googleClientId: "",
+  googleRedirectUri: "",
+  edgePorts: { http: "127.0.0.1:30180", https: "127.0.0.1:30181" },
+  hosts: {
+    web: "tudominio.com",
+    admin: "admin.tudominio.com",
+    "picking-admin": "picking-admin.tudominio.com",
+    "delivery-admin": "delivery-admin.tudominio.com",
+    api: "api.tudominio.com",
+  },
 };
 
-const APP_DEPENDS = {
-  backend: ["db"],
-  web: ["backend"],
-  admin: ["backend"],
-  picking: ["backend"],
-  "picking-admin": ["backend"],
-  "delivery-admin": ["backend"],
-  bot: ["backend"],
-  osrm: [],
-};
-
-const NO_SELECTOR_FLAGS = new Set([
-  "--stop",
-  "--help",
-  "--build",
-  "--no-build",
-  "--all",
-  "--dns",
-  "--init-config",
-  "--config",
-]);
-
-/** Flags `--x` no reconocidos. Si hay alguno, el launcher no ejecuta nada. */
-function unknownFlags() {
-  const valid = new Set(
-    [...NO_SELECTOR_FLAGS, ...Object.keys(APP_ALIASES).map((k) => `--${k}`)].map((f) =>
-      f.toLowerCase(),
-    ),
-  );
-  return ARGS.filter((a) => a.startsWith("--") && !valid.has(a.toLowerCase()));
+function loadConfig() {
+  if (!fs.existsSync(CONFIG_PATH)) {
+    die(
+      `No existe ${rel(CONFIG_PATH)}. Créalo con:  node prod.js --init-config\n` +
+        `  (el del repositorio ya viene configurado para este servidor).`,
+    );
+  }
+  let cfg;
+  try {
+    cfg = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+  } catch (e) {
+    die(`${rel(CONFIG_PATH)} no es JSON válido: ${e.message}`);
+  }
+  cfg.mode = cfg.mode === "direct" ? "direct" : "edge";
+  cfg.hosts = cfg.hosts ?? {};
+  cfg.edgePorts = cfg.edgePorts ?? CONFIG_TEMPLATE.edgePorts;
+  if (!cfg.hosts.web) die(`Falta "hosts.web" en ${rel(CONFIG_PATH)}.`);
+  if (!cfg.hosts.api) die(`Falta "hosts.api" en ${rel(CONFIG_PATH)}.`);
+  if (!cfg.acmeEmail) die(`Falta "acmeEmail" en ${rel(CONFIG_PATH)}.`);
+  return cfg;
 }
 
-/** null ⇒ levantar todo (comportamiento por defecto). */
-function resolveSelection() {
-  const requested = ARGS.filter((a) => a.startsWith("--") && !NO_SELECTOR_FLAGS.has(a))
-    .map((a) => a.slice(2).toLowerCase());
-  if (requested.length === 0) return null;
-  const names = requested.map((r) => APP_ALIASES[r]).filter((n) => n !== undefined);
-  if (names.length === 0) return null;
+const schemeOf = (cfg) => (cfg.tls ? "https" : "http");
+const edgeMode = (cfg) => cfg.mode !== "direct";
 
-  const out = [];
-  const seen = new Set();
-  const add = (n) => {
-    for (const dep of APP_DEPENDS[n] ?? []) {
-      if (dep === "db" || dep === "osrm") {
-        if (!seen.has(dep)) {
-          seen.add(dep);
-          out.push(dep);
-        }
-      } else {
-        add(dep);
-      }
+// ── docker/.env ─────────────────────────────────────────────
+/** Actualiza/agrega pares KEY=valor conservando el resto del archivo. */
+function setEnvKeys(text, pairs) {
+  let out = text;
+  const added = [];
+  for (const [key, value] of Object.entries(pairs)) {
+    const re = new RegExp(`^${key}=.*$`, "m");
+    if (re.test(out)) {
+      out = out.replace(re, `${key}=${value}`);
+    } else if (new RegExp(`^#\\s*${key}=`, "m").test(out)) {
+      // clave comentada: se descomenta con el valor nuevo.
+      out = out.replace(new RegExp(`^#\\s*${key}=.*$`, "m"), `${key}=${value}`);
+    } else {
+      added.push(`${key}=${value}`);
     }
-    if (!seen.has(n)) {
-      seen.add(n);
-      out.push(n);
-    }
+  }
+  if (added.length) {
+    if (!out.endsWith("\n")) out += "\n";
+    out += `\n# ── Sincronizado por prod.js desde prod.config.json ──\n${added.join("\n")}\n`;
+  }
+  return out;
+}
+
+function envValue(text, key) {
+  const m = text.match(new RegExp(`^\\s*${key}=(.*)$`, "m"));
+  return m ? m[1].trim() : "";
+}
+
+function syncEnvFile(cfg) {
+  if (!fs.existsSync(ENV_FILE)) {
+    if (!fs.existsSync(ENV_EXAMPLE)) die(`Falta ${rel(ENV_EXAMPLE)} (no puedo crear docker/.env).`);
+    fs.copyFileSync(ENV_EXAMPLE, ENV_FILE);
+    console.log(`✅ Creado ${rel(ENV_FILE)} a partir del ejemplo.`);
+  }
+  const text = fs.readFileSync(ENV_FILE, "utf8");
+
+  const edge = edgeMode(cfg);
+  const scheme = schemeOf(cfg);
+  const containerTls = !edge && cfg.tls !== false;
+  const pairs = {
+    HOST_API: cfg.hosts.api,
+    HOST_WEB: cfg.hosts.web,
+    // Modo edge: el TLS lo termina el edge compartido; el contenedor sirve
+    // HTTP en loopback (por eso ALLOW_INSECURE=true, aceptado explícitamente)
+    // y el esquema público real se declara en PUBLIC_SCHEME.
+    TLS: containerTls ? "true" : "false",
+    ALLOW_INSECURE: containerTls ? "false" : "true",
+    PUBLIC_SCHEME: scheme,
+    ACME_EMAIL: cfg.acmeEmail,
+    VITE_API_URL: `${scheme}://${cfg.hosts.api}`,
+    PUBLIC_HTTP_PORT: edge ? cfg.edgePorts.http : String(cfg.publicHttpPort),
+    PUBLIC_HTTPS_PORT: edge ? cfg.edgePorts.https : String(cfg.publicHttpsPort),
   };
-  for (const n of names) add(n);
-  return out; // orden de arranque: dependencias primero
+  for (const [key, envKey] of FRONTS) {
+    if (cfg.hosts[key]) pairs[envKey] = cfg.hosts[key];
+  }
+  if (cfg.googleClientId) pairs.VITE_GOOGLE_CLIENT_ID = cfg.googleClientId;
+  if (cfg.googleRedirectUri) pairs.VITE_GOOGLE_REDIRECT_URI = cfg.googleRedirectUri;
+
+  fs.writeFileSync(ENV_FILE, setEnvKeys(text, pairs));
+  try {
+    fs.chmodSync(ENV_FILE, 0o600);
+  } catch {
+    /* Windows */
+  }
+  console.log(`✅ ${rel(ENV_FILE)} sincronizado (dominios, TLS, URLs y puertos).`);
+
+  // Fail-closed del contenedor: avisamos aquí, no en los logs de Docker.
+  const current = fs.readFileSync(ENV_FILE, "utf8");
+  const problems = [];
+  const mediaStorage = envValue(current, "MEDIA_STORAGE").toLowerCase();
+  const cloud = ["CLOUDINARY_CLOUD_NAME", "CLOUDINARY_API_KEY", "CLOUDINARY_API_SECRET"].filter(
+    (k) => !envValue(current, k),
+  );
+  if (mediaStorage === "local") {
+    console.log(
+      `ℹ️  MEDIA_STORAGE=local → las imágenes se guardan en el volumen ${C.dim}media${C.reset} (sin Cloudinary).`,
+    );
+  } else if (cloud.length) {
+    problems.push(
+      `Faltan ${cloud.join(", ")} → el backend aborta ("Cloudinary credentials are required"). ` +
+        `Usa MEDIA_STORAGE=local si no quieres depender de Cloudinary.`,
+    );
+  }
+  if (!envValue(current, "ADMIN_PASSWORD") && !envValue(current, "ADMIN_PASSWORD_HASH")) {
+    problems.push("Falta ADMIN_PASSWORD/HASH → los paneles son fail-closed (Basic Auth).");
+  }
+  if (!envValue(current, "DATABASE_URL")) {
+    problems.push("Falta DATABASE_URL → la BD no vive en este contenedor (db/docker o gestionada).");
+  }
+  if (problems.length) {
+    console.error(`\n${C.err}✘ docker/.env está incompleto (el contenedor NO arrancaría):${C.reset}`);
+    for (const p of problems) console.error(`   • ${p}`);
+    console.error(`   Genera los secretos con:  node scripts-agent/set-prod-secrets.mjs`);
+    console.error(`   y edita ${rel(ENV_FILE)} antes de reintentar.`);
+    process.exit(1);
+  }
+
+  if (!envValue(current, "JWT_SECRET")) {
+    console.warn(
+      `\n${C.warn}⚠️  JWT_SECRET vacío — genéralo con: node scripts-agent/set-prod-secrets.mjs${C.reset}`,
+    );
+  }
+  if (!envValue(current, "DEEPSEEK_API_KEY")) {
+    console.warn(`${C.warn}⚠️  DEEPSEEK_API_KEY vacía — el bot de compras no responderá.${C.reset}`);
+  }
 }
 
-function selectionLabel(plan) {
-  if (!plan) return "todo";
-  const apps = plan.filter((n) => n !== "db" && n !== "osrm");
-  return apps.length ? apps.join(" + ") : "solo bases de datos";
-}
+// ── DNS / red ───────────────────────────────────────────────
+function printDns(cfg) {
+  const edge = edgeMode(cfg);
+  const ip = cfg.publicIp || "<IP_PUBLICA_DEL_SERVIDOR>";
+  const zone = cfg.dnsZone || (cfg.baseDomain || "").split(".").slice(1).join(".");
+  const W = 66;
+  const bar = "━".repeat(W);
+  const line = (s = "") => console.log(`  ${s}`);
+  const recordName = (d) =>
+    d === cfg.baseDomain ? "@ (raíz)" : d.slice(0, -(zone.length + 1));
 
-// ── Utilidades de red ───────────────────────────────────────
+  const doms = [cfg.hosts.web, cfg.hosts.api, cfg.hosts.admin];
+  for (const [key] of FRONTS) if (key !== "web" && key !== "admin" && cfg.hosts[key]) doms.push(cfg.hosts[key]);
 
-function waitForPort(port, timeoutMs = 90000) {
-  const deadline = Date.now() + timeoutMs;
-  return new Promise((resolve) => {
-    const attempt = () => {
-      const sock = net.connect({ host: "127.0.0.1", port });
-      const done = (ok) => {
-        try {
-          sock.destroy();
-        } catch {
-          /* noop */
-        }
-        resolve(ok);
-      };
-      sock.once("connect", () => done(true));
-      sock.once("error", () => {
-        try {
-          sock.destroy();
-        } catch {
-          /* noop */
-        }
-        if (Date.now() > deadline) done(false);
-        else setTimeout(attempt, 1000);
-      });
-    };
-    attempt();
-  });
-}
+  console.log(`\n${bar}`);
+  console.log(`  DNS y red a configurar (ecommerce)`);
+  console.log(bar);
+  line(`Dominio base : ${cfg.baseDomain}`);
+  line(`IP pública   : ${ip}`);
+  line(`Modo         : ${edge ? "edge (el edge compartido publica 80/443 y hace TLS)" : "directo (este contenedor publica 80/443 y hace TLS)"}`);
+  console.log(bar);
 
-function sleepSync(ms) {
-  const sab = new SharedArrayBuffer(4);
-  Atomics.wait(new Int32Array(sab), 0, 0, ms);
-}
+  line(`${C.cyan}1) En GoDaddy → zona ${zone} → registros tipo A (TTL 600):${C.reset}`);
+  line(`   Valor para todos: ${ip}`);
+  line(`   ─────────────────────────────────────────────`);
+  for (const d of doms) line(`   Nombre: ${recordName(d).padEnd(28)} →  ${d}`);
+  line(`   ─────────────────────────────────────────────`);
+  line(`${C.dim}   (No crees picking.mercaldas ni ml.mercaldas: no se sirven aquí.${C.reset}`);
+  line(`${C.dim}    ml.mercaldas es opcional y lo sirve el contenedor de Astaroth.)${C.reset}`);
 
-/** Mata el proceso que escuche en `port` (Unix: fuser, Windows: netstat+taskkill). */
-function killPort(port) {
-  if (process.platform === "win32") {
-    try {
-      const out = spawnSync("netstat", ["-ano"], { encoding: "utf8" }).stdout;
-      const pids = new Set();
-      out.split("\n").forEach((line) => {
-        const m = line.trim().match(new RegExp(`:${port}\\s+.*?LISTENING\\s+(\\d+)\\s*$`));
-        if (m) pids.add(m[1]);
-      });
-      pids.forEach((pid) => {
-        try {
-          spawnSync("taskkill", ["/PID", pid, "/T", "/F"], { stdio: "ignore" });
-        } catch {
-          /* ya terminó */
-        }
-      });
-      if (pids.size)
-        console.log(`  ✓ puerto ${port} liberado (PID ${[...pids].join(", ")})`);
-    } catch {
-      /* sin procesos */
-    }
+  console.log(bar);
+  line(`${C.cyan}2) Firewall:${C.reset}`);
+  if (edge) {
+    line(`   Abre SOLO 80 y 443 (los publica el edge en docker/edge/).`);
+    line(`   El contenedor publica ${cfg.edgePorts.http}/${cfg.edgePorts.https} en loopback: no abras nada más.`);
   } else {
-    const r = spawnSync("fuser", ["-k", `${port}/tcp`], {
-      stdio: ["ignore", "pipe", "ignore"],
-      encoding: "utf8",
-    });
-    const out = (r.stdout || "").toString().trim();
-    if (out) console.log(`  ✓ puerto ${port} liberado (PID ${out})`);
+    line(`   Abre SOLO TCP 80 y 443 en el proveedor del VPS y en Windows.`);
   }
+
+  console.log(bar);
+  line(`${C.cyan}3) Base de datos (no vive en este contenedor):${C.reset}`);
+  line(`   node prod.js --with-db`);
+  line(`${C.dim}   (levanta db/docker y conecta ecommerce_postgres a mercaldas_internal)${C.reset}`);
+
+  console.log(bar);
+  line(`${C.cyan}4) OSRM — rutas de delivery:${C.reset}`);
+  line(`   Incluido en docker/docker-compose.yml (servicio osrm, solo red interna).`);
+  line(`   Requiere los datos en delivery-routing/data/manizales.osrm*`);
+  line(`${C.dim}   (si faltan: ./delivery-routing/prepare.sh)${C.reset}`);
+
+  if (edge) {
+    console.log(bar);
+    line(`${C.cyan}5) Edge (el único que publica 80/443):${C.reset}`);
+    line(`   cd docker/edge && docker compose up -d`);
+    line(`${C.dim}   (el Caddyfile del edge ya incluye todos estos dominios)${C.reset}`);
+  }
+
+  console.log(bar);
+  line(`${C.cyan}6) Apps móviles (Expo) — no se sirven aquí:${C.reset}`);
+  line(`   Compila los APK/IPA con  EXPO_PUBLIC_API_URL=${schemeOf(cfg)}://${cfg.hosts.api}`);
+
+  console.log(bar);
+  line(`${C.cyan}Mapa dominio → servicio (Caddy del contenedor):${C.reset}`);
+  line(`   ${cfg.hosts.api.padEnd(34)} → backend (y /bot)`);
+  line(`   ${cfg.hosts.web.padEnd(34)} → tienda web`);
+  if (cfg.hosts.admin) line(`   ${cfg.hosts.admin.padEnd(34)} → panel admin`);
+  if (cfg.hosts["picking-admin"]) line(`   ${cfg.hosts["picking-admin"].padEnd(34)} → picking admin`);
+  if (cfg.hosts["delivery-admin"]) line(`   ${cfg.hosts["delivery-admin"].padEnd(34)} → delivery admin`);
+  console.log(`${bar}\n`);
 }
 
-// ── Logs ────────────────────────────────────────────────────
-
-function openLog(name) {
-  fs.mkdirSync(LOGS_DIR, { recursive: true });
-  const logPath = path.join(LOGS_DIR, `${name}.prod.log`);
-  const fd = fs.openSync(logPath, "a");
-  fs.writeSync(fd, `\n===== [${name}] ${new Date().toISOString()} modo=prod =====\n`);
-  return { fd, logPath };
-}
-
-// ── Bases de datos (Docker) ─────────────────────────────────
-
-function startDatabase() {
-  const dbDir = path.join(ROOT, "db", "docker");
-  console.log(`${C.db}[db]${C.reset} 🐘 PostgreSQL (docker compose up -d) → logs/db.prod.log`);
-  const { fd } = openLog("db");
-  const run = (args) =>
-    spawnSync("docker", args, {
-      cwd: dbDir,
-      stdio: ["ignore", fd, fd],
-      timeout: 120000,
-    });
-
-  let r = run(["compose", "up", "-d", "--wait"]);
-  if (r.status === 0) {
-    fs.closeSync(fd);
-    console.log(`${C.db}[db]${C.reset} ✅ PostgreSQL listo`);
-    return true;
-  }
-  r = run(["compose", "up", "-d"]);
-  fs.closeSync(fd);
-  if (r.status === 0) {
-    console.log(`${C.db}[db]${C.reset} ✅ Contenedor arrancado. Esperando :5432...`);
-    return true;
-  }
-  console.warn(`${C.db}[db]${C.reset} ⚠️  No se pudo levantar PostgreSQL (logs/db.prod.log).`);
-  console.warn(
-    `${C.db}[db]${C.reset} 💡 Arranca Docker: sudo systemctl start docker (y añade tu usuario: sudo usermod -aG docker $USER).`,
-  );
-  return false;
-}
-
-function startOsrm() {
-  console.log(`${C.osrm}[osrm]${C.reset} 🗺️  OSRM Manizales (docker compose up -d) → logs/db.prod.log`);
-  const { fd } = openLog("db");
-  const run = (args) =>
-    spawnSync("docker", args, {
-      cwd: OSRM_DIR,
-      stdio: ["ignore", fd, fd],
-      timeout: 120000,
-    });
-
-  const r = run(["compose", "up", "-d"]);
-  fs.closeSync(fd);
-  if (r.status === 0) {
-    console.log(`${C.osrm}[osrm]${C.reset} ✅ Contenedor arrancado. Esperando :${OSRM_PORT}...`);
-    return true;
-  }
-  console.warn(`${C.osrm}[osrm]${C.reset} ⚠️  No se pudo levantar OSRM (logs/db.prod.log).`);
-  console.warn(`${C.osrm}[osrm]${C.reset} 💡 Si aún no has preparado el grafo: cd delivery-routing && ./prepare.sh`);
-  return false;
-}
-
-// ── Dependencias ───────────────────────────────────────────
-
-function dirHasContent(p) {
-  try {
-    return fs.readdirSync(p).length > 0;
-  } catch {
-    return false;
-  }
-}
-
-function ensureDeps(svc) {
-  const color = C[svc.name] || "";
-  const cwd = path.join(ROOT, svc.dir);
-  const markerPath = path.join(cwd, ...svc.deps.marker);
-  const installed =
-    svc.deps.markerType === "file" ? fs.existsSync(markerPath) : dirHasContent(markerPath);
-  if (installed) return true;
-
-  console.log(`${color}[${svc.name}]${C.reset} 📦 instalando dependencias...`);
-  for (const step of svc.deps.install) {
-    const r = spawnSync(step[0], step.slice(1), { cwd, stdio: "inherit" });
-    if (r.status !== 0) {
-      console.error(
-        `${color}[${svc.name}]${C.reset} ✘ falló la instalación: ${step.join(" ")} — se omite este servicio`,
-      );
-      return false;
-    }
-  }
-  console.log(`${color}[${svc.name}]${C.reset} ✅ dependencias listas`);
-  return true;
-}
-
-// ── Compilación ────────────────────────────────────────────
-
-function runSteps(color, name, cwd, steps, env = process.env) {
-  for (const step of steps) {
-    console.log(`${color}[${name}]${C.reset} 🔨 ${step.join(" ")}`);
-    const r = spawnSync(step[0], step.slice(1), {
-      cwd,
-      stdio: "inherit",
-      shell: process.platform === "win32",
-      env,
-    });
-    if (r.status !== 0) {
-      console.error(`${color}[${name}]${C.reset} ✘ falló: ${step.join(" ")}`);
-      return false;
-    }
-  }
-  return true;
-}
-
-function buildService(svc) {
-  const color = C[svc.name] || "";
-  const cwd = path.join(ROOT, svc.dir);
-
-  // Backend: nest build + compilación aparte de drizzle/ (el runtime lo importa
-  // desde dist; mismo paso que hace el Dockerfile de producción).
-  if (svc.name === "backend") {
-    return runSteps(color, svc.name, cwd, [
-      ["npm", "run", "build"],
-      [
-        localBin(cwd, "tsc"),
-        "--outDir", "dist",
-        "--rootDir", ".",
-        "--module", "nodenext",
-        "--moduleResolution", "nodenext",
-        "--target", "ES2023",
-        "--esModuleInterop",
-        "--skipLibCheck",
-        "--declaration", "false",
-        "--sourceMap", "false",
-        "drizzle/schema.ts",
-        "drizzle/relations.ts",
-      ],
-    ]);
-  }
-
-  if (Array.isArray(svc.build) && svc.build.length) {
-    // Los fronts Vite hornean `VITE_API_URL` en el bundle → se lo pasamos al build.
-    return runSteps(color, svc.name, cwd, svc.build, frontBuildEnv());
-  }
-
-  return true; // bot: Python, nada que compilar
-}
-
-// ── Arranque de servicios ───────────────────────────────────
-
-function resolveCmd(svc) {
-  const cwd = path.join(ROOT, svc.dir);
-
-  if (svc.name === "backend") {
-    // Espejo de docker-entrypoint.sh: prefiere dist/src/main.js, si no dist/main.js.
-    const main =
-      fs.existsSync(path.join(cwd, "dist", "src", "main.js")) ||
-      fs.existsSync(path.join(cwd, "dist", "main.js"));
-    if (!main) {
-      console.warn(
-        `${C.backend}[backend]${C.reset} ⚠️  No se encontró backend/dist — compila con: node prod.js --build`,
-      );
-      return null;
-    }
-    const entry = fs.existsSync(path.join(cwd, "dist", "src", "main.js"))
-      ? "dist/src/main.js"
-      : "dist/main.js";
-    return ["node", entry];
-  }
-
-  if (svc.name === "bot") {
-    const py = path.join(cwd, ".venv", "bin", "python");
-    if (!fs.existsSync(py)) {
-      console.warn(
-        `${C.bot}[bot]${C.reset} ⚠️  ${svc.dir}/.venv no existe — ` +
-          `crealo con: python3 -m venv ${svc.dir}/.venv && ${svc.dir}/.venv/bin/pip install -r ${svc.dir}/requirements.txt`,
-      );
-      return null;
-    }
-    return [py, "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"];
-  }
-
-  // Fronts: sirve el `dist` ya compilado en su puerto fijo (no el 4173 por defecto).
-  const port = new URL(svc.url).port;
-  return [localBin(cwd, "vite"), "preview", "--host", "0.0.0.0", "--port", port];
-}
-
-function startService(svc) {
-  const color = C[svc.name] || "";
-  console.log(`${color}[${svc.name}]${C.reset} ▶ ${svc.url || svc.dir}  (log: logs/${svc.name}.prod.log)`);
-
-  const cmd = resolveCmd(svc);
-  if (!cmd) return null;
-
-  const port = svc.url ? new URL(svc.url).port : null;
-  if (port) {
-    killPort(port);
-    sleepSync(800); // tiempo para que el SO libere el socket
-  }
-
-  const { fd } = openLog(svc.name);
-  const child = spawn(cmd[0], cmd.slice(1), {
-    cwd: path.join(ROOT, svc.dir),
-    stdio: ["ignore", fd, fd],
-    detached: true, // grupo de procesos propio: sobrevive a la terminal
-    shell: process.platform === "win32",
-    env: serviceEnv(svc),
+// ── docker ──────────────────────────────────────────────────
+function compose(file, args) {
+  return cp.spawnSync("docker", ["compose", "-f", file, ...args], {
+    cwd: ROOT,
+    stdio: "inherit",
+    windowsHide: true,
   });
+}
 
-  child.on("error", (err) => {
-    console.error(`${color}[${svc.name}]${C.reset} ✘ no se pudo arrancar: ${err.message}`);
+function checkDocker() {
+  const r = cp.spawnSync("docker", ["--version"], { stdio: "ignore", windowsHide: true });
+  if (r.status !== 0) die(`Docker no está disponible en el PATH (¿Docker Desktop / WSL2 arrancado?).`);
+}
+
+/** Levanta la BD de db/docker y la conecta a la red interna del contenedor. */
+function withDb() {
+  const up = compose(COMPOSE_DB, ["up", "-d"]);
+  if (up.status !== 0) die(`Falló docker compose up de ${rel(COMPOSE_DB)}.`);
+  const r = cp.spawnSync("docker", ["network", "connect", "mercaldas_internal", "ecommerce_postgres"], {
+    cwd: ROOT,
+    stdio: "pipe",
+    encoding: "utf8",
+    windowsHide: true,
   });
-  child.unref();
-  fs.closeSync(fd);
-  return child.pid;
-}
-
-// ── Salida ─────────────────────────────────────────────────
-
-function printUrls(services, showDb, showOsrm) {
-  console.log("\n━━━━━━━━━━━━━ Mercaldas (PRODUCCIÓN) — URLs ━━━━━━━━━━━━━");
-  for (const svc of services) {
-    if (!svc.url) continue;
-    console.log(`  ${svc.name.toUpperCase().padEnd(8)} → ${svc.url}`);
+  if (r.status === 0) {
+    console.log(`✅ ecommerce_postgres conectado a mercaldas_internal.`);
+  } else if (/already exists|is already connected/i.test(r.stderr || "")) {
+    console.log(`ℹ️  ecommerce_postgres ya estaba en mercaldas_internal.`);
+  } else {
+    console.warn(`${C.warn}⚠️  No pude conectar ecommerce_postgres a mercaldas_internal:${C.reset}`);
+    console.warn(`   ${(r.stderr || "").trim().split("\n").pop()}`);
   }
-  if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
-  if (showOsrm) console.log("  OSRM           → Rutas http://localhost:5000 (docker, Manizales)");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  const started = services.map((s) => s.name).join(", ");
-  console.log(`Logs: logs/*.prod.log  (${started || "sin servicios"}).`);
-  console.log("🔐 Para exponer con dominios/HTTPS añade un Caddy por delante (siguiente paso).");
-}
-
-// ── Detención ───────────────────────────────────────────────
-
-function stopAll() {
-  let pids = {};
-  try {
-    pids = JSON.parse(fs.readFileSync(PIDS_FILE, "utf8"));
-  } catch {
-    /* sin archivo de pids */
-  }
-
-  const entries = Object.entries(pids);
-  if (!entries.length) console.log("No hay servicios registrados (logs/.pids.prod.json).");
-  for (const [name, pid] of entries) {
-    try {
-      if (process.platform === "win32") {
-        spawnSync("taskkill", ["/pid", String(pid), "/T", "/F"]);
-      } else {
-        process.kill(-pid, "SIGTERM"); // todo el grupo (procesos desacoplados)
-      }
-      console.log(`⏹  ${name} (pid ${pid})`);
-    } catch {
-      try {
-        process.kill(pid, "SIGTERM");
-        console.log(`⏹  ${name} (pid ${pid})`);
-      } catch {
-        console.log(`  ${name} ya no estaba corriendo`);
-      }
-    }
-  }
-
-  // Red de seguridad: liberar los puertos de los servicios.
-  for (const svc of SERVICES) {
-    if (svc.url) killPort(new URL(svc.url).port);
-  }
-
-  // OSRM corre como contenedor (no como proceso node): se detiene aparte.
-  spawnSync("docker", ["compose", "stop"], { cwd: OSRM_DIR, stdio: "ignore" });
-
-  try {
-    fs.unlinkSync(PIDS_FILE);
-  } catch {
-    /* noop */
-  }
-  console.log("\n💡 La BD (docker) sigue corriendo. Para detenerla: cd db/docker && docker compose stop");
-  console.log("   OSRM (rutas): cd delivery-routing && docker compose stop");
-}
-
-// ── Ayuda ─────────────────────────────────────────────────
-
-const APP_LABELS = {
-  backend: "API backend (NestJS)",
-  web: "Cliente web",
-  admin: "Panel admin web",
-  picking: "Picking web",
-  "picking-admin": "Picking admin web",
-  "delivery-admin": "Delivery admin web",
-  bot: "Bot (Python)",
-};
-
-function selectorFlags(name) {
-  const flags = [];
-  for (const [alias, n] of Object.entries(APP_ALIASES)) {
-    if (n === name) flags.push("--" + alias);
-  }
-  return flags.sort((a, b) => Number(b === "--" + name) - Number(a === "--" + name));
-}
-
-function helpDeps(name) {
-  const deps = (APP_DEPENDS[name] ?? []).map((d) =>
-    d === "db" ? "PostgreSQL :5432" : d,
-  );
-  return deps.length ? "requiere " + deps.join(" + ") : "";
 }
 
 function printHelp() {
-  const out = [];
-  out.push("🚀 Mercaldas launcher de PRODUCCIÓN — node prod.js (en la raíz)");
-  out.push("");
-  out.push("USO");
-  out.push("  node prod.js --build              → compila TODO y levanta (backend + 5 fronts + bot + BD + OSRM)");
-  out.push("  node prod.js                       → levanta TODO usando los dist ya compilados");
-  out.push("  node prod.js <flags>               → solo los aplicativos pedidos (+ sus dependencias)");
-  out.push("  node prod.js --build <flags>       → compila y levanta solo lo pedido");
-  out.push("  node prod.js --no-build            → fuerza no recompilar (equivale al comportamiento por defecto)");
-  out.push("  node prod.js --stop                → detiene los servicios de prod.js");
-  out.push("  node prod.js --init-config         → crea prod.config.json (plantilla de dominios)");
-  out.push("  node prod.js --dns                 → muestra los registros DNS a configurar en tu proveedor");
-  out.push("  node prod.js --config <ruta>       → usa otro archivo de configuración");
-  out.push("  node prod.js --help                → esta ayuda");
-  out.push("");
-  out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
-  const order = [
-    "web",
-    "admin",
-    "picking",
-    "picking-admin",
-    "delivery-admin",
-    "backend",
-    "bot",
-  ];
-  const rows = order.map((name) => {
-    const svc = SERVICES.find((s) => s.name === name);
-    return {
-      flags: selectorFlags(name).join(" / "),
-      label: APP_LABELS[name] + (svc ? ` (${svc.dir})` : ""),
-      url: svc?.url ?? "",
-      deps: helpDeps(name),
-    };
-  });
-  const wFlags = Math.max(...rows.map((r) => r.flags.length));
-  const wLabel = Math.max(...rows.map((r) => r.label.length));
-  const wUrl = Math.max(...rows.map((r) => r.url.length));
-  for (const r of rows) {
-    out.push(`  ${r.flags.padEnd(wFlags)}  ${r.label.padEnd(wLabel)}  ${r.url.padEnd(wUrl)}  ${r.deps}`.trimEnd());
-  }
-  out.push("");
-  out.push("BASES DE DATOS Y RUTAS");
-  out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
-  out.push("  --osrm   Motor de rutas OSRM (:5000) — Manizales (sin apps).");
-  out.push("");
-  out.push("CONFIGURACIÓN (prod.config.json)");
-  out.push("  Define aquí los dominios y la IP; prod.js deriva de ahí VITE_API_URL (build de los");
-  out.push("  fronts) y CORS_ORIGIN (backend), y te imprime los registros DNS a crear.");
-  out.push("    { \"baseDomain\": \"tudominio.com\", \"publicIp\": \"<IP_WAN>\", \"acmeEmail\": \"admin@tudominio.com\" }");
-  out.push("  (con solo baseDomain se generan client.<dom>, admin.<dom>, api.<dom>, ml.<dom>, …)");
-  out.push("");
-  out.push("CONFIGURACIÓN DE ENTORNO");
-  out.push("  El backend lee sus variables desde backend/.env (DATABASE_URL, JWT_SECRET,");
-  out.push("  claves Cloudinary/DeepSeek/Wompi/Epayco/Resend, etc.). prod.js añade NODE_ENV=production");
-  out.push("  y CORS_ORIGIN a partir de prod.config.json.");
-  out.push("");
-  out.push("EJEMPLOS");
-  out.push("  node prod.js --build --delivery-admin   → compila delivery admin + backend + BD");
-  out.push("  node prod.js --admin --picking          → levanta admin + picking (usa dist ya compilados)");
-  out.push("");
-  out.push("Notas: --client es alias de --web · logs en logs/<servicio>.prod.log · PIDs en logs/.pids.prod.json");
-  console.log(out.join("\n"));
+  console.log(`
+Mercaldas — despliegue de producción en CONTENEDOR (docker/)
+
+  node prod.js                 sincroniza docker/.env, construye y levanta
+  node prod.js --no-build      levanta sin reconstruir la imagen
+  node prod.js --with-db       además levanta db/docker y la conecta a la red
+  node prod.js --dns           imprime los registros DNS/red a configurar
+  node prod.js --status        estado del contenedor
+  node prod.js --logs          logs en vivo
+  node prod.js --stop          detiene el contenedor
+  node prod.js --init-config   crea prod.config.json (plantilla)
+  node prod.js --config <ruta> usa otro prod.config.json
+  node prod.js --help
+
+Dominios/TLS/puertos : prod.config.json (mode: edge|direct)
+Secretos (JWT, panel, Cloudinary, BD): docker/.env
+  → node scripts-agent/set-prod-secrets.mjs (genera JWT_SECRET y ADMIN_PASSWORD)
+
+Bare-metal (compilar aquí): prod-local.js
+`);
 }
 
-// ── Configuración (prod.config.json) ────────────────────────
+function main() {
+  if (has("--help")) return printHelp();
 
-// Etiqueta por defecto de cada host cuando solo defines `baseDomain`.
-const HOST_LABELS = {
-  web: "client",
-  admin: "admin",
-  picking: "picking",
-  "picking-admin": "picking-admin",
-  "delivery-admin": "delivery-admin",
-  api: "api",
-  ml: "ml",
-};
-const FRONT_SERVICES = ["web", "admin", "picking", "picking-admin", "delivery-admin"];
-
-let CONFIG = null;
-
-/** IP pública WAN (best-effort). Sirve para imprimir el valor correcto del DNS. */
-function detectPublicIp() {
-  for (const url of ["https://api.ipify.org", "https://ifconfig.me"]) {
-    try {
-      const r = spawnSync("curl", ["-s", "--max-time", "5", url], { encoding: "utf8" });
-      const ip = (r.stdout || "").trim();
-      if (r.status === 0 && /^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return ip;
-    } catch {
-      /* sin red: se deja vacío */
-    }
-  }
-  return "";
-}
-
-/** Lee prod.config.json (o el indicado con --config) y completa hosts por defecto. */
-function loadConfig() {
-  let raw = {};
-  try {
-    raw = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
-  } catch (e) {
-    const rel = path.relative(ROOT, CONFIG_PATH) || CONFIG_PATH;
-    if (fs.existsSync(CONFIG_PATH)) {
-      console.warn(`⚠️  No se pudo leer ${rel}: ${e.message}`);
-    } else {
-      console.warn(`⚠️  No existe ${rel} — usando localhost. Créalo con: node prod.js --init-config`);
-    }
-  }
-
-  const baseDomain = (raw.baseDomain || "").trim();
-  const hosts = {};
-  for (const [key, label] of Object.entries(HOST_LABELS)) {
-    const explicit = raw.hosts?.[key];
-    hosts[key] = explicit || (baseDomain ? `${label}.${baseDomain}` : "");
-  }
-
-  return {
-    baseDomain,
-    publicIp: (raw.publicIp || "").trim() || detectPublicIp(),
-    localIp: (raw.localIp || "").trim(),
-    acmeEmail: (raw.acmeEmail || "").trim(),
-    tls: raw.tls !== false,
-    hosts,
-  };
-}
-
-function schemeOf(cfg) {
-  return cfg && cfg.tls ? "https" : "http";
-}
-
-/** URL pública del backend (se hornea en los fronts como VITE_API_URL). */
-function apiBaseUrl() {
-  if (!CONFIG || !CONFIG.hosts.api) return "http://localhost:3000";
-  return `${schemeOf(CONFIG)}://${CONFIG.hosts.api}`;
-}
-
-/** Orígenes permitidos por CORS: las URLs públicas de cada front. */
-function corsOrigins() {
-  if (!CONFIG) return [];
-  return FRONT_SERVICES.map((s) => CONFIG.hosts[s])
-    .filter(Boolean)
-    .map((h) => `${schemeOf(CONFIG)}://${h}`);
-}
-
-function frontBuildEnv() {
-  return { ...process.env, VITE_API_URL: apiBaseUrl() };
-}
-
-function serviceEnv(svc) {
-  if (svc.name === "backend") {
-    const cors = corsOrigins();
-    return {
-      ...process.env,
-      NODE_ENV: "production",
-      ...(cors.length ? { CORS_ORIGIN: cors.join(",") } : {}),
-    };
-  }
-  return process.env;
-}
-
-/** Heurística: IP privada, loopback o CGNAT (no sirve para exponer). */
-function isPrivateIp(ip) {
-  if (!ip) return true;
-  if (/^(10\.|127\.|192\.168\.|169\.254\.)/.test(ip)) return true;
-  if (/^172\.(1[6-9]|2\d|3[01])\./.test(ip)) return true;
-  if (/^100\.(6[4-9]|[7-9]\d|1[01]\d|12[0-7])\./.test(ip)) return true; // CGNAT 100.64/10
-  return false;
-}
-
-/** Imprime los registros DNS a configurar en el proveedor de dominio. */
-function printDns() {
-  const cfg = CONFIG || loadConfig();
-  const scheme = schemeOf(cfg);
-
-  const rows = [];
-  const push = (host, target) => {
-    if (host) rows.push({ host, target });
-  };
-  push(cfg.hosts.api, "backend (3000) · bot (8000)");
-  push(cfg.hosts.ml, "Astaroth (ML)");
-  for (const s of FRONT_SERVICES) push(cfg.hosts[s], s);
-
-  console.log("\n━━━━━━━━━━━ DNS a configurar en tu proveedor de dominio ━━━━━━━━━━━");
-  if (!rows.length) {
-    console.log("  ⚠️  No hay dominios configurados. Crea prod.config.json (node prod.js --init-config)");
-    console.log("     y define `baseDomain` o el mapa `hosts`, luego vuelve a ejecutar prod.js.");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  if (has("--init-config")) {
+    if (fs.existsSync(CONFIG_PATH)) die(`Ya existe ${rel(CONFIG_PATH)}.`);
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(CONFIG_TEMPLATE, null, 2) + "\n");
+    console.log(`✅ Creado ${rel(CONFIG_PATH)} — edita dominios/IP y ejecuta:  node prod.js --dns`);
     return;
   }
 
-  console.log(`  Dominio base : ${cfg.baseDomain || "(no definido)"}`);
-  console.log(`  IP pública   : ${cfg.publicIp || "(no definida — averíguala o configura DDNS)"}`);
-  if (cfg.publicIp && isPrivateIp(cfg.publicIp)) {
-    console.log(`  ⚠️  Esa IP es privada/CGNAT: apunta los DNS a la IP WAN del router (no a ${cfg.publicIp}).`);
-  }
+  const cfg = loadConfig();
 
-  console.log("\n  1) Registros DNS (tipo A → tu IP pública):");
-  const wHost = Math.max(...rows.map((r) => r.host.length));
-  for (const r of rows) {
-    console.log(`     ${r.host.padEnd(wHost)}   A   ${cfg.publicIp || "<TU_IP_PUBLICA>"}`);
-  }
-  console.log("     (si tu IP es dinámica, usa DDNS o un CNAME a un host DDNS)");
+  if (has("--dns")) return printDns(cfg);
 
-  console.log("\n  2) Reenvío de puertos en el router:");
-  console.log(`     TCP 80   → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}   (solo para emitir/renovar TLS)`);
-  console.log(`     TCP 443  → ${cfg.localIp || "<IP_LOCAL_DE_ESTE_PC>"}`);
-  console.log("     NO reenvíes 5432 ni 5000: son internos (base de datos y rutas).");
+  checkDocker();
 
-  console.log("\n  3) Mapa dominio → servicio interno (lo aplica el proxy Caddy):");
-  for (const r of rows) {
-    console.log(`     ${scheme}://${r.host}  →  ${r.target}`);
-  }
-  if (!cfg.acmeEmail) {
-    console.log("\n  ℹ️  Define `acmeEmail` en prod.config.json para Let's Encrypt (avisos de expiración).");
-  }
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-}
-
-function initConfig() {
-  const rel = path.relative(ROOT, CONFIG_PATH) || CONFIG_PATH;
-  if (fs.existsSync(CONFIG_PATH)) {
-    console.log(`ℹ️  Ya existe ${rel} — edítalo o usa --config <ruta>.`);
+  if (has("--stop")) {
+    compose(COMPOSE_APP, ["down"]);
     return;
   }
-  const template = {
-    baseDomain: "tudominio.com",
-    publicIp: "",
-    localIp: "",
-    acmeEmail: "admin@tudominio.com",
-    tls: true,
-    hosts: {
-      web: "client.tudominio.com",
-      admin: "admin.tudominio.com",
-      picking: "picking.tudominio.com",
-      "picking-admin": "picking-admin.tudominio.com",
-      "delivery-admin": "delivery-admin.tudominio.com",
-      api: "api.tudominio.com",
-      ml: "ml.tudominio.com",
-    },
-  };
-  fs.writeFileSync(CONFIG_PATH, JSON.stringify(template, null, 2) + "\n");
-  console.log(`✅ Creado ${rel} — edita dominios/IP y vuelve a ejecutar prod.js.`);
-}
-
-// ── Main ────────────────────────────────────────────────────
-
-async function main() {
-  if (HELP) {
-    printHelp();
+  if (has("--logs")) {
+    compose(COMPOSE_APP, ["logs", "-f", "app"]);
     return;
   }
-  // Flag desconocido ⇒ no se ejecuta nada (antes se interpretaba como "todo").
-  const unknown = unknownFlags();
-  if (unknown.length) {
-    console.error(`✘ Flag(s) desconocido(s): ${unknown.join(", ")} — no se levanta nada.`);
-    console.error("  Usa `node prod.js --help` para ver las opciones.");
-    process.exit(1);
-  }
-  if (INIT_CONFIG) return initConfig();
-
-  CONFIG = loadConfig();
-  if (DNS_ONLY) return printDns();
-  if (STOP) return stopAll();
-
-  fs.mkdirSync(LOGS_DIR, { recursive: true });
-
-  const plan = resolveSelection(); // null ⇒ todo
-  const wantDb = plan === null || plan.includes("db");
-  const wantOsrm = plan === null || plan.includes("osrm");
-  const svcNames =
-    plan === null
-      ? SERVICES.map((s) => s.name)
-      : plan.filter((n) => n !== "db" && n !== "osrm");
-  const services = SERVICES.filter((s) => svcNames.includes(s.name));
-
-  console.log(
-    `🚀 Mercaldas — PRODUCCIÓN · selección: ${selectionLabel(plan)}${BUILD ? " (con build)" : ""}  (logs → logs/*.prod.log)`,
-  );
-  console.log(
-    `🌐 API pública (VITE_API_URL): ${apiBaseUrl()}` +
-      (CONFIG.baseDomain ? `  ·  dominio base: ${CONFIG.baseDomain}` : "  ·  (sin prod.config.json → localhost)"),
-  );
-  if (PM === "npm")
-    console.warn(`${C.picking}[pnpm]${C.reset} ⚠️  pnpm no está instalado — se usará npm en los fronts.`);
-  console.log("");
-
-  // 1. Dependencias (necesarias antes de compilar/arrancar).
-  const sinDeps = new Set();
-  for (const svc of services) {
-    if (!ensureDeps(svc)) sinDeps.add(svc.name);
+  if (has("--status")) {
+    compose(COMPOSE_APP, ["ps"]);
+    return;
   }
 
-  // 2. Compilación (--build).
-  if (BUILD && !NO_BUILD) {
-    console.log("");
-    if (apiBaseUrl() === "http://localhost:3000") {
-      console.warn(
-        `${C.web}[build]${C.reset} ⚠️  VITE_API_URL quedaría en localhost: los fronts compilados NO podrán hablar con el backend remoto.\n` +
-          `             Configura prod.config.json (hosts.api) antes de compilar los fronts.`,
-      );
-    }
-    for (const svc of services) {
-      if (sinDeps.has(svc.name)) continue;
-      if (!buildService(svc)) {
-        console.error(`${C[svc.name]}[${svc.name}]${C.reset} ✘ build fallido — se omite al arrancar.`);
-        sinDeps.add(svc.name);
-      }
-    }
-    console.log("");
-  } else {
-    const backendSvc = services.find((s) => s.name === "backend");
-    if (backendSvc && !fs.existsSync(path.join(ROOT, "backend", "dist"))) {
-      console.warn(`${C.backend}[backend]${C.reset} ⚠️  backend/dist no existe. ¿Olvidaste --build?`);
-    }
+  // Despliegue completo.
+  syncEnvFile(cfg);
+
+  if (!has("--no-build")) {
+    console.log(`\n==> construyendo imagen (bake de VITE_API_URL=${schemeOf(cfg)}://${cfg.hosts.api})…`);
+    const b = compose(COMPOSE_APP, ["build"]);
+    if (b.status !== 0) die(`Falló la construcción de la imagen.`);
   }
 
-  // 3. Bases de datos y OSRM.
-  if (wantDb) {
-    startDatabase();
-    const dbUp = await waitForPort(5432, 90000);
-    if (!dbUp)
-      console.warn(`${C.db}[db]${C.reset} ⚠️  PostgreSQL no responde en :5432; los servicios reintentarán al conectar.`);
-  }
-  if (!wantDb)
-    console.log(`${C.db}[db]${C.reset} 🚫 PostgreSQL no iniciado (esta selección no lo necesita).`);
+  console.log(`\n==> levantando contenedor…`);
+  const u = compose(COMPOSE_APP, ["up", "-d"]);
+  if (u.status !== 0) die(`Falló docker compose up.`);
 
-  if (wantOsrm) {
-    startOsrm();
-    const osrmUp = await waitForPort(OSRM_PORT, 90000);
-    if (!osrmUp)
-      console.warn(`${C.osrm}[osrm]${C.reset} ⚠️  OSRM no responde en :${OSRM_PORT} — ¿corriste delivery-routing/prepare.sh?`);
-  }
+  if (has("--with-db")) withDb();
 
-  // 4. Servicios de aplicación.
-  const pids = {};
-  for (const svc of services) {
-    if (sinDeps.has(svc.name)) continue;
-    const pid = startService(svc);
-    if (pid) pids[svc.name] = pid;
-  }
-  if (Object.keys(pids).length) {
-    fs.writeFileSync(PIDS_FILE, JSON.stringify(pids, null, 2));
-  } else {
-    try {
-      fs.unlinkSync(PIDS_FILE);
-    } catch {
-      /* noop */
-    }
-  }
+  compose(COMPOSE_APP, ["ps"]);
+  const donde = edgeMode(cfg)
+    ? `${cfg.edgePorts.http}/${cfg.edgePorts.https} en loopback (lo alcanza el edge por shared_edge)`
+    : `${cfg.publicHttpPort}/${cfg.publicHttpsPort} público (TLS propio para ${cfg.hosts.api})`;
+  console.log(`
+${C.ok}✅ Mercaldas (ecommerce) desplegado.${C.reset}
 
-  // Esperar al backend antes de cerrar (para ver si arrancó bien).
-  const backendSvc = services.find((s) => s.name === "backend");
-  if (backendSvc && backendSvc.url) {
-    const backendPort = Number(new URL(backendSvc.url).port);
-    console.log(`${C.backend}[backend]${C.reset} ⏳ esperando a que esté listo (${backendSvc.url})...`);
-    const backendUp = await waitForPort(backendPort, 120000);
-    if (backendUp) {
-      console.log(`${C.backend}[backend]${C.reset} ✅ Backend listo`);
-    } else {
-      console.warn(`${C.backend}[backend]${C.reset} ⚠️  No respondió en :${backendPort} — revisa logs/backend.prod.log`);
-    }
-  }
+  • Publicado en : ${donde}
+  • Logs         : node prod.js --logs
+  • DNS/red      : node prod.js --dns
+  • BD           : node prod.js --with-db   (si aún no la levantaste)
 
-  printUrls(services, wantDb, wantOsrm);
-  printDns();
+${C.warn}Si es la primera vez:  node prod.js --dns  y levanta el edge (docker/edge/).${C.reset}
+`);
 }
 
 main();

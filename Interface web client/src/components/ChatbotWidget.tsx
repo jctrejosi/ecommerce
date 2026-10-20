@@ -8,7 +8,8 @@ import {
   type BotQuickOption,
 } from "../services/chatbot.service";
 import logoBot from "../assets/logo-bot.png";
-import logo from "../assets/tienda.png";
+import logo from "../assets/logo.png";
+import { useBackToClose } from "../hooks/useBackToClose";
 import type { CartItem } from "../app/types";
 
 type ChatMessage = {
@@ -23,9 +24,23 @@ type ChatMessage = {
  *  con carrito y conversación nuevos.)
  */
 function getSessionId(): string {
-  return typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const c = typeof crypto !== "undefined" ? crypto : undefined;
+  if (c && typeof c.randomUUID === "function") return c.randomUUID();
+  // En contextos no seguros (p. ej. el WebView de la APK sobre http://)
+  // `crypto.randomUUID` no existe. El bot valida que el session_id sea un UUID,
+  // así que se construye uno v4 a mano (getRandomValues sí está disponible).
+  if (c && typeof c.getRandomValues === "function") {
+    const b = c.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6] & 0x0f) | 0x40;
+    b[8] = (b[8] & 0x3f) | 0x80;
+    const h = Array.from(b, (x) => x.toString(16).padStart(2, "0"));
+    return `${h.slice(0, 4).join("")}-${h.slice(4, 6).join("")}-${h.slice(6, 8).join("")}-${h.slice(8, 10).join("")}-${h.slice(10, 16).join("")}`;
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (ch) => {
+    const r = (Math.random() * 16) | 0;
+    const v = ch === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
 }
 
 const fmtPrice = (n: number) =>
@@ -107,6 +122,9 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
   const sessionRef = useRef<string>(getSessionId());
   const historyRef = useRef<BotHistoryMessage[]>([]);
   const hasSentRef = useRef(false);
+
+  // El botón "atrás" del dispositivo cierra el panel del chat.
+  useBackToClose(open, () => setOpen(false));
 
   // Modal del carrito
   const [cartModalOpen, setCartModalOpen] = useState(false);
@@ -371,8 +389,18 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Daisy"
         style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
-        className="relative z-[90] w-[84px] h-[84px] rounded-full bg-white shadow-[0_6px_20px_rgba(26,26,46,0.35)] hover:shadow-[0_8px_26px_rgba(26,26,46,0.45)] flex flex-col items-center justify-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-all"
+        className="relative z-[90] w-[84px] h-[84px] rounded-full flex flex-col items-center justify-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
       >
+        <span
+          className="text-lg font-black leading-none -mb-2"
+          style={{
+            fontFamily: "var(--font-script)",
+            color: "var(--foreground)",
+            WebkitTextStroke: "0.4px currentColor",
+          }}
+        >
+          Daisy
+        </span>
         <span className="relative block w-14 h-14">
           {showHint && !open && (
             <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping pointer-events-none" />
@@ -399,22 +427,12 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
             />
           )}
         </span>
-        <span
-          className="text-lg font-black leading-none -mt-1"
-          style={{
-            fontFamily: "var(--font-script)",
-            color: "var(--foreground)",
-            WebkitTextStroke: "0.4px currentColor",
-          }}
-        >
-          Daisy
-        </span>
       </button>
 
       {/* Panel — en móvil ocupa la pantalla entera; en escritorio tarjeta flotante */}
       {open && (
         <div
-          className="fixed inset-0 z-[95] h-[100dvh] w-full max-w-full overflow-x-hidden rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl"
+          className="fixed inset-0 z-[95] h-[100dvh] w-full max-w-full overflow-x-hidden rounded-none bg-white shadow-2xl border border-black/10 flex flex-col overflow-hidden pb-[var(--safe-bottom)] sm:top-auto sm:inset-x-auto sm:bottom-24 sm:right-5 sm:w-[92vw] sm:max-w-sm sm:h-[560px] sm:max-h-[75vh] sm:rounded-2xl"
           style={{ animation: "panelIn 0.25s ease-out both" }}
         >
           {/* Header */}
@@ -424,7 +442,10 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                 <img src={logoBot} alt="Daisy" className="w-full h-full object-cover" />
               </div>
               <div>
-                <p className="text-sm font-bold leading-tight">Daisy</p>
+                <div className="flex items-center gap-1.5">
+                  <p className="text-sm font-bold leading-tight">Daisy</p>
+                  <img src={logo} alt="Mercaldas" className="h-4 w-auto object-contain" />
+                </div>
                 <p className="text-[10px] text-foreground/70 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
                   Arma tu carrito conmigo 🛒
@@ -468,17 +489,10 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                 </svg>
               </button>
             </div>
-
-            {/* Logo centrado en el header */}
-            <img
-              src={logo}
-              alt="DSI"
-              className="absolute left-1/2 top-3 -translate-x-1/2 h-3.5 w-auto object-contain"
-            />
           </div>
 
           {/* Mensajes */}
-          <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-[#F7F7F9]">
+          <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4 space-y-3 bg-muted">
             {messages.length === 0 && (
               <div className="text-sm text-gray-600 leading-relaxed">
                 <p>¡Hola! 👋 Soy Daisy, tu asistente de compras de Mercaldas.</p>
@@ -503,7 +517,7 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
                     {m.content}
                   </div>
                   {m.payload?.receta && (
-                    <div className="mt-1.5 max-w-[90%] w-full bg-[#FFFDF2] border border-primary rounded-xl p-3 shadow-sm">
+                    <div className="mt-1.5 max-w-[90%] w-full bg-primary/10 border border-primary rounded-xl p-3 shadow-sm">
                       <p className="text-sm font-bold text-foreground">
                         🍳 {m.payload.receta.nombre}
                       </p>
@@ -569,12 +583,12 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
 
           {/* Opciones rápidas (hasta que el usuario escriba su primer mensaje) */}
           {options.length > 0 && !hasSentRef.current && !loading && (
-            <div className="px-3 pb-2 flex flex-col gap-1.5 bg-[#F7F7F9]">
+            <div className="px-3 pb-2 flex flex-col gap-1.5 bg-muted">
               {options.map((o) => (
                 <button
                   key={o.id}
                   onClick={() => send(o.message)}
-                  className="text-left text-xs font-medium text-foreground bg-white border border-black/10 hover:border-primary hover:bg-[#FFFDF2] px-3 py-2 rounded-xl transition-colors cursor-pointer"
+                  className="text-left text-xs font-medium text-foreground bg-white border border-black/10 hover:border-primary hover:bg-primary/10 px-3 py-2 rounded-xl transition-colors cursor-pointer"
                 >
                   {o.label}
                 </button>
@@ -697,7 +711,7 @@ function BotCartModal({
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[85vh] flex flex-col shadow-2xl"
+        className="bg-white rounded-none sm:rounded-2xl w-full h-[100dvh] sm:h-auto sm:max-w-2xl sm:max-h-[85vh] flex flex-col shadow-2xl pb-[var(--safe-bottom)]"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
@@ -735,7 +749,7 @@ function BotCartModal({
             ) : (
               <div className="space-y-2.5">
                 {items.map((it) => (
-                  <div key={it.variant_id} className="flex items-center gap-2.5 bg-[#F7F7F9] rounded-xl p-2">
+                  <div key={it.variant_id} className="flex items-center gap-2.5 bg-muted rounded-xl p-2">
                     {it.image ? (
                       <img src={it.image} alt="" loading="lazy" className="w-11 h-11 rounded-lg object-cover bg-white shrink-0" />
                     ) : (
@@ -743,7 +757,7 @@ function BotCartModal({
                     )}
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-gray-800 line-clamp-1">{it.name}</p>
-                      <p className="text-xs font-bold text-foreground">{fmtPrice(it.subtotal)}</p>
+                      <p className="text-xs font-bold text-foreground truncate">{fmtPrice(it.subtotal)}</p>
                     </div>
                     {readOnlyProductIds.has(it.product_id) ? (
                       <span className="shrink-0 text-[10px] font-semibold text-gray-400">
@@ -821,7 +835,7 @@ function BotCartModal({
             ) : (
               <div className="grid grid-cols-2 gap-2">
                 {products.map((p) => (
-                  <div key={p.product_id} className="bg-[#F7F7F9] rounded-xl p-2 flex flex-col">
+                  <div key={p.product_id} className="bg-muted rounded-xl p-2 flex flex-col">
                     {p.image ? (
                       <img src={p.image} alt={p.name} loading="lazy" className="w-full h-16 object-cover rounded-lg mb-1.5 bg-white" />
                     ) : (
@@ -830,12 +844,12 @@ function BotCartModal({
                       </div>
                     )}
                     <p className="text-[11px] leading-tight text-gray-700 line-clamp-2 flex-1">{p.name}</p>
-                    <div className="flex items-center justify-between mt-1.5">
-                      <span className="text-xs font-bold text-foreground">{fmtPrice(p.price)}</span>
+                    <div className="flex items-center justify-between gap-1.5 mt-1.5">
+                      <span className="text-xs font-bold text-foreground truncate min-w-0">{fmtPrice(p.price)}</span>
                       <button
                         onClick={() => onAddProduct(p, 1)}
                         disabled={mutating}
-                        className="text-[11px] font-semibold bg-primary text-foreground px-2 py-1 rounded-lg hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
+                        className="shrink-0 whitespace-nowrap text-[11px] font-semibold bg-primary text-foreground px-2 py-1 rounded-lg hover:bg-[#ffe60d] disabled:opacity-40 cursor-pointer"
                       >
                         + Agregar
                       </button>
@@ -856,18 +870,18 @@ function BotCartModal({
               </span>
               <span className="text-lg font-bold text-foreground">{fmtPrice(total)}</span>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col-reverse sm:flex-row gap-2">
               <button
                 onClick={() => cart && onApplyCart(cart)}
                 disabled={mutating}
-                className="flex-1 text-sm font-bold bg-secondary text-white py-2.5 rounded-xl hover:bg-[#2a2a44] disabled:opacity-50 cursor-pointer"
+                className="w-full sm:flex-1 text-sm font-bold bg-secondary text-white py-2.5 rounded-xl hover:bg-[#2a2a44] disabled:opacity-50 cursor-pointer"
               >
                 {checkout ? "Ir a pagar →" : "Usar este carrito"}
               </button>
               <button
                 onClick={onClose}
                 disabled={mutating}
-                className="px-4 text-sm font-semibold text-gray-500 hover:text-foreground border border-black/10 rounded-xl hover:bg-gray-50 cursor-pointer"
+                className="w-full sm:w-auto px-4 py-2.5 text-sm font-semibold text-gray-500 hover:text-foreground border border-black/10 rounded-xl hover:bg-gray-50 cursor-pointer"
               >
                 Seguir comprando
               </button>

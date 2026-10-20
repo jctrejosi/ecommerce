@@ -1,0 +1,307 @@
+{
+  "table": "POSDCTO3",
+  "source": "db/ADD_ANALITICA/POSDCTO3.ADT",
+  "bytes": 11544,
+  "recordCount": 4,
+  "recordLength": 936,
+  "headerLength": 7800,
+  "fieldCount": 37,
+  "fields": [
+    {
+      "name": "PCODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "PDESCRIP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 8,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PACTIVA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 58,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PCANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 59,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 67,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PCLIPTOS",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 75,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PMULTIPLOS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 76,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 84,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 134,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON3",
+      "type": 4,
+      "typeName": "char",
+      "offset": 184,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON4",
+      "type": 4,
+      "typeName": "char",
+      "offset": 234,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PFECHAI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 284,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PFECHAF",
+      "type": 10,
+      "typeName": "double",
+      "offset": 292,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VCANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 300,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 308,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PIMAGEN",
+      "type": 4,
+      "typeName": "char",
+      "offset": 316,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "PVALOR2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 326,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VVALOR2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 334,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PBOTON",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 342,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PCONTADOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 343,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PGANADOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 351,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PENTREGAS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 359,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTREGAS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 367,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PFORPAGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 375,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "PPAGBONO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 377,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON5",
+      "type": 4,
+      "typeName": "char",
+      "offset": 385,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON6",
+      "type": 4,
+      "typeName": "char",
+      "offset": 435,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON7",
+      "type": 4,
+      "typeName": "char",
+      "offset": 485,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON8",
+      "type": 4,
+      "typeName": "char",
+      "offset": 535,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON9",
+      "type": 4,
+      "typeName": "char",
+      "offset": 585,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON10",
+      "type": 4,
+      "typeName": "char",
+      "offset": 635,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON11",
+      "type": 4,
+      "typeName": "char",
+      "offset": 685,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON12",
+      "type": 4,
+      "typeName": "char",
+      "offset": 735,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON13",
+      "type": 4,
+      "typeName": "char",
+      "offset": 785,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON14",
+      "type": 4,
+      "typeName": "char",
+      "offset": 835,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PTALON15",
+      "type": 4,
+      "typeName": "char",
+      "offset": 885,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "PPRODIF",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 935,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

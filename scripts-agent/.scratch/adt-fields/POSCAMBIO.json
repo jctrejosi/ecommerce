@@ -1,0 +1,91 @@
+{
+  "table": "POSCAMBIO",
+  "source": "db/ADD_ANALITICA/POSCAMBIO.ADT",
+  "bytes": 5392,
+  "recordCount": 22,
+  "recordLength": 136,
+  "headerLength": 2400,
+  "fieldCount": 10,
+  "fields": [
+    {
+      "name": "IFARTIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "IFNUMERO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 24,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 32,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "IFVENTAO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 92,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVENTAF",
+      "type": 10,
+      "typeName": "double",
+      "offset": 100,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFFECHA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 108,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFHORA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 116,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "IFOPE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 126,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IFSUPER",
+      "type": 4,
+      "typeName": "char",
+      "offset": 130,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IFCAJA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 134,
+      "length": 2,
+      "decimals": 0
+    }
+  ]
+}

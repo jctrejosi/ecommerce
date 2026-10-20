@@ -1,0 +1,499 @@
+{
+  "table": "REGIS01",
+  "source": "db/ADD_ANALITICA/REGIS01.ADT",
+  "bytes": 76820,
+  "recordCount": 76,
+  "recordLength": 845,
+  "headerLength": 12600,
+  "fieldCount": 61,
+  "fields": [
+    {
+      "name": "IFSUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFCAJA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "IFCLIENTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "IFCLIBONO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 28,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "IFFACT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 41,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "IFARTIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 53,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "IFNUMERO",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 72,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IFNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 76,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "IFPROVEE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 106,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "IFCANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 116,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFCOSTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 124,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRUNI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 132,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRBRU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 140,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFPORDES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 148,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRDES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 156,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLADES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 164,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFPORIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 172,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 180,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRIMC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 188,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLROIP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 196,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRNET",
+      "type": 10,
+      "typeName": "double",
+      "offset": 204,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFHORA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 212,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFFECHA",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 220,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IFVENDED",
+      "type": 4,
+      "typeName": "char",
+      "offset": 224,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IFITEM",
+      "type": 10,
+      "typeName": "double",
+      "offset": 228,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFTIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 236,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFTARJE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 237,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "IFSALE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 240,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFCTIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 241,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFPIVA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 242,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "IFCONTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 247,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFNULO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 248,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFDEVOL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 249,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "IFVENDE2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 251,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IFTPRO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 255,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "IFEPS",
+      "type": 4,
+      "typeName": "char",
+      "offset": 258,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "IFREFER",
+      "type": 4,
+      "typeName": "char",
+      "offset": 263,
+      "length": 28,
+      "decimals": 0
+    },
+    {
+      "name": "IFFRACC",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 291,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "IFBRU2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 293,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFDCT2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 301,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFIVA2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 309,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFIMC2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 317,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFNETO2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 325,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFPDES2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 333,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFOBSER1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 341,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "IFOBSER2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 376,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "IFOBSER3",
+      "type": 4,
+      "typeName": "char",
+      "offset": 411,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "IFOBSER4",
+      "type": 4,
+      "typeName": "char",
+      "offset": 446,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "IFOBSER5",
+      "type": 4,
+      "typeName": "char",
+      "offset": 481,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "IFOBSER6",
+      "type": 4,
+      "typeName": "char",
+      "offset": 516,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "IFOBSER7",
+      "type": 4,
+      "typeName": "char",
+      "offset": 551,
+      "length": 35,
+      "decimals": 0
+    },
+    {
+      "name": "IFPTOS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 586,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFDCTOAR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 594,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "IFPORDES2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 604,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRDES2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 612,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFDCTOSUB",
+      "type": 10,
+      "typeName": "double",
+      "offset": 620,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRSUB",
+      "type": 10,
+      "typeName": "double",
+      "offset": 628,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFRECAMBIO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 636,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFPOSO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 637,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "IFDURA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 737,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRAJU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 837,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

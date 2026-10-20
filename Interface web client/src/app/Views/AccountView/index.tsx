@@ -3818,7 +3818,7 @@ export function UserAdminView({
               <AcctCard
                 key={n.id}
                 className={`p-4 transition-all ${!n.read ? "ring-1 ring-foreground/20" : ""}`}
-                style={!n.read ? { background: "#FFFEF0" } : {}}
+                style={!n.read ? { background: "var(--muted)" } : {}}
               >
                 <div className="flex items-start gap-3">
                   <div
@@ -4393,7 +4393,7 @@ export function UserAdminView({
             className="absolute inset-0 bg-black/40"
             onClick={() => setMobileNavOpen(false)}
           />
-          <div className="absolute left-0 top-0 bottom-0 w-64 bg-white flex flex-col shadow-2xl overflow-y-auto">
+          <div className="absolute left-0 top-0 bottom-0 w-64 bg-white flex flex-col shadow-2xl overflow-y-auto pb-[var(--safe-bottom)]">
             <div className="flex items-center justify-between px-4 py-4 border-b border-border">
               <p className="font-bold text-sm">Mi Cuenta</p>
               <button onClick={() => setMobileNavOpen(false)}>
