@@ -51,10 +51,23 @@ picking-admin.mercaldas.jcti.xyz, delivery-admin.mercaldas.jcti.xyz {
 # ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
 # Descomenta cuando el CRM esté desplegado. Si se deja activo sin el contenedor
 # ni DNS, Caddy acumula reintentos de ACME y errores de upstream.
-# crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
-# 	import edge_headers
-# 	reverse_proxy mercaldas_crm_app:8080
-# }
+crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			test_dir https://acme-v02.api.letsencrypt.org/directory
+		}
+	}
+
+	reverse_proxy mercaldas_crm_app:8080
+}
 
 # ── Opcional: Astaroth (APIs de ML) — contenedor `mercaldas_astaroth_app` ──
 # El CRM ya lo consume por la red interna `shared_edge` (sin pasar por aquí).

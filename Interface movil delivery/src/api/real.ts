@@ -21,7 +21,7 @@ import type {
 export const realApi: DeliveryApi = {
   async login(username, password) {
     try {
-      const res = await http.post("/auth/login", { username, password });
+      const res = await http.post("/auth/login", { identifier: username, password });
       return unwrap<LoginResponse>(res.data);
     } catch (err) {
       throw new Error(apiErrorMessage(err, "Error al iniciar sesión."));

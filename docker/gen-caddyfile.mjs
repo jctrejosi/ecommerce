@@ -211,6 +211,12 @@ ${cacheHeaders}		root * ${dir}
 // Host del API cuando ya existe HOST_WEB: solo webhooks (Wompi, etc.), para
 // no publicar otra vez toda la superficie del backend.
 const webhookBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
+	# Wompi puede estar configurado con la raíz del host: se reescribe al
+	# endpoint real del backend.
+	handle / {
+		rewrite * /webhooks/wompi
+		reverse_proxy ${BACKEND}${protoUp}
+	}
 	handle /webhooks/* {
 		reverse_proxy ${BACKEND}${protoUp}
 	}
