@@ -188,9 +188,10 @@ const API_PATHS = [
 
 // Caché de estáticos: el HTML nunca se cachea (un index viejo apunta a
 // bundles viejos); los assets con hash son inmutables.
-const cacheHeaders = `\theader Cache-Control "no-cache"
-\t@assets path /assets/*
+const cacheHeaders = `\t@assets path /assets/*
 \theader @assets Cache-Control "public, max-age=31536000, immutable"
+\t@notAssets not path /assets/*
+\theader @notAssets Cache-Control "no-cache"
 `;
 
 // Con HOST_WEB el API se sirve en el MISMO origen que la web del cliente
