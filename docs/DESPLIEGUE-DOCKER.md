@@ -306,6 +306,16 @@ docker run --rm -v /tmp/Caddyfile:/etc/caddy/Caddyfile:ro caddy:2.9.1 \
 
 ## 8. Operación
 
+`node prod.js` comprueba antes de construir que los puertos publicados
+(`30180/30181` en modo edge o `80/443` en modo directo) estén libres o sean del
+propio contenedor (`mercaldas_app`). Si otro proceso o contenedor los ocupa,
+aborta sin construir y muestra quién los tiene (`nombre · PID` + comando), o el
+contenedor en conflicto. Para ejecutar solo esa comprobación:
+
+```bash
+node prod.js --check-ports
+```
+
 ```bash
 # Reconstruir tras cambios de código
 docker compose -f docker/docker-compose.yml build

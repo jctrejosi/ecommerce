@@ -8,7 +8,8 @@
  *
  * `node prod.js` sincroniza `docker/.env` desde `prod.config.json` (dominios,
  * TLS y puertos — sin pisar secretos), valida lo que el contenedor necesita
- * para no entrar en bucle de reinicio y construye/levanta.
+ * para no entrar en bucle de reinicio, comprueba que los puertos del host estén
+ * libres (o sean del propio contenedor) y construye/levanta.
  *
  * ¿Modo bare-metal (compilar y servir desde esta máquina)? Ese es `prod-local.js`.
  *
@@ -304,6 +305,250 @@ function checkDocker() {
   if (r.status !== 0) die(`Docker no está disponible en el PATH (¿Docker Desktop / WSL2 arrancado?).`);
 }
 
+// ── Puertos del host ────────────────────────────────────────
+const APP_CONTAINER = "mercaldas_app";
+const EDGE_CONTAINER = "edge_caddy";
+
+/** "127.0.0.1:30180" | "80" | "[::1]:30180" → { raw, port }. */
+function parseHostPort(value, fallback) {
+  const raw = String(value || fallback || "").trim();
+  if (!raw) return null;
+  const noProto = raw.replace(/\/tcp$/i, "");
+  let portText = noProto;
+  if (noProto.startsWith("[")) {
+    const idx = noProto.lastIndexOf("]:");
+    portText = idx >= 0 ? noProto.slice(idx + 2) : noProto;
+  } else if (noProto.includes(":")) {
+    portText = noProto.slice(noProto.lastIndexOf(":") + 1);
+  }
+  const port = Number(portText);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return { raw, port };
+}
+
+function run(cmd, args) {
+  return cp.spawnSync(cmd, args, { encoding: "utf8", windowsHide: true });
+}
+
+/** Contenedores activos y sus puertos publicados en el host. */
+function dockerSnapshot() {
+  const r = run("docker", [
+    "ps",
+    "--format",
+    "{{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}",
+  ]);
+  if (r.status !== 0) return [];
+  return (r.stdout || "")
+    .split(/\r?\n/)
+    .filter(Boolean)
+    .map((line) => {
+      const [name, image, status, ports] = line.split("\t");
+      const hostPorts = new Set();
+      const re = /:(\d+)->/g;
+      let match;
+      while ((match = re.exec(ports || ""))) hostPorts.add(Number(match[1]));
+      return { name, image, status, ports: ports || "", hostPorts };
+    });
+}
+
+function processCommand(pid) {
+  if (!pid) return "";
+  const r = run("ps", ["-p", String(pid), "-o", "args="]);
+  if (r.status !== 0) return "";
+  return (r.stdout || "").trim().split(/\r?\n/)[0].slice(0, 180);
+}
+
+function linuxListeners(port) {
+  const ss = run("ss", ["-ltnpH", `sport = :${port}`]);
+  if (ss.status === 0) {
+    const out = ss.stdout || "";
+    if (!out.trim()) return [];
+    const found = [];
+    const re = /users:\(\("([^"]+)",pid=(\d+)/g;
+    let match;
+    while ((match = re.exec(out))) {
+      found.push({
+        name: match[1],
+        pid: Number(match[2]),
+        command: processCommand(Number(match[2])),
+      });
+    }
+    return found.length
+      ? found
+      : [
+          {
+            name: "proceso no identificado",
+            pid: null,
+            command: "requiere permisos para ver el PID",
+          },
+        ];
+  }
+
+  const lsof = run("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-F", "pcn"]);
+  if (lsof.status === 0) {
+    const out = lsof.stdout || "";
+    if (!out.trim()) return [];
+    const found = [];
+    let current = null;
+    for (const line of out.split(/\r?\n/)) {
+      if (line.startsWith("p")) {
+        if (current && current.pid) found.push(current);
+        current = { pid: Number(line.slice(1)) };
+      } else if (line.startsWith("c") && current) {
+        current.name = line.slice(1);
+      }
+    }
+    if (current && current.pid) found.push(current);
+    if (found.length) {
+      for (const item of found) item.command = processCommand(item.pid);
+      return found;
+    }
+  }
+
+  const netstat = run("netstat", ["-ltnp"]);
+  if (netstat.status === 0) {
+    const line = (netstat.stdout || "")
+      .split(/\r?\n/)
+      .find((l) => new RegExp(`:${port}\\s`).test(l));
+    if (line) {
+      const m = line.match(/\s(\d+)\/([^\s]+)$/);
+      return [
+        {
+          name: m ? m[2] : "proceso no identificado",
+          pid: m ? Number(m[1]) : null,
+          command: m ? processCommand(Number(m[1])) : "",
+        },
+      ];
+    }
+  }
+  return [];
+}
+
+function windowsListeners(port) {
+  const netstat = run("netstat", ["-ano", "-p", "tcp"]);
+  if (netstat.status !== 0) return [];
+  const pids = new Set();
+  for (const line of (netstat.stdout || "").split(/\r?\n/)) {
+    const cols = line.trim().split(/\s+/);
+    if (cols.length < 5 || cols[3] !== "LISTENING") continue;
+    if (!new RegExp(`:${port}$`).test(cols[1])) continue;
+    pids.add(Number(cols[4]));
+  }
+  const found = [];
+  for (const pid of pids) {
+    const q = run("tasklist", ["/FI", `PID eq ${pid}`, "/FO", "CSV", "/NH"]);
+    const name = (q.stdout || "").match(/^"([^"]+)"/)?.[1] || "proceso no identificado";
+    found.push({ name, pid, command: "" });
+  }
+  return found;
+}
+
+function hostListeners(port) {
+  return process.platform === "win32" ? windowsListeners(port) : linuxListeners(port);
+}
+
+function describeContainers(containers) {
+  return containers.map((c) => `${c.name} (${c.image})`).join(", ");
+}
+
+function describeListener(listener) {
+  const bits = [];
+  if (listener.name) bits.push(listener.name);
+  if (listener.pid) bits.push(`PID ${listener.pid}`);
+  const head = bits.join(" · ") || "proceso no identificado";
+  return listener.command ? `${head}\n        ${listener.command}` : head;
+}
+
+/**
+ * Comprueba los puertos publicados antes de construir/levantar.
+ * - Si el puerto lo tiene `mercaldas_app`, es el propio stack: se recreará.
+ * - Si lo tiene otro contenedor o proceso, aborta y muestra quién lo usa.
+ * - En modo edge, 80/443 son del edge compartido: si están ocupados por otro,
+ *   avisa (el edge no podrá publicar) pero no impide desplegar la app.
+ */
+function checkHostPorts(cfg) {
+  const text = fs.readFileSync(ENV_FILE, "utf8");
+  const edge = edgeMode(cfg);
+  const defaultHttp = edge ? "127.0.0.1:30180" : "80";
+  const defaultHttps = edge ? "127.0.0.1:30181" : "443";
+  const http = parseHostPort(envValue(text, "PUBLIC_HTTP_PORT"), defaultHttp);
+  const https = parseHostPort(envValue(text, "PUBLIC_HTTPS_PORT"), defaultHttps);
+  const appPorts = [
+    http && { ...http, internal: 8080, label: "HTTP de la app" },
+    https && { ...https, internal: 8443, label: "HTTPS de la app" },
+  ].filter(Boolean);
+  const containers = dockerSnapshot();
+  const conflicts = [];
+
+  console.log(`\n${C.cyan}==> Comprobando puertos del host…${C.reset}`);
+  for (const item of appPorts) {
+    const owners = containers.filter((c) => c.hostPorts.has(item.port));
+    const own = owners.find((c) => c.name === APP_CONTAINER);
+    if (own) {
+      console.log(`  ✅ ${item.raw} (${item.label}) → ${APP_CONTAINER} ya lo usa; se recreará.`);
+      continue;
+    }
+    if (owners.length) {
+      conflicts.push({ port: item.port, raw: item.raw, owners: describeContainers(owners) });
+      continue;
+    }
+    const listeners = hostListeners(item.port);
+    if (listeners.length) {
+      conflicts.push({ port: item.port, raw: item.raw, listeners });
+    } else {
+      console.log(`  ✅ ${item.raw} (${item.label}) → libre.`);
+    }
+  }
+
+  if (conflicts.length) {
+    console.error(`\n${C.err}✘ Hay puertos ocupados por otros servicios:${C.reset}`);
+    for (const conflict of conflicts) {
+      console.error(`   • ${conflict.raw} (puerto ${conflict.port})`);
+      if (conflict.owners) {
+        console.error(`     Contenedor(es): ${conflict.owners}`);
+      } else {
+        for (const listener of conflict.listeners) {
+          console.error(`     ${describeListener(listener)}`);
+        }
+      }
+    }
+    console.error(
+      `\n   Detén esos servicios o cambia PUBLIC_HTTP_PORT / PUBLIC_HTTPS_PORT en ${rel(ENV_FILE)}.`,
+    );
+    console.error(`   No se construyó ni levantó nada.\n`);
+    process.exit(1);
+  }
+
+  if (!edge) return;
+
+  for (const port of [80, 443]) {
+    if (appPorts.some((item) => item.port === port)) continue;
+    const owners = containers.filter((c) => c.hostPorts.has(port));
+    const edgeOwner = owners.find((c) => c.name === EDGE_CONTAINER);
+    if (edgeOwner) {
+      console.log(`  ✅ ${port} → ${EDGE_CONTAINER} (edge compartido).`);
+      continue;
+    }
+    if (owners.length) {
+      console.warn(
+        `  ${C.warn}⚠️  ${port} está ocupado por ${describeContainers(owners)}; el edge no podrá publicar ese puerto.${C.reset}`,
+      );
+      continue;
+    }
+    const listeners = hostListeners(port);
+    if (listeners.length) {
+      console.warn(
+        `  ${C.warn}⚠️  ${port} está ocupado por otro proceso; el edge no podrá publicar ese puerto.${C.reset}`,
+      );
+      for (const listener of listeners) console.warn(`     ${describeListener(listener)}`);
+    } else {
+      console.warn(
+        `  ${C.warn}⚠️  ${port} está libre: el edge compartido no está publicado (docker/edge/).${C.reset}`,
+      );
+    }
+  }
+}
+
 /** Levanta la BD de db/docker y la conecta a la red interna del contenedor. */
 function withDb() {
   const up = compose(COMPOSE_DB, ["up", "-d"]);
@@ -328,10 +573,11 @@ function printHelp() {
   console.log(`
 Mercaldas — despliegue de producción en CONTENEDOR (docker/)
 
-  node prod.js                 sincroniza docker/.env, construye y levanta
+  node prod.js                 sincroniza docker/.env, comprueba puertos, construye y levanta
   node prod.js --no-build      levanta sin reconstruir la imagen
   node prod.js --with-db       además levanta db/docker y la conecta a la red
   node prod.js --dns           imprime los registros DNS/red a configurar
+  node prod.js --check-ports   solo comprueba los puertos del host y sale
   node prod.js --status        estado del contenedor
   node prod.js --logs          logs en vivo
   node prod.js --stop          detiene el contenedor
@@ -363,6 +609,12 @@ function main() {
 
   checkDocker();
 
+  if (has("--check-ports")) {
+    syncEnvFile(cfg);
+    checkHostPorts(cfg);
+    return;
+  }
+
   if (has("--stop")) {
     compose(COMPOSE_APP, ["down"]);
     return;
@@ -378,6 +630,7 @@ function main() {
 
   // Despliegue completo.
   syncEnvFile(cfg);
+  checkHostPorts(cfg);
 
   if (!has("--no-build")) {
     console.log(`\n==> construyendo imagen (bake de VITE_API_URL=${schemeOf(cfg)}://${cfg.hosts.api})…`);
