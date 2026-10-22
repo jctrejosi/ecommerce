@@ -24,6 +24,15 @@ if [ ! -x "$JAVA_HOME/bin/javac" ]; then
   exit 1
 fi
 
+if [ ! -f signing/ecommerce-signing.properties ]; then
+  echo "ERROR: falta signing/ecommerce-signing.properties (credenciales de firma)." >&2
+  echo "Consulta signing/README.md." >&2
+  exit 1
+fi
+
+# android/ lo regenera Expo: asegura la configuración de firma antes de compilar.
+node scripts/apply-release-signing.cjs
+
 echo "JDK:      $JAVA_HOME"
 echo "SDK:      $ANDROID_HOME"
 echo
@@ -32,8 +41,16 @@ cd android
 ./gradlew assembleRelease
 
 APK="app/build/outputs/apk/release/app-release.apk"
+APKSIGNER="$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)"
+echo
+"$APKSIGNER" verify --print-certs "$APK" | grep -E "Signer #1 certificate (DN|SHA-256) digest" || true
+
+VERSION="$(node -p "require('../app.json').expo.version")"
+mkdir -p ../dist
+cp "$APK" "../dist/EcommerceClient-$VERSION.apk"
 echo
 echo "APK listo: android/$APK  ($(du -h "$APK" | cut -f1))"
+echo "Copia:    dist/EcommerceClient-$VERSION.apk"
 
 if [ "${1:-}" = "--install" ]; then
   ADB="$ANDROID_HOME/platform-tools/adb"

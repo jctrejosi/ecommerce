@@ -8,32 +8,43 @@ equipos en estos dos almacenes:
 - `LocalMachine\TrustedPublisher` (Editores de confianza)
 
 No hace falta instalar la clave privada en los equipos de los usuarios. La clave
-privada (`certs/Ecommerce-CodeSigning.pfx`) se queda solo en el equipo/CI que
+privada (`certs/Ecommerce-JCTI-CodeSigning.pfx`) se queda solo en el equipo/CI que
 compila.
+
+## Equipos sueltos: instalador AllInOne
+
+Si el equipo no está en el dominio y no tienes Intune, usa
+`EcommerceAdmin-Setup-AllInOne-<versión>.exe`: pide permisos de administrador
+(UAC), instala la app para todos los usuarios y agrega este certificado en
+`LocalMachine\Root` y `LocalMachine\TrustedPublisher`. Al desinstalar, también
+retira el certificado.
+
+El instalador por usuario (`EcommerceAdmin-Setup-<versión>.exe`) **no** instala el
+certificado; para ese caso usa GPO/Intune o el script de esta carpeta.
 
 ## Archivos
 
 | Archivo | Uso |
 |---|---|
-| `Ecommerce-CodeSigning.cer` | Certificado público. Se importa por GPO o Intune. |
+| `Ecommerce-JCTI-CodeSigning.cer` | Certificado público. Se importa por GPO o Intune. |
 | `Install-EcommerceCodeSigningCert.ps1` | Instalación manual o por script (requiere admin). |
 | `Install-EcommerceCodeSigningCert-Intune.ps1` | Versión autocontenida para Intune (certificado en Base64). |
 
 Thumbprint actual:
 
 ```
-76941B8E533DB1BB23A4E0893511E4513BE0C85D
+413070E61F354A28BEEDF438A2A44EA1E189EEA9
 ```
 
 Se puede confirmar con:
 
 ```powershell
-(Get-PfxCertificate .\Ecommerce-CodeSigning.cer).Thumbprint
+(Get-PfxCertificate .\Ecommerce-JCTI-CodeSigning.cer).Thumbprint
 ```
 
 ## Opción 1: GPO (equipos del dominio)
 
-1. Copia `Ecommerce-CodeSigning.cer` a la máquina donde administras las GPO.
+1. Copia `Ecommerce-JCTI-CodeSigning.cer` a la máquina donde administras las GPO.
 2. Abre `gpmc.msc` y edita la GPO que aplica a los equipos.
 3. Ve a:
    `Configuración del equipo > Directivas > Configuración de Windows >
@@ -56,7 +67,7 @@ Se puede confirmar con:
 
    ```powershell
    Get-ChildItem Cert:\LocalMachine\Root, Cert:\LocalMachine\TrustedPublisher |
-     Where-Object { $_.Subject -like '*Ecommerce Code Signing*' } |
+     Where-Object { $_.Subject -like '*Ecommerce-JCTI Code Signing*' } |
      Format-List Subject, Thumbprint, NotAfter
    ```
 
@@ -73,7 +84,7 @@ SYSTEM y escribe en `LocalMachine`).
 2. Plataforma: **Windows 10 y versiones posteriores**.
 3. Tipo: **Plantillas** → **Certificado de confianza**
    (`Trusted certificate`).
-4. Sube `Ecommerce-CodeSigning.cer`.
+4. Sube `Ecommerce-JCTI-CodeSigning.cer`.
 5. Asigna el perfil al grupo de dispositivos correspondiente.
 
 Esto despliega el certificado en `LocalMachine\Root`.
@@ -113,7 +124,7 @@ Get-AuthenticodeSignature .\EcommerceAdmin-Setup-1.0.0.exe |
 Resultado esperado:
 
 - `Status: Valid`
-- `SignerCertificate.Subject` contiene `CN=Ecommerce Code Signing`
+- `SignerCertificate.Subject` contiene `CN=Ecommerce-JCTI Code Signing`
 - `SignerCertificate.Thumbprint` coincide con el desplegado
 
 También se puede revisar el certificado de la app instalada:
@@ -156,7 +167,7 @@ refresco. En un equipo aislado:
 
 ```powershell
 Get-ChildItem Cert:\LocalMachine\Root, Cert:\LocalMachine\TrustedPublisher |
-  Where-Object { $_.Subject -like '*Ecommerce Code Signing*' } |
+  Where-Object { $_.Subject -like '*Ecommerce-JCTI Code Signing*' } |
   Remove-Item
 ```
 
@@ -164,7 +175,7 @@ Si la GPO sigue aplicándose, el certificado volverá a instalarse.
 
 ## Seguridad
 
-- `certs/Ecommerce-CodeSigning.pfx`, `certs/Ecommerce-CodeSigning.key` y
+- `certs/Ecommerce-JCTI-CodeSigning.pfx`, `certs/Ecommerce-JCTI-CodeSigning.key` y
   `certs/.pfx-password` **nunca** deben subirse al repositorio. Ya están en
   `.gitignore`.
 - Restringe la ACL del PFX y de la contraseña al usuario que compila.

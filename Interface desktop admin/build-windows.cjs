@@ -11,9 +11,10 @@
  * Uso:
  *   npm run build:win
  *   npm run build:win:clean
+ *   npm run build:win:admin      (AllInOne: pide UAC, instala app + certificado)
  *   npm run build:win:unsigned   (omite la firma)
  *
- * Firma: si existe certs/Ecommerce-CodeSigning.pfx, firma la app y el
+ * Firma: si existe certs/Ecommerce-JCTI-CodeSigning.pfx, firma la app y el
  * instalador. Variables: SIGN_PFX, SIGN_PFX_PASSWORD, SIGN_ALIAS,
  * SIGN_TIMESTAMP_URL, SIGN_JSIGN_JAR. Con SIGN=0 o --no-sign se omite.
  *
@@ -22,6 +23,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const crypto = require('node:crypto');
 const { execFileSync } = require('node:child_process');
 
 const { packager } = require('@electron/packager');
@@ -33,6 +35,7 @@ const pkg = require('./package.json');
 const PRODUCT_NAME = 'Ecommerce Admin';
 const APP_ID = 'EcommerceAdmin';
 const EXECUTABLE_NAME = 'EcommerceAdmin';
+const allInOne = process.argv.includes('--all-in-one') || process.env.ALL_IN_ONE === '1';
 
 const distDir = path.join(root, 'dist');
 const packagedDir = path.join(distDir, 'packaged');
@@ -40,12 +43,19 @@ const workDir = path.join(distDir, 'work');
 const buildDir = path.join(root, 'build');
 const iconIco = path.join(buildDir, 'icon.ico');
 const iconPng = path.join(buildDir, 'icon.png');
-const installerTemplate = path.join(root, 'installer.nsi');
+const installerTemplate = path.join(
+  root,
+  allInOne ? 'installer-allinone.nsi' : 'installer.nsi',
+);
 const configFile = path.join(root, 'config.json');
 const localConfigFile = path.join(root, 'config.local.json');
 const configSource = fs.existsSync(localConfigFile) ? localConfigFile : configFile;
 const buildConfigFile = path.join(distDir, 'config', 'config.json');
-const setupFile = path.join(distDir, `${APP_ID}-Setup-${pkg.version}.exe`);
+const certFile = path.join(root, 'deployment', 'Ecommerce-JCTI-CodeSigning.cer');
+const setupFile = path.join(
+  distDir,
+  `${APP_ID}-Setup${allInOne ? '-AllInOne' : ''}-${pkg.version}.exe`,
+);
 
 // La app solo necesita el idioma del panel, es-CO usa es-419; en-US es el
 // fallback interno de Chromium. Quitar el resto ahorra ~45 MB instalados.
@@ -53,10 +63,10 @@ const KEEP_LOCALES = new Set(['en-US.pak', 'es.pak', 'es-419.pak']);
 
 // Firma de código con certificado autofirmado (ruta gratuita GPO/Intune).
 const certsDir = path.join(root, 'certs');
-const defaultSignPfx = path.join(certsDir, 'Ecommerce-CodeSigning.pfx');
+const defaultSignPfx = path.join(certsDir, 'Ecommerce-JCTI-CodeSigning.pfx');
 const signPfx = process.env.SIGN_PFX ? path.resolve(process.env.SIGN_PFX) : defaultSignPfx;
 const signPasswordFile = path.join(certsDir, '.pfx-password');
-const signAlias = process.env.SIGN_ALIAS || 'Ecommerce Code Signing';
+const signAlias = process.env.SIGN_ALIAS || 'Ecommerce-JCTI Code Signing';
 const jsignJar = process.env.SIGN_JSIGN_JAR
   ? path.resolve(process.env.SIGN_JSIGN_JAR)
   : path.join(root, 'tools', 'jsign.jar');
@@ -265,6 +275,11 @@ function versionParts(version) {
   return [numbers[0] || 1, numbers[1] || 0, numbers[2] || 0, 0];
 }
 
+/** Thumbprint SHA-1 del certificado DER, tal como lo muestra Windows. */
+function certThumbprint(file) {
+  return crypto.createHash('sha1').update(fs.readFileSync(file)).digest('hex').toUpperCase();
+}
+
 /** Aplica icono y metadatos de versión al .exe sin necesitar wine/rcedit. */
 function patchExecutable(exePath) {
   log('Aplicando icono y metadatos al ejecutable');
@@ -333,10 +348,15 @@ function writeInstallerScript(sourceDir) {
     .replaceAll('@@OUTPUT_FILE@@', toNsisPath(setupFile))
     .replaceAll('@@ICON_FILE@@', toNsisPath(iconIco))
     .replaceAll('@@CONFIG_FILE@@', toNsisPath(buildConfigFile))
+    .replaceAll('@@CERT_FILE@@', toNsisPath(certFile))
+    .replaceAll('@@CERT_THUMBPRINT@@', allInOne ? certThumbprint(certFile) : '')
     .replaceAll('@@ESTIMATED_SIZE@@', String(estimatedKb));
 
   fs.mkdirSync(workDir, { recursive: true });
-  const generated = path.join(workDir, 'installer.generated.nsi');
+  const generated = path.join(
+    workDir,
+    allInOne ? 'installer-allinone.generated.nsi' : 'installer.generated.nsi',
+  );
   fs.writeFileSync(generated, script, 'utf8');
   return generated;
 }
@@ -352,6 +372,13 @@ async function main() {
 
   ensureIcon();
 
+  if (allInOne && !fs.existsSync(certFile)) {
+    fail(
+      `El instalador AllInOne necesita el certificado público ${certFile}.\n` +
+        'Genera el certificado antes de compilar.',
+    );
+  }
+
   const signingBackend = await ensureSigningTools();
 
   if (process.argv.includes('--clean')) {
@@ -362,6 +389,8 @@ async function main() {
   }
 
   fs.mkdirSync(distDir, { recursive: true });
+
+  log(`Modo: ${allInOne ? 'AllInOne (administrador)' : 'por usuario (sin administrador)'}`);
 
   // La configuración del cliente vive en config.local.json (ignorado por git).
   // El build la copia como config.json para el instalador y resources/.
@@ -396,6 +425,7 @@ async function main() {
       /^\/config\.local\.json$/,
       /^\/build-windows\.cjs$/,
       /^\/installer\.nsi$/,
+      /^\/installer-allinone\.nsi$/,
       /^\/README\.md$/,
       /^\/\.gitignore$/,
       /^\/package-lock\.json$/,

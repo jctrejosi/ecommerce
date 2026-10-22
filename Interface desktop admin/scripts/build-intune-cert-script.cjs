@@ -2,7 +2,7 @@
 
 /**
  * Genera deployment/Install-EcommerceCodeSigningCert-Intune.ps1 a partir del
- * certificado publico deployment/Ecommerce-CodeSigning.cer.
+ * certificado publico deployment/Ecommerce-JCTI-CodeSigning.cer.
  *
  * Intune (Platform scripts) solo acepta un archivo .ps1, por eso el certificado
  * se incrusta en Base64. El script instala la confianza en LocalMachine\Root y
@@ -16,7 +16,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 
 const root = path.join(__dirname, '..');
-const cerPath = path.join(root, 'deployment', 'Ecommerce-CodeSigning.cer');
+const cerPath = path.join(root, 'deployment', 'Ecommerce-JCTI-CodeSigning.cer');
 const outPath = path.join(root, 'deployment', 'Install-EcommerceCodeSigningCert-Intune.ps1');
 
 if (!fs.existsSync(cerPath)) {
@@ -47,7 +47,7 @@ ${wrapped}
 '@
 
     $bytes = [Convert]::FromBase64String(($base64 -replace '\\s', ''))
-    $temp = Join-Path $env:TEMP 'Ecommerce-CodeSigning.cer'
+    $temp = Join-Path $env:TEMP 'Ecommerce-JCTI-CodeSigning.cer'
     [IO.File]::WriteAllBytes($temp, $bytes)
 
     $cert = [Security.Cryptography.X509Certificates.X509Certificate2]::new($temp)

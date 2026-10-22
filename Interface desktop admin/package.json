@@ -11,6 +11,7 @@
     "start": "electron .",
     "build:win": "node build-windows.cjs",
     "build:win:clean": "node build-windows.cjs --clean",
+    "build:win:admin": "node build-windows.cjs --all-in-one",
     "build:win:unsigned": "node build-windows.cjs --no-sign",
     "cert:intune": "node scripts/build-intune-cert-script.cjs"
   },

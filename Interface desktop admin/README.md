@@ -27,16 +27,19 @@ abrir o recargar la app, sin reinstalar nada.
 ```bash
 cd "Interface desktop admin"
 npm install
-npm run build:win
+
+npm run build:win        # por usuario, sin administrador
+npm run build:win:admin  # AllInOne: pide UAC, app + certificado + acceso directo
 ```
 
 Resultado:
 
 ```
-dist/EcommerceAdmin-Setup-<versión>.exe
+dist/EcommerceAdmin-Setup-<versión>.exe            # por usuario
+dist/EcommerceAdmin-Setup-AllInOne-<versión>.exe   # con administrador
 ```
 
-Tamaños de referencia: ~104 MB el instalador y ~311 MB instalados (Electron
+Tamaños de referencia: ~104 MB cada instalador y ~311 MB instalados (Electron
 incluye Chromium; se recortan los idiomas no usados).
 
 Para partir de cero:
@@ -50,17 +53,18 @@ El proceso:
 1. Empaqueta la app con `@electron/packager` para `win32-x64`.
 2. Aplica el icono y los metadatos de versión con `resedit` (no requiere wine).
 3. Firma `EcommerceAdmin.exe` con el certificado de `certs/` (si existe).
-4. Genera y compila el instalador NSIS en `dist/work/installer.generated.nsi`.
+4. Genera y compila el instalador NSIS con la plantilla correspondiente:
+   `installer.nsi` (por usuario) o `installer-allinone.nsi` (administrador).
 5. Firma el `Setup.exe` como último paso.
 
 ## Firma de código (autofirmada y gratuita)
 
 El proyecto incluye un certificado de code signing autofirmado:
 
-- `certs/Ecommerce-CodeSigning.pfx`: clave privada + certificado. **Ignorado por
+- `certs/Ecommerce-JCTI-CodeSigning.pfx`: clave privada + certificado. **Ignorado por
   git**, nunca se empaqueta en la app.
 - `certs/.pfx-password`: contraseña del PFX. **Ignorada por git**.
-- `deployment/Ecommerce-CodeSigning.cer`: certificado público para distribuir.
+- `deployment/Ecommerce-JCTI-CodeSigning.cer`: certificado público para distribuir.
 
 `npm run build:win` firma automáticamente la app y el instalador si el PFX está
 presente. Para generar o rotar el certificado:
@@ -84,9 +88,9 @@ Variables de entorno del build:
 
 | Variable | Uso |
 |---|---|
-| `SIGN_PFX` | Ruta al PFX (por defecto `certs/Ecommerce-CodeSigning.pfx`) |
+| `SIGN_PFX` | Ruta al PFX (por defecto `certs/Ecommerce-JCTI-CodeSigning.pfx`) |
 | `SIGN_PFX_PASSWORD` | Contraseña del PFX (si no, lee `certs/.pfx-password`) |
-| `SIGN_ALIAS` | Alias del certificado (por defecto `Ecommerce Code Signing`) |
+| `SIGN_ALIAS` | Alias del certificado (por defecto `Ecommerce-JCTI Code Signing`) |
 | `SIGN_TIMESTAMP_URL` | URL TSA opcional (p. ej. `http://timestamp.digicert.com`) |
 | `SIGN_JSIGN_JAR` | Ruta alternativa al jar de jsign |
 | `SIGN=0` | Omite la firma (equivale a `--no-sign`) |
@@ -96,11 +100,24 @@ equipos. Instrucciones completas en [`deployment/README.md`](deployment/README.m
 
 ## Instalar en Windows
 
+### Opción recomendada: AllInOne (pide administrador)
+
+1. Copia `EcommerceAdmin-Setup-AllInOne-<versión>.exe` al equipo.
+2. Ejecútalo. Windows pedirá permisos de administrador (UAC).
+   - Si aceptas, continúa la instalación.
+   - Si cancelas, no se instala nada.
+3. Instala la app para todos los usuarios en `%PROGRAMFILES%\Ecommerce Admin`.
+4. Crea el acceso directo **Ecommerce Admin** en el escritorio y en el menú Inicio.
+5. Instala el certificado de confianza de Ecommerce en el equipo.
+6. Crea el desinstalador. Al desinstalar también retira el certificado.
+
+### Opción sin administrador (para GPO/Intune)
+
 1. Copia `EcommerceAdmin-Setup-<versión>.exe` al equipo.
 2. Ejecútalo. Se instala en `%LOCALAPPDATA%\Programs\Ecommerce Admin` **sin pedir
    permisos de administrador**.
 3. Crea accesos directos en el escritorio y en el menú Inicio (`Ecommerce`).
-4. Al finalizar puede abrir la app directamente.
+4. El certificado debe desplegarse aparte por GPO/Intune.
 
 Para desinstalar: Configuración → Aplicaciones, o el acceso
 "Desinstalar Ecommerce Admin". Los datos de sesión
@@ -180,21 +197,28 @@ ECOMMERCE_SMOKE_TEST=1 xvfb-run -a ./node_modules/.bin/electron . --no-sandbox
 - El icono y el logo del instalador salen de `build/icon.ico` y
   `build/icon.png`. Para cambiarlos, reemplaza `build/icon.png` (192×192 o
   mayor) y borra `build/icon.ico` para que se regenere en el siguiente build.
-- El instalador es por usuario (`RequestExecutionLevel user`), por lo que cada
-  cuenta de Windows tiene su propia copia y su propia sesión.
+- **AllInOne** es per-machine (`RequestExecutionLevel admin`, `Program Files`);
+  el instalador sin administrador es per-user (`LocalAppData`). Ambos conservan
+  la sesión por usuario en `%APPDATA%\Ecommerce Admin`.
+- El AllInOne puede advertir por SmartScreen en el primer arranque, porque el
+  certificado se instala durante la ejecución. Después de instalado, ese equipo
+  confía en los binarios firmados por Ecommerce.
 
 ## Estructura
 
 ```
-main.cjs              proceso principal de Electron (ventana, navegación, menú)
-offline.html          pantalla local cuando falla la conexión
-config.json           URL del panel y opciones
-installer.nsi         plantilla del instalador NSIS
-build-windows.cjs     orquestador del build (packager + icono + firma + NSIS)
-build/icon.ico|png    icono de la app y del instalador
-certs/                PFX, clave y contraseña (privados, ignorados por git) + .cer
-scripts/              generación/rotación del certificado y script de Intune
-deployment/           .cer público y scripts de GPO/Intune
-tools/                jsign (descargado, ignorado por git)
-dist/                 salida generada (ignorada por git)
+main.cjs                 proceso principal de Electron (ventana, navegación, menú)
+offline.html             pantalla local cuando falla la conexión
+config.json              plantilla de configuración (URL genérica)
+config.local.json        URL real del cliente (ignorado por git)
+installer.nsi            instalador por usuario (sin administrador)
+installer-allinone.nsi   instalador con UAC (app + certificado + acceso directo)
+build-windows.cjs        orquestador del build (packager + icono + firma + NSIS)
+build/icon.ico|png       icono de la app y del instalador
+certs/                   PFX, clave y contraseña (privados, ignorados por git) + .cer
+scripts/                 generación/rotación del certificado y script de Intune
+deployment/              .cer público y scripts de GPO/Intune
+tools/                   jsign (descargado, ignorado por git)
+release/                 instaladores listos para distribuir (ignorado por git)
+dist/                    salida generada (ignorada por git)
 ```

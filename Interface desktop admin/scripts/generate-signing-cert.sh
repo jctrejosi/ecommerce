@@ -7,21 +7,21 @@
 #
 # Variables opcionales:
 #   OUT_DIR  (default: <proyecto>/certs)
-#   SUBJECT  (default: /C=CO/O=Ecommerce/OU=Tecnologia/CN=Ecommerce Code Signing)
+#   SUBJECT  (default: /C=CO/O=Ecommerce-JCTI/OU=Tecnologia/CN=Ecommerce-JCTI Code Signing)
 #   DAYS     (default: 3650)
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT="${OUT_DIR:-$ROOT/certs}"
-SUBJECT="${SUBJECT:-/C=CO/O=Ecommerce/OU=Tecnologia/CN=Ecommerce Code Signing}"
+SUBJECT="${SUBJECT:-/C=CO/O=Ecommerce-JCTI/OU=Tecnologia/CN=Ecommerce-JCTI Code Signing}"
 DAYS="${DAYS:-3650}"
 FORCE="${FORCE:-0}"
 
-PFX="$OUT/Ecommerce-CodeSigning.pfx"
-KEY="$OUT/Ecommerce-CodeSigning.key"
-CRT="$OUT/Ecommerce-CodeSigning.crt"
-CER="$OUT/Ecommerce-CodeSigning.cer"
+PFX="$OUT/Ecommerce-JCTI-CodeSigning.pfx"
+KEY="$OUT/Ecommerce-JCTI-CodeSigning.key"
+CRT="$OUT/Ecommerce-JCTI-CodeSigning.crt"
+CER="$OUT/Ecommerce-JCTI-CodeSigning.cer"
 PASSWORD_FILE="$OUT/.pfx-password"
 DEPLOYMENT="$ROOT/deployment"
 
@@ -52,14 +52,14 @@ openssl pkcs12 -export \
   -out "$PFX" \
   -inkey "$KEY" \
   -in "$CRT" \
-  -name "Ecommerce Code Signing" \
+  -name "Ecommerce-JCTI Code Signing" \
   -passout "file:$PASSWORD_FILE"
 
 openssl x509 -in "$CRT" -outform DER -out "$CER"
-cp "$CER" "$DEPLOYMENT/Ecommerce-CodeSigning.cer"
+cp "$CER" "$DEPLOYMENT/Ecommerce-JCTI-CodeSigning.cer"
 
 chmod 600 "$KEY" "$PFX" "$PASSWORD_FILE"
-chmod 644 "$CRT" "$CER" "$DEPLOYMENT/Ecommerce-CodeSigning.cer"
+chmod 644 "$CRT" "$CER" "$DEPLOYMENT/Ecommerce-JCTI-CodeSigning.cer"
 
 echo ""
 echo "Certificado generado:"
@@ -69,5 +69,5 @@ echo "  CER:      $CER"
 echo "  Password: $PASSWORD_FILE"
 echo ""
 echo "Siguiente paso: npm run build:win"
-echo "Luego publica deployment/Ecommerce-CodeSigning.cer por GPO/Intune."
+echo "Luego publica deployment/Ecommerce-JCTI-CodeSigning.cer por GPO/Intune."
 echo "Regenera el script de Intune con: npm run cert:intune"

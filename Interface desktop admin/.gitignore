@@ -11,3 +11,4 @@ certs/*.key
 certs/*.pem
 certs/.pfx-password
 *.pfx
+certs/legacy/

@@ -8,12 +8,12 @@
 #
 # Despues de generarlo:
 #   1. Compila:  npm run build:win
-#   2. Distribuye deployment\Ecommerce-CodeSigning.cer por GPO/Intune
+#   2. Distribuye deployment\Ecommerce-JCTI-CodeSigning.cer por GPO/Intune
 #      (ver deployment\README.md).
 
 [CmdletBinding()]
 param(
-    [string]$Subject = 'CN=Ecommerce Code Signing, O=Ecommerce, OU=Tecnologia, C=CO',
+    [string]$Subject = 'CN=Ecommerce-JCTI Code Signing, O=Ecommerce-JCTI, OU=Tecnologia, C=CO',
     [int]$Years = 10,
     [string]$OutputDirectory = (Join-Path (Split-Path -Parent $PSScriptRoot) 'certs'),
     [SecureString]$PfxPassword,
@@ -22,9 +22,9 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$pfxPath = Join-Path $OutputDirectory 'Ecommerce-CodeSigning.pfx'
-$cerPath = Join-Path $OutputDirectory 'Ecommerce-CodeSigning.cer'
-$crtPath = Join-Path $OutputDirectory 'Ecommerce-CodeSigning.crt'
+$pfxPath = Join-Path $OutputDirectory 'Ecommerce-JCTI-CodeSigning.pfx'
+$cerPath = Join-Path $OutputDirectory 'Ecommerce-JCTI-CodeSigning.cer'
+$crtPath = Join-Path $OutputDirectory 'Ecommerce-JCTI-CodeSigning.crt'
 $passwordFile = Join-Path $OutputDirectory '.pfx-password'
 
 if ((Test-Path $pfxPath) -and -not $Force) {
@@ -77,7 +77,7 @@ try {
 
     $deploymentDir = Join-Path (Split-Path -Parent $OutputDirectory) 'deployment'
     New-Item -ItemType Directory -Force -Path $deploymentDir | Out-Null
-    Copy-Item -Path $cerPath -Destination (Join-Path $deploymentDir 'Ecommerce-CodeSigning.cer') -Force
+    Copy-Item -Path $cerPath -Destination (Join-Path $deploymentDir 'Ecommerce-JCTI-CodeSigning.cer') -Force
 
     # Restringir el PFX y la contrasena al usuario actual.
     & icacls.exe $pfxPath /inheritance:r /grant:r "$($env:USERNAME):(R,W)" | Out-Null
@@ -93,7 +93,7 @@ try {
     Write-Host "  Password:   $passwordFile"
     Write-Host ''
     Write-Host 'Siguiente paso: npm run build:win'
-    Write-Host 'Luego publica deployment\Ecommerce-CodeSigning.cer por GPO/Intune.'
+    Write-Host 'Luego publica deployment\Ecommerce-JCTI-CodeSigning.cer por GPO/Intune.'
     Write-Host 'Regenera el script de Intune con: npm run cert:intune'
 } finally {
     Remove-Item -Path $cert.PSPath -Force -ErrorAction SilentlyContinue

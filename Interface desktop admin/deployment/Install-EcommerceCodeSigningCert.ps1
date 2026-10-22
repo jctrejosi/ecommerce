@@ -4,7 +4,7 @@
 # Uso manual (PowerShell como administrador):
 #   .\deployment\Install-EcommerceCodeSigningCert.ps1
 #
-# GPO: tambien puedes importar Ecommerce-CodeSigning.cer directamente en
+# GPO: tambien puedes importar Ecommerce-JCTI-CodeSigning.cer directamente en
 #   Equipo > Configuracion > Directivas > Configuracion de Windows >
 #   Configuracion de seguridad > Directivas de clave publica >
 #   Entidades de certificacion raiz de confianza y Editores de confianza.
@@ -13,7 +13,7 @@
 
 [CmdletBinding()]
 param(
-    [string]$CertificatePath = (Join-Path $PSScriptRoot 'Ecommerce-CodeSigning.cer')
+    [string]$CertificatePath = (Join-Path $PSScriptRoot 'Ecommerce-JCTI-CodeSigning.cer')
 )
 
 $ErrorActionPreference = 'Stop'
