@@ -1,0 +1,67 @@
+{
+  "table": "TIDPRECI",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDPRECI.ADT",
+  "bytes": 19350,
+  "recordCount": 225,
+  "recordLength": 78,
+  "headerLength": 1800,
+  "fieldCount": 7,
+  "fields": [
+    {
+      "name": "INARTIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "INVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 24,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INVALORN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 32,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INFECHA",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 40,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "INHORA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 44,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INUSUAR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 52,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "INTIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 58,
+      "length": 20,
+      "decimals": 0
+    }
+  ]
+}

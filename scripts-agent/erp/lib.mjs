@@ -14,15 +14,60 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const ROOT = path.resolve(__dirname, '../..');
 
 const require = createRequire(import.meta.url);
-require(path.join(ROOT, 'backend/node_modules/dotenv')).config({
-  path: path.join(ROOT, 'backend/.env.development.local'),
-});
+const dotenv = require(path.join(ROOT, 'backend/node_modules/dotenv'));
+
+// Producción: backend/.env.production o backend/.env; desarrollo: .env.development.local.
+// DOTENV_CONFIG_PATH permite apuntar a un archivo explícito al desplegar.
+const envFiles = process.env.DOTENV_CONFIG_PATH
+  ? [process.env.DOTENV_CONFIG_PATH]
+  : process.env.NODE_ENV === 'production'
+    ? ['backend/.env.production', 'backend/.env']
+    : ['backend/.env.development.local', 'backend/.env'];
+for (const rel of envFiles) {
+  const file = path.isAbsolute(rel) ? rel : path.join(ROOT, rel);
+  if (fs.existsSync(file)) dotenv.config({ path: file, override: false });
+}
 
 /** Sucursal del ERP ("1","2","11") -> branches.code en Postgres. */
 export const BRANCH_CODE = (insuc) => String(String(insuc).trim()).replace(/^0+/, '') || '0';
 
 /** char(n): limpiar relleno. El API ya entrega string. */
 export const s = (v) => (v == null ? null : String(v).trim());
+
+/** Recorta a n caracteres (para columnas char(n) del ERP). */
+export const clip = (v, n) => (v == null ? '' : String(v)).slice(0, n);
+
+/**
+ * Número de pedido web → DOMDIA.FAPEDIDO / DOMITE.IFPEDIDO.
+ *
+ * Ambas columnas se enlazan por este valor y `IFPEDIDO` es char(9), así que el
+ * número debe medir exactamente 9. Prefijo propio del canal web (por defecto
+ * '9') + id secuencial. Ej.: id 510 → '900000510'.
+ */
+export function orderNumber(id) {
+  const prefix = process.env.ERP_ORDER_PREFIX ?? '9';
+  const width = 9 - prefix.length;
+  const n = String(id);
+  if (width < 1 || n.length > width) {
+    throw new Error(`orderNumber: id ${id} no cabe con prefijo '${prefix}' en char(9)`);
+  }
+  return prefix + n.padStart(width, '0');
+}
+
+/**
+ * Código nuevo para una maestra del ERP, con la longitud exacta de la columna.
+ * Por defecto usa el rango numérico 9xxxxxxx (no colisiona con las maestras
+ * existentes, que son códigos numéricos cortos).
+ */
+export function newErpCode(id, length) {
+  const prefix = process.env.ERP_NEW_CODE_PREFIX ?? '9';
+  const width = length - prefix.length;
+  const n = String(id);
+  if (width < 1 || n.length > width) {
+    throw new Error(`newErpCode: id ${id} no cabe en char(${length}) con prefijo '${prefix}'`);
+  }
+  return prefix + n.padStart(width, '0');
+}
 
 /** numérico: '' / centinelas -> null. */
 export function n(v) {

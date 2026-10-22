@@ -1,6 +1,6 @@
 {
   "table": "TIDEAN",
-  "source": "db/ADD_ANALITICA/TIDEAN.ADT",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDEAN.ADT",
   "bytes": 2104,
   "recordCount": 6,
   "recordLength": 84,

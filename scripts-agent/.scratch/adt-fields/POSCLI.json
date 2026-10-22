@@ -1,7 +1,7 @@
 {
   "table": "POSCLI",
-  "source": "db/ADD_ANALITICA/POSCLI.adt",
-  "bytes": 194546588,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/POSCLI.adt",
+  "bytes": 262144,
   "recordCount": 146372,
   "recordLength": 1329,
   "headerLength": 18200,

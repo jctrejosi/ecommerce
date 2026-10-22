@@ -1,6 +1,6 @@
 {
   "table": "TIDMARCAS",
-  "source": "db/ADD_ANALITICA/TIDMARCAS.adt",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDMARCAS.adt",
   "bytes": 203168,
   "recordCount": 2176,
   "recordLength": 93,

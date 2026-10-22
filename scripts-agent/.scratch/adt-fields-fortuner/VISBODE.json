@@ -1,0 +1,107 @@
+{
+  "table": "VISBODE",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/VISBODE.ADT",
+  "bytes": 5308,
+  "recordCount": 33,
+  "recordLength": 76,
+  "headerLength": 2800,
+  "fieldCount": 12,
+  "fields": [
+    {
+      "name": "SUC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CCOSTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CNIVEL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 45,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CFLAG",
+      "type": 4,
+      "typeName": "char",
+      "offset": 46,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "SALDOS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 47,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "COSTOS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 55,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PROMEDIO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 63,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BANO",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 71,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FACTURA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 73,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "INVE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 74,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ASALDO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 75,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

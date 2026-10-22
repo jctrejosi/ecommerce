@@ -32,7 +32,7 @@ código (módulos `catalog`, `inventory`, `orders`, `customers`, `delivery`).
 | Dato del ERP | Destino Postgres | ¿Se usa? | Decisión |
 |---|---|---|---|
 | `TIDSAL` (artículos, precio, saldo) | `products`, `product_variants`, `prices`, `inventory`, `branch_products` | **Sí** | **Sincronizar** (hecho) |
-| `TIDTAB`/`TIDCATE` (categorías) | `categories`, `product_categories` | Sí | Sincronizar (hecho) |
+| `TIDCATE` (categorías) | `categories`, `product_categories` | Sí | Sincronizar (hecho) |
 | `TIDTPRO` (tipos) | `product_types` | Sí | Sincronizar (hecho) |
 | `TIDMARCAS`/`INMARCAP` (marcas) | `brands` | Sí | Sincronizar (hecho) |
 | `POSCLI` (clientes) | `customers` | Sí (¿?) | Sincronizar (hecho) |
@@ -53,15 +53,15 @@ código (módulos `catalog`, `inventory`, `orders`, `customers`, `delivery`).
 
 | Sentido | Entidad | Script / artefacto | Estado |
 |---|---|---|---|
-| ERP → PG | Diccionario de códigos | `sync-codes.mjs` | ✅ (6 dominios + `order_status`) |
+| ERP → PG | Diccionario de códigos | `sync-codes.mjs` | ✅ (marcas, tipos, bodegas, pagos, impuestos, `order_status`; `city` sin fuente) |
 | ERP → PG | Catálogo | `sync-catalog.mjs` | ✅ |
 | ERP → PG | Clientes | `sync-customers.mjs` | ✅ |
 | ERP → PG | Facturación (espejo completo) | `sync-invoices.mjs` | ⚠️ opcional/gated (`--full`); no lo usa el ecommerce |
 | PG → ERP | Pedidos | `push-orders.mjs` | ✅ |
-| PG → ERP | Clientes (alta + actualización) | `push-customers.mjs` | ✅ (`CODCLI` provisional) |
+| PG → ERP | Clientes (alta + actualización) | `push-customers.mjs` | ✅ (`CODCLI` generado, 13 chars) |
 | PG → ERP | Precio / stock | `push-catalog.mjs` + triggers (`db/sql/21_erp_catalog_outbox.sql`) | ✅ |
 | PG → ERP | Maestras: marcas, categorías, tipos, producto | `push-catalog.mjs` + triggers (`db/sql/22_erp_outbox_masters.sql`) | ✅ |
-| PG → ERP | Estado de pedido (`DOMDIA.FAESTADO`) | `push-catalog.mjs` + trigger (`22`) + `erp_code_map` | ✅ (códigos **provisionales**) |
+| PG → ERP | Estado de pedido (`DOMDIA.FAESTADO`) | `push-catalog.mjs` + trigger (`22`) + `erp_code_map` | ✅ (códigos cerrados con FORTUNER) |
 | ERP ⇄ PG | Conciliación factura→pedido | `reconcile.mjs` | ✅ |
 | PG → ERP | Drenado de salida (loop/cron) | `sync-out.mjs` | ✅ |
 | — | Runner / automatización | `sync-all.mjs` | ✅ (cron/Task Scheduler) |
@@ -77,14 +77,14 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
 
 ### 4.A Inyectar una venta (PG → ERP)
 - ✅ Pedido → `DOMDIA`/`DOMITE` (`push-orders.mjs`).
-- ✅ **Alta/actualización de cliente PG → `POSCLI`** (`push-customers.mjs`; `CODCLI` provisional).
+- ✅ **Alta/actualización de cliente PG → `POSCLI`** (`push-customers.mjs`; `CODCLI` generado de 13 chars).
 - ✅ **Drenado de `erp_outbox`** como loop (`sync-out.mjs --loop=N`).
-- ⚠️ Numeración y estados: `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM` (**códigos provisionales**).
+- ✅ Numeración y estados cerrados con FORTUNER: `FAPEDIDO`/`IFPEDIDO` 9 dígitos, `FAESTADO` 0/5/9, `IFESTADO` vacío (normal)/5, `FATIPODOM` 01 (ver `docs/ESCRITURA-FORTUNER-READINESS.md`).
 - ✅ **Retorno**: el ERP factura → actualizar estado/factura de *nuestro* pedido (`reconcile.mjs`).
 
 ### 4.B Modificar producto desde el backend → ERP
 - ✅ Tras editar en el backend, el trigger encola en `erp_outbox` y `push-catalog.mjs`
-  escribe en `TIDSAL`/`TIDMARCAS`/`TIDTAB`/`TIDTPRO` (precio, stock, marca,
+  escribe en `TIDSAL`/`TIDMARCAS`/`TIDCATE`/`TIDTPRO` (precio, stock, marca,
   categoría, tipo, nombre de producto). Ver `db/sql/22_erp_outbox_masters.sql`.
 - ⚠️ Regla de propiedad: el ERP es dueño del catálogo; nuestro push lo pisa
   (decisión aceptada). Guardia `app.erp_sync='on'` evita el ping-pong.
@@ -111,9 +111,9 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
 - §11 de `PLAN-INTEGRACION-ERP.md`: `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM`,
   `FACANALV`, `FADOCPAGO`, `CLAWEB`/`NEWWEB`, `FECHABAJA`.
 - Medios de pago `NEQUI`/`DAVIPLATA`/`PSE` ↔ `POSPAGO`.
-- `erp_code_map`: falta confirmar los **códigos reales** de `FAESTADO`
-  (`order_status`); hoy hay una semilla **provisional** (`db/sql/23_erp_order_status_map.sql`).
-  Faltan además dominios (tipo factura, estado línea, tipo domicilio, tipo doc).
+- `erp_code_map`: dominios poblados desde `POSPAGO`, `TIDTIPOS`, `TIDBODE`,
+  `TIDMARCAS` y `TIDTPRO` con `sync-codes.mjs`; la semilla de `order_status`
+  quedó en `db/sql/24_erp_code_map_fortuner.sql` y usa códigos reales.
 
 ---
 

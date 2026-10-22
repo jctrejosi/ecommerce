@@ -1,60 +1,71 @@
 # Checklist — puesta en marcha contra el ERP real (en sitio)
 
-Lista para llenar cuando se conecte el ecommerce a la base Advantage del ERP.
-Diseño: `docs/PLAN-SINCRONIZACION-ERP.md`. Operación: `docs/RUNBOOK-ERP.md`.
+Lista para validar cuando el ecommerce se conecte a la base Advantage del ERP.
+Decisiones y evidencia: `docs/ESCRITURA-FORTUNER-READINESS.md`.
+Comparación de esquema: `docs/COMPARACION-ESQUEMA-FORTUNER.md`.
 
 ## 0. Conexión
 
 - [ ] `OPENADS_URL`, `OPENADS_USER`, `OPENADS_PASS` apuntan al OpenADS del ERP
       (o al motor Advantage equivalente).
 - [ ] `DATABASE_URL` apunta a la Postgres del ecommerce.
-- [ ] `node scripts-agent/erp/init-db.mjs` corre sin error (migraciones 19–23).
+- [ ] `node scripts-agent/erp/init-db.mjs` corre sin error (migraciones 19–24).
+- [ ] `db/ads/fortuner-dicts/` tiene los `.ADT` (POSPAGO, TIDTIPOS, TIDBODE,
+      TIDMARCAS, TIDTPRO) y `node scripts-agent/erp/sync-codes.mjs` corre sin error.
 - [ ] Confirmar que el transporte admite **DML por SQL** (`/api/sql`: `UPDATE`/`DELETE`)
       y **insert**; si no, definir el mecanismo alterno.
 - [ ] Tablas presentes: `tidsal`, `tidtab`, `tidcate`, `tidtpro`, `tidmarcas`,
-      `tidbode`, `pospago`, `posdane`, `poscli`, `domdia`, `domite`,
-      `faddia`, `fapago`.
+      `tidbode`, `pospago`, `poscli`, `domdia`, `domite`, `faddia`, `fapago`.
 
-## 1. Numeración y estados (bloquea la inyección de ventas)
+## 1. Numeración y estados (códigos cerrados)
 
-| Dato | Dónde se usa | Valor en la copia (piloto) | Valor real del ERP |
+| Dato | Dónde se usa | Valor decidido | Evidencia |
 |---|---|---|---|
-| `FAPEDIDO` (numeración) | `push-orders.mjs` | `String(id).padStart(9,'0')` | |
-| `FAESTADO` (cabecera) | `push-orders.mjs` (`ERP_FAESTADO`) | `0` | |
-| `IFESTADO` (línea) | `push-orders.mjs` (`ERP_IFESTADO`) | `0` | |
-| `FATIPODOM` | `push-orders.mjs` (`ERP_TIPODOM`) | `01` | |
-| `IFTIPO` | `push-orders.mjs` (`ERP_IFTIPO`) | `E` (venta) | |
-| `FACANALV` | pendiente mapear | — | |
-| `FADOCPAGO` | pendiente mapear | — | |
-| `CLAWEB` / `NEWWEB` | pendiente mapear | — | |
+| `FAPEDIDO` / `IFPEDIDO` | `push-orders.mjs` | 9 dígitos: `ERP_ORDER_PREFIX` (`9`) + id | `IFPEDIDO` es char(9); es el enlace cabecera-línea |
+| `FAFACTURA` | `push-orders.mjs` | vacío al crear | la llena el ERP al facturar |
+| `FAESTADO` | `push-orders.mjs` (`ERP_FAESTADO`) | `0` pendiente | pedidos demo 2026 sin factura |
+| `IFESTADO` | `push-orders.mjs` (`ERP_IFESTADO`) | vacío = normal | 239.361 de 240.841 líneas facturadas (en disco se lee 32768) |
+| `FATIPODOM` | `push-orders.mjs` (`ERP_TIPODOM`) | `01` domicilio | 42.391 de 52.585 filas |
+| `IFTIPO` | `push-orders.mjs` (`ERP_IFTIPO`) | `E` venta | 143.713 líneas |
+| `IFBODEGA` | `push-orders.mjs` (`ERP_BODEGA`) | `00` | `TIDSAL.INBODEGA='00'` en 51.938 filas |
+| `FACANALV` | pendiente mapear | — | campo adicional |
+| `FADOCPAGO` | pendiente mapear | — | campo adicional |
+| `CLAWEB` / `NEWWEB` | pendiente mapear | — | campo adicional |
 
-- [ ] Confirmar cada valor y, si aplica, dejarlo en `backend/.env.development.local`.
+- [ ] Confirmar en sitio que el ERP lista para facturar un `DOMDIA` con
+      `FAESTADO=0` y `FAPEDIDO` de 9 dígitos.
 
-## 2. Estados de pedido → `DOMDIA.FAESTADO` (`order_status`)
+## 2. Estados de pedido → `DOMDIA.FAESTADO` / `DOMITE.IFESTADO`
 
-Semilla **provisional** en `db/sql/23_erp_order_status_map.sql`. En la copia:
+Semilla corregida en `db/sql/24_erp_code_map_fortuner.sql` y `sync-codes.mjs`.
 
-| `erp_value` | Observado | Semilla (canonical) |
+| `erp_value` | Significado | Estados ecommerce |
 |---|---|---|
-| `9` | 50.758 filas (casi todas con `FAPEDIDO`) | `delivered` |
-| `5` | 389 filas (algunas con `FAPEDIDO`) | `preparing`, `ready`, `shipped` |
-| `0` | 134 filas (sin `FAPEDIDO`) | `cancelled`, `refunded` |
-| `` | 1.303 filas | (sin uso) |
+| `0` | Pendiente | `created`, `payment_pending`, `paid`, `preparing`, `ready`, `shipped` |
+| `5` | Cancelado | `cancelled`, `refunded` |
+| `9` | Facturado / entregado | `delivered` |
 
-- [ ] Confirmar el significado real de `9` / `5` / `0`.
-- [ ] Ajustar con `UPDATE erp_code_map SET erp_value='…' WHERE domain='order_status' AND canonical='…'`
-      (no requiere tocar código).
+- [ ] Al cancelar, `push-catalog.mjs` actualiza también
+      `DOMITE.IFESTADO=5 WHERE IFPEDIDO=<FAPEDIDO real>`.
+- [ ] Confirmar que `32768` es el centinela nulo de `bin2` (línea normal = vacío).
 
 ## 3. Medios de pago ↔ `POSPAGO.CODIGO`
 
-Hoy `PAY_MAP` fijo en `push-orders.mjs`: `CASH→EF`, `CARD→TC`, `PSE/NEQUI/DAVIPLATA→TF`.
+Mapa en `erp_code_map` (dominio `payment_method`), ya no hardcodeado:
 
-- [ ] Confirmar códigos reales de `POSPAGO` para `CASH`, `CARD`, `PSE`, `NEQUI`, `DAVIPLATA`.
-- [ ] Decidir si `PSE`/`NEQUI`/`DAVIPLATA` comparten código o son distintos.
+| Ecommerce | ERP |
+|---|---|
+| `CASH` | `EF` EFECTIVO |
+| `CARD` | `TC` TARJETA CREDITO |
+| `PSE`, `BANK_TRANSFER`, `NEQUI`, `DAVIPLATA`, `BREB` | `TF` TRANSFERENCIA BANCARIA |
+
+- [ ] Confirmar con caja si las tarjetas débito deben ir a `TD` en vez de `TC`
+      (el ecommerce no distingue crédito/débito).
+- [ ] Confirmar que las transferencias electrónicas comparten `TF`.
 
 ## 4. Cliente (`POSCLI`)
 
-- [ ] Algoritmo real de `CODCLI` (hoy `ERP_NEW_CODE_PREFIX` + id, `2999########`).
+- [ ] Algoritmo real de `CODCLI`. Hoy `newErpCode(id, 13)` = `9` + secuencia.
 - [ ] `SUCURSAL` por defecto del alta (`ERP_CUSTOMER_SUCURSAL`, hoy `01`).
 - [ ] `TIPODOC` por defecto (`ERP_CUSTOMER_TIPODOC`, hoy `13`).
 - [ ] Semántica de `FECHABAJA` (hoy no se usa).
@@ -62,16 +73,29 @@ Hoy `PAY_MAP` fijo en `push-orders.mjs`: `CASH→EF`, `CARD→TC`, `PSE/NEQUI/DA
 
 ## 5. Productos y maestras
 
-- [ ] `TIDSAL` por sucursal: confirmar lista de precio usada (`INVRVENTA1`) y "antes" (`INVRVENTA0`).
+- [ ] `TIDSAL` por sucursal: confirmar lista de precio (`INVRVENTA1`) y
+      "antes" (`INVRVENTA0`).
 - [ ] **Stock**: ¿se pisa `INSALDO00` o se envían **movimientos**? (hoy pisa).
-- [ ] Alta de artículos nuevos desde el ecommerce: ¿se permite o el artículo nace en el ERP?
-      (hoy sólo se **actualiza** por `external_id`).
-- [ ] Marca: `INMARCAP` (nombre) vs `INMARCA` (código) — cuál es la relación real
-      artículo↔marca; ¿sincronizar el renombrado a las filas de `TIDSAL`?
-- [ ] Tipos (`TIDTPRO`): confirmar convención `HABILITA` (`T`=activo, `F`, `''`).
-- [ ] Categorías (`TIDTAB`): confirmar árbol y si el ecommerce puede crear códigos.
-- [ ] Flags de visibilidad/estado (`INACTIVO` `A/I/S`, `INWEB`, `SACATWEB`, `INAPP`):
-      ¿se propagan o los gobierna el ERP?
+- [ ] Alta de artículos nuevos desde el ecommerce: ¿se permite o el artículo nace
+      en el ERP? (hoy sólo se **actualiza** por `external_id`).
+- [ ] Marca: `INMARCA` **no se escribe** (en la copia no coincide con
+      `TIDMARCAS.MCODIGO`: FRUCO tiene `INMARCA=2000145`, pero TIDMARCAS asigna
+      ese código a AESSY OFF). El agente actualiza `TIDMARCAS` y `INMARCAP`
+      (nombre). Confirmar qué tabla referencia realmente `INMARCA`.
+- [ ] Tipos (`TIDTPRO`): confirmar convención `HABILITA`; `INTIPO` sale de
+      `product_type_assignments` → `product_types.code`.
+- [x] Categorías: confirmado que `TIDSAL.INCATE` referencia `TIDCATE` (códigos
+      de 2/4/6 dígitos). El catálogo de Postgres se reconstruye desde ese árbol y
+      cada producto guarda su código en el atributo `categoria-erp`.
+- [x] Marcas: las marcas de Postgres salen de `TIDMARCAS` + los nombres
+      referenciados en `TIDSAL.INMARCAP`; cada producto queda con su `brand_id`.
+- [ ] Nombre corto/largo: el agente usa los atributos `nombre-corto` y
+      `nombre-largo` (facturación), no la descripción de la tienda.
+- [ ] Flags de visibilidad (`INWEB`, `SACATWEB`, `INAPP`): hoy los gobierna el ERP
+      (sólo se leen al importar). `INACTIVO` sí se escribe desde `is_active`
+      (`A`/`I`), respetando `S` (suspendido por el ERP).
+- [ ] Dimensiones: `INALTO`/`INANCHO`/`INLARGO` en cm; el ecommerce las guarda en
+      mm y el agente divide entre 10.
 
 ## 6. Conciliación (ERP → PG)
 

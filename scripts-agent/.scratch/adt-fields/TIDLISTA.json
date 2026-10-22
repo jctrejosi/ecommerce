@@ -1,0 +1,203 @@
+{
+  "table": "TIDLISTA",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDLISTA.ADT",
+  "bytes": 262144,
+  "recordCount": 68017,
+  "recordLength": 245,
+  "headerLength": 5200,
+  "fieldCount": 24,
+  "fields": [
+    {
+      "name": "INPROVEE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "INARTIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "INDCTO1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 34,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INDCTO2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 42,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INDCTO3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 50,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INVLRANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 58,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 66,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INVALOR1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 74,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INFECHA1",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 82,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "INFECHA2",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 86,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "INFECHA3",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 90,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "INVALOR2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 94,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INACTIVO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 102,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "INDCTO4",
+      "type": 10,
+      "typeName": "double",
+      "offset": 103,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INDCTO5",
+      "type": 10,
+      "typeName": "double",
+      "offset": 111,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INDCTO6",
+      "type": 10,
+      "typeName": "double",
+      "offset": 119,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INVLRAN2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 127,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INVALO2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 135,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "MODPRE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 143,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 151,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "INIMPC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 201,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INFCHREG",
+      "type": 10,
+      "typeName": "double",
+      "offset": 209,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INIMP3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 217,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CODVER",
+      "type": 4,
+      "typeName": "char",
+      "offset": 225,
+      "length": 20,
+      "decimals": 0
+    }
+  ]
+}

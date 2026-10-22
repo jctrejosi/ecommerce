@@ -1,6 +1,6 @@
 {
   "table": "TIDCATE",
-  "source": "db/ADD_ANALITICA/TIDCATE.ADT",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDCATE.ADT",
   "bytes": 81822,
   "recordCount": 174,
   "recordLength": 453,

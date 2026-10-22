@@ -20,7 +20,7 @@
  *             OJO: INMARCA viene poblado en el 100% de las filas pero apunta a
  *             marcas sin relación con el artículo → NO se usa como fuente.
  *   Tipo    : INTIPO → product_types (vía erp_code_map domain 'product_type').
- *   Categoría: prefijos del código de artículo (árbol TIDTAB), como el import.
+ *   Categoría: TIDSAL.INCATE → árbol TIDCATE (2/4/6 dígitos).
  *   Stock   : INSALDO00 (real) por defecto; `--stock-default=N` para fijar N.
  *   Precios : INVRVENTA1 (venta) / INVRVENTA0 (precio "antes").
  *   Impuesto: INTIMP (J→IVA19, C→IVA5, E→EXENTO).
@@ -126,30 +126,27 @@ const cmRows = (
   await q("SELECT domain, erp_value, label FROM erp_code_map WHERE domain IN ('brand','product_type')")
 ).rows;
 const brandNameByCode = new Map();
-const brandCodeByName = new Map();
 for (const r of cmRows) {
   if (r.domain !== 'brand') continue;
   const code = String(r.erp_value).trim();
   const name = String(r.label || '').trim();
   brandNameByCode.set(code, name);
-  if (name && !brandCodeByName.has(name.toLowerCase())) brandCodeByName.set(name.toLowerCase(), code);
 }
 const typeNameByCode = new Map(
   cmRows.filter((r) => r.domain === 'product_type').map((r) => [String(r.erp_value).trim(), String(r.label || '').trim()]),
 );
 log(`Referencias: ${brandNameByCode.size} marcas ERP, ${typeNameByCode.size} tipos ERP, ${taxIdByCode.size} impuestos`);
 
-// Árbol de categorías TIDTAB
-const tab = await erp.sql('SELECT CTABCOD, CTABDES, CTABCOD1 FROM tidtab', { limit: 5000 });
-const tabName = new Map();
-const tabParent = new Map();
-for (const r of tab.rows) {
+// Árbol de categorías TIDCATE (categorías de producto del ERP).
+// TIDSAL.INCATE guarda el código de 2/4/6 dígitos de esta tabla.
+const cate = await erp.sql('SELECT CTABCOD, CTABDES FROM tidcate', { limit: 5000 });
+const catNameByCode = new Map();
+for (const r of cate.rows) {
   const code = s(r[0]);
   if (!code) continue;
-  tabName.set(code, s(r[1]) || code);
-  tabParent.set(code, s(r[2]) || null);
+  catNameByCode.set(code, s(r[1]) || code);
 }
-log(`Categorías TIDTAB: ${tabName.size} nodos`);
+log(`Categorías TIDCATE: ${catNameByCode.size} nodos`);
 
 // ─────────────────────────── lectura de TIDSAL ───────────────────────────
 
@@ -272,7 +269,7 @@ if (DRY) {
   log(`\n🧪 DRY-RUN — nada escrito.`);
   log(`   artículos totales        : ${articles.size}`);
   log(`   artículos a tocar        : ${todo.length}`);
-  log(`   marcas referenciadas     : ${new Set(todo.map((p) => p.marcap || brandNameByCode.get(p.marca) || null).filter(Boolean)).size}`);
+  log(`   marcas referenciadas     : ${new Set(todo.map((p) => p.marcap).filter(Boolean)).size}`);
   log(`   tipos referenciados      : ${new Set(todo.map((p) => p.tipo).filter(Boolean)).size}`);
   log(`   INCATE distintos         : ${new Set(todo.map((p) => p.incate).filter(Boolean)).size}`);
   log(`   precios (var×suc)        : ${todo.reduce((s2, p) => s2 + [...p.branches.values()].filter((d) => d.v1 > 0).length, 0)}`);
@@ -307,71 +304,92 @@ for (const code of [...sucursales].sort()) {
 }
 log('🏬 Sucursales:', [...branchIdByCode.entries()].map(([c, id]) => `${c}=${id}`).join(', '));
 
-// ─────────────────────────── marcas ───────────────────────────
+// ─────────────────────────── marcas (TIDMARCAS) ───────────────────────────
 
-const brandNameOf = (p) =>
-  p.marcap || (p.marca ? brandNameByCode.get(p.marca) : null) || null;
+// INMARCAP es el nombre de marca que usa TIDSAL. INMARCA no se usa como FK:
+// en la copia no coincide con TIDMARCAS.MCODIGO (ver docs/ESCRITURA-FORTUNER-READINESS.md).
+const brandNameOf = (p) => s(p.marcap) || null;
 
 const brandIdByName = new Map(
   (await q('SELECT id, name FROM brands')).rows.map((b) => [String(b.name).trim().toLowerCase(), Number(b.id)]),
 );
-const brandNames = [
-  ...new Set(todo.map(brandNameOf).filter(Boolean)),
-];
-log(`🏷️  Marcas: ${brandNames.length} referenciadas por los artículos a tocar`);
 let brandsCreated = 0;
-for (const name of brandNames) {
-  const key = name.trim().toLowerCase();
-  if (brandIdByName.has(key)) continue;
-  const erpCode = brandCodeByName.get(key) || null;
-  const slug = `${slugify(name) || 'marca'}-${brandNames.indexOf(name)}`.slice(0, 100);
+
+// 1) Todas las marcas del ERP (TIDMARCAS → erp_code_map domain=brand).
+for (const [code, name] of brandNameByCode) {
+  const clean = s(name);
+  if (!clean) continue;
+  const key = clean.toLowerCase();
+  if (!brandIdByName.has(key)) brandsCreated++;
+  const slug = `${slugify(clean) || 'marca'}-${code}`.slice(0, 100);
   const row = (
     await q(
       `INSERT INTO brands (name, slug, website, description, country, code, is_active)
-       VALUES ($1,$2,'','Importado ERP','',$3,true)
-       ON CONFLICT (name) DO UPDATE SET code = COALESCE(EXCLUDED.code, brands.code)
+       VALUES ($1,$2,'','Importado ERP (TIDMARCAS)','',$3,true)
+       ON CONFLICT (name) DO UPDATE SET code = COALESCE(brands.code, EXCLUDED.code)
        RETURNING id`,
-      [name.trim().slice(0, 100), slug, erpCode],
+      [clean.slice(0, 100), slug, code],
+    )
+  ).rows[0];
+  brandIdByName.set(key, Number(row.id));
+}
+log(`🏷️  Marcas TIDMARCAS: ${brandNameByCode.size} en ERP, +${brandsCreated} nuevas`);
+
+// 2) Marcas referenciadas por INMARCAP que no estén en TIDMARCAS.
+const referencedBrands = [...new Set(todo.map(brandNameOf).filter(Boolean))];
+for (const name of referencedBrands) {
+  const key = name.trim().toLowerCase();
+  if (brandIdByName.has(key)) continue;
+  const slug = `${slugify(name) || 'marca'}-${brandIdByName.size}`.slice(0, 100);
+  const row = (
+    await q(
+      `INSERT INTO brands (name, slug, website, description, country, code, is_active)
+       VALUES ($1,$2,'','Importado ERP (TIDSAL.INMARCAP)','',NULL,true)
+       ON CONFLICT (name) DO UPDATE SET name = brands.name
+       RETURNING id`,
+      [name.trim().slice(0, 100), slug],
     )
   ).rows[0];
   brandIdByName.set(key, Number(row.id));
   brandsCreated++;
 }
+log(`🏷️  Marcas referenciadas: ${referencedBrands.length} · total creadas: ${brandsCreated}`);
 const brandIdOf = (p) => {
   const name = brandNameOf(p);
   return name ? brandIdByName.get(name.trim().toLowerCase()) ?? null : null;
 };
 
-// ─────────────────────────── categorías (TIDTAB) ───────────────────────────
-
-const usedCodes = new Set();
-for (const p of todo)
-  for (const L of [1, 3, 5, 7]) if (p.artic.length >= L) usedCodes.add(p.artic.slice(0, L));
-const levelOf = (code) => ({ 1: 0, 3: 1, 5: 2, 7: 3 }[code.length] ?? 3);
+// ─────────────────────────── categorías (TIDCATE) ───────────────────────────
 
 const categoryIdByCode = new Map(
   (await q('SELECT id, code FROM categories WHERE code IS NOT NULL')).rows.map((c) => [String(c.code).trim(), Number(c.id)]),
 );
+// Códigos usados por TIDSAL.INCATE + todos los nodos del árbol TIDCATE.
+const cateCodes = new Set(catNameByCode.keys());
+for (const p of todo) if (p.incate) cateCodes.add(p.incate);
 let catsCreated = 0;
-for (const code of [...usedCodes].sort((x, y) => x.length - y.length || x.localeCompare(y))) {
+for (const code of [...cateCodes].sort((x, y) => x.length - y.length || x.localeCompare(y))) {
   if (categoryIdByCode.has(code)) continue;
-  const baseName = (tabName.get(code) || `Categoría ${code}`).slice(0, 100);
-  const parentCode = tabParent.get(code) || null;
+  const baseName = (catNameByCode.get(code) || `Categoría ERP ${code}`).slice(0, 100);
+  // Jerarquía TIDCATE: 050703 → 0507 → 05 → raíz.
+  const parentCode = code.length > 2 ? code.slice(0, -2) : null;
   const parentId = parentCode ? categoryIdByCode.get(parentCode) ?? null : null;
   const slug = `${slugify(baseName) || 'cat'}-${code}`.slice(0, 100);
+  const level = Math.max(0, Math.floor(code.length / 2) - 1);
   const row = (
     await q(
       `INSERT INTO categories (parent_id, name, slug, code, level, is_active)
        VALUES ($1,$2,$3,$4,$5,true)
-       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name
+       ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name,
+         code = EXCLUDED.code, parent_id = EXCLUDED.parent_id, level = EXCLUDED.level
        RETURNING id`,
-      [parentId, baseName, slug, code, levelOf(code)],
+      [parentId, baseName, slug, code, level],
     )
   ).rows[0];
   categoryIdByCode.set(code, Number(row.id));
   catsCreated++;
 }
-log(`🌳 Categorías: +${catsCreated} (total nodos usados ${usedCodes.size})`);
+log(`🌳 Categorías TIDCATE: ${catNameByCode.size} en ERP, +${catsCreated} nuevas`);
 
 // ─────────────────────────── tipos de producto ───────────────────────────
 
@@ -402,6 +420,7 @@ const ATTR_DEFS = [
   ['Unidad de medida', 'unidad-medida', (p) => p.unidad],
   ['Presentación', 'presentacion', (p) => p.present],
   ['Nombre corto', 'nombre-corto', (p) => p.nombre3],
+  ['Nombre largo (factura)', 'nombre-largo', (p) => p.nombre4],
   ['Unidades por empaque', 'unidades-empaque', (p) => p.empaque],
   ['EAN caja (EAN-14)', 'ean-caja', (p) => p.ean14],
   ['Referencia fabricante', 'referencia-fabricante', (p) => p.parte],
@@ -409,6 +428,7 @@ const ATTR_DEFS = [
   ['CUM', 'cum', (p) => p.cum],
   ['Ubicación bodega', 'ubicacion-bodega', (p) => p.ubic],
   ['Categoría ERP (INCATE)', 'categoria-erp', (p) => p.incate],
+  ['Código de marca ERP (INMARCA)', 'marca-erp', (p) => p.marca],
 ];
 const attrIdBySlug = new Map(
   (await q('SELECT id, slug FROM attributes')).rows.map((r) => [r.slug, Number(r.id)]),
@@ -578,7 +598,7 @@ const attrRows = [];
 for (const p of todo) {
   const pid = productIdByArtic.get(p.artic);
   if (!pid) continue;
-  const catId = categoryIdByCode.get(p.artic.slice(0, 7));
+  const catId = categoryIdByCode.get(p.incate);
   if (catId) catRows.push([pid, catId]);
   const typeId = p.tipo ? typeIdByCode.get(p.tipo) : null;
   if (typeId) typeRows.push([pid, typeId]);

@@ -1,6 +1,6 @@
 {
   "table": "POSPAGO",
-  "source": "db/ADD_ANALITICA/POSPAGO.adt",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/POSPAGO.ADT",
   "bytes": 55421,
   "recordCount": 129,
   "recordLength": 349,

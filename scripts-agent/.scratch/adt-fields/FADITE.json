@@ -1,7 +1,7 @@
 {
   "table": "FADITE",
-  "source": "db/ADD_ANALITICA/FADITE.ADT",
-  "bytes": 5761561287,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/FADITE.ADT",
+  "bytes": 262144,
   "recordCount": 7175029,
   "recordLength": 803,
   "headerLength": 13000,

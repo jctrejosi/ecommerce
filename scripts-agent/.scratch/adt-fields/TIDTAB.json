@@ -1,6 +1,6 @@
 {
   "table": "TIDTAB",
-  "source": "db/ADD_ANALITICA/TIDTAB.ADT",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDTAB.ADT",
   "bytes": 125435,
   "recordCount": 231,
   "recordLength": 485,

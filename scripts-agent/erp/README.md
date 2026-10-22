@@ -13,12 +13,14 @@ del ecommerce. Objetivo y alcance: `docs/PLAN-SINCRONIZACION-ERP.md`.
 |---|---|---|
 | `sync-all.mjs` | ambas | **Runner completo**: entrada pesada + salida. Seguro por defecto; `--apply` escribe en el ERP. |
 | `sync-out.mjs` | ambas | **Runner de salida ligero** (clientes/precio-stock/pedidos/reconcile), para bucle/cron. |
-| `sync-codes.mjs` | ERP → PG | Diccionario `erp_code_map` (marcas, ciudades, tipos, impuestos, medios de pago, bodegas). |
-| `sync-catalog.mjs` | ERP → PG | `products`/`product_variants`/`prices`/`inventory`/`branch_products` + marcas, tipos, categorías, atributos. |
+| `sync-codes.mjs` | ERP → PG | Diccionario `erp_code_map` desde `db/ads/fortuner-dicts` (marcas, tipos, impuestos, medios de pago, bodegas, estados). No necesita OpenADS. |
+| `sync-catalog.mjs` | ERP → PG | `products`/`product_variants`/`prices`/`inventory`/`branch_products` + tipos, categorías (`TIDCATE`) y marcas (`TIDMARCAS`/`INMARCAP`), atributos. |
+| `sync-categories.mjs` | ERP → PG | **Migración única**: árbol de `TIDCATE` → `categories`, `TIDMARCAS` + `INMARCAP` → `brands`, y reasigna `product_categories`/`products.brand_id` de todos los productos. Oculta las categorías viejas sin uso. |
+| `remap-shelves.mjs` | PG | **Migración única**: traduce `shelf_categories` de las categorías viejas a las hojas `TIDCATE` equivalentes (mapeo por nombre; dry-run por defecto). |
 | `sync-customers.mjs` | ERP → PG | Clientes `POSCLI` → `customers`. |
 | `push-orders.mjs` | PG → ERP | `orders`/`order_items` → `DOMDIA`/`DOMITE`. |
-| `push-customers.mjs` | PG → ERP | Clientes locales → `POSCLI` (crea o actualiza; `CODCLI` provisional). |
-| `push-catalog.mjs` | PG → ERP | Drena `erp_outbox`: precio/stock → `TIDSAL`; marcas → `TIDMARCAS`; categorías → `TIDTAB`; tipos → `TIDTPRO`; producto (nombre) → `TIDSAL`; estado de pedido → `DOMDIA.FAESTADO`. |
+| `push-customers.mjs` | PG → ERP | Clientes locales → `POSCLI` (crea o actualiza; `CODCLI` generado de 13 chars). |
+| `push-catalog.mjs` | PG → ERP | Drena `erp_outbox`: precio/stock → `TIDSAL`; marcas → `TIDMARCAS` (+ `TIDSAL.INMARCAP`); categorías → `TIDCATE`; tipos → `TIDTPRO`; producto (nombre, barcode, dimensiones y atributos ERP) → `TIDSAL`; activación → `TIDSAL.INACTIVO`; estado de pedido → `DOMDIA.FAESTADO` y, al cancelar, `DOMITE.IFESTADO`. |
 | `reconcile.mjs` | ERP → PG | Factura del ERP → `invoices`/`orders` de *nuestros* pedidos. |
 
 Los `push-*` y `reconcile` escriben en el ERP: por defecto van en **dry-run**;
@@ -35,10 +37,11 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 | `price` | `21` (`product_variants`) | `TIDSAL.INVRVENTA1/0` |
 | `stock` | `21` (`inventory`) | `TIDSAL.INSALDO00` (por sucursal) |
 | `brands` | `22` | `TIDMARCAS` |
-| `categories` | `22` | `TIDTAB` |
+| `categories` | `22` | `TIDCATE` (`TIDSAL.INCATE` referencia este árbol) |
 | `product_types` | `22` | `TIDTPRO` |
-| `products` | `22` | `TIDSAL.INNOMBRE` |
-| `order_status` | `22` (`orders.status`) | `DOMDIA.FAESTADO` (vía `erp_code_map` dominio `order_status`) |
+| `products` | `22` + `25` (producto, tipo, categoría, atributos, barcode/dimensiones) | `TIDSAL.INNOMBRE/INNOMBRE3/INNOMBRE4`, `INEAN`, `INMARCAP`, `INTIPO`, `INCATE`, `INUNIDAD/INPRESEN/INEMBALAJE/INPARTE/ININVIMA/INCUM/INUBIC/INEAN14`, `INLARGO/INANCHO/INALTO` |
+| `product_flags` | `25` (`is_active` de producto/variante) | `TIDSAL.INACTIVO` (`A`/`I`; no pisa `S`) |
+| `order_status` | `22` (`orders.status`) | `DOMDIA.FAESTADO` + `DOMITE.IFESTADO` (vía `erp_code_map`) |
 
 ## Syncs **opcionales / de análisis** (el ecommerce NO los usa)
 
@@ -64,24 +67,33 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 - **Tipos de producto**: `push-catalog` los **actualiza** por `CODIGO`; no los
   crea (el ERP es dueño de `TIDTPRO` y su `CODIGO` es de 3 caracteres con
   significado propio). Si el tipo no tiene código, el evento queda en `error`.
-- **Producto**: `push-catalog` propaga el **nombre** (`TIDSAL.INNOMBRE`). Los
-  flags de visibilidad/estado del artículo (`TIDSAL.INACTIVO` = `A`/`I`/`S`,
-  `INWEB`/`SACATWEB`, `INAPP`) se dejan **del lado del ERP** (afectan al POS y
-  su semántica exacta está pendiente de confirmar en sitio).
+- **Producto**: `push-catalog` propaga nombre corto/largo (atributos
+  `nombre-corto`/`nombre-largo`), barcode, dimensiones, atributos ERP
+  (`categoria-erp`, unidad, presentación, empaque, INVIMA, CUM, ubicación,
+  EAN-14), marca por **nombre** (`INMARCAP`), tipo y estado (`INACTIVO` =
+  `A`/`I`; `S` se respeta). **`INMARCA` no se toca**: en la copia no coincide
+  con `TIDMARCAS.MCODIGO` (ver `docs/ESCRITURA-FORTUNER-READINESS.md`). Los
+  flags de publicación web (`INWEB`/`SACATWEB`, `INAPP`) se dejan del lado del
+  ERP y se leen al importar.
 
 ## Utilidades
 
 - `openads.mjs` — cliente HTTP del conector (OpenADS) + conexión Postgres.
-- `lib.mjs` — codecs del formato Advantage (latin1, centinelas, fechas) y helpers.
+- `adt.mjs` — lector de tablas `.ADT` (diccionarios de FORTUNER).
+- `lib.mjs` — codecs del formato Advantage, `orderNumber` y `newErpCode`.
 - `init-db.mjs` — aplica las migraciones ERP (idempotente):
   `19_erp_integration.sql`, `20_erp_invoice_mirror.sql`,
   `21_erp_catalog_outbox.sql` (triggers precio/stock),
   `22_erp_outbox_masters.sql` (triggers marcas/categorías/tipos/producto/estado),
-  `23_erp_order_status_map.sql` (PK de `erp_code_map` + semilla `order_status`).
+  `23_erp_order_status_map.sql` (PK de `erp_code_map`),
+  `24_erp_code_map_fortuner.sql` (códigos reales de FORTUNER).
 - `analyze-brands.mjs` — diagnóstico de marcas.
 
 ## Variables de entorno
 
 - `OPENADS_URL` (def. `http://localhost:18080`), `OPENADS_USER` (def. `dsi`), `OPENADS_PASS` (def. `dsi`).
 - `DATABASE_URL` (def. `postgresql://postgres:postgres@localhost:5432/ecommerce`).
+- `ERP_ADT_DIR` (def. `db/ads/fortuner-dicts`) — diccionarios `.ADT` de FORTUNER.
+- `ERP_ORDER_PREFIX` (def. `9`) — prefijo del `FAPEDIDO`/`IFPEDIDO` web (9 dígitos).
+- `ERP_NEW_CODE_PREFIX` (def. `9`) — prefijo de códigos nuevos de maestras.
 - `ADMIN_USER_ID` (def. `1`).

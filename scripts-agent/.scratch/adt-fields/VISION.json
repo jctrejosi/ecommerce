@@ -1,0 +1,739 @@
+{
+  "table": "VISION",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/VISION.ADT",
+  "bytes": 20042,
+  "recordCount": 1,
+  "recordLength": 1442,
+  "headerLength": 18600,
+  "fieldCount": 91,
+  "fields": [
+    {
+      "name": "CTCODCIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "CTCIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 8,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "CTNIT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 68,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "CTCIUDAD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 83,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CTDIRECC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 103,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CTTELEF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 133,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CTFCHOY",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 153,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CTNORMAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 157,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CTCOMPRI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 187,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CTDOBLE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 217,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CTPASS",
+      "type": 4,
+      "typeName": "char",
+      "offset": 247,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "CTPASSW",
+      "type": 4,
+      "typeName": "char",
+      "offset": 262,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "CTINIS",
+      "type": 4,
+      "typeName": "char",
+      "offset": 268,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CTANO",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 272,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTCOLOR1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 274,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTCOLOR2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 282,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTCONTAB",
+      "type": 4,
+      "typeName": "char",
+      "offset": 290,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "CTTIPCON",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 293,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTNIVEL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 295,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTTIPDOC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 296,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTTIPCOM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 298,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTCONTROL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 300,
+      "length": 26,
+      "decimals": 0
+    },
+    {
+      "name": "CTDIRVIS",
+      "type": 4,
+      "typeName": "char",
+      "offset": 326,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "CTCONDIR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 366,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "CTINVDIR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 406,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "CTFACDIR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 446,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "CTCARDIR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 486,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "CTCXPDIR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 526,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "CTSER1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 566,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CTSER2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 586,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CTLINF",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 606,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTLINI",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 608,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTLINX",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 610,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTLINC",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 612,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTMOD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 614,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CTCAJON",
+      "type": 4,
+      "typeName": "char",
+      "offset": 624,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTMES13",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 626,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTLOTF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 627,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTLOTI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 629,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTLOTX",
+      "type": 4,
+      "typeName": "char",
+      "offset": 631,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTFTE1",
+      "type": 10,
+      "typeName": "double",
+      "offset": 633,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTFTE2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 641,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTFTE3",
+      "type": 10,
+      "typeName": "double",
+      "offset": 649,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTFTE4",
+      "type": 10,
+      "typeName": "double",
+      "offset": 657,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTPUERTOS",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 665,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CXPCONCE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 666,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTLEECON",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 667,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTLOTC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 668,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "EDITOR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 670,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CTCONTAB2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 680,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "CTCODCIU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 683,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "CTFUERAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 688,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CRUTAWEB",
+      "type": 4,
+      "typeName": "char",
+      "offset": 718,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CTCLUBES",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 768,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTBFCH",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 769,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTCADUCA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 770,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTOPERAF",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 778,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTREMOTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 779,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CTSUCURSAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 829,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CTAUTODOC",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 879,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTDATAFONO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 880,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "MODNIIF",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 881,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "REPLICLI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 882,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTPEDDIR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 883,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CTMONEXT",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 913,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "REALNIT",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 914,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTTIPOTER",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 915,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTOBSERCA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 916,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTCONTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 917,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "CTSUCAUDI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 920,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CTHORAI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 930,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CTHORAF",
+      "type": 4,
+      "typeName": "char",
+      "offset": 934,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "TIPOTALL",
+      "type": 10,
+      "typeName": "double",
+      "offset": 938,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTPRP",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 946,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CRUTAREPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 947,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "CTORDENL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1047,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTINTDIR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1048,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CTOPESUC",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1098,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTCODSUC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1099,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTRETITER",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1101,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTRUTAFE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1102,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "CTRUTAPRN",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1202,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "CTPRESOP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1302,
+      "length": 6,
+      "decimals": 0
+    },
+    {
+      "name": "CTCONSOP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1308,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTULCONSP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1316,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTFCHSOP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1324,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTLIMISOP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1332,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CTREPLISUC",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1340,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTREPLIFE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1341,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTRUTAFE1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1342,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CTRUTAFE2",
+      "type": 20,
+      "typeName": "?20",
+      "offset": 1392,
+      "length": 50,
+      "decimals": 0
+    }
+  ]
+}

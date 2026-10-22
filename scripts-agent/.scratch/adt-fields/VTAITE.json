@@ -1,0 +1,211 @@
+{
+  "table": "VTAITE",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/VTAITE.ADT",
+  "bytes": 262144,
+  "recordCount": 2008435,
+  "recordLength": 208,
+  "headerLength": 5400,
+  "fieldCount": 25,
+  "fields": [
+    {
+      "name": "IFSUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFANO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 13,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFMES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 21,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFARTIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 29,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "IFNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 48,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "IFPROVEE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 78,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "IFCANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 88,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFCOSTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 96,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRUNI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 104,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRBRU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 112,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFPORDES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 120,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRDES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 128,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLADES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 136,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFPORIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 144,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 152,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRIMC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 160,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLROIP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 168,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFVLRNET",
+      "type": 10,
+      "typeName": "double",
+      "offset": 176,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IFFECHA",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 184,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "IFTIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 188,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFTPRO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 189,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "IFFAMILIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 192,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "IFDPTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 193,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "IFGRUPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 196,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "IFSECCION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 201,
+      "length": 7,
+      "decimals": 0
+    }
+  ]
+}

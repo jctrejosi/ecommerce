@@ -1,0 +1,411 @@
+{
+  "table": "POSPAGO",
+  "source": "db/ads/openads/data/pospago.adt",
+  "bytes": 55421,
+  "recordCount": 129,
+  "recordLength": 349,
+  "headerLength": 10400,
+  "fieldCount": 50,
+  "fields": [
+    {
+      "name": "SUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 25,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 40,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "ALTERNA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 50,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VALMIN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 51,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VALMAX",
+      "type": 10,
+      "typeName": "double",
+      "offset": 59,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "MARCA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 67,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "HISTORIA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 68,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "BRETEIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 69,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRETEIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 77,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BRETEFTE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 85,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRETEFTE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 93,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BCOMISION",
+      "type": 10,
+      "typeName": "double",
+      "offset": 101,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PCOMISION",
+      "type": 10,
+      "typeName": "double",
+      "offset": 109,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DEBRETIVA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 117,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CRERETIVA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 131,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "DEBRETFTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 145,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CRERETFTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 159,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "DEBCOMI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 173,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CRECOMI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 187,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "DEBNETO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 201,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CRENETO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 215,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "DEBIVACOM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 229,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "CREIVACOM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 243,
+      "length": 14,
+      "decimals": 0
+    },
+    {
+      "name": "IVACOMI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 257,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DIVIDECOM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 265,
+      "length": 16,
+      "decimals": 0
+    },
+    {
+      "name": "CLICARTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 281,
+      "length": 11,
+      "decimals": 0
+    },
+    {
+      "name": "PERMAVL",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 292,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "AUTODOC",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 293,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CUENTA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 294,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CARTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 295,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CONCESION",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 305,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VLRVTA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 306,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VISA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 307,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "NIT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 308,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "APLIPTOS",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 318,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PRIMERAC",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 319,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PRIMERAP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 320,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTIRILLA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 328,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PSUBSIDIO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 329,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PBONOS",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 330,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CODCARTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 331,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "PMARCABEN",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 333,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PMARCAPOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 334,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PACTIVIDAD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 342,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "PMOVIL",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 345,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PERMIDSI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 346,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "AUTOFE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 347,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VALIDAWEB",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 348,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

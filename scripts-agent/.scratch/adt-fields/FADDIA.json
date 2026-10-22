@@ -1,7 +1,7 @@
 {
   "table": "FADDIA",
-  "source": "db/ADD_ANALITICA/FADDIA.ADT",
-  "bytes": 1828536942,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/FADDIA.ADT",
+  "bytes": 262144,
   "recordCount": 1167637,
   "recordLength": 1566,
   "headerLength": 17400,
