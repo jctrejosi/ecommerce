@@ -34,6 +34,7 @@ import {
   productImages,
   productVariants,
   products,
+  prices,
   shipments,
   users,
 } from '../../../drizzle/schema';
@@ -255,6 +256,11 @@ export class OrdersService {
     // pedido disponible en stock (si no, la siguiente más cercana; si ninguna
     // lo tiene completo, la más cercana en general).
     const branch = await this.resolveOrderBranch(normalizedItems, dto.address);
+
+    // El pedido se factura con el precio de la sucursal que lo atiende
+    // (modelo del ERP: un precio por INSUC). Si esa sucursal no tiene precio
+    // propio se conserva el primario de la variante.
+    await this.applyBranchPrices(normalizedItems, Number(branch.id));
 
     const subtotal = normalizedItems.reduce(
       (sum, item) => sum + item.subtotal,
@@ -1268,6 +1274,57 @@ export class OrdersService {
     }
 
     return result[0];
+  }
+
+  /**
+   * Ajusta el precio unitario de los ítems al de la sucursal indicada.
+   * Sólo pisa el precio cuando la sucursal tiene una fila vigente en `prices`.
+   */
+  private async applyBranchPrices(
+    items: {
+      productVariantId: number;
+      quantity: number;
+      unitPrice: number;
+      subtotal: number;
+    }[],
+    branchId: number,
+  ): Promise<void> {
+    if (!items.length || !Number.isFinite(branchId)) return;
+
+    const rows = await this.db
+      .select({
+        variantId: prices.productVariantId,
+        price: prices.price,
+      })
+      .from(prices)
+      .where(
+        and(
+          inArray(
+            prices.productVariantId,
+            items.map((i) => i.productVariantId),
+          ),
+          eq(prices.branchId, branchId),
+          isNull(prices.endDate),
+        ),
+      )
+      .orderBy(desc(prices.startDate));
+
+    const priceByVariant = new Map<number, number>();
+    for (const row of rows) {
+      const variantId = Number(row.variantId);
+      if (!priceByVariant.has(variantId)) {
+        priceByVariant.set(variantId, Number(row.price));
+      }
+    }
+
+    for (const item of items) {
+      const branchPrice = priceByVariant.get(item.productVariantId);
+      if (branchPrice == null || !Number.isFinite(branchPrice) || branchPrice <= 0) {
+        continue;
+      }
+      item.unitPrice = branchPrice;
+      item.subtotal = branchPrice * item.quantity;
+    }
   }
 
   /**

@@ -129,16 +129,26 @@ export class CatalogController {
     summary: 'Detalle de producto para el cliente (atributos y dimensiones)',
   })
   @ApiResponse({ status: 200, description: 'Detalle del producto' })
-  getProductDetail(@Param('id') id: string) {
-    return this.catalogService.getProductDetail(Number(id));
+  getProductDetail(@Param('id') id: string, @Query('branchId') branchId?: string) {
+    return this.catalogService.getProductDetail(
+      Number(id),
+      branchId ? Number(branchId) : null,
+    );
   }
 
   @Public()
   @Get('products/:id/related')
   @ApiOperation({ summary: 'Productos relacionados (misma categoría o marca)' })
   @ApiResponse({ status: 200, description: 'Listado de productos relacionados' })
-  getRelatedProducts(@Param('id') id: string) {
-    return this.catalogService.getRelatedProducts(Number(id));
+  getRelatedProducts(
+    @Param('id') id: string,
+    @Query('branchId') branchId?: string,
+  ) {
+    return this.catalogService.getRelatedProducts(
+      Number(id),
+      undefined,
+      branchId ? Number(branchId) : null,
+    );
   }
 
   @Public()

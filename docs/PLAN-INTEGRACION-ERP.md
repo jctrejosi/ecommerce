@@ -1,6 +1,10 @@
 # Plan de integración Ecommerce ⇄ ERP Advantage
 
-> **Estado**: propuesta para revisión.
+> **Estado**: propuesta histórica. **Actualización 2026-10-22**: la operación real
+> ya está conectada al ERP Advantage 12 (`asqlcmd` contra `PUBLIDATA.add`), con
+> categorías en `TIDTAB` y el demonio `erp-daemon.mjs`. Lo vigente está en
+> `docs/RUNBOOK-ERP.md` y `docs/PLAN-SINCRONIZACION-ERP.md`; este documento se
+> conserva como diseño y mapeo original.
 > **Alcance**: sincronización bidireccional entre la base Postgres del ecommerce
 > y la base Advantage (ADS) del ERP de Mercaldas.
 > **Documentos relacionados**:

@@ -110,6 +110,7 @@ export interface Slide {
 
 export interface Branch {
   id: number;
+  code?: string | null;
   name: string;
   address: string;
   city: string;
@@ -143,6 +144,8 @@ export interface ProductCardProps {
 
 export interface ProductDetailModalProps {
   product: Product | null;
+  /** Sucursal con la que se resuelve el precio mostrado. */
+  branchId?: number | null;
   cartItems: CartItem[];
   onAdd: (p: Product, quantity?: number) => void;
   onRemove: (id: number) => void;

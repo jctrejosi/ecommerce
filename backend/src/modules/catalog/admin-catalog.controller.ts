@@ -403,4 +403,29 @@ export class AdminCatalogController {
     );
     return { success: true };
   }
+
+  @Public()
+  @Get('products/:id/branch-prices')
+  @ApiOperation({ summary: 'Precios vigentes del producto por sucursal' })
+  async getBranchPrices(@Param('id') id: string) {
+    return this.catalogService.getBranchPrices(Number(id));
+  }
+
+  @Public()
+  @Post('products/:id/branch-price')
+  @ApiOperation({
+    summary: 'Fijar el precio del producto en una sucursal (prices)',
+  })
+  async setBranchPrice(
+    @Param('id') id: string,
+    @Body()
+    body: { branchId: number; price: number; comparePrice?: number | null },
+  ) {
+    return this.catalogService.setBranchPrice(
+      Number(id),
+      Number(body.branchId),
+      Number(body.price),
+      body.comparePrice != null ? Number(body.comparePrice) : null,
+    );
+  }
 }

@@ -28,8 +28,14 @@ for (const rel of envFiles) {
   if (fs.existsSync(file)) dotenv.config({ path: file, override: false });
 }
 
-/** Sucursal del ERP ("1","2","11") -> branches.code en Postgres. */
-export const BRANCH_CODE = (insuc) => String(String(insuc).trim()).replace(/^0+/, '') || '0';
+/** Sucursal del ERP ("1","2","11") -> branches.code en Postgres.
+ *  asqlcmd entrega los numéricos como "1.000000000000000". */
+export const BRANCH_CODE = (insuc) => {
+  const raw = String(insuc ?? '').trim();
+  const num = Number(raw);
+  if (Number.isFinite(num)) return String(Math.trunc(num));
+  return raw.replace(/^0+/, '') || '0';
+};
 
 /** char(n): limpiar relleno. El API ya entrega string. */
 export const s = (v) => (v == null ? null : String(v).trim());

@@ -422,7 +422,17 @@ export default function App() {
           );
         void catalogService
           .getBranches()
-          .then(setLandingBranches)
+          .then((list) => {
+            setLandingBranches(list);
+            // Por defecto se muestra el precio de la sucursal 1 del ERP.
+            setCatalogBranch((prev) => {
+              if (prev != null) return prev;
+              const primary = list.find(
+                (b) => String(b.code ?? "").replace(/^0+/, "") === "1",
+              );
+              return primary?.id ?? list[0]?.id ?? null;
+            });
+          })
           .catch(() => {});
         void catalogService
           .getFeaturedProductTypes()
@@ -446,7 +456,12 @@ export default function App() {
     setLandingLoading(true);
     try {
       if (tab) {
-        setLandingProducts(await catalogService.getFeaturedTabProducts(tab));
+        setLandingProducts(
+          await catalogService.getFeaturedTabProducts(
+            tab,
+            catalogBranch ?? undefined,
+          ),
+        );
       } else {
         setLandingProducts([]);
       }
@@ -455,7 +470,7 @@ export default function App() {
     } finally {
       setLandingLoading(false);
     }
-  }, []);
+  }, [catalogBranch]);
 
   useEffect(() => {
     void fetchLandingProducts(activeTab);
@@ -1143,6 +1158,7 @@ export default function App() {
       />
       <ProductDetailModal
         product={selectedProduct}
+        branchId={catalogBranch}
         cartItems={cartItems}
         onAdd={addToCart}
         onRemove={removeFromCart}

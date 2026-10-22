@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Put } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Put, Query } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
 import { LandingService } from './landing.service';
@@ -111,7 +111,11 @@ export class LandingPublicController {
   @Public()
   @Get('daily-deals')
   @ApiOperation({ summary: 'Ofertas del día (público)' })
-  getDailyDeals() { return this.landingService.getPublicDailyDeals(); }
+  getDailyDeals(@Query('branchId') branchId?: string) {
+    return this.landingService.getPublicDailyDeals(
+      branchId ? Number(branchId) : null,
+    );
+  }
 
   @Public()
   @Get('brands')

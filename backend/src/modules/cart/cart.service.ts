@@ -13,6 +13,10 @@ import {
   productVariants,
 } from '../../../drizzle/schema';
 import { UpdateCartDto } from './dto/update-cart.dto';
+import {
+  branchComparePriceSql,
+  branchPriceSql,
+} from '../../common/pricing/branch-price';
 
 @Injectable()
 export class CartService {
@@ -33,13 +37,15 @@ export class CartService {
 
     await this.db.delete(cartItems).where(eq(cartItems.cartId, cartId));
 
+    const cartBranchId = cart.branchId ? Number(cart.branchId) : null;
+
     if (dto.items.length > 0) {
       const productIds = dto.items.map((item) => item.productId);
       const variants = await this.db
         .select({
           variantId: productVariants.id,
           productId: productVariants.productId,
-          price: productVariants.currentPrice,
+          price: branchPriceSql(cartBranchId),
         })
         .from(productVariants)
         .innerJoin(products, eq(products.id, productVariants.productId))
@@ -93,7 +99,7 @@ export class CartService {
 
   private async getOrCreateActiveCart(customerId: number) {
     const existing = await this.db
-      .select({ id: carts.id })
+      .select({ id: carts.id, branchId: carts.branchId })
       .from(carts)
       .where(and(eq(carts.customerId, customerId), eq(carts.status, 'ACTIVE')))
       .limit(1);
@@ -122,20 +128,27 @@ export class CartService {
         status: 'ACTIVE',
         lastActivityAt: new Date().toISOString(),
       })
-      .returning({ id: carts.id });
+      .returning({ id: carts.id, branchId: carts.branchId });
 
     return inserted[0];
   }
 
   private async buildCartResponse(cartId: number) {
+    const [cart] = await this.db
+      .select({ branchId: carts.branchId })
+      .from(carts)
+      .where(eq(carts.id, BigInt(cartId)))
+      .limit(1);
+    const branchId = cart?.branchId ? Number(cart.branchId) : null;
+
     const rows = await this.db
       .select({
         productId: products.id,
         name: products.name,
         slug: products.slug,
         description: products.description,
-        price: productVariants.currentPrice,
-        originalPrice: productVariants.currentComparePrice,
+        price: branchPriceSql(branchId),
+        originalPrice: branchComparePriceSql(branchId),
         image: media.path,
         category: categories.name,
         categoryId: categories.id,

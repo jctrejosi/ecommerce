@@ -3,24 +3,26 @@
 Scripts que mantienen sincronizadas la base **Advantage del ERP** y **Postgres**
 del ecommerce. Objetivo y alcance: `docs/PLAN-SINCRONIZACION-ERP.md`.
 
-> Requisitos: OpenADS arriba (`node dev.js` levanta PostgreSQL + OpenADS) y las
-> tablas del ERP presentes en `db/ads/openads/data` (el sembrado inicial no las
-> trae todas: ver cada script).
+> **Vía real (dsi-vps):** `asqlcmd64.exe` contra el servicio ADS 12 y la base
+> `C:\ADD_FORTUNER\PUBLIDATA.add`. OpenADS sólo se usa como banco de pruebas con
+> una copia. Configuración y operación: `docs/RUNBOOK-ERP.md`.
 
 ## Syncs **requeridos** (lo que el ecommerce usa)
 
 | Script | Dirección | Qué |
 |---|---|---|
+| `erp-daemon.mjs` | ambas | **Demonio**: pull del catálogo cada 5 min + push cada 30 s (tarea de Windows). |
+| `erp-sync.cmd` | — | Lanzador del demonio con reintento (lo usa la tarea "Mercaldas ERP Sync"). |
 | `sync-all.mjs` | ambas | **Runner completo**: entrada pesada + salida. Seguro por defecto; `--apply` escribe en el ERP. |
 | `sync-out.mjs` | ambas | **Runner de salida ligero** (clientes/precio-stock/pedidos/reconcile), para bucle/cron. |
 | `sync-codes.mjs` | ERP → PG | Diccionario `erp_code_map` desde `db/ads/fortuner-dicts` (marcas, tipos, impuestos, medios de pago, bodegas, estados). No necesita OpenADS. |
-| `sync-catalog.mjs` | ERP → PG | `products`/`product_variants`/`prices`/`inventory`/`branch_products` + tipos, categorías (`TIDCATE`) y marcas (`TIDMARCAS`/`INMARCAP`), atributos. |
-| `sync-categories.mjs` | ERP → PG | **Migración única**: árbol de `TIDCATE` → `categories`, `TIDMARCAS` + `INMARCAP` → `brands`, y reasigna `product_categories`/`products.brand_id` de todos los productos. Oculta las categorías viejas sin uso. |
-| `remap-shelves.mjs` | PG | **Migración única**: traduce `shelf_categories` de las categorías viejas a las hojas `TIDCATE` equivalentes (mapeo por nombre; dry-run por defecto). |
+| `sync-catalog.mjs` | ERP → PG | `products`/`product_variants`/`prices`/`inventory`/`branch_products` + tipos, categorías (**`TIDTAB`**) y marcas (`TIDMARCAS`/`INMARCAP`), atributos. `--reset-snapshot` re-basa todo. |
+| `sync-categories.mjs` | ERP → PG | **Migración única**: árbol de **`TIDTAB`** → `categories`, `TIDMARCAS` + `INMARCAP` → `brands`, y reasigna `product_categories`/`products.brand_id`. Oculta las categorías viejas sin uso. |
+| `remap-shelves.mjs` | PG | **Migración única**: traduce `shelf_categories` de categorías viejas a las hojas equivalentes (dry-run por defecto). |
 | `sync-customers.mjs` | ERP → PG | Clientes `POSCLI` → `customers`. |
-| `push-orders.mjs` | PG → ERP | `orders`/`order_items` → `DOMDIA`/`DOMITE`. |
+| `push-orders.mjs` | PG → ERP | `orders`/`order_items` → `DOMDIA`/`DOMITE`. Por defecto omite `DEMO-*` (`--include-demo` para probar). |
 | `push-customers.mjs` | PG → ERP | Clientes locales → `POSCLI` (crea o actualiza; `CODCLI` generado de 13 chars). |
-| `push-catalog.mjs` | PG → ERP | Drena `erp_outbox`: precio/stock → `TIDSAL`; marcas → `TIDMARCAS` (+ `TIDSAL.INMARCAP`); categorías → `TIDCATE`; tipos → `TIDTPRO`; producto (nombre, barcode, dimensiones y atributos ERP) → `TIDSAL`; activación → `TIDSAL.INACTIVO`; estado de pedido → `DOMDIA.FAESTADO` y, al cancelar, `DOMITE.IFESTADO`. |
+| `push-catalog.mjs` | PG → ERP | Drena `erp_outbox`: precio/stock → `TIDSAL`; marcas → `TIDMARCAS` (+ `TIDSAL.INMARCAP`); categorías → **`TIDTAB`**; tipos → `TIDTPRO`; producto (nombre, barcode, dimensiones y atributos ERP) → `TIDSAL`; activación → `TIDSAL.INACTIVO`; estado de pedido → `DOMDIA.FAESTADO` y, al cancelar, `DOMITE.IFESTADO`. |
 | `reconcile.mjs` | ERP → PG | Factura del ERP → `invoices`/`orders` de *nuestros* pedidos. |
 
 Los `push-*` y `reconcile` escriben en el ERP: por defecto van en **dry-run**;
@@ -37,9 +39,9 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 | `price` | `21` (`product_variants`) | `TIDSAL.INVRVENTA1/0` |
 | `stock` | `21` (`inventory`) | `TIDSAL.INSALDO00` (por sucursal) |
 | `brands` | `22` | `TIDMARCAS` |
-| `categories` | `22` | `TIDCATE` (`TIDSAL.INCATE` referencia este árbol) |
+| `categories` | `22` | `TIDTAB` (`CTABDES` por `CTABCOD`; alta con `CTABCOD1` = padre) |
 | `product_types` | `22` | `TIDTPRO` |
-| `products` | `22` + `25` (producto, tipo, categoría, atributos, barcode/dimensiones) | `TIDSAL.INNOMBRE/INNOMBRE3/INNOMBRE4`, `INEAN`, `INMARCAP`, `INTIPO`, `INCATE`, `INUNIDAD/INPRESEN/INEMBALAJE/INPARTE/ININVIMA/INCUM/INUBIC/INEAN14`, `INLARGO/INANCHO/INALTO` |
+| `products` | `22` + `25` (producto, tipo, categoría, atributos, barcode/dimensiones) | `TIDSAL.INNOMBRE/INNOMBRE3/INNOMBRE4`, `INEAN`, `INMARCAP`, `INTIPO`, `INUNIDAD/INPRESEN/INEMBALAJE/INPARTE/ININVIMA/INCUM/INUBIC/INEAN14`, `INLARGO/INANCHO/INALTO` (sin `INCATE`) |
 | `product_flags` | `25` (`is_active` de producto/variante) | `TIDSAL.INACTIVO` (`A`/`I`; no pisa `S`) |
 | `order_status` | `22` (`orders.status`) | `DOMDIA.FAESTADO` + `DOMITE.IFESTADO` (vía `erp_code_map`) |
 
@@ -78,22 +80,37 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 
 ## Utilidades
 
-- `openads.mjs` — cliente HTTP del conector (OpenADS) + conexión Postgres.
+- `asqlcmd.mjs` — cliente del servicio ADS vía `asqlcmd64.exe` (SQL, filas, esquema).
+- `openads.mjs` — selector de transporte (`ERP_ADS_MODE=asqlcmd` o HTTP OpenADS) + conexión Postgres.
 - `adt.mjs` — lector de tablas `.ADT` (diccionarios de FORTUNER).
-- `lib.mjs` — codecs del formato Advantage, `orderNumber` y `newErpCode`.
+- `lib.mjs` — codecs del formato Advantage, `BRANCH_CODE`, `orderNumber`, `newErpCode` y carga del `.env`.
 - `init-db.mjs` — aplica las migraciones ERP (idempotente):
   `19_erp_integration.sql`, `20_erp_invoice_mirror.sql`,
   `21_erp_catalog_outbox.sql` (triggers precio/stock),
   `22_erp_outbox_masters.sql` (triggers marcas/categorías/tipos/producto/estado),
   `23_erp_order_status_map.sql` (PK de `erp_code_map`),
-  `24_erp_code_map_fortuner.sql` (códigos reales de FORTUNER).
+  `24_erp_code_map_fortuner.sql` (códigos reales de FORTUNER) y
+  `25_erp_product_outbox.sql` (tipo/categoría, barcode/dimensiones, activación).
 - `analyze-brands.mjs` — diagnóstico de marcas.
+
+## Notas de implementación
+
+- `asqlcmd` devuelve CSV con comillas internas **sin escapar**; `parseAsqlcmd()`
+  cierra un campo citado sólo cuando la comilla va seguida de coma, salto o EOF.
+  No vuelvas a un parser CSV estándar: fusiona filas (se perdían ~23k).
+- Los numéricos llegan como `1.000000000000000`; usa `BRANCH_CODE()` y `Number()`.
+  `FAFCHFAC`/`IFFECHA` son enteros `YYYYMMDD`.
+- `TOP/START AT` pagina correctamente una vez que el parser no pierde filas.
 
 ## Variables de entorno
 
-- `OPENADS_URL` (def. `http://localhost:18080`), `OPENADS_USER` (def. `dsi`), `OPENADS_PASS` (def. `dsi`).
+- `ERP_ADS_MODE` (`asqlcmd` para el ERP real), `ADS_CMD`, `ADS_SERVER`,
+  `ADS_DATABASE`, `ADS_USER`, `ADS_PASS`.
+- `OPENADS_URL` (def. `http://localhost:18080`), `OPENADS_USER` (def. `dsi`),
+  `OPENADS_PASS` (def. `dsi`) — sólo para el banco de pruebas.
 - `DATABASE_URL` (def. `postgresql://postgres:postgres@localhost:5432/ecommerce`).
 - `ERP_ADT_DIR` (def. `db/ads/fortuner-dicts`) — diccionarios `.ADT` de FORTUNER.
 - `ERP_ORDER_PREFIX` (def. `9`) — prefijo del `FAPEDIDO`/`IFPEDIDO` web (9 dígitos).
 - `ERP_NEW_CODE_PREFIX` (def. `9`) — prefijo de códigos nuevos de maestras.
+- `ERP_PULL_SECONDS` (def. `300`) y `ERP_PUSH_SECONDS` (def. `30`) — ritmo del demonio.
 - `ADMIN_USER_ID` (def. `1`).

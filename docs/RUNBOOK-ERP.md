@@ -1,169 +1,209 @@
-# Runbook — conectar y operar la sincronización con el ERP
+# Runbook — ERP Advantage (FORTUNER) ⇄ ecommerce
 
-Guía para montar el ecommerce junto al ERP (Advantage) y dejar la
-sincronización corriendo. Diseño y alcance: `PLAN-SINCRONIZACION-ERP.md`.
+Operación de la sincronización **en vivo** entre el ecommerce (Postgres) y el
+ERP Advantage que corre en `dsi-vps`. Diseño: `PLAN-SINCRONIZACION-ERP.md`.
+
+> **Actualizado 2026-10-22.** La vía real ya **no** es OpenADS: se escribe y lee
+> con `asqlcmd64.exe` contra el servicio ADS del ERP. OpenADS quedó sólo como
+> banco de pruebas con una copia (`db/ads/openads/data-test`).
 
 ---
 
-## 1. Componentes
+## 1. Arquitectura
 
 ```
-Ecommerce (backend + interfaces) ── Postgres (ecommerce)
-                                        ▲
-                                        │  scripts-agent/erp/*.mjs
-                                        ▼
-                                 OpenADS (Docker) ── base Advantage del ERP
+Cliente / Admin / Bot
+        │
+        ▼
+Backend NestJS ──► PostgreSQL ecommerce (:5432, contenedor ecommerce_postgres)
+        │                         ▲
+        │                         │ erp-daemon.mjs
+        │                         ▼
+        └──────────► Servicio ADS 12 (TCP 127.0.0.1:6262)
+                              │
+                              ▼
+                 C:\ADD_FORTUNER\PUBLIDATA.add
 ```
 
-- **Postgres** del ecommerce: contenedor `ecommerce_postgres` (:5432).
-- **OpenADS**: contenedor `openads-img` (:18080 HTTP, :16262 wire) montando
-  `db/ads/openads/data` como `/data`. Es el puente hacia Advantage.
-- **Scripts de sync**: `scripts-agent/erp/`.
+- **ERP**: Advantage 12, servicio Windows `Advantage`
+  (`C:\Program Files\Advantage 12.0\Server\ADS.EXE`), escuchando `0.0.0.0:6262`.
+  Base: `C:\ADD_FORTUNER\PUBLIDATA.add` (el `.add`, no la carpeta).
+- **Puente**: `asqlcmd64.exe` (incluido con Advantage 12). No abre los `.adt`
+  directamente, así el ERP y el ecommerce pueden leer/escribir a la vez.
+- **Postgres**: el contenedor no publica `5432`; en el host hay un proxy
+  `ecommerce_pg_proxy` (`127.0.0.1:5432 → ecommerce_postgres:5432`).
+- **Scripts**: `scripts-agent/erp/`. **Demonio**: `erp-daemon.mjs`.
 
-## 2. Puesta en marcha
+## 2. Conexión al ERP
+
+Variables en `backend/.env.development.local` (las cargan los scripts vía
+`scripts-agent/erp/lib.mjs`):
+
+```dotenv
+ERP_ADS_MODE=asqlcmd
+ADS_CMD=C:\Program Files\Advantage 12.0\Server\asqlcmd64.exe
+ADS_SERVER=TCP:127.0.0.1:6262
+ADS_DATABASE=C:\ADD_FORTUNER\PUBLIDATA.add
+ADS_USER=ADSSYS
+ADS_PASS=
+```
+
+Prueba manual:
+
+```bat
+"C:\Program Files\Advantage 12.0\Server\asqlcmd64.exe" ^
+  -S TCP:127.0.0.1:6262 ^
+  -CS "Data Source=C:\ADD_FORTUNER\PUBLIDATA.add" ^
+  -U ADSSYS -P "" ^
+  -Q "SELECT COUNT(*) AS N FROM tidsal"
+```
+
+Notas:
+- Sin `-CS` (o con `Data Source=C:\ADD_FORTUNER`) asqlcmd busca tablas libres y
+  falla con `Error 5159` ("The table is a database table").
+- **No** montes `C:\ADD_FORTUNER` en OpenADS/Docker mientras el ERP lo usa: dos
+  motores sobre los mismos `.adt` pueden corromper los datos.
+- Si `ERP_ADS_MODE` falta, los scripts caen silenciosamente en OpenADS
+  (`http://localhost:18080`). El demonio **se niega a arrancar** en ese caso.
+
+## 3. Migraciones y primera puesta en marcha
 
 ```bash
-node dev.js                 # levanta Postgres + OpenADS (y siembra si falta)
-node dev.js --erp-sync      # ídem + deja la salida PG→ERP en bucle (cada 30 s)
-node scripts-agent/erp/init-db.mjs   # crea tablas erp_* + triggers + mapa de estados (idempotente)
-```
-
-`--erp-sync` arranca `scripts-agent/erp/sync-out.mjs --apply` en bucle (log en
-`logs/erp-sync.log`, se detiene con `node dev.js --stop`). El intervalo se ajusta
-con `--erp-interval=<seg>` o `ERP_SYNC_INTERVAL`. Requiere Advantage; con
-`--no-advantage` se omite.
-
-`init-db.mjs` aplica, en orden: `19_erp_integration.sql`, `20_erp_invoice_mirror.sql`,
-`21_erp_catalog_outbox.sql` (triggers precio/stock), `22_erp_outbox_masters.sql`
-(triggers marcas/categorías/tipos/producto/estado), `23_erp_order_status_map.sql`
-(PK de `erp_code_map` + semilla de estados de pedido), `24_erp_code_map_fortuner.sql`
-(códigos de FORTUNER) y `25_erp_product_outbox.sql` (cambios de tipo/categoría,
-barcode/dimensiones y activación). Despliegue completo: `DESPLIEGUE-ERP-FORTUNER.md`.
-
-Si OpenADS no tiene las tablas del ERP, cópialas a `db/ads/openads/data/`
-(desde `db/ADD_ANALITICA/`). Los diccionarios frescos de FORTUNER viven en
-`db/ads/fortuner-dicts/` y los usa `sync-codes.mjs`. Las tablas que usa el
-ecommerce:
-`tidsal`, `tidtab`, `tidcate`, `tidtpro`, `tidmarcas`, `tidbode`,
-`pospago`, `poscli`. (Y `faddia`/`fapago` sólo si usas el espejo
-opcional `sync-invoices.mjs --full`.)
-
-## 3. Variables de entorno
-
-Las lee el backend y los scripts (vía `backend/.env.development.local`):
-
-| Variable | Defecto | Uso |
-|---|---|---|
-| `OPENADS_URL` | `http://localhost:18080` | **aquí se cambia al montar en el ERP** |
-| `OPENADS_USER` / `OPENADS_PASS` | `dsi` / `dsi` | credenciales de OpenADS |
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/ecommerce` | Postgres del ecommerce |
-| `ADMIN_USER_ID` | `1` | auditoría de precios |
-| `ERP_ADV_DATA` | `db/ads/openads/data` | carpeta Advantage montada por Docker (`C:/ADD_FORTUNER`) |
-| `ERP_ADV_EXTERNAL` | — | `1` = no levantar Docker; usar el OpenADS de `OPENADS_URL` |
-| `ERP_ADV_HTTP_PORT` / `ERP_ADV_WIRE_PORT` | `18080` / `16262` | puertos del OpenADS en Docker |
-| `ERP_ORDER_PREFIX` | `9` | prefijo del número de pedido web (9 dígitos) |
-| `ERP_FAESTADO` / `ERP_TIPODOM` / `ERP_BODEGA` / `ERP_IFTIPO` | `0` / `01` / `00` / `E` | códigos cerrados con FORTUNER |
-| `ERP_SYNC_INTERVAL` | `30` | segundos entre ciclos de `sync-out` |
-| `NODE_ENV` | — | en el servidor: `production` (los scripts leen `.env.production`/`.env`) |
-| `DOTENV_CONFIG_PATH` | — | archivo `.env` explícito para los scripts del conector |
-
-> **Montaje en el ERP real**: basta apuntar `OPENADS_URL` a la IP/puerto donde
-> corra OpenADS (o `localhost` si es la misma máquina).
-
-## 4. Sincronización
-
-```bash
-# Todo en modo seguro (trae del ERP; muestra lo que haría hacia el ERP)
-node scripts-agent/erp/sync-all.mjs
-
-# Todo, incluyendo escrituras hacia el ERP
-node scripts-agent/erp/sync-all.mjs --apply
-```
-
-Pasos que corre `sync-all`:
-`sync-codes → sync-catalog → sync-customers → push-customers → push-catalog →
-push-orders → reconcile`.
-
-`sync-catalog` es el pull del catálogo: lee `TIDSAL`, `TIDCATE` (categorías) y
-`TIDMARCAS`/`INMARCAP` (marcas) y actualiza productos, precios, inventario,
-categorías, marcas y tipos en Postgres. Es la vía para que un cambio hecho en
-el ERP se refleje aquí.
-
-Scripts individuales y su sentido: ver `scripts-agent/erp/README.md`.
-
-### Primera carga de categorías y marcas
-
-En una base nueva (o tras un cambio grande del catálogo del ERP), además de
-`sync-all` conviene ejecutar una vez:
-
-```bash
+node scripts-agent/erp/init-db.mjs          # idempotente: tablas erp_* + triggers
+node scripts-agent/erp/sync-catalog.mjs --reset-snapshot
 node scripts-agent/erp/sync-categories.mjs --apply
-node scripts-agent/erp/remap-shelves.mjs --apply
 ```
 
-El primero reconstruye el árbol `TIDCATE` y las marcas de `TIDMARCAS`, y
-reasigna cada producto a su categoría/marca del ERP. El segundo traduce las
-estanterías físicas a las categorías nuevas. Ambos son idempotentes.
+`init-db.mjs` aplica `19` a `25`: integración, espejo de facturación, triggers de
+precio/stock (`21`), maestras (`22`), estados de pedido (`23`), códigos FORTUNER
+(`24`) y cambios de producto (`25`). En el servidor ya está aplicado.
 
-## 5. Automatización
+`sync-categories.mjs` reconstruye el árbol de **`TIDTAB`** (no `TIDCATE`), crea
+las marcas de `TIDMARCAS` y las que sólo aparecen en `TIDSAL.INMARCAP`, y
+reasigna `product_categories` / `products.brand_id`. Es idempotente.
 
-### Linux (cron)
-```cron
-*/5 * * * * cd /ruta/ecommerce && node scripts-agent/erp/sync-all.mjs --apply >> /var/log/erp-sync.log 2>&1
+## 4. Qué se sincroniza
+
+### ERP → Postgres (`sync-catalog.mjs`)
+
+| ERP | Postgres |
+|---|---|
+| `TIDSAL` (51.938 filas, 21.613 artículos, sucursales 1/2/11) | `products`, `product_variants`, `prices`, `inventory`, `branch_products` |
+| `TIDTAB` (231 nodos, `CTABCOD`/`CTABDES`/`CTABCOD1`) | `categories` (código, nombre, padre, nivel) |
+| `TIDSAL.INMARCAP` + `TIDMARCAS` (`MCODIGO`/`MNOMBRE`) | `brands` + `products.brand_id` |
+| `INTIPO` | `product_types` + `product_type_assignments` |
+| `INVRVENTA1` / `INVRVENTA0` | `prices.price` / `compare_price` (por sucursal) |
+| `INSALDO00` | `inventory.stock` (por sucursal) |
+| `INALTO`/`INANCHO`/`INLARGO` (cm) | dimensiones en mm (`length_mm`, etc.) |
+
+**Categorías**: `INCATE` no es fiable (vacío en 34.659 filas y con códigos viejos
+que no existen en `TIDTAB`). `categoryOf()` usa `INCATE` sólo si existe en
+`TIDTAB`; si no, deriva la categoría del **prefijo del SKU** (7 → 2 dígitos).
+
+**Marcas**: `INMARCA` no coincide con `TIDMARCAS.MCODIGO`; se guarda como
+atributo `marca-erp` y no se escribe. La relación real es `INMARCAP` (nombre).
+
+### Postgres → ERP (`push-catalog.mjs` + `erp_outbox`)
+
+Los triggers de `db/sql/21`, `22` y `25` encolan cambios hechos en el backend:
+
+| Kind | Destino |
+|---|---|
+| `price` | `TIDSAL.INVRVENTA1` / `INVRVENTA0` |
+| `stock` | `TIDSAL.INSALDO00` (por `INSUC`) |
+| `brands` | `TIDMARCAS` + `TIDSAL.INMARCAP` |
+| `categories` | `TIDTAB` (`CTABDES`; alta con `CTABCOD1` = padre) |
+| `product_types` | `TIDTPRO` (`NOMBRE`/`HABILITA`) |
+| `products` | `TIDSAL`: nombre, `INNOMBRE3/4`, `INEAN`, `INMARCAP`, `INTIPO`, atributos y dimensiones |
+| `product_flags` | `TIDSAL.INACTIVO` (`A`/`I`; no pisa `S`) |
+| `order_status` | `DOMDIA.FAESTADO` (+ `DOMITE.IFESTADO` al cancelar) |
+
+`push-catalog.mjs` es dry-run por defecto; escribe con `--apply`.
+
+### Pedidos (`push-orders.mjs`)
+
+Escribe `DOMDIA` (cabecera) y `DOMITE` (ítems). Detalles del ERP real:
+- `FAFCHFAC` e `IFFECHA` son **enteros** `YYYYMMDD` (no texto).
+- Los importes (`FAVLRBRU`, `IFVLRUNI`, etc.) son `Double`: se envían como
+  números, no como cadenas.
+- `FACONTROL` = `orders.reference_code`; `FAPEDIDO` = `900000000 + id`.
+- Los pedidos `DEMO-*` **no se envían** por defecto. Para probar:
+  `node scripts-agent/erp/push-orders.mjs --include-demo --limit=5`.
+- `--force --order=<id>` reenvía un pedido concreto (idempotente por `FACONTROL`).
+
+## 5. Demonio y automatización
+
+`erp-daemon.mjs`:
+- **Pull** `sync-catalog` cada `ERP_PULL_SECONDS` (300 s).
+- **Push** `push-catalog --apply`, `push-orders` y `reconcile --apply` cada
+  `ERP_PUSH_SECONDS` (30 s).
+- Los clientes **no** se empujan en el bucle (para no crear clientes de prueba
+  en el ERP); se hace manualmente con `push-customers.mjs --apply`.
+
+En el servidor corre como tarea de Windows **"Mercaldas ERP Sync"** (al iniciar,
+como SYSTEM):
+
+```bat
+schtasks /Query  /TN "Mercaldas ERP Sync" /FO LIST
+schtasks /Run    /TN "Mercaldas ERP Sync"
+schtasks /End    /TN "Mercaldas ERP Sync"
 ```
 
-### Windows (donde vive el ERP)
-- **Task Scheduler**: tarea cada N minutos que ejecute
-  `node C:\ruta\ecommerce\scripts-agent\erp\sync-all.mjs --apply`.
-- Como servicio: envolver con [NSSM](https://nssm.cc/) o `sc.exe` si se quiere
-  el agente (y `node dev.js`) siempre arriba.
+El lanzador es `scripts-agent/erp/erp-sync.cmd` (reintenta cada 10 s si Node
+sale). Log: `logs/erp-sync.log`.
 
-> Fase futura (tiempo real): triggers `DSI_EVENTO` en el ERP + endpoints
-> `/erp/*` en el backend, para no depender del intervalo del cron.
-
-### Mientras NO haya ERP real (probar con la copia OpenADS)
-
-La entrada pesada (catálogo + 146k clientes) basta con correrla cada tanto. Lo
-que debe fluir seguido es la **salida**, y para eso está el runner ligero.
-
-Lo más simple es dejar que `dev.js` lo arranque junto al resto:
+Para probar un ciclo sin dejar el bucle:
 
 ```bash
-node dev.js --erp-sync                 # salida PG→ERP en bucle cada 30 s
-node dev.js --erp-sync --erp-interval=15   # cada 15 s
+node scripts-agent/erp/erp-daemon.mjs --once
 ```
 
-O correrlo aparte:
+## 6. Validación y diagnóstico
 
-```bash
-# una vez
-node scripts-agent/erp/sync-out.mjs --apply
+```sql
+-- Postgres
+SELECT kind, status, count(*) FROM erp_outbox GROUP BY 1,2;
+SELECT count(*) FROM products;            -- 21.613
+SELECT count(*) FROM product_images;      -- 15.597 (11.427 productos con imagen)
 
-# en bucle (cada 30 s) mientras se prueba
-node scripts-agent/erp/sync-out.mjs --apply --loop=30
+-- ERP (asqlcmd)
+SELECT COUNT(*) AS N FROM tidsal;         -- 51.938
+SELECT INSUC, COUNT(*) AS N FROM tidsal GROUP BY INSUC;
 ```
 
-Así, cada transacción que se haga en el ecommerce (pedido, alta de cliente,
-cambio de precio/stock) se envía a la copia OpenADS sin intervención manual.
+Prueba de ida y vuelta:
+1. Editar un producto/precio en el admin (o `UPDATE` en Postgres).
+2. Esperar ≤ 30 s y confirmar `erp_outbox.status='sent'`.
+3. Consultar `TIDSAL`/`TIDMARCAS`/`TIDTAB` con asqlcmd.
+4. Cambiar un precio en el ERP y esperar ≤ 5 min: `sync-catalog` lo baja a
+   Postgres.
 
-## 6. Problemas comunes
+Errores comunes:
 
 | Síntoma | Causa / solución |
 |---|---|
-| `ECONNREFUSED :18080` | OpenADS caído → `docker start openads-img` |
-| `AdsOpenTable failed` / `could not find ... .dbf` | Falta la tabla en `db/ads/openads/data` (copiar `.adt`+`.adi`) |
-| "authentication required" en el navegador | entrar con `http://localhost:18080/?_auth_user=dsi&_auth_pass=dsi` |
-| Sync no ve cambios | el contenedor montó un `/data` distinto; revisar el bind mount |
+| `Error 5159` | falta `-CS "Data Source=...\PUBLIDATA.add"` |
+| `Invalid operand ... Target Data Type: <Integer>` | se envió texto a una columna numérica/fecha del ERP |
+| `record not locked` | se intentó escribir vía OpenADS sobre la copia; usar asqlcmd |
+| El cambio no llega al ERP | revisar `erp_outbox` (`pending`/`error`) y `last_error` |
+| El pull trae menos filas | parser CSV: las comillas internas de asqlcmd no se escapan; el parser cierra el campo sólo con `"` seguida de coma/salto/EOF |
+| Sucursales duplicadas (`1.000000...`) | `INSUC` numérico de asqlcmd; normalizar con `BRANCH_CODE()` |
 
-## 7. Pendientes para producción
+## 7. Herramientas puntuales
 
-- **`CODCLI`**: hoy `push-customers.mjs` lo genera (`2999########`). Confirmar
-  con el ERP su algoritmo real.
-- **Enums**: `FAESTADO`/`IFESTADO` cerrados con datos reales (0/5/9 y
-  vacío/5), `FATIPODOM=01`. `FACANALV` y `FADOCPAGO` siguen opcionales. El mapa
-  vive en `db/sql/24_erp_code_map_fortuner.sql` y `sync-codes.mjs`; se ajusta con
-  `UPDATE` a `erp_code_map`, sin tocar código.
-- **Stock**: `push-catalog.mjs` pisa `INSALDO00`; lo correcto suele ser enviar
-  **movimientos** de inventario.
-- **Conflictos de propiedad**: definir quién gana cuando ambos editan
-  (el campo de precio/stock se escribe en ambos sentidos).
+```bash
+# Re-basar el snapshot tras cambiar de transporte (OpenADS ⇄ asqlcmd)
+node scripts-agent/erp/sync-catalog.mjs --reset-snapshot
+
+# Forzar reasignación de categorías/marcas
+node scripts-agent/erp/sync-categories.mjs --apply
+
+# Reenviar un pedido concreto
+node scripts-agent/erp/push-orders.mjs --order=352 --force
+
+# Empujar clientes (manual, revisar antes)
+node scripts-agent/erp/push-customers.mjs --apply --limit=50
+```
+
+> El catálogo sigue siendo propiedad del ERP: el ecommerce puede editar y subir
+> cambios, pero la siguiente pasada de `sync-catalog` reconcilia con `TIDSAL`.

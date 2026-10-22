@@ -13,9 +13,10 @@
  *   solo proxya al backend (útil como smoke-test del contenedor).
  *
  * Variables:
- *   HOST_API            alias solo para webhooks de pasarelas (/webhooks/*)
- *                        cuando HOST_WEB está definido. Si no hay HOST_WEB,
- *                        mantiene el comportamiento anterior (API completa).
+ *   HOST_API            API completa. La raíz se reescribe a /webhooks/wompi
+ *                        para pasarelas configuradas con el host pelado.
+ *                        Los frontends se compilan con VITE_API_URL apuntando
+ *                        a este host.
  *   HOST_WEB            cliente web; además proxya el API en el mismo origen
  *                        (rutas /catalog/*, /orders, /static/*, /bot/*, …)
  *   HOST_WEB            cliente web          → /srv/web
@@ -211,20 +212,17 @@ ${cacheHeaders}		root * ${dir}
 		file_server
 	}`;
 
-// Host del API cuando ya existe HOST_WEB: solo webhooks (Wompi, etc.), para
-// no publicar otra vez toda la superficie del backend.
-const webhookBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
-	# Wompi puede estar configurado con la raíz del host: se reescribe al
-	# endpoint real del backend.
+// Host del API cuando ya existe HOST_WEB: sirve TODO el backend. Los frontends
+// se compilan con VITE_API_URL=https://api... y necesitan todas las rutas
+// (/catalog, /orders, /auth, ...). Se conserva el rewrite de la raíz para las
+// pasarelas configuradas con el host pelado (Wompi).
+const apiHostBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
 	handle / {
 		rewrite * /webhooks/wompi
 		reverse_proxy ${BACKEND}${protoUp}
 	}
-	handle /webhooks/* {
-		reverse_proxy ${BACKEND}${protoUp}
-	}
 	handle {
-		respond 404
+		reverse_proxy ${BACKEND}${protoUp}
 	}`;
 
 const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
@@ -253,7 +251,7 @@ if (anyHost) {
   out += `{\n${opts.join("\n")}\n}\n`;
 
   if (HOST_API && HOST_API !== HOST_WEB) {
-    out += `\n${siteAddr(HOST_API)} {\n${HOST_WEB ? webhookBlock : apiBlock}\n}\n`;
+    out += `\n${siteAddr(HOST_API)} {\n${apiHostBlock}\n}\n`;
   }
   for (const f of frontHosts) {
     const withAuth = PROTECT_ADMIN && Boolean(f.admin) && Boolean(basicAuth);

@@ -14,6 +14,7 @@ import {
   media,
 } from '../../../drizzle/schema';
 import { CreateBranchDto, UpdateBranchDto, CreateDeliveryZoneDto } from './dto/branch.dto';
+import { branchPriceSql } from '../../common/pricing/branch-price';
 
 @Injectable()
 export class BranchesService {
@@ -227,7 +228,7 @@ export class BranchesService {
         productId: products.id,
         productName: products.name,
         productSlug: products.slug,
-        price: productVariants.currentPrice,
+        price: branchPriceSql(branchId),
         variantSku: productVariants.sku,
       })
       .from(inventory)

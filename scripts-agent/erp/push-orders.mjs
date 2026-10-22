@@ -19,7 +19,8 @@
  *   node scripts-agent/erp/push-orders.mjs --dry-run
  *   node scripts-agent/erp/push-orders.mjs --limit=3
  *   node scripts-agent/erp/push-orders.mjs --order=508
- *   node scripts-agent/erp/push-orders.mjs            # todos los pendientes
+ *   node scripts-agent/erp/push-orders.mjs            # todos los pendientes (sin DEMO-*)
+ *   node scripts-agent/erp/push-orders.mjs --include-demo
  *   node scripts-agent/erp/push-orders.mjs --force    # re-envía aunque estén marcados
  */
 import { createErpClient, createPg } from './openads.mjs';
@@ -28,6 +29,7 @@ import { s, args, log, clip, orderNumber } from './lib.mjs';
 const a = args();
 const DRY = !!a['dry-run'];
 const FORCE = !!a.force;
+const INCLUDE_DEMO = !!a['include-demo'];
 const LIMIT = a.limit ? Number(a.limit) : 50;
 const ONLY_ORDER = a.order ? Number(a.order) : null;
 
@@ -43,7 +45,7 @@ const FATIPODOM = process.env.ERP_TIPODOM ?? '01';
 const IFTIPO = process.env.ERP_IFTIPO ?? 'E'; // E = venta
 const IFBODEGA = process.env.ERP_BODEGA ?? '00';
 
-const money = (v) => Number(v || 0).toFixed(2);
+const money = (v) => Math.round(Number(v || 0) * 100) / 100;
 const pad2 = (v) => String(v).replace(/^0+/, '').padStart(2, '0');
 
 /** Fecha/hora del pedido en zona Colombia → { ymd: "YYYYMMDD", hms: "HH:MM:SS" }. */
@@ -92,6 +94,7 @@ const ordersSql = `
   LEFT JOIN customer_addresses ca ON ca.id = o.customer_address_id
   WHERE o.status NOT IN ('cancelled', 'refunded')
     ${FORCE ? '' : 'AND o.erp_sync_status IS NULL'}
+    ${INCLUDE_DEMO ? '' : "AND o.reference_code NOT LIKE 'DEMO-%'"}
     ${ONLY_ORDER ? 'AND o.id = $1' : ''}
   ORDER BY o.id
   LIMIT ${ONLY_ORDER ? 1 : LIMIT}`;
@@ -189,7 +192,7 @@ async function insertOrder(ord) {
       IFPORDES: money(0),
       IFVLRDES: money(it.discount_amount || 0),
       IFESTADO, // null = normal (0x8000 en disco); 5 = cancelada
-      IFFECHA: ymd,
+      IFFECHA: Number(ymd),
       IFTIPO,
       IFSUCUR: sucursal,
       IFBODEGA,
@@ -216,7 +219,7 @@ async function insertOrder(ord) {
     FACELU: celular,
     FANIT: nit,
     FAEMAIL: email,
-    FAFCHFAC: ymd,
+    FAFCHFAC: Number(ymd),
     FATIME: hms,
     FAVLRBRU: money(ord.subtotal),
     FAVLRDES: money(ord.discount_total),

@@ -141,6 +141,21 @@ export class CatalogProductsQueryDto {
   @IsNumber()
   branchId?: number;
 
+  /**
+   * Sucursal con la que se resuelve el precio mostrado, sin filtrar la
+   * disponibilidad. El admin lo usa para ver el precio de una sucursal sin
+   * ocultar productos que esa sucursal no tenga.
+   */
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (value === undefined || value === null || value === '') {
+      return undefined;
+    }
+    return Number(value);
+  })
+  @IsNumber()
+  priceBranchId?: number;
+
   @IsOptional()
   @Transform(({ value }) => {
     if (value === undefined || value === null || value === '') {

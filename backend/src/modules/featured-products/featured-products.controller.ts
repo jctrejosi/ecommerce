@@ -126,10 +126,12 @@ export class FeaturedPublicController {
   getTabProducts(
     @Param('slug') slug: string,
     @Query('limit') limit?: string,
+    @Query('branchId') branchId?: string,
   ) {
     return this.featuredService.getPublicTabProducts(
       slug,
       limit ? Number(limit) : 12,
+      branchId ? Number(branchId) : null,
     );
   }
 }

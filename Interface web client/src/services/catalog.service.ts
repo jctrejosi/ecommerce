@@ -91,8 +91,15 @@ export const catalogService = {
     return fetchJson(`${API_BASE_URL}/featured/tabs`);
   },
 
-  async getFeaturedTabProducts(slug: string): Promise<Product[]> {
-    return fetchJson<Product[]>(`${API_BASE_URL}/featured/tabs/${encodeURIComponent(slug)}/products?limit=8`);
+  async getFeaturedTabProducts(
+    slug: string,
+    branchId?: number,
+  ): Promise<Product[]> {
+    const qs = new URLSearchParams({ limit: "8" });
+    if (branchId) qs.set("branchId", String(branchId));
+    return fetchJson<Product[]>(
+      `${API_BASE_URL}/featured/tabs/${encodeURIComponent(slug)}/products?${qs}`,
+    );
   },
 
   async getPaymentQr(): Promise<{
@@ -151,23 +158,28 @@ export const catalogService = {
     return products.find((product) => product.id === id);
   },
 
-  async getRelatedProducts(product: Product): Promise<Product[]> {
+  async getRelatedProducts(
+    product: Product,
+    branchId?: number,
+  ): Promise<Product[]> {
     // Mismo backend que el modal del carrito: prioriza el tipo de producto.
-    const related = await this.getRelatedProductsById(product.id);
+    const related = await this.getRelatedProductsById(product.id, branchId);
     return related.filter((item) => item.id !== product.id);
   },
 
   /** Relacionados por id (misma categoría o marca, calculado en backend). */
-  async getRelatedProductsById(id: number): Promise<Product[]> {
+  async getRelatedProductsById(id: number, branchId?: number): Promise<Product[]> {
+    const qs = branchId ? `?branchId=${branchId}` : "";
     return fetchJson<Product[]>(
-      `${API_BASE_URL}/catalog/products/${id}/related`,
+      `${API_BASE_URL}/catalog/products/${id}/related${qs}`,
     );
   },
 
   /** Detalle del producto para el cliente (descripción, atributos, dimensiones). */
-  async getProductDetail(id: number): Promise<Product | null> {
+  async getProductDetail(id: number, branchId?: number): Promise<Product | null> {
+    const qs = branchId ? `?branchId=${branchId}` : "";
     return fetchJson<Product | null>(
-      `${API_BASE_URL}/catalog/products/${id}/detail`,
+      `${API_BASE_URL}/catalog/products/${id}/detail${qs}`,
     );
   },
 

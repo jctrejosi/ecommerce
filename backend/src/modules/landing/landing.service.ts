@@ -18,6 +18,10 @@ import {
   sanitizeTheme,
   type ThemeConfig,
 } from './theme.config';
+import {
+  branchComparePriceSql,
+  branchPriceSql,
+} from '../../common/pricing/branch-price';
 
 @Injectable()
 export class LandingService {
@@ -141,7 +145,7 @@ export class LandingService {
 
   // ── Daily Deals ──
 
-  private async resolveCarouselProducts(ids: number[]) {
+  private async resolveCarouselProducts(ids: number[], branchId?: number | null) {
     if (ids.length === 0) return [];
     const rows = await this.db
       .select({
@@ -149,8 +153,8 @@ export class LandingService {
         name: products.name,
         slug: products.slug,
         description: products.description,
-        price: productVariants.currentPrice,
-        originalPrice: productVariants.currentComparePrice,
+        price: branchPriceSql(branchId),
+        originalPrice: branchComparePriceSql(branchId),
         image: media.path,
         category: categories.name,
         plu: products.plu,
@@ -192,7 +196,7 @@ export class LandingService {
       .filter((x): x is Record<string, unknown> => !!x);
   }
 
-  async getDailyDeals() {
+  async getDailyDeals(branchId?: number | null) {
     const row = await this.db
       .select()
       .from(settings)
@@ -249,7 +253,7 @@ export class LandingService {
     const allIds = [
       ...new Set(carousels.flatMap((c) => c.products.map((p) => p.id))),
     ];
-    const resolved = await this.resolveCarouselProducts(allIds);
+    const resolved = await this.resolveCarouselProducts(allIds, branchId);
     const byId = new Map<number, Record<string, unknown>>(
       resolved.map((p: any) => [Number(p.id), p]),
     );
@@ -367,8 +371,10 @@ export class LandingService {
     return aS < bE && bS < aE;
   }
 
-  async getPublicDailyDeals() {
-    const { featuredItems, carousels, carousel } = await this.getDailyDeals();
+  async getPublicDailyDeals(branchId?: number | null) {
+    const { featuredItems, carousels, carousel } = await this.getDailyDeals(
+      branchId,
+    );
 
     const activeItems = featuredItems.filter((it: any) =>
       this.isScheduleActive(it.startAt, it.endAt),

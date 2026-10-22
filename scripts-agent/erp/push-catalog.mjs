@@ -7,10 +7,10 @@
  *   price        → TIDSAL.INVRVENTA1 / INVRVENTA0
  *   stock        → TIDSAL.INSALDO00 (por sucursal)
  *   brands       → TIDMARCAS (MCODIGO/MNOMBRE) + TIDSAL.INMARCAP
- *   categories   → TIDCATE   (CTABCOD/CTABDES; TIDSAL.INCATE apunta aquí)
+ *   categories   → TIDTAB    (CTABCOD/CTABDES/CTABCOD1; árbol de la web)
  *   product_types→ TIDTPRO   (CODIGO/NOMBRE/HABILITA)
  *   products     → TIDSAL: INNOMBRE, INNOMBRE3/4 (atributos), INEAN,
- *                  INMARCAP, INTIPO, INCATE (atributo categoria-erp),
+ *                  INMARCAP, INTIPO,
  *                  atributos enriquecidos y dimensiones
  *                  (por INARTIC = external_id)
  *   product_flags→ TIDSAL.INACTIVO (A/I; nunca pisa 'S' del ERP)
@@ -73,6 +73,7 @@ async function productData(id) {
       `SELECT p.id, p.external_id, p.name, p.is_active, p.description,
               b.name AS brand_name,
               pt.code AS type_code,
+              cat.code AS category_code,
               v.barcode, v.length_mm, v.width_mm, v.height_mm,
               v.is_active AS variant_active,
               COALESCE(at.attrs, '{}'::jsonb) AS attrs
@@ -93,6 +94,14 @@ async function productData(id) {
              LEFT JOIN attribute_options ao ON ao.id = pa.attribute_option_id
             WHERE pa.product_id = p.id
          ) at ON TRUE
+         LEFT JOIN LATERAL (
+           SELECT c.code
+             FROM product_categories pc
+             JOIN categories c ON c.id = pc.category_id
+            WHERE pc.product_id = p.id AND c.code IS NOT NULL
+            ORDER BY length(c.code) DESC
+            LIMIT 1
+         ) cat ON TRUE
          LEFT JOIN LATERAL (
            SELECT v.barcode, v.length_mm, v.width_mm, v.height_mm, v.is_active
              FROM product_variants v
@@ -149,6 +158,11 @@ const branchById = new Map(
     return [Number(r.id), { raw, n: Number(raw) }];
   }),
 );
+// Sucursal primaria: la de código más bajo (el ERP usa 1 para la principal).
+// Es el destino de los eventos de precio que no traen `branch_id`.
+const primaryBranch = [...branchById.values()]
+  .filter((b) => Number.isFinite(b.n))
+  .sort((a, b) => a.n - b.n)[0];
 const skuCache = new Map();
 async function skuOf(vid) {
   if (!skuCache.has(vid)) {
@@ -185,7 +199,19 @@ for (const ev of pending) {
         const price = Number(p.price);
         if (!sku || !Number.isFinite(price)) throw new Error(`price inválido: ${JSON.stringify(p)}`);
         const cmp = p.compare_price == null ? null : Number(p.compare_price);
-        plan.push(`UPDATE tidsal SET INVRVENTA1 = ${num(price)}${Number.isFinite(cmp) ? `, INVRVENTA0 = ${num(cmp)}` : ''} WHERE INARTIC = ${lit(sku)}`);
+        // El ERP guarda el precio por sucursal (INSUC). Si el evento no trae
+        // sucursal (edición del precio "general"), se escribe solo la primaria:
+        // nunca se pisan todas las sucursales.
+        const branch =
+          p.branch_id != null
+            ? branchById.get(Number(p.branch_id))
+            : primaryBranch;
+        if (!branch || !Number.isFinite(branch.n)) {
+          throw new Error(`price sin sucursal válida: ${JSON.stringify(p)}`);
+        }
+        plan.push(
+          `UPDATE tidsal SET INVRVENTA1 = ${num(price)}${Number.isFinite(cmp) ? `, INVRVENTA0 = ${num(cmp)}` : ''} WHERE INARTIC = ${lit(sku)} AND INSUC = ${num(branch.n)}`,
+        );
         break;
       }
       case 'stock': {
@@ -222,11 +248,23 @@ for (const ev of pending) {
       }
       case 'categories': {
         const code = safeCode(p.code);
-        const name = clip(s(p.name), 100);
+        const name = clip(s(p.name), 45);
         if (!name) throw new Error('category sin nombre');
-        if (code) plan.push({ sql: `UPDATE tidcate SET CTABDES = ${lit(name)} WHERE CTABCOD = ${lit(code)}` });
-        // TIDCATE.CTABCOD es char(6) y TIDSAL.INCATE referencia este árbol.
-        else plan.push({ table: 'tidcate', values: { CTABCOD: newErpCode(p.id, 6), CTABDES: name, HABILITA: true }, back: `UPDATE categories SET code = %CODE% WHERE id = ${Number(p.id)}` });
+        if (code) {
+          plan.push({ sql: `UPDATE tidtab SET CTABDES = ${lit(name)} WHERE CTABCOD = ${lit(code)}` });
+        } else {
+          // TIDTAB.CTABCOD es char(7); la jerarquía va en CTABCOD1.
+          let parentCode = '';
+          if (p.parent_id != null) {
+            const pr = await q('SELECT code FROM categories WHERE id=$1', [Number(p.parent_id)]);
+            parentCode = s(pr.rows[0]?.code) || '';
+          }
+          plan.push({
+            table: 'tidtab',
+            values: { CTABCOD: newErpCode(p.id, 7), CTABDES: name, CTABCOD1: parentCode, CTWEB: true },
+            back: `UPDATE categories SET code = %CODE% WHERE id = ${Number(p.id)}`,
+          });
+        }
         break;
       }
       case 'product_types': {
@@ -267,11 +305,9 @@ for (const ev of pending) {
         // (ver docs/ESCRITURA-FORTUNER-READINESS.md). El nombre sí es estable.
         if (pd.brand_name) sets.push(`INMARCAP = ${lit(clip(pd.brand_name, 20))}`);
         if (pd.type_code) sets.push(`INTIPO = ${lit(clip(pd.type_code, 3))}`);
-        // INCATE es una clasificación propia del ERP; se conserva en el
-        // atributo `categoria-erp` (no es la categoría web).
-        if (attrs['categoria-erp']) {
-          sets.push(`INCATE = ${lit(clip(attrs['categoria-erp'], 6))}`);
-        }
+        // INCATE no se escribe: en el ERP real es un código viejo/vacío (char 6)
+        // y la categoría web se deriva del prefijo del SKU. La categoría se
+        // mantiene en TIDTAB (nombre) y en `product_categories` de Postgres.
         // Atributos enriquecidos importados del ERP.
         if (attrs['unidad-medida']) sets.push(`INUNIDAD = ${lit(clip(attrs['unidad-medida'], 2))}`);
         if (attrs['presentacion']) sets.push(`INPRESEN = ${lit(clip(attrs['presentacion'], 3))}`);

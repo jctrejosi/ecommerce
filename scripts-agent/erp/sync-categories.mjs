@@ -2,7 +2,7 @@
  * Importa el árbol de categorías y las marcas del ERP sin tocar productos,
  * precios, stock, imágenes ni la activación local.
  *
- *   TIDCATE   → categories / product_categories   (TIDSAL.INCATE)
+ *   TIDTAB    → categories / product_categories   (categoría derivada del SKU)
  *   TIDMARCAS → brands / products.brand_id        (TIDSAL.INMARCAP)
  *
  * `TIDSAL.INMARCA` se conserva como atributo `marca-erp` (no se usa como FK:
@@ -52,12 +52,27 @@ async function insertBatches(table, cols, rows, conflict = '') {
 
 // ─────────────────────────── ERP → memoria ───────────────────────────
 
-log('⏳ Leyendo TIDCATE…');
-const cateRes = await erp.sql('SELECT CTABCOD, CTABDES FROM tidcate', { limit: 10000 });
+log('⏳ Leyendo TIDTAB…');
+const cateRes = await erp.sql('SELECT CTABCOD, CTABDES, CTABCOD1 FROM tidtab', { limit: 10000 });
 const catNameByCode = new Map();
+const catParentByCode = new Map();
 for (const r of cateRes.rows) {
   const code = s(r[0]);
-  if (code) catNameByCode.set(code, s(r[1]) || code);
+  if (!code) continue;
+  catNameByCode.set(code, s(r[1]) || code);
+  catParentByCode.set(code, s(r[2]) || null);
+}
+
+/** INCATE si existe en TIDTAB; si no, prefijo del SKU (el ERP real lo usa así). */
+function categoryOf(artic, incate) {
+  const direct = s(incate);
+  if (direct && catNameByCode.has(direct)) return direct;
+  const sku = s(artic) || '';
+  for (let len = Math.min(7, sku.length); len > 0; len--) {
+    const code = sku.slice(0, len);
+    if (catNameByCode.has(code)) return code;
+  }
+  return null;
 }
 
 log('⏳ Leyendo TIDMARCAS…');
@@ -82,6 +97,7 @@ for (;;) {
     if (!artic || erpArticles.has(artic)) continue;
     erpArticles.set(artic, {
       incate: s(r[1]),
+      categoria: categoryOf(artic, r[1]),
       marcap: s(r[2]),
       marca: s(r[3]),
     });
@@ -100,15 +116,19 @@ const categoryIdByCode = new Map(
   ]),
 );
 const cateCodes = new Set(catNameByCode.keys());
-for (const x of erpArticles.values()) if (x.incate) cateCodes.add(x.incate);
+for (const x of erpArticles.values()) if (x.categoria) cateCodes.add(x.categoria);
 
 const newCats = [];
 for (const code of [...cateCodes].sort((x, y) => x.length - y.length || x.localeCompare(y))) {
   const existed = categoryIdByCode.has(code);
   const name = (catNameByCode.get(code) || `Categoría ERP ${code}`).slice(0, 100);
-  const parentCode = code.length > 2 ? code.slice(0, -2) : null;
+  const parentCode = catParentByCode.get(code) || null;
   const parentId = parentCode ? categoryIdByCode.get(parentCode) ?? null : null;
-  const level = Math.max(0, Math.floor(code.length / 2) - 1);
+  let level = 0;
+  for (let cur = parentCode, guard = 0; cur && guard < 20; guard++) {
+    level++;
+    cur = catParentByCode.get(cur) || null;
+  }
   const slug = `${slugify(name) || 'cat'}-${code}`.slice(0, 100);
   if (!APPLY) {
     if (!existed) {
@@ -206,7 +226,7 @@ for (const p of products) {
     notInErp++;
     continue;
   }
-  const catId = erpArt.incate ? categoryIdByCode.get(erpArt.incate) : null;
+  const catId = erpArt.categoria ? categoryIdByCode.get(erpArt.categoria) : null;
   if (catId) catRows.push([p.id, catId]);
   else noCategory++;
 
@@ -217,7 +237,7 @@ for (const p of products) {
   else noBrand++;
 
   if (erpArt.marca) brandAttrRows.push([p.id, erpArt.marca]);
-  if (erpArt.incate) catAttrRows.push([p.id, erpArt.incate]);
+  if (erpArt.categoria) catAttrRows.push([p.id, erpArt.categoria]);
 }
 log(
   `   productos: ${products.length} · con categoría: ${catRows.length} · sin categoría: ${noCategory} · ` +

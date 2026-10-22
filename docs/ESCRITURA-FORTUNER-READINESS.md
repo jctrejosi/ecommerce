@@ -12,9 +12,12 @@
 - **Códigos cerrados**: numeración, estados, tipo de domicilio, pagos, impuestos,
   enlace de líneas, bodega y envío ya tienen un valor decidido con evidencia de
   producción. No quedan códigos “provisionales”.
-- **Pendiente de negocio**: confirmar si las categorías nuevas van a `TIDTAB` o
-  `TIDCATE`; si el ERP factura desde `DOM*` o `PED*`; y el alta de artículos
-  nuevos (hoy sólo hay UPDATE de `TIDSAL`).
+- **Categorías resueltas (2026-10-22)**: el árbol del ERP real es **`TIDTAB`**
+  (`CTABCOD`/`CTABDES`/`CTABCOD1`); `TIDCATE` es del modelo viejo. `TIDSAL.INCATE`
+  está vacío o trae códigos que no existen en `TIDTAB`, así que la categoría web
+  se deriva del prefijo del SKU y **no se escribe `INCATE`**.
+- **Pendiente de negocio**: el alta de artículos nuevos (hoy sólo hay UPDATE de
+  `TIDSAL`) y confirmar si el ERP factura desde `DOM*` o `PED*`.
 - **Para piloto controlado sí**: se puede escribir en una copia de trabajo de
   FORTUNER (nunca en producción) y validar la facturación.
 
@@ -179,17 +182,18 @@ Hoy escribimos 11 de 89 campos. Podríamos añadir:
 5. **`INMARCA`**: ¿qué tabla referencia? En la copia, FRUCO tiene
    `INMARCA=2000145`, pero `TIDMARCAS` asigna `2000145` a AESSY OFF y `49` a
    FRUCO. Hasta confirmarlo, el agente sólo escribe `INMARCAP` (nombre).
-6. **`INCATE`**: los valores de `TIDSAL` son de 6 dígitos (ej. `050703`) y no
-   salen del árbol de categorías web; confirmar si vienen de `TIDCATE` o de
-   otra tabla. Hoy se conserva el atributo `categoria-erp`.
+6. **`INCATE`**: resuelto. En el ERP real está vacío en 34.659 filas y los
+   códigos restantes no existen en `TIDTAB`; no se usa como fuente ni se escribe.
+   La categoría vive en `product_categories` y se deriva del prefijo del SKU.
 
 ## 7. Siguiente paso
 
-1. Aplicar `db/sql/24_erp_code_map_fortuner.sql` y `25_erp_product_outbox.sql` con
-   `node scripts-agent/erp/init-db.mjs`, y ejecutar `sync-codes.mjs`.
-2. Desplegar según `docs/DESPLIEGUE-ERP-FORTUNER.md`.
-3. Piloto contra una **copia de trabajo** de FORTUNER:
-   `push-orders.mjs --dry-run`, luego `--limit=3 --apply`.
-4. Validar en el ERP que el pedido aparece pendiente y que la factura se genera
-   con las líneas correctas.
-4. Recién entonces promover a producción con outbox y conciliación.
+1. `init-db.mjs` ya aplicó `19` a `25` en el servidor y los triggers están
+   instalados; `sync-codes.mjs` ya pobló `erp_code_map`.
+2. El despliegue está corriendo: tarea **Mercaldas ERP Sync** (`erp-daemon.mjs`),
+   pull cada 5 min y push cada 30 s. Ver `docs/RUNBOOK-ERP.md`.
+3. Validado en el ERP real: edición de producto/precio/marca/categoría llega a
+   `TIDSAL`/`TIDMARCAS`/`TIDTAB`; un cambio en `TIDSAL` baja a Postgres.
+4. Pedido real (`MER-*`) insertado en `DOMDIA`/`DOMITE`; los `DEMO-*` quedan
+   excluidos del envío automático.
+5. Falta validar la facturación real del ERP y el alta de artículos nuevos.
