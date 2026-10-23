@@ -11,12 +11,13 @@ del ecommerce. Objetivo y alcance: `docs/PLAN-SINCRONIZACION-ERP.md`.
 
 | Script | Dirección | Qué |
 |---|---|---|
-| `erp-daemon.mjs` | ambas | **Demonio**: pull del catálogo cada 5 min + push cada 30 s (tarea de Windows). |
+| `erp-daemon.mjs` | ambas | **Demonio**: pull del catálogo y maestros cada 5 min + push cada 30 s (tarea de Windows). |
 | `erp-sync.cmd` | — | Lanzador del demonio con reintento (lo usa la tarea "Mercaldas ERP Sync"). |
 | `sync-all.mjs` | ambas | **Runner completo**: entrada pesada + salida. Seguro por defecto; `--apply` escribe en el ERP. |
 | `sync-out.mjs` | ambas | **Runner de salida ligero** (clientes/precio-stock/pedidos/reconcile), para bucle/cron. |
 | `sync-codes.mjs` | ERP → PG | Diccionario `erp_code_map` desde `db/ads/fortuner-dicts` (marcas, tipos, impuestos, medios de pago, bodegas, estados). No necesita OpenADS. |
 | `sync-catalog.mjs` | ERP → PG | `products`/`product_variants`/`prices`/`inventory`/`branch_products` + tipos, categorías (**`TIDTAB`**) y marcas (`TIDMARCAS`/`INMARCAP`), atributos. `--reset-snapshot` re-basa todo. |
+| `sync-masters.mjs` | ERP → PG | **Maestros en vivo** (no `.ADT`): marcas `TIDMARCAS`, tipos `TIDTPRO`, categorías `TIDTAB` y bodegas `TIDBODE`, upsert **por código** con renombre. `--prune` desactiva bajas; `--types-active=erp` copia `HABILITA`. |
 | `sync-categories.mjs` | ERP → PG | **Migración única**: árbol de **`TIDTAB`** → `categories`, `TIDMARCAS` + `INMARCAP` → `brands`, y reasigna `product_categories`/`products.brand_id`. Oculta las categorías viejas sin uso. |
 | `remap-shelves.mjs` | PG | **Migración única**: traduce `shelf_categories` de categorías viejas a las hojas equivalentes (dry-run por defecto). |
 | `sync-customers.mjs` | ERP → PG | Clientes `POSCLI` → `customers`. |
@@ -93,7 +94,9 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
   `22_erp_outbox_masters.sql` (triggers marcas/categorías/tipos/producto/estado),
   `23_erp_order_status_map.sql` (PK de `erp_code_map`),
   `24_erp_code_map_fortuner.sql` (códigos reales de FORTUNER) y
-  `25_erp_product_outbox.sql` (tipo/categoría, barcode/dimensiones, activación).
+  `25_erp_product_outbox.sql` (tipo/categoría, barcode/dimensiones, activación),
+  `26_erp_branch_price_outbox.sql` (precio por sucursal) y
+  `27_erp_master_keys.sql` (índices únicos parciales `brands.code`/`categories.code`).
 - `analyze-brands.mjs` — diagnóstico de marcas.
 
 ## Notas de implementación
@@ -101,6 +104,13 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 - `asqlcmd` devuelve CSV con comillas internas **sin escapar**; `parseAsqlcmd()`
   cierra un campo citado sólo cuando la comilla va seguida de coma, salto o EOF.
   No vuelvas a un parser CSV estándar: fusiona filas (se perdían ~23k).
+- **`asqlcmd64.exe` es ANSI (Windows-1252), no UTF-8.** `asqlcmd.mjs` decodifica con
+  `TextDecoder('windows-1252')` (ver `ANSI`). Antes se leía como UTF-8 y los
+  acentuados (`Ñ`, `É`, `Á`, `Í`, `Ó`, `Ú`, `´` = bytes `0x80-0xFF`) se corrompían a
+  `U+FFFD '�'`. Tras el fix se re-sincronizó y se limpiaron las 62 marcas corruptas
+  residuales de `brands` (soft-delete de duplicados corruptos + re-apunte del único
+  producto afectado). `products`/`categories`/`product_variants.sku` quedaron en 0
+  `�` desde el re-sync.
 - Los numéricos llegan como `1.000000000000000`; usa `BRANCH_CODE()` y `Number()`.
   `FAFCHFAC`/`IFFECHA` son enteros `YYYYMMDD`.
 - `TOP/START AT` pagina correctamente una vez que el parser no pierde filas.

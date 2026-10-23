@@ -316,7 +316,7 @@ for (const code of [...sucursales].sort()) {
       `INSERT INTO branches
          (code, name, address, city, phone, store_id, email, manager_name, manager_phone, branch_type, location, is_active)
        VALUES ($1,$2,'PENDIENTE (ERP)','Manizales','0000000',$3,$4,'PENDIENTE','0000000','STORE','0,0',true)
-       ON CONFLICT (code) DO UPDATE SET name = EXCLUDED.name
+       ON CONFLICT (code) DO UPDATE SET code = EXCLUDED.code
        RETURNING id`,
       [code, `TID Sucursal ${code}`, storeId, `sucursal${code}@pendiente.local`],
     )

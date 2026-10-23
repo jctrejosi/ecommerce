@@ -14,8 +14,14 @@
  *   ADS_PASS=
  */
 import { spawnSync } from 'node:child_process';
+import { TextDecoder } from 'node:util';
 
 const DEFAULT_CMD = 'C:\\Program Files\\Advantage 12.0\\Server\\asqlcmd64.exe';
+
+// asqlcmd64.exe es un binario ANSI (codepage Windows-1252). Node lo decodificaba
+// como UTF-8 y los caracteres acentuados (p. ej. 'ñ' = 0xD1) se corrompían a
+// U+FFFD '�'. Decodificamos en Windows-1252 para preservar tildes y eñes.
+const ANSI = new TextDecoder('windows-1252');
 
 function literal(value) {
   if (value === null || value === undefined) return 'NULL';
@@ -137,13 +143,13 @@ export function createAsqlcmdClient(cfg = {}) {
       '-Q', query,
     ];
     const r = spawnSync(cmd, args, {
-      encoding: 'utf8',
+      encoding: 'buffer',
       windowsHide: true,
       timeout: cfg.timeout ?? 180000,
       maxBuffer: 512 * 1024 * 1024,
     });
     if (r.error) throw new Error(`ADS ${cmd}: ${r.error.message}`);
-    const out = `${r.stdout || ''}${r.stderr || ''}`;
+    const out = ANSI.decode(Buffer.concat([r.stdout || Buffer.alloc(0), r.stderr || Buffer.alloc(0)]));
     if (r.status !== 0 || /^\s*Error:/m.test(out) || /Error \d+:/m.test(out)) {
       throw new Error(`ADS SQL falló (exit ${r.status}): ${out.trim().slice(0, 1500)}`);
     }

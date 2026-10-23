@@ -3,6 +3,11 @@
 Estado a 2026-10-23. Complementa `docs/PLAN-SINCRONIZACION-ERP.md` (visión general) y
 `db/add_fortuner_study/` (diccionario de las 111 tablas del ERP).
 
+> **F1 implementada** (`scripts-agent/erp/sync-masters.mjs`): pull en vivo de marcas,
+> tipos, categorías y bodegas con upsert por código + renombre; se corre en el ciclo
+> del demonio. Faltan las decisiones de §5 para las bajas (`--prune`) y el nombre de
+> bodega (`TIDBODE` vs `TIDSUCUR`).
+
 **Decisión de partida:** las tablas de Advantage son la **fuente principal** de los
 maestros (producto, marca, tipo, categoría, impuesto, bodega). Postgres es dueño del
 **contenido web** (imágenes, descripciones largas, banners, popups, colecciones, SEO) y
@@ -140,6 +145,30 @@ Leyenda de estado: ✅ sincronizado · ⚠️ sincroniza a medias · ❌ no sinc
 8. **Sin arbitraje de conflicto.** Postgres empuja cambios (outbox) y el pull puede
    pisarlos, pero solo en los campos que el pull escribe: no hay una regla explícita
    campo por campo.
+
+### 3.1 Encoding ANSI y limpieza de marcas corruptas
+
+`asqlcmd64.exe` es **ANSI (Windows-1252)**, no UTF-8. Antes del fix en
+`asqlcmd.mjs` los nombres del ERP se decodificaban como UTF-8 y los acentuados
+(`Ñ`, `É`, `Á`, `Í`, `Ó`, `Ú`, `´` = bytes `0x80-0xFF`) se corrompían a
+`U+FFFD '�'`. Con el fix se re-sincronizó el catálogo y quedaron `0 �` en
+`products`/`categories`/`product_variants.sku`; en `brands` quedaban 62 marcas
+corruptas residuales que se limpiaron así (soft-delete, nunca borrar):
+
+- **2 con código** (`SAVOR�S`=2001712, `PEQUE�IN`=2001545): duplicados del ERP
+  con **mismo nombre y distinto código** (el ERP tiene `SAVOR´S` en 2001711 y
+  2001712, `PEQUEÑIN` en 325 y 2001545). Como `brands.name` es `UNIQUE`, no se
+  pueden renombrar sin chocar; se re-apuntó el único producto de `SAVOR�S` a la
+  limpia `SAVOR´S` (id 32322) y se soft-deletearon ambas corruptas.
+- **60 sin código**: duplicados corruptos (0 productos) cuyos nombres ya tenían
+  contraparte limpia (p. ej. `LA NI�A`→`LA NIÑA`, `DO�A PEPA`→`DOÑA PEPA`); se
+  soft-deletearon.
+
+Caveat pendiente: ante un `sync-masters --reset-snapshot`, los códigos duplicados
+por nombre (2001711/2001712, 325/2001545…) se reprocesarían y el segundo en llegar
+podría reescribir el `code` de la marca limpia. No afecta al ciclo normal del
+demonio (la huella `erp_snapshot` ya guarda el nombre limpio), pero conviene
+resolver el arbitraje de códigos duplicados antes de F3/F4.
 
 ---
 

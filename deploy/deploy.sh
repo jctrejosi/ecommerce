@@ -3,12 +3,12 @@
 # Despliegue de producción del ecommerce en el VPS (WSL + Docker).
 #
 # Uso:
-#   bash deploy/deploy.sh                 # despliega origin/master
+#   bash deploy/deploy.sh                 # despliega origin/dev
 #   bash deploy/deploy.sh <sha|ref>       # despliega un commit/ref concreto
 #   DEPLOY_PATH=/ruta bash deploy/deploy.sh
 #
 # Lo usan tanto GitHub Actions (runner self-hosted) como el operador a mano.
-# Es idempotente: deja el checkout en `master`, reconstruye la imagen `app`,
+# Es idempotente: deja el checkout en `dev`, reconstruye la imagen `app`,
 # la recrea y espera a que el healthcheck quede `healthy`.
 #
 # NO toca docker/.env ni los volúmenes: los secretos y los datos persisten.
@@ -16,7 +16,7 @@
 set -Eeuo pipefail
 
 ROOT="${DEPLOY_PATH:-/mnt/c/Users/Desarrolo4/Documents/ecommerce}"
-TARGET="${1:-origin/master}"
+TARGET="${1:-origin/dev}"
 COMPOSE_FILE="$ROOT/docker/docker-compose.yml"
 ENV_FILE="$ROOT/docker/.env"
 PUBLIC_HEALTH_URL="${PUBLIC_HEALTH_URL:-https://mercaldas.jcti.xyz/api-status}"
@@ -53,18 +53,37 @@ git_here() {
 log "Repositorio: $ROOT"
 log "Objetivo   : $TARGET"
 
-# Trae siempre master; el runner puede desplegar un SHA que llegó en el push.
-git_here fetch --prune origin '+refs/heads/master:refs/remotes/origin/master'
+# SHA en el que estaba el checkout antes de moverlo (para detectar si cambió la
+# configuración del edge compartido).
+PREV_SHA="$(git_here rev-parse HEAD 2>/dev/null || true)"
+
+# Trae siempre dev; el runner puede desplegar un SHA que llegó en el push.
+git_here fetch --prune origin '+refs/heads/dev:refs/remotes/origin/dev'
 git_here rev-parse --verify --quiet "$TARGET^{commit}" >/dev/null \
   || die "El commit/ref '$TARGET' no existe tras el fetch"
 
 # Checkout determinista. -f descarta cambios locales en archivos versionados
 # (en producción no se editan a mano); los archivos ignorados (.env, volúmenes)
 # no se tocan.
-git_here checkout -f -B master "$TARGET"
+git_here checkout -f -B dev "$TARGET"
 COMMIT="$(git_here rev-parse --short=12 HEAD)"
 SUBJECT="$(git_here log -1 --pretty=%s)"
-log "Checkout en master: $COMMIT — $SUBJECT"
+log "Checkout en dev: $COMMIT — $SUBJECT"
+
+# El Caddyfile del edge es un bind mount de ARCHIVO: si git lo reemplaza cambia
+# el inodo y el contenedor deja de verlo. Se reinicia el edge cuando cambió.
+if docker inspect edge_caddy >/dev/null 2>&1 && [[ -n "$PREV_SHA" ]]; then
+  if ! git_here diff --quiet "$PREV_SHA" "$COMMIT" -- docker/edge/Caddyfile; then
+    log "Cambió docker/edge/Caddyfile: reiniciando edge_caddy…"
+    docker restart edge_caddy >/dev/null
+    sleep 3
+    docker exec edge_caddy caddy validate --config /etc/caddy/Caddyfile \
+      || die "El Caddyfile del edge no valida"
+    docker exec edge_caddy caddy reload --config /etc/caddy/Caddyfile \
+      || die "No se pudo recargar el edge"
+    log "Edge recargado."
+  fi
+fi
 
 # Valida que el compose y el .env sean coherentes antes de construir.
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" config --quiet \
