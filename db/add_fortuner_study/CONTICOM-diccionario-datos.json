@@ -1,0 +1,92 @@
+{
+  "tabla": "CONTICOM",
+  "nombre_completo": "Tipos de comprobante contable",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\CONTICOM.adt",
+  "descripcion": "Catalogo de tipos de comprobante (codigo, nombre y descripcion).",
+  "registros": null,
+  "clave_primaria": null,
+  "total_columnas": 6,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "CIA",
+      "tipo": "tipo_2",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 1,
+      "columna": "CODIGO",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo del registro",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "NOMBRE",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre o descripcion",
+      "confianza": "alta"
+    },
+    {
+      "idx": 3,
+      "columna": "HIST",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 4,
+      "columna": "CTABDES",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre o descripcion",
+      "confianza": "alta"
+    },
+    {
+      "idx": 5,
+      "columna": "ID",
+      "tipo": "date/time",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    }
+  ]
+}

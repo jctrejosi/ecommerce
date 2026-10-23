@@ -81,6 +81,9 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 ## Utilidades
 
 - `asqlcmd.mjs` — cliente del servicio ADS vía `asqlcmd64.exe` (SQL, filas, esquema).
+- `dict-fortuner-ads.mjs` — genera `db/add_fortuner_study/` leyendo `system.tables`/`system.columns` del ERP real (se corre en el servidor).
+- `fortuner-tablas.mjs` — **nombre completo y descripción funcional de las 111 tablas** del ERP, más `renderReadme()`. Es la fuente de verdad de la prosa del diccionario; al aparecer una tabla nueva hay que agregarla aquí.
+- `patch-table-metadata.mjs` — reaplica nombres y descripciones a `db/add_fortuner_study/` sin volver a leer la base (idempotente).
 - `openads.mjs` — selector de transporte (`ERP_ADS_MODE=asqlcmd` o HTTP OpenADS) + conexión Postgres.
 - `adt.mjs` — lector de tablas `.ADT` (diccionarios de FORTUNER).
 - `lib.mjs` — codecs del formato Advantage, `BRANCH_CODE`, `orderNumber`, `newErpCode` y carga del `.env`.

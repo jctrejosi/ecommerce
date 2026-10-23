@@ -157,6 +157,9 @@ export default function Products() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
 
+  const selectedBranchName =
+    branches.find((b) => b.id === priceBranch)?.name ?? null;
+
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   // Load categories, brands, product-types, and total count on mount
@@ -187,11 +190,15 @@ export default function Products() {
         });
       })
       .catch(() => {});
+  }, []);
+
+  // El total debe reflejar la sucursal seleccionada.
+  useEffect(() => {
     catalogService
-      .getProductsCount()
+      .getProductsCount(priceBranch ?? undefined)
       .then((r) => setTotalCount(r.total))
       .catch(() => {});
-  }, []);
+  }, [priceBranch]);
 
   // Debounce search
   useEffect(() => {
@@ -237,6 +244,7 @@ export default function Products() {
           limit: PAGE_SIZE,
           offset,
           priceBranchId: priceBranch ?? undefined,
+          branchId: priceBranch ?? undefined,
         });
 
         // Ignore stale responses
@@ -350,7 +358,7 @@ export default function Products() {
               setGlobalError(null);
               loadProducts(true);
               catalogService
-                .getProductsCount()
+                .getProductsCount(priceBranch ?? undefined)
                 .then((r) => setTotalCount(r.total))
                 .catch(() => {});
               catalogService
@@ -391,7 +399,7 @@ export default function Products() {
               <p className="text-sm text-gray-500 mt-0.5">
                 {loading
                   ? "Cargando..."
-                  : `${totalCount} productos en el catálogo`}
+                  : `${totalCount} productos ${selectedBranchName ? `en ${selectedBranchName}` : "en el catálogo"}`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -437,7 +445,7 @@ export default function Products() {
                       );
                       loadProducts(true);
                       catalogService
-                        .getProductsCount()
+                        .getProductsCount(priceBranch ?? undefined)
                         .then((r) => setTotalCount(r.total))
                         .catch(() => {});
                     } else {
@@ -473,7 +481,7 @@ export default function Products() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">
-                Precio en
+                Sucursal
               </span>
               <select
                 value={priceBranch ?? ""}

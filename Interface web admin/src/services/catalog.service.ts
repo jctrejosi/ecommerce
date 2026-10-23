@@ -70,6 +70,8 @@ export type ProductsQuery = {
   offset?: number;
   /** Sucursal con la que se resuelve el precio (no filtra disponibilidad). */
   priceBranchId?: number;
+  /** Sucursal: solo productos que la sucursal tiene disponibles. */
+  branchId?: number;
   uncategorized?: boolean;
 };
 
@@ -83,9 +85,10 @@ export const catalogService = {
     });
   },
 
-  async getProductsCount(): Promise<{ total: number }> {
+  async getProductsCount(branchId?: number): Promise<{ total: number }> {
+    const query = branchId ? `?branchId=${branchId}` : "";
     return fetchJson<{ total: number }>(
-      `${API_BASE_URL}/catalog/products/count`,
+      `${API_BASE_URL}/catalog/products/count${query}`,
     );
   },
 

@@ -1,0 +1,179 @@
+{
+  "tabla": "TIDCATE",
+  "nombre_completo": "Categorias de articulos",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDCATE.adt",
+  "descripcion": "Arbol de categorias de 3 niveles (CATE1..CATE3) con caracteristicas libres e imagen.",
+  "registros": 174,
+  "clave_primaria": null,
+  "total_columnas": 13,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {
+    "jerarquia": "CATE1, CATE2 y CATE3 son los niveles del arbol (de mayor a menor).",
+    "caracteristicas": "CARAC1..CARAC6 son atributos libres configurables por categoria."
+  },
+  "relaciones": [
+    {
+      "campo": "CTABCOD",
+      "referencia": "TIDSAL.INCATE / TIDTAB.CTABCOD",
+      "nota": "Codigo de categoria usado por el articulo.",
+      "confianza": "media"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "CTABCOD",
+      "tipo": "char",
+      "bytes": 7,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo de la categoria",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "CTABDES",
+      "tipo": "char",
+      "bytes": 150,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Descripcion/nombre de la categoria",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "CATE1",
+      "tipo": "char",
+      "bytes": 50,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nivel 1 del arbol de categorias",
+      "confianza": "alta"
+    },
+    {
+      "idx": 3,
+      "columna": "CATE2",
+      "tipo": "char",
+      "bytes": 50,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nivel 2 del arbol de categorias",
+      "confianza": "alta"
+    },
+    {
+      "idx": 4,
+      "columna": "CATE3",
+      "tipo": "char",
+      "bytes": 50,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nivel 3 del arbol de categorias",
+      "confianza": "alta"
+    },
+    {
+      "idx": 5,
+      "columna": "CARAC1",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Caracteristica libre 1 de la categoria",
+      "confianza": "media"
+    },
+    {
+      "idx": 6,
+      "columna": "CARAC2",
+      "tipo": "varchar",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Caracteristica libre 2 de la categoria",
+      "confianza": "media"
+    },
+    {
+      "idx": 7,
+      "columna": "CARAC3",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Caracteristica libre 3 de la categoria",
+      "confianza": "media"
+    },
+    {
+      "idx": 8,
+      "columna": "CARAC4",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Caracteristica libre 4 de la categoria",
+      "confianza": "media"
+    },
+    {
+      "idx": 9,
+      "columna": "CARAC5",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Caracteristica libre 5 de la categoria",
+      "confianza": "media"
+    },
+    {
+      "idx": 10,
+      "columna": "CARAC6",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Caracteristica libre 6 de la categoria",
+      "confianza": "media"
+    },
+    {
+      "idx": 11,
+      "columna": "IMAGEN",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Ruta/nombre de la imagen de la categoria",
+      "confianza": "media"
+    },
+    {
+      "idx": 12,
+      "columna": "HABILITA",
+      "tipo": "logical",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Categoria habilitada",
+      "confianza": "alta"
+    }
+  ]
+}

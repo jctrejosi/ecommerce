@@ -1,0 +1,57 @@
+{
+  "tabla": "TIDMARCAS",
+  "nombre_completo": "Marcas de articulos",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDMARCAS.adt",
+  "descripcion": "Maestro de marcas (codigo y nombre) que referencia TIDSAL.INMARCA. 2.175 filas.",
+  "registros": 2175,
+  "clave_primaria": null,
+  "total_columnas": 2,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {
+    "MCODIGO": "Codigo de marca de 8 posiciones; en TIDSAL se referencia por INMARCA."
+  },
+  "relaciones": [
+    {
+      "campo": "MCODIGO",
+      "referencia": "TIDSAL.INMARCA",
+      "nota": "OJO: en la copia estudiada INMARCA trae codigos que no coinciden con este maestro; el nombre real del articulo viene en INMARCAP.",
+      "confianza": "baja"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "MCODIGO",
+      "tipo": "char",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo de la marca",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "MNOMBRE",
+      "tipo": "char",
+      "bytes": 80,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre de la marca",
+      "confianza": "alta"
+    }
+  ]
+}

@@ -116,10 +116,12 @@ export class CatalogController {
   getProductsCount(
     @Query('unbranded') unbranded?: string,
     @Query('unsupplied') unsupplied?: string,
+    @Query('branchId') branchId?: string,
   ) {
     return this.catalogService.getProductsCount(
       unbranded === 'true',
       unsupplied === 'true',
+      branchId ? Number(branchId) : undefined,
     );
   }
 

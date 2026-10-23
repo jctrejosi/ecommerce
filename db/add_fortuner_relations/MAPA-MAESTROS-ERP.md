@@ -1,0 +1,194 @@
+# Mapa de maestros ERP (Advantage) → Postgres
+
+Estado a 2026-10-23. Complementa `docs/PLAN-SINCRONIZACION-ERP.md` (visión general) y
+`db/add_fortuner_study/` (diccionario de las 111 tablas del ERP).
+
+**Decisión de partida:** las tablas de Advantage son la **fuente principal** de los
+maestros (producto, marca, tipo, categoría, impuesto, bodega). Postgres es dueño del
+**contenido web** (imágenes, descripciones largas, banners, popups, colecciones, SEO) y
+de los ajustes de publicación.
+
+---
+
+## 1. Cómo funciona hoy el producto (pipeline real)
+
+`erp-daemon.mjs` cada **5 min** (pull) y **30 s** (push):
+
+```
+TIDSAL (Advantage)
+   │  SELECT de 36 columnas, paginado por offset (PAGE=5000)
+   ▼
+agrupa por INARTIC  →  21.613 artículos (51.938 filas = artículo × bodega)
+   │
+   ├─ huella sha1 por fila:  key = INSUC|INBODEGA|INARTIC
+   ├─ compara con erp_snapshot  →  solo artículos con alguna fila cambiada
+   ▼
+UPSERT en Postgres (SET app.erp_sync='on' para que los triggers NO reencolen)
+   ├─ products               (external_id = INARTIC, merge COALESCE: lo que el ERP trae NULL no pisa lo local)
+   ├─ product_variants       (sku = INARTIC; precio/compare/costo/dimensiones)
+   ├─ prices                 (por variante + sucursal: INVRVENTA1 / INVRVENTA0)
+   ├─ inventory              (INSALDO00, INMINIMO, INMAXIMO, INPTOPOS)
+   ├─ branch_products        (INWEB → is_public, INACTIVO='A' → is_available)
+   └─ relaciones (se borran y se recrean para los productos tocados):
+        product_categories, product_type_assignments, product_tax_classes, product_attributes
+   ▼
+erp_snapshot (hash por fila)
+```
+
+Mapeo de campos (real, verificado):
+
+| ERP | Destino |
+|---|---|
+| `INARTIC` | `products.external_id`, `product_variants.sku` |
+| `INNOMBRE` / `INNOMBRE3` / `INNOMBRE4` | `products.name` + atributos `nombre-corto`, `nombre-largo` |
+| `INEAN` | `product_variants.barcode` (duplicados → `NULL`) |
+| `INVRVENTA1` / `INVRVENTA0` | `prices.price` / `prices.compare_price` (y el "actual" de la variante) |
+| `INSALDO00` | `inventory.stock` |
+| `INPTOPOS` / `INMINIMO` / `INMAXIMO` | `inventory.reorder_point` / `minimum_stock` / `maximum_stock` |
+| `INVRULTC` (o `INCOSTO00`) | `product_variants.cost_price`, `prices.cost` |
+| `INMARCAP` | `brands.name` (nombre real de la marca) |
+| `INMARCA` | solo atributo `marca-erp` (no se usa como FK) |
+| `INTIPO` | `product_type_assignments` |
+| `INCATE` → si no sirve, **prefijo del SKU** | `product_categories` |
+| `INTIMP` (`J`/`C`/`E`) | `product_tax_classes` |
+| `INLARGO` / `INANCHO` / `INALTO` | `product_variants.*_mm` (×10) |
+| `INUNIDAD`, `INPRESEN`, `INEMBALAJE`, `INPARTE`, `ININVIMA`, `INCUM`, `INUBIC`, `INEAN14` | `product_attributes` |
+
+Sentido inverso (`erp_outbox` → `push-catalog.mjs`): precios, stock, marcas,
+categorías, tipos, datos de producto, flags de publicación y estado de pedido.
+
+**Clave del diseño:** la huella + `erp_snapshot` evita reescribir 21.613 productos cada
+5 minutos. Ese mecanismo **solo existe para `TIDSAL`**.
+
+---
+
+## 2. Mapa completo de maestros
+
+Leyenda de estado: ✅ sincronizado · ⚠️ sincroniza a medias · ❌ no sincroniza.
+
+| Entidad Postgres | Tabla(s) PG | Fuente ERP | Sentido | Estado |
+|---|---|---|---|---|
+| Producto / variante | `products`, `product_variants` | `TIDSAL` | ⇄ | ✅ pull con huella + push |
+| Precio por sucursal | `prices` | `TIDSAL.INVRVENTA1/0` | ⇄ | ✅ |
+| Inventario | `inventory` | `TIDSAL.INSALDO00/MINIMO/MAXIMO/PTOPOS` | ⇄ | ✅ |
+| Disponibilidad por sucursal | `branch_products` | `TIDSAL.INWEB` / `INACTIVO` | ⇄ | ✅ |
+| Atributos de producto | `attributes`, `product_attributes` | columnas de `TIDSAL` | ← | ✅ |
+| **Marca** | `brands` | `TIDMARCAS` + `TIDSAL.INMARCAP` | ← ⚠️ → | ⚠️ el pull sale de `.ADT` locales, no de la base viva |
+| **Tipo de producto** | `product_types` | `TIDTPRO` | ← ⚠️ → | ⚠️ ídem; `HABILITA` no se trae |
+| **Categoría** | `categories`, `product_categories` | `TIDTAB` (231 nodos) | ← ⚠️ → | ⚠️ solo crea: no aplica renombre ni baja |
+| **Impuesto** | `tax_rates`, `product_tax_classes` | `TIDTIPOS` (`CLASE='IM'`) | ← | ⚠️ mapeo hardcodeado `J/C/E` |
+| **Bodega / sucursal** | `branches` | `TIDBODE` (3: 1, 2, 11) | ← | ❌ nombres placeholder `TID Sucursal N` |
+| Cliente | `customers` | `POSCLI` (146.371) | ⇄ | ✅ |
+| Pedido | `orders`, `order_items` | `DOMDIA` / `DOMITE` | → | ✅ push + `reconcile` |
+| Factura / pago | `invoices`, `payments` | `FADDIA` / `FAPAGO` | ← | ✅ conciliación |
+| Medio de pago | `erp_code_map` (`payment_method`) | `POSPAGO` | ← | ⚠️ estático (52 códigos de `.ADT`) |
+| Estado de pedido | `erp_code_map` (`order_status`) | `DOMDIA.FAESTADO` | ↔ | ✅ |
+| Proveedor | — | `TIDSAL.INPROVEE`, `TIDLISTA.INPROVEE` (1.587) | — | ❌ no existe la entidad |
+| Vendedor | — | `VEDVEN` | — | ❌ no existe |
+| Rutas de reparto | — | `RUTAENC` (5) / `RUTAITEM` (35) | — | ❌ (delivery tiene lo suyo) |
+| Promociones / descuentos | — | `POSDCTOS` (5.566), `POSDCTO2`, `POSDCTO5` | — | ❌ no se traen |
+| Listas de precio 2..10 | — | `TIDSAL.INVRVENTA2..9` | — | ⚠️ decisión: hoy solo se usa la 1 |
+| Góndola / ubicación | atributo `ubicacion-bodega` | `TIDSAL.INUBIC`, `TIDGON` (15) | ← | ⚠️ parcial |
+| Unidad de medida | atributo `unidad-medida` | `TIDSAL.INUNIDAD` (texto) | ← | ⚠️ texto libre |
+| Ciudad | `branches.city` fijo "Manizales" | `POSDANE` **no** sirve (guarda EAN basura) | — | ❌ sin fuente; `FADCLI.CCIUDAD` es texto libre |
+
+---
+
+## 3. Defectos encontrados (con evidencia)
+
+1. **Marcas y tipos se leen de copias `.ADT`, no de la base.**
+   `sync-catalog.mjs` toma marcas/tipos de `erp_code_map`, que llena `sync-codes.mjs`
+   desde `db/ads/fortuner-dicts/*.ADT`. Ese directorio quedó desfasado y el demonio
+   **no** ejecuta `sync-codes`:
+
+   | dominio | `erp_code_map` | ERP real |
+   |---|---:|---:|
+   | `brand` | 2.176 | 2.175 |
+   | `warehouse` | **29** | **3** |
+   | `product_type` | 363 | 363 |
+
+2. **El pull de maestros solo crea, nunca actualiza.**
+   ```js
+   if (categoryIdByCode.has(code)) continue;   // renombre del ERP: se ignora
+   if (typeIdByCode.has(code)) continue;       // ídem
+   ```
+   Las marcas se buscan **por nombre**, así que un renombre en `TIDMARCAS` crea una
+   marca nueva y deja la vieja huérfana (hoy hay 3.473 marcas para 2.175 + 2.621
+   nombres distintos de `INMARCAP`).
+
+3. **No existe propagación de bajas.** Ni categorías, ni marcas, ni tipos, ni
+   productos desactivados en el ERP se reflejan. `TIDTPRO.HABILITA` y
+   `TIDCATE.HABILITA` no se leen; en PG hay 367 tipos y solo 6 activos (ajuste manual).
+
+4. **`branches` se inventan.** `sync-catalog` inserta `TID Sucursal {code}` con
+   dirección `PENDIENTE (ERP)` y ciudad fija `Manizales`, aunque `TIDBODE` trae
+   `NOMBRE` y 103 columnas. Por eso conviven las 3 reales (1, 2, 11) con 7 `SUC-00x`
+   viejas inactivas.
+
+5. **`TIDSAL.INCATE` no sirve como FK de categoría** (por eso el código deriva la
+   categoría del prefijo del SKU, que sí coincide con `TIDTAB`):
+   - 34.659 de 51.938 filas tienen `INCATE` vacío;
+   - 287 valores distintos; solo **25** existen en `TIDTAB` y **2** en `TIDCATE`;
+   - `TIDCATE` (174 filas) es un árbol aparte (Electrodomésticos), no el de alimentos.
+
+6. **Impuestos hardcodeados** (`{ J: 'IVA19', C: 'IVA5', E: 'EXENTO' }`) en lugar de
+   leer `TIDTIPOS` con `CLASE='IM'` (20 combinaciones en `erp_code_map`).
+
+7. **Sin huella para maestros.** Cada corrida recorre y reescribe todas las marcas y
+   categorías; no hay `erp_snapshot` para `TIDMARCAS`, `TIDTAB`, `TIDTPRO` ni `TIDBODE`.
+
+8. **Sin arbitraje de conflicto.** Postgres empuja cambios (outbox) y el pull puede
+   pisarlos, pero solo en los campos que el pull escribe: no hay una regla explícita
+   campo por campo.
+
+---
+
+## 4. Modelo propuesto
+
+### Propiedad de cada dato
+
+| Dato | Dueño | Regla |
+|---|---|---|
+| Nombre, EAN, precio, stock, costo, dimensiones | ERP | El pull manda; el push solo refleja ediciones locales puntuales |
+| Marca, tipo, categoría, impuesto, bodega | ERP | Llave = **código** ERP, nunca el nombre |
+| Imágenes, descripciones web, banners, popups, colecciones, SEO | Postgres | El ERP nunca los toca |
+| `is_active` de producto/tipo/categoría | ERP **y** ajuste web | `is_active = ERP(HABILITA/INACTIVO) AND web_no_oculto` |
+| Clientes, pedidos, facturas | mixto | Ya resuelto en `sync-*` |
+
+### Reglas del pull de maestros
+
+1. **Llave natural = código ERP** (`MCODIGO`, `TIDTAB.CTABCOD`, `TIDTPRO.CODIGO`,
+   `TIDBODE.CODIGO`), guardado en `brands.code`, `categories.code`, etc.
+2. **Upsert por código** con `ON CONFLICT (code)`:
+   - renombre → `UPDATE name` (no crear fila nueva);
+   - baja (`HABILITA='F'` / registro ausente) → `is_active=false` (no borrar, para no
+     romper pedidos históricos);
+   - alta → `INSERT`.
+3. **Huella por tabla** (`erp_snapshot.erp_table = 'TIDMARCAS'`, etc.) para no
+   reescribir todo en cada ciclo.
+4. **Aislamiento de triggers** con `SET app.erp_sync='on'` (ya se hace en los pulls).
+5. **Un solo script** `sync-masters.mjs` para marcas, tipos, categorías, bodegas e
+   impuestos, llamado por el demonio en el mismo ciclo que `sync-catalog`.
+
+### Fases
+
+| Fase | Alcance | Riesgo |
+|---|---|---|
+| **F1** | `sync-masters.mjs`: marcas, tipos, categorías y bodegas en vivo desde la base (no `.ADT`), upsert por código + renombre + baja lógica + huella | Bajo: solo maestros |
+| **F2** | Impuestos desde `TIDTIPOS` (`CLASE='IM'`) y asignación por `INTIMP` sin tabla hardcodeada | Medio: afecta precios con IVA |
+| **F3** | Proveedores (`INPROVEE` + `TIDLISTA`), vendedores (`VEDVEN`) y rutas (`RUTA*`) como entidades nuevas | Medio: tablas nuevas |
+| **F4** | Bajas/reconciliación completa: detectar artículos desaparecidos de `TIDSAL`, categorías y marcas huérfanas; reporte de divergencias | Alto: toca catálogo |
+
+---
+
+## 5. Decisiones pendientes (para cerrar antes de F1)
+
+1. **Categoría borrada en el ERP**: ¿se desactiva en PG (propuesto) o se borra?
+2. **Marca renombrada**: ¿se renombra en PG por código (propuesto) o se crea una nueva?
+3. **Tipos activos**: `TIDTPRO.HABILITA` manda (363 → los que estén en `T`), o se
+   mantienen los 6 elegidos para la web con una lista blanca local.
+4. **`TIDCATE` vs `TIDTAB`**: se confirma que el árbol del catálogo es `TIDTAB`
+   (coincide con el prefijo del SKU). `TIDCATE` queda fuera salvo para
+   electrodomésticos.
+5. **Bodegas**: ¿las 3 de `TIDBODE` (1, 2, 11) son las únicas, o se quieren también
+   los 151 puntos de `TIDSUCUR` como sucursales de venta?

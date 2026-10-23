@@ -1,0 +1,174 @@
+{
+  "tabla": "TIDTPRO",
+  "nombre_completo": "Tipos de producto",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDTPRO.adt",
+  "descripcion": "Clasificacion comercial del articulo; el codigo es el que usa TIDSAL.INTIPO.",
+  "registros": 363,
+  "clave_primaria": null,
+  "total_columnas": 12,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {
+    "CODIGO": "Codigo de 3 posiciones (p. ej. 026 = CONDIMENTOS).",
+    "TABLA": "Apunta a la tabla/categoria parametrica (TIDTAB) asociada al tipo."
+  },
+  "relaciones": [
+    {
+      "campo": "CODIGO",
+      "referencia": "TIDSAL.INTIPO",
+      "nota": "Tipo de producto del articulo.",
+      "confianza": "alta"
+    },
+    {
+      "campo": "TABLA",
+      "referencia": "TIDTAB.CTABCOD",
+      "nota": "Categoria/linea asociada al tipo.",
+      "confianza": "media"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "CODIGO",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo del tipo de producto",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "NOMBRE",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre del tipo de producto",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "MARCA",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Requiere marca",
+      "confianza": "media"
+    },
+    {
+      "idx": 3,
+      "columna": "TABLA",
+      "tipo": "char",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo de tabla/categoria asociada",
+      "confianza": "media"
+    },
+    {
+      "idx": 4,
+      "columna": "HABILITA",
+      "tipo": "logical",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Tipo habilitado",
+      "confianza": "alta"
+    },
+    {
+      "idx": 5,
+      "columna": "VALORMAX",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor maximo permitido",
+      "confianza": "baja"
+    },
+    {
+      "idx": 6,
+      "columna": "PRODSI",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Maneja producto SI/inventario",
+      "confianza": "baja"
+    },
+    {
+      "idx": 7,
+      "columna": "LAT",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Latitud (uso auxiliar/etiquetas)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 8,
+      "columna": "LON",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Longitud (uso auxiliar/etiquetas)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 9,
+      "columna": "OCULTA",
+      "tipo": "logical",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Tipo oculto en la operacion",
+      "confianza": "media"
+    },
+    {
+      "idx": 10,
+      "columna": "ACUCANT",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Acumulado de cantidad",
+      "confianza": "baja"
+    },
+    {
+      "idx": 11,
+      "columna": "ACUVLR",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Acumulado de valor",
+      "confianza": "baja"
+    }
+  ]
+}

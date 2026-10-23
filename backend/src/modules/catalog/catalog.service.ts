@@ -1408,6 +1408,7 @@ export class CatalogService {
   async getProductsCount(
     unbranded?: boolean,
     unsupplied?: boolean,
+    branchId?: number,
   ): Promise<{ total: number }> {
     const conditions: any[] = [
       eq(products.isActive, true),
@@ -1423,6 +1424,12 @@ export class CatalogService {
     if (unsupplied) {
       conditions.push(
         sql`NOT EXISTS (SELECT 1 FROM supplier_products sp INNER JOIN product_variants pv ON pv.id = sp.product_variant_id WHERE pv.product_id = ${products.id})`,
+      );
+    }
+
+    if (branchId) {
+      conditions.push(
+        sql`EXISTS (SELECT 1 FROM branch_products bp WHERE bp.product_id = ${products.id} AND bp.branch_id = ${branchId} AND bp.is_available = true)`,
       );
     }
 
