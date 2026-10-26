@@ -16,11 +16,12 @@ del ecommerce. Objetivo y alcance: `docs/PLAN-SINCRONIZACION-ERP.md`.
 | `sync-all.mjs` | ambas | **Runner completo**: entrada pesada + salida. Seguro por defecto; `--apply` escribe en el ERP. |
 | `sync-out.mjs` | ambas | **Runner de salida ligero** (clientes/precio-stock/pedidos/reconcile), para bucle/cron. |
 | `sync-codes.mjs` | ERP → PG | Diccionario `erp_code_map` desde `db/ads/fortuner-dicts` (marcas, tipos, impuestos, medios de pago, bodegas, estados). No necesita OpenADS. |
-| `sync-catalog.mjs` | ERP → PG | `products`/`product_variants`/`prices`/`inventory`/`branch_products` + tipos, categorías (**`TIDTAB`**) y marcas (`TIDMARCAS`/`INMARCAP`), atributos. `--reset-snapshot` re-basa todo. |
+| `sync-catalog.mjs` | ERP → PG | `products`/`product_variants`/`prices`/`inventory`/`branch_products` + tipos, categorías (**`TIDTAB`**), marcas (`TIDMARCAS`/`INMARCAP`), atributos e impuestos (`TIDTIPOS` → `tax_rates`). `--reset-snapshot` re-basa todo. |
 | `sync-masters.mjs` | ERP → PG | **Maestros en vivo** (no `.ADT`): marcas `TIDMARCAS`, tipos `TIDTPRO`, categorías `TIDTAB` y bodegas `TIDBODE`, upsert **por código** con renombre. `--prune` desactiva bajas; `--types-active=erp` copia `HABILITA`. |
 | `sync-categories.mjs` | ERP → PG | **Migración única**: árbol de **`TIDTAB`** → `categories`, `TIDMARCAS` + `INMARCAP` → `brands`, y reasigna `product_categories`/`products.brand_id`. Oculta las categorías viejas sin uso. |
 | `remap-shelves.mjs` | PG | **Migración única**: traduce `shelf_categories` de categorías viejas a las hojas equivalentes (dry-run por defecto). |
 | `sync-customers.mjs` | ERP → PG | Clientes `POSCLI` → `customers`. |
+| `sync-suppliers.mjs` | ERP → PG | Proveedores `TIDLISTA.INPROVEE` + `CONTERCE` → `suppliers`, y `TIDLISTA` → `supplier_products` (manual/bajo demanda; no va en el ciclo). |
 | `push-orders.mjs` | PG → ERP | `orders`/`order_items` → `DOMDIA`/`DOMITE`. Por defecto omite `DEMO-*` (`--include-demo` para probar). |
 | `push-customers.mjs` | PG → ERP | Clientes locales → `POSCLI` (crea o actualiza; `CODCLI` generado de 13 chars). |
 | `push-catalog.mjs` | PG → ERP | Drena `erp_outbox`: precio/stock → `TIDSAL`; marcas → `TIDMARCAS` (+ `TIDSAL.INMARCAP`); categorías → **`TIDTAB`**; tipos → `TIDTPRO`; producto (nombre, barcode, dimensiones y atributos ERP) → `TIDSAL`; activación → `TIDSAL.INACTIVO`; estado de pedido → `DOMDIA.FAESTADO` y, al cancelar, `DOMITE.IFESTADO`. |
@@ -55,7 +56,6 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 ## Lo que **NO** se sincroniza (a propósito)
 
 - `FADCLI` (clientes de facturación) — es del POS/facturación.
-- `TIDTIPOS` como `tax_rates` — el carrito usa las 3 tarifas existentes.
 - Listas de precio `INVRVENTA2..10` — sólo se usa la lista 1 (+ `INVRVENTA0` "antes").
 - POS (`POSMENU`, `POSARCA`, `POSCAJA`, `POSDCTO*`, `PUBLIDATA`, `NOMCALEN`, …).
 - `FADITE` (detalle de línea, 5,7 GB) — sólo verificación puntual.
@@ -107,10 +107,15 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 - **`asqlcmd64.exe` es ANSI (Windows-1252), no UTF-8.** `asqlcmd.mjs` decodifica con
   `TextDecoder('windows-1252')` (ver `ANSI`). Antes se leía como UTF-8 y los
   acentuados (`Ñ`, `É`, `Á`, `Í`, `Ó`, `Ú`, `´` = bytes `0x80-0xFF`) se corrompían a
-  `U+FFFD '�'`. Tras el fix se re-sincronizó y se limpiaron las 62 marcas corruptas
-  residuales de `brands` (soft-delete de duplicados corruptos + re-apunte del único
-  producto afectado). `products`/`categories`/`product_variants.sku` quedaron en 0
-  `�` desde el re-sync.
+  `U+FFFD '�'`. Además, al **escribir** `�` en el ERP, se perdía como `?` (0x3F).
+  Limpieza aplicada: se soft-deletearon las marcas `�` y `?` en Postgres y se
+  corrigieron (UPDATE, sin borrar) los 62 nombres `?` de `TIDMARCAS`.
+  `products`/`categories`/`product_variants.sku` quedaron en 0 `�`.
+- **Blindaje anti-corrupción de marcas**: `sync-masters` ignora nombres con `?`/`�`
+  y, al chocar nombre duplicado, **no pisa el `code` existente**
+  (`code = COALESCE(code, $1)`) — así los duplicados del ERP (mismo nombre, dos
+  códigos) no voltean el código canónico. `push-catalog` tampoco empuja marcas con
+  nombre `?`/`�`.
 - Los numéricos llegan como `1.000000000000000`; usa `BRANCH_CODE()` y `Number()`.
   `FAFCHFAC`/`IFFECHA` son enteros `YYYYMMDD`.
 - `TOP/START AT` pagina correctamente una vez que el parser no pierde filas.

@@ -5,8 +5,10 @@ Estado a 2026-10-23. Complementa `docs/PLAN-SINCRONIZACION-ERP.md` (visión gene
 
 > **F1 implementada** (`scripts-agent/erp/sync-masters.mjs`): pull en vivo de marcas,
 > tipos, categorías y bodegas con upsert por código + renombre; se corre en el ciclo
-> del demonio. Faltan las decisiones de §5 para las bajas (`--prune`) y el nombre de
-> bodega (`TIDBODE` vs `TIDSUCUR`).
+> del demonio. **F2 implementada** (`sync-catalog.mjs`): impuestos `TIDTIPOS` →
+> `tax_rates` en vivo + `INTIMP → tax_rate_id` dinámico. Faltan las decisiones de §5
+> para las bajas (`--prune`), el nombre de bodega (`TIDBODE` vs `TIDSUCUR`) y los
+> tipos activos (`--types-active=erp`).
 
 **Decisión de partida:** las tablas de Advantage son la **fuente principal** de los
 maestros (producto, marca, tipo, categoría, impuesto, bodega). Postgres es dueño del
@@ -55,7 +57,7 @@ Mapeo de campos (real, verificado):
 | `INMARCA` | solo atributo `marca-erp` (no se usa como FK) |
 | `INTIPO` | `product_type_assignments` |
 | `INCATE` → si no sirve, **prefijo del SKU** | `product_categories` |
-| `INTIMP` (`J`/`C`/`E`) | `product_tax_classes` |
+| `INTIMP` (leído en vivo de `TIDTIPOS`) | `product_tax_classes` |
 | `INLARGO` / `INANCHO` / `INALTO` | `product_variants.*_mm` (×10) |
 | `INUNIDAD`, `INPRESEN`, `INEMBALAJE`, `INPARTE`, `ININVIMA`, `INCUM`, `INUBIC`, `INEAN14` | `product_attributes` |
 
@@ -78,17 +80,17 @@ Leyenda de estado: ✅ sincronizado · ⚠️ sincroniza a medias · ❌ no sinc
 | Inventario | `inventory` | `TIDSAL.INSALDO00/MINIMO/MAXIMO/PTOPOS` | ⇄ | ✅ |
 | Disponibilidad por sucursal | `branch_products` | `TIDSAL.INWEB` / `INACTIVO` | ⇄ | ✅ |
 | Atributos de producto | `attributes`, `product_attributes` | columnas de `TIDSAL` | ← | ✅ |
-| **Marca** | `brands` | `TIDMARCAS` + `TIDSAL.INMARCAP` | ← ⚠️ → | ⚠️ el pull sale de `.ADT` locales, no de la base viva |
-| **Tipo de producto** | `product_types` | `TIDTPRO` | ← ⚠️ → | ⚠️ ídem; `HABILITA` no se trae |
-| **Categoría** | `categories`, `product_categories` | `TIDTAB` (231 nodos) | ← ⚠️ → | ⚠️ solo crea: no aplica renombre ni baja |
-| **Impuesto** | `tax_rates`, `product_tax_classes` | `TIDTIPOS` (`CLASE='IM'`) | ← | ⚠️ mapeo hardcodeado `J/C/E` |
-| **Bodega / sucursal** | `branches` | `TIDBODE` (3: 1, 2, 11) | ← | ❌ nombres placeholder `TID Sucursal N` |
+| **Marca** | `brands` | `TIDMARCAS` + `TIDSAL.INMARCAP` | ← ⚠️ → | ✅ `sync-masters` en vivo (upsert por código + renombre) |
+| **Tipo de producto** | `product_types` | `TIDTPRO` | ← ⚠️ → | ✅ `sync-masters` + `--types-active=erp` (el ERP manda `HABILITA`) |
+| **Categoría** | `categories`, `product_categories` | `TIDTAB` (231 nodos) | ← ⚠️ → | ✅ upsert por código + renombre + re-parent (solo crea en `sync-catalog`) |
+| **Impuesto** | `tax_rates`, `product_tax_classes` | `TIDTIPOS` (`CLASE='IM'`) | ← | ✅ F2: upsert en vivo de `tax_rates` + `INTIMP → tax_rate_id` |
+| **Bodega / sucursal** | `branches` | `TIDBODE` (3: 1, 2, 11) | ← | ✅ `sync-masters` por `TIDBODE.CODIGO`/`NOMBRE` (CENTRO, SULTANA, PALERMO) |
 | Cliente | `customers` | `POSCLI` (146.371) | ⇄ | ✅ |
 | Pedido | `orders`, `order_items` | `DOMDIA` / `DOMITE` | → | ✅ push + `reconcile` |
 | Factura / pago | `invoices`, `payments` | `FADDIA` / `FAPAGO` | ← | ✅ conciliación |
 | Medio de pago | `erp_code_map` (`payment_method`) | `POSPAGO` | ← | ⚠️ estático (52 códigos de `.ADT`) |
 | Estado de pedido | `erp_code_map` (`order_status`) | `DOMDIA.FAESTADO` | ↔ | ✅ |
-| Proveedor | — | `TIDSAL.INPROVEE`, `TIDLISTA.INPROVEE` (1.587) | — | ❌ no existe la entidad |
+| Proveedor | `suppliers`, `supplier_products` | `TIDLISTA.INPROVEE` + `CONTERCE` | ← | ✅ `sync-suppliers.mjs` (manual/bajo demanda; 1.587 proveedores + ~18k relaciones) |
 | Vendedor | — | `VEDVEN` | — | ❌ no existe |
 | Rutas de reparto | — | `RUTAENC` (5) / `RUTAITEM` (35) | — | ❌ (delivery tiene lo suyo) |
 | Promociones / descuentos | — | `POSDCTOS` (5.566), `POSDCTO2`, `POSDCTO5` | — | ❌ no se traen |
@@ -136,8 +138,9 @@ Leyenda de estado: ✅ sincronizado · ⚠️ sincroniza a medias · ❌ no sinc
    - 287 valores distintos; solo **25** existen en `TIDTAB` y **2** en `TIDCATE`;
    - `TIDCATE` (174 filas) es un árbol aparte (Electrodomésticos), no el de alimentos.
 
-6. **Impuestos hardcodeados** (`{ J: 'IVA19', C: 'IVA5', E: 'EXENTO' }`) en lugar de
-   leer `TIDTIPOS` con `CLASE='IM'` (20 combinaciones en `erp_code_map`).
+6. **Impuestos (cerrado en F2).** Se leen en vivo de `TIDTIPOS` (`CLASE='IM'`)
+   y se hace upsert a `tax_rates`; la asignación `INTIMP → tax_rate_id` ya no es
+   hardcodeada. Ver `sync-catalog.mjs` (`TIPO_TO_TAX_CODE` + upsert).
 
 7. **Sin huella para maestros.** Cada corrida recorre y reescribe todas las marcas y
    categorías; no hay `erp_snapshot` para `TIDMARCAS`, `TIDTAB`, `TIDTPRO` ni `TIDBODE`.
@@ -151,24 +154,34 @@ Leyenda de estado: ✅ sincronizado · ⚠️ sincroniza a medias · ❌ no sinc
 `asqlcmd64.exe` es **ANSI (Windows-1252)**, no UTF-8. Antes del fix en
 `asqlcmd.mjs` los nombres del ERP se decodificaban como UTF-8 y los acentuados
 (`Ñ`, `É`, `Á`, `Í`, `Ó`, `Ú`, `´` = bytes `0x80-0xFF`) se corrompían a
-`U+FFFD '�'`. Con el fix se re-sincronizó el catálogo y quedaron `0 �` en
-`products`/`categories`/`product_variants.sku`; en `brands` quedaban 62 marcas
-corruptas residuales que se limpiaron así (soft-delete, nunca borrar):
+`U+FFFD '�'`. Ese `�` se propagó en dos saltos:
 
-- **2 con código** (`SAVOR�S`=2001712, `PEQUE�IN`=2001545): duplicados del ERP
-  con **mismo nombre y distinto código** (el ERP tiene `SAVOR´S` en 2001711 y
-  2001712, `PEQUEÑIN` en 325 y 2001545). Como `brands.name` es `UNIQUE`, no se
-  pueden renombrar sin chocar; se re-apuntó el único producto de `SAVOR�S` a la
-  limpia `SAVOR´S` (id 32322) y se soft-deletearon ambas corruptas.
-- **60 sin código**: duplicados corruptos (0 productos) cuyos nombres ya tenían
-  contraparte limpia (p. ej. `LA NI�A`→`LA NIÑA`, `DO�A PEPA`→`DOÑA PEPA`); se
-  soft-deletearon.
+1. **Pull corrupto**: `sync-masters`/`sync-catalog` crearon 62 marcas `�` en
+   Postgres (soft-deleteadas en la primera limpieza).
+2. **Push corrupto**: `push-catalog` volvió a escribir esas marcas `�` en
+   `TIDMARCAS`; como `U+FFFD` no existe en Windows-1252, el carácter se perdió
+   como **`?` (0x3F)**. Resultado: 60 marcas nuevas (`90021386`–`90021446`, con
+   código `9`+id) y 2 sobrescritas (`SAVOR?S`=2001712, `PEQUE?IN`=2001545).
+3. **Re-import**: el siguiente pull trajo esas `?` del ERP a Postgres (62 marcas
+   activas con `?`).
 
-Caveat pendiente: ante un `sync-masters --reset-snapshot`, los códigos duplicados
-por nombre (2001711/2001712, 325/2001545…) se reprocesarían y el segundo en llegar
-podría reescribir el `code` de la marca limpia. No afecta al ciclo normal del
-demonio (la huella `erp_snapshot` ya guarda el nombre limpio), pero conviene
-resolver el arbitraje de códigos duplicados antes de F3/F4.
+**Limpieza final (sin borrar nada en Advantage):**
+- Advantage: **UPDATE** de los 62 nombres `?` → nombre limpio (`SAVOR?S`→`SAVOR´S`,
+  `PEQUE?IN`→`PEQUEÑIN`, `LA CORU?A`→`LA CORUÑA`…). Las 60 marcas `90021386`+
+  quedan como duplicados con nombre bien escrito (el ERP ya tenía duplicados por
+  nombre con distinto código).
+- Postgres: **soft-delete** de las 62 marcas `?` (0 productos); las contrapartes
+  limpias ya existen y conservan su `code`.
+
+**Blindaje (para que no se repita):**
+- `sync-masters` ignora nombres con `?`/`�` (no re-importa).
+- `sync-masters`, al chocar nombre duplicado, **no pisa el `code` ya existente**
+  (`code = COALESCE(code, $1)`): los duplicados del ERP (mismo nombre, dos
+  códigos) no voltean el código canónico.
+- `push-catalog` no empuja marcas con nombre `?`/`�`.
+
+Con esto `SAVOR´S` conserva `2001711` (no salta a `2001712`) y `PEQUEÑIN`
+conserva `325` (no salta a `2001545`).
 
 ---
 
@@ -204,7 +217,7 @@ resolver el arbitraje de códigos duplicados antes de F3/F4.
 | Fase | Alcance | Riesgo |
 |---|---|---|
 | **F1** | `sync-masters.mjs`: marcas, tipos, categorías y bodegas en vivo desde la base (no `.ADT`), upsert por código + renombre + baja lógica + huella | Bajo: solo maestros |
-| **F2** | Impuestos desde `TIDTIPOS` (`CLASE='IM'`) y asignación por `INTIMP` sin tabla hardcodeada | Medio: afecta precios con IVA |
+| **F2** | ✅ Impuestos desde `TIDTIPOS` (`CLASE='IM'`) → upsert `tax_rates` + asignación `INTIMP` dinámica (sin tabla hardcodeada) | Cerrado |
 | **F3** | Proveedores (`INPROVEE` + `TIDLISTA`), vendedores (`VEDVEN`) y rutas (`RUTA*`) como entidades nuevas | Medio: tablas nuevas |
 | **F4** | Bajas/reconciliación completa: detectar artículos desaparecidos de `TIDSAL`, categorías y marcas huérfanas; reporte de divergencias | Alto: toca catálogo |
 
@@ -214,10 +227,10 @@ resolver el arbitraje de códigos duplicados antes de F3/F4.
 
 1. **Categoría borrada en el ERP**: ¿se desactiva en PG (propuesto) o se borra?
 2. **Marca renombrada**: ¿se renombra en PG por código (propuesto) o se crea una nueva?
-3. **Tipos activos**: `TIDTPRO.HABILITA` manda (363 → los que estén en `T`), o se
-   mantienen los 6 elegidos para la web con una lista blanca local.
+3. **Tipos activos**: ✅ resuelto — el ERP manda (`TIDTPRO.HABILITA`): `T`=activo,
+   `' '`/`F`=inactivo. Se aplica con `--types-active=erp` en el demonio (260 activos).
 4. **`TIDCATE` vs `TIDTAB`**: se confirma que el árbol del catálogo es `TIDTAB`
    (coincide con el prefijo del SKU). `TIDCATE` queda fuera salvo para
    electrodomésticos.
-5. **Bodegas**: ¿las 3 de `TIDBODE` (1, 2, 11) son las únicas, o se quieren también
-   los 151 puntos de `TIDSUCUR` como sucursales de venta?
+5. **Bodegas**: ✅ resuelto — la fuente canónica es `TIDBODE` (3 filas = `TIDSAL.INSUC`,
+   con `NOMBRE` real: CENTRO, SULTANA, PALERMO). `TIDSUCUR` (~151 puntos) queda fuera.

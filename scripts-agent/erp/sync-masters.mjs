@@ -30,7 +30,7 @@ import { s, sha1, args, log } from './lib.mjs';
 const a = args();
 const DRY = !!a['dry-run'];
 const PRUNE = !!a.prune;
-const TYPES_ACTIVE_ERP = !!a['types-active=erp'];
+const TYPES_ACTIVE_ERP = a['types-active'] === 'erp';
 const RESET = !!a['reset-snapshot'];
 
 const slugify = (v) =>
@@ -112,6 +112,9 @@ for (const r of brands) {
   const code = s(r[0]);
   const name = s(r[1]).trim();
   if (!code || !name) continue;
+  // Nombre corrupto: '?' (carácter perdido al escribir U+FFFD en ANSI) o el
+  // propio U+FFFD. No se importa para no volver a ensuciar Postgres.
+  if (name.includes('?') || name.includes('\uFFFD')) continue;
   brandByCode.set(code, name);
   brandHashes.set(code, sha1([code, name]));
 }
@@ -140,8 +143,11 @@ for (const code of brandChanged) {
         [nm],
       );
       if (byName.rows[0]) {
+        // No pisar un código ya existente: el ERP puede traer el mismo nombre
+        // con dos códigos distintos (duplicados). Se conserva el primer código
+        // y los duplicados por nombre no lo voltean.
         await q(
-          'UPDATE brands SET code = $1, name = $2, is_active = true, deleted_at = NULL, updated_at = $3 WHERE id = $4',
+          'UPDATE brands SET code = COALESCE(code, $1), name = $2, is_active = true, deleted_at = NULL, updated_at = $3 WHERE id = $4',
           [code, nm, NOW, byName.rows[0].id],
         );
       } else {
@@ -245,53 +251,35 @@ for (const code of catOrder) {
 }
 log(`🌳 Categorías: ${catName.size} en ERP · ${cUp} actualizadas`);
 
-// ─────────────────── bodegas (TIDBODE) + nombres (TIDSUCUR) ───────────────────
+// ─────────────────── bodegas (TIDBODE) ───────────────────
 
-const cleanName = (v) => v.replace(/^[A-Z]{1,3}\.\s*/, '').trim();
-
-log('⏳ Leyendo TIDBODE y TIDSUCUR…');
-const bodes = await loadAll('SELECT CODIGO FROM tidbode');
-const bodeCodes = [...new Set(bodes.map((r) => normCode(r[0])).filter(Boolean))];
-
-// Existencia: una branch por bodega (código 1, 2, 11). El nombre se resuelve abajo.
+log('⏳ Leyendo TIDBODE…');
+const bodes = await loadAll('SELECT CODIGO, NOMBRE FROM tidbode');
+const bodeByCode = new Map();
+const bodeHashes = new Map();
+for (const r of bodes) {
+  const code = normCode(r[0]);
+  const name = s(r[1]).trim();
+  if (!code || !name) continue;
+  bodeByCode.set(code, name);
+  bodeHashes.set(code, sha1([code, name]));
+}
+const bodeChanged = await changedKeys('TIDBODE', bodeHashes);
 let boUp = 0;
-for (const code of bodeCodes) {
+for (const code of bodeChanged) {
+  const name = bodeByCode.get(code);
+  if (!name) continue;
   if (!DRY) {
     await q(
       `INSERT INTO branches (code, name, address, city, phone, store_id, email, manager_name, manager_phone, branch_type, location, is_active, created_at, updated_at)
        VALUES ($1,$2,'PENDIENTE (ERP)','Manizales','0000000',$3,$4,'PENDIENTE','0000000','STORE','0,0',true,$5,$5)
-       ON CONFLICT (code) DO NOTHING`,
-      [code, `TID Sucursal ${code}`, storeId, `sucursal${code}@pendiente.local`, NOW],
+       ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, is_active=true, deleted_at=NULL, updated_at=EXCLUDED.updated_at`,
+      [code, name.slice(0, 100), storeId, `sucursal${code}@pendiente.local`, NOW],
     );
   }
   boUp++;
 }
-
-// Nombres amigables desde TIDSUCUR: SUCURSAL '011' → bodega '01' → 'MERCALDAS CENTRO'.
-// Preferimos el punto principal (tercer carácter '1' = S., supermercado).
-const sucurs = await loadAll('SELECT SUCURSAL, CTNOMBRE FROM tidsucur');
-const nameByBodega = new Map();
-for (const r of sucurs) {
-  const suc = s(r[0]).trim();
-  if (suc.length < 2) continue;
-  const bodega = normCode(suc.slice(0, 2));
-  if (!bodeCodes.includes(bodega)) continue; // solo las bodegas reales de TIDBODE
-  const name = cleanName(s(r[1]));
-  if (!name) continue;
-  const kind = suc.slice(2);
-  if (!nameByBodega.has(bodega) || kind === '1') nameByBodega.set(bodega, name);
-}
-const nameHashes = new Map([...nameByBodega.entries()].map(([c, n]) => [c, sha1([c, n])]));
-const nameChanged = await changedKeys('TIDSUCUR', nameHashes);
-for (const code of nameChanged) {
-  const name = nameByBodega.get(code);
-  if (!name) continue;
-  if (!DRY) {
-    await q('UPDATE branches SET name = $1, updated_at = $2 WHERE code = $3 AND deleted_at IS NULL', [name.slice(0, 100), NOW, code]);
-  }
-  boUp++;
-}
-log(`🏬 Bodegas: ${bodeCodes.length} aseguradas · ${nameByBodega.size} nombres desde TIDSUCUR (${boUp} tocadas)`);
+log(`🏬 Bodegas: ${bodeByCode.size} en ERP · ${boUp} actualizadas (nombre desde TIDBODE)`);
 
 // ─────────────────────────── bajas (opcional) ───────────────────────────
 

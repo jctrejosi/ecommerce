@@ -66,7 +66,7 @@ for (;;) {
   if (!lastPull || now - lastPull >= PULL * 1000) {
     log(`── ${new Date().toISOString()} pull catálogo ──`);
     run('sync-catalog', 'sync-catalog.mjs');
-    run('sync-masters', 'sync-masters.mjs', ['--prune']);
+    run('sync-masters', 'sync-masters.mjs', ['--prune', '--types-active=erp']);
     lastPull = Date.now();
   }
   log(`── ${new Date().toISOString()} push ──`);

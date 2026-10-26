@@ -23,7 +23,7 @@
  *   Categoría: INCATE si existe en TIDTAB; si no, prefijo del SKU (7→2 dígitos).
  *   Stock   : INSALDO00 (real) por defecto; `--stock-default=N` para fijar N.
  *   Precios : INVRVENTA1 (venta) / INVRVENTA0 (precio "antes").
- *   Impuesto: INTIMP (J→IVA19, C→IVA5, E→EXENTO).
+ *   Impuesto: INTIMP → tax_rate leído en vivo de TIDTIPOS (CLASE='IM').
  *
  * Uso:
  *   node scripts-agent/erp/sync-catalog.mjs --dry-run
@@ -42,8 +42,6 @@ const LIMIT = a.limit ? Number(a.limit) : Infinity;
 const PAGE = Number(a.page || 5000);
 const STOCK_DEFAULT = a['stock-default'] ? Number(a['stock-default']) : null;
 const ADMIN_USER_ID = Number(process.env.ADMIN_USER_ID || 1);
-
-const TAX_BY_TIPO_IMP = { J: 'IVA19', C: 'IVA5', E: 'EXENTO' };
 
 const COLS = [
   'INSUC', 'INBODEGA', 'INARTIC', 'NUMERO', 'INEAN', 'INNOMBRE', 'INNOMBRE3',
@@ -119,11 +117,65 @@ const one = async (text, params) => (await pg.query(text, params)).rows[0];
 
 // ─────────────────────────────── referencias ───────────────────────────────
 
-const taxRows = (await q('SELECT id, code FROM tax_rates')).rows;
-const taxIdByCode = new Map(taxRows.map((t) => [String(t.code).trim(), Number(t.id)]));
-for (const c of Object.values(TAX_BY_TIPO_IMP))
-  if (!taxIdByCode.has(c)) throw new Error(`Falta tax_rate ${c}`);
+// Mapa TIPO (TIDTIPOS) → código de tax_rates. Los porcentajes se leen en vivo de
+// TIDTIPOS.VALOR, así un cambio de tarifa en el ERP (p. ej. IVA 19→20%) se refleja.
+const TIPO_TO_TAX_CODE = {
+  J: 'IVA19',    // IVA 19%
+  C: 'IVA5',     // IVA 5%
+  V: 'IVA20',    // IVA 20%
+  S: 'IVA10',    // IVA 10%
+  I: 'IVA16',    // IVA 16%
+  T: 'IVA35',    // IVA 35%
+  P: 'IVA8',     // Impuesto consumo 8%
+  U: 'IVA20U',   // Productos ultraprocesados 20%
+  X: 'EXENTO',   // Exento 0%
+  E: 'EXENTO',   // Excluido 0% (TIDTIPOS llama 'EXCLUIDO' a 'E'; a efectos de IVA es 0%)
+  B: 'IMPBOLSA', // Impuesto consumo bolsa 0%
+};
+
+const taxTypes = await erp.sql('SELECT CLASE, TIPO, NOMBRE, VALOR FROM tidtipos', { limit: 1000 });
+const taxByTipo = new Map();
+for (const r of taxTypes.rows) {
+  if (s(r[0]) !== 'IM') continue;
+  const tipo = s(r[1]);
+  const nombre = s(r[2]);
+  const valor = n(r[3]);
+  if (!tipo || !nombre || valor == null) continue;
+  taxByTipo.set(tipo, { nombre, valor });
+}
+
+// Upsert tax_rates desde TIDTIPOS: actualiza nombre y %, crea las que falten.
+const taxIdByCode = new Map();
+for (const [tipo, { nombre, valor }] of taxByTipo) {
+  const code = TIPO_TO_TAX_CODE[tipo];
+  if (!code) continue;
+  const taxType = code === 'EXENTO' ? 'EXEMPT' : 'VAT';
+  if (DRY) {
+    // En dry-run no se escribe: solo registramos los códigos que se crearían.
+    taxIdByCode.set(code, 0);
+    continue;
+  }
+  const row = (
+    await q(
+      `INSERT INTO tax_rates (code, name, description, priority, compound, rate, is_active, tax_type, created_at, updated_at)
+       VALUES ($1,$2,'Importado ERP (TIDTIPOS)',1,false,$3,true,$4,now(),now())
+       ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, rate=EXCLUDED.rate, tax_type=EXCLUDED.tax_type, is_active=true, deleted_at=NULL, updated_at=now()
+       RETURNING id`,
+      [code, nombre.slice(0, 50), valor, taxType],
+    )
+  ).rows[0];
+  taxIdByCode.set(code, Number(row.id));
+}
 const fallbackTaxId = taxIdByCode.get('IVA19');
+
+// Mapa INTIMP → tax_rate_id (los artículos usan J/C/E/B; el resto queda disponible
+// por si el ERP empieza a usar V/S/I/T/P/U).
+const taxIdByTipoImp = new Map();
+for (const [tipo, code] of Object.entries(TIPO_TO_TAX_CODE)) {
+  const id = taxIdByCode.get(code);
+  if (id) taxIdByTipoImp.set(tipo, id);
+}
+log(`🧾 Impuestos TIDTIPOS: ${taxByTipo.size} tipos · ${taxIdByCode.size} tax_rates`);
 
 const storeId = (await one('SELECT id FROM store ORDER BY id LIMIT 1')).id;
 
@@ -627,7 +679,7 @@ for (const p of todo) {
   if (catId) catRows.push([pid, catId]);
   const typeId = p.tipo ? typeIdByCode.get(p.tipo) : null;
   if (typeId) typeRows.push([pid, typeId]);
-  const taxId = taxIdByCode.get(TAX_BY_TIPO_IMP[p.tipoImp] ?? '') ?? fallbackTaxId;
+  const taxId = taxIdByTipoImp.get(p.tipoImp) ?? fallbackTaxId;
   if (taxId) taxRowsAssign.push([pid, taxId, ADMIN_USER_ID]);
   for (const [, slug, get] of ATTR_DEFS) {
     const val = get(p);

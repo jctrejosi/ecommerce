@@ -229,6 +229,7 @@ for (const ev of pending) {
         const name = clip(s(p.name), 80);
         const brandId = Number(p.id);
         if (!name || !Number.isFinite(brandId)) throw new Error('brand inválida');
+        if (name.includes('?') || name.includes('\uFFFD')) { await markSkipped(ev, 'marca con nombre corrupto (?/�)'); continue; }
         const finalCode = code || newErpCode(brandId, 8);
         if (code) plan.push(`UPDATE tidmarcas SET MNOMBRE = ${lit(name)} WHERE MCODIGO = ${lit(code)}`);
         else plan.push({ table: 'tidmarcas', values: { MCODIGO: finalCode, MNOMBRE: name }, back: `UPDATE brands SET code = %CODE% WHERE id = ${brandId}` });
