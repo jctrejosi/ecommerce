@@ -16,6 +16,9 @@ interface CartDrawerProps {
   cartItems: CartItem[];
   cartCount: number;
   cartTotal: number;
+  /** Descuento por promociones vigentes (cotización del backend). */
+  discountTotal?: number;
+  promotions?: { id: number; name: string; amount: number }[];
   onClose: () => void;
   onAdd: (product: Product, quantity?: number) => void;
   onRemove: (id: number) => void;
@@ -138,6 +141,8 @@ export function CartDrawer({
   cartItems,
   cartCount,
   cartTotal,
+  discountTotal = 0,
+  promotions = [],
   onClose,
   onAdd,
   onRemove,
@@ -354,8 +359,38 @@ export function CartDrawer({
               <span className="text-sm text-muted-foreground">
                 Subtotal ({cartCount} productos)
               </span>
-              <span className="font-bold text-xl">{fmt(cartTotal)}</span>
+              <span
+                className={
+                  discountTotal > 0
+                    ? "font-semibold"
+                    : "font-bold text-xl"
+                }
+              >
+                {fmt(cartTotal)}
+              </span>
             </div>
+            {discountTotal > 0 && (
+              <>
+                <div className="flex items-center justify-between text-sm text-green-600">
+                  <span>
+                    Descuento
+                    {promotions.length > 0 && (
+                      <span className="text-[11px] text-muted-foreground">
+                        {" "}
+                        ({promotions.map((p) => p.name).join(", ")})
+                      </span>
+                    )}
+                  </span>
+                  <span className="font-semibold">-{fmt(discountTotal)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold">Total</span>
+                  <span className="font-bold text-xl">
+                    {fmt(Math.max(0, cartTotal - discountTotal))}
+                  </span>
+                </div>
+              </>
+            )}
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2">
               <Truck className="w-3.5 h-3.5 flex-shrink-0" />
               <span>Domicilio calculado al finalizar el pedido</span>

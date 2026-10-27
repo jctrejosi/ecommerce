@@ -172,6 +172,7 @@ export const paymentMethodEnum = pgEnum('payment_method_enum', [
   'NEQUI',
   'DAVIPLATA',
   'BREB',
+  'COUPON',
 ]);
 export const paymentStatusEnum = pgEnum('payment_status_enum', [
   'PENDING',
@@ -308,7 +309,16 @@ export const users = pgTable(
     isActive: boolean('is_active').default(true).notNull(),
     // Marca que el usuario puede iniciar sesión en la app móvil de picking.
     isPicker: boolean('is_picker').default(false).notNull(),
+    // Disponibilidad del picker para tomar pedidos de la cola (false = en
+    // descanso / pausado). La usa el despachador de colas.
+    isAvailable: boolean('is_available').default(true).notNull(),
     lastLoginAt: timestamp('last_login_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    // Última señal de vida de la app (heartbeat): distingue "conectado" de
+    // "app cerrada". La actualiza la app de picking periódicamente.
+    lastSeenAt: timestamp('last_seen_at', {
       withTimezone: true,
       mode: 'string',
     }),
@@ -2788,6 +2798,20 @@ export const promotions = pgTable(
     description: text(),
     isAutoApply: boolean('is_auto_apply').default(false).notNull(),
     requiresCode: boolean('requires_code').default(false).notNull(),
+    // Descuento base de la promoción (se aplica a todas las metas).
+    discountType: varchar('discount_type', { length: 20 })
+      .default('percentage')
+      .notNull(),
+    discountValue: numeric('discount_value', { precision: 12, scale: 2 })
+      .default('0')
+      .notNull(),
+    maximumDiscount: numeric('maximum_discount', {
+      precision: 12,
+      scale: 2,
+    }),
+    // Días de la semana en que aplica: 0=domingo … 6=sábado.
+    // null o arreglo vacío = todos los días.
+    weekdays: integer('weekdays').array(),
     priority: integer().default(0),
     stackable: boolean().default(false).notNull(),
     exclusive: boolean().default(false).notNull(),
@@ -2866,14 +2890,34 @@ export const coupons = pgTable(
   {
     id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
     // You can use { mode: "bigint" } if numbers are exceeding js number limitations
-    promotionId: bigint('promotion_id', { mode: 'number' }).notNull(),
+    promotionId: bigint('promotion_id', { mode: 'number' }),
     code: varchar({ length: 50 }).notNull(),
+    // 'discount' | 'balance' | 'mixed'
+    kind: varchar({ length: 20 }).default('discount').notNull(),
+    // Descuento propio del cupón (opcional; si falta, hereda el de la promoción)
+    discountType: varchar('discount_type', { length: 20 }),
+    discountValue: numeric('discount_value', { precision: 12, scale: 2 }),
+    maximumDiscount: numeric('maximum_discount', {
+      precision: 12,
+      scale: 2,
+    }),
+    // Saldo tipo bono digital
+    initialBalance: numeric('initial_balance', { precision: 12, scale: 2 }),
+    currentBalance: numeric('current_balance', { precision: 12, scale: 2 }),
+    currency: varchar({ length: 3 }).default('COP').notNull(),
+    // 'active' | 'exhausted' | 'expired' | 'blocked'
+    status: varchar({ length: 20 }).default('active').notNull(),
     maxUsesTotal: integer('max_uses_total').default(1),
     startsAt: timestamp('starts_at', { withTimezone: true, mode: 'string' }),
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'string' }),
     timesUsed: integer('times_used').default(0).notNull(),
     isActive: boolean('is_active').default(true).notNull(),
     maxUsesPerCustomer: integer('max_uses_per_customer').default(1),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    issuedCustomerId: bigint('issued_customer_id', { mode: 'number' }),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    createdBy: bigint('created_by', { mode: 'number' }),
+    notes: text(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
       .defaultNow()
       .notNull(),
@@ -2890,12 +2934,99 @@ export const coupons = pgTable(
       'btree',
       table.code.asc().nullsLast().op('text_ops'),
     ),
+    index('idx_coupon_status').using(
+      'btree',
+      table.status.asc().nullsLast().op('text_ops'),
+    ),
+    index('idx_coupon_issued_customer').using(
+      'btree',
+      table.issuedCustomerId.asc().nullsLast().op('int8_ops'),
+    ),
     foreignKey({
       columns: [table.promotionId],
       foreignColumns: [promotions.id],
       name: 'coupons_promotion_id_fkey',
     }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.issuedCustomerId],
+      foreignColumns: [customers.id],
+      name: 'coupons_issued_customer_id_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.createdBy],
+      foreignColumns: [users.id],
+      name: 'coupons_created_by_fkey',
+    }),
     unique('coupons_code_key').on(table.code),
+  ],
+);
+
+export const couponTransactionTypeEnum = pgEnum('coupon_transaction_type_enum', [
+  'ISSUE',
+  'REDEEM',
+  'REVERSAL',
+  'ADJUSTMENT',
+  'EXPIRATION',
+]);
+
+export const couponTransactions = pgTable(
+  'coupon_transactions',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    couponId: bigint('coupon_id', { mode: 'number' }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    orderId: bigint('order_id', { mode: 'number' }),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    customerId: bigint('customer_id', { mode: 'number' }),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    guestSessionId: bigint('guest_session_id', { mode: 'number' }),
+    type: couponTransactionTypeEnum().notNull(),
+    discountAmount: numeric('discount_amount', { precision: 12, scale: 2 })
+      .default('0')
+      .notNull(),
+    amount: numeric({ precision: 12, scale: 2 }).default('0').notNull(),
+    balanceBefore: numeric('balance_before', { precision: 12, scale: 2 }),
+    balanceAfter: numeric('balance_after', { precision: 12, scale: 2 }),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    createdBy: bigint('created_by', { mode: 'number' }),
+    note: text(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_coupon_transactions_coupon').using(
+      'btree',
+      table.couponId.asc().nullsLast().op('int8_ops'),
+    ),
+    index('idx_coupon_transactions_order').using(
+      'btree',
+      table.orderId.asc().nullsLast().op('int8_ops'),
+    ),
+    uniqueIndex('idx_coupon_transactions_order_unique')
+      .using(
+        'btree',
+        table.couponId.asc().nullsLast().op('int8_ops'),
+        table.orderId.asc().nullsLast().op('int8_ops'),
+        table.type.asc().nullsLast().op('enum_ops'),
+      )
+      .where(sql`(order_id IS NOT NULL)`),
+    foreignKey({
+      columns: [table.couponId],
+      foreignColumns: [coupons.id],
+      name: 'coupon_transactions_coupon_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.orderId],
+      foreignColumns: [orders.id],
+      name: 'coupon_transactions_order_id_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.customerId],
+      foreignColumns: [customers.id],
+      name: 'coupon_transactions_customer_id_fkey',
+    }).onDelete('set null'),
   ],
 );
 
@@ -3614,7 +3745,7 @@ export const promotionProducts = pgTable(
     discountValue: numeric('discount_value', {
       precision: 12,
       scale: 2,
-    }).notNull(),
+    }),
     isPercentage: boolean('is_percentage').default(true).notNull(),
     maximumDiscount: numeric('maximum_discount', { precision: 12, scale: 2 }),
   },
@@ -3640,6 +3771,134 @@ export const promotionProducts = pgTable(
     check(
       'promotion_products_discount_value_check',
       sql`discount_value >= (0)::numeric`,
+    ),
+  ],
+);
+
+// ── Promociones dinámicas: categorías, combos y sus ítems ──
+
+export const promotionCategories = pgTable(
+  'promotion_categories',
+  {
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    promotionId: bigint('promotion_id', { mode: 'number' }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    categoryId: bigint('category_id', { mode: 'number' }).notNull(),
+  },
+  (table) => [
+    index('idx_promotion_categories_category').using(
+      'btree',
+      table.categoryId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.categoryId],
+      foreignColumns: [categories.id],
+      name: 'promotion_categories_category_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.promotionId],
+      foreignColumns: [promotions.id],
+      name: 'promotion_categories_promotion_id_fkey',
+    }).onDelete('cascade'),
+    primaryKey({
+      columns: [table.promotionId, table.categoryId],
+      name: 'promotion_categories_pkey',
+    }),
+  ],
+);
+
+export const promotionBranches = pgTable(
+  'promotion_branches',
+  {
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    promotionId: bigint('promotion_id', { mode: 'number' }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    branchId: bigint('branch_id', { mode: 'number' }).notNull(),
+  },
+  (table) => [
+    index('idx_promotion_branches_branch').using(
+      'btree',
+      table.branchId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'promotion_branches_branch_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.promotionId],
+      foreignColumns: [promotions.id],
+      name: 'promotion_branches_promotion_id_fkey',
+    }).onDelete('cascade'),
+    primaryKey({
+      columns: [table.promotionId, table.branchId],
+      name: 'promotion_branches_pkey',
+    }),
+  ],
+);
+
+export const promotionCombos = pgTable(
+  'promotion_combos',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    promotionId: bigint('promotion_id', { mode: 'number' }).notNull(),
+    name: varchar({ length: 100 }),
+    // 'same_discount': mismo descuento para todos los ítems del combo.
+    // 'per_product': cada ítem trae su propio descuento.
+    mode: varchar({ length: 20 }).default('same_discount').notNull(),
+    quantityRequired: integer('quantity_required').default(2).notNull(),
+    discountValue: numeric('discount_value', { precision: 12, scale: 2 })
+      .default('0')
+      .notNull(),
+    isPercentage: boolean('is_percentage').default(true).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index('idx_promotion_combos_promotion').using(
+      'btree',
+      table.promotionId.asc().nullsLast().op('int8_ops'),
+    ),
+    foreignKey({
+      columns: [table.promotionId],
+      foreignColumns: [promotions.id],
+      name: 'promotion_combos_promotion_id_fkey',
+    }).onDelete('cascade'),
+    check('promotion_combos_quantity_check', sql`quantity_required >= 2`),
+  ],
+);
+
+export const promotionComboItems = pgTable(
+  'promotion_combo_items',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    comboId: bigint('combo_id', { mode: 'number' }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    productVariantId: bigint('product_variant_id', {
+      mode: 'number',
+    }).notNull(),
+    discountValue: numeric('discount_value', { precision: 12, scale: 2 })
+      .default('0')
+      .notNull(),
+    isPercentage: boolean('is_percentage').default(true).notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.comboId],
+      foreignColumns: [promotionCombos.id],
+      name: 'promotion_combo_items_combo_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.productVariantId],
+      foreignColumns: [productVariants.id],
+      name: 'promotion_combo_items_product_variant_id_fkey',
+    }).onDelete('cascade'),
+    unique('promotion_combo_items_combo_variant_key').on(
+      table.comboId,
+      table.productVariantId,
     ),
   ],
 );
@@ -4242,5 +4501,94 @@ export const pickerChatMessages = pgTable(
       foreignColumns: [users.id],
       name: 'picker_chat_messages_sender_user_id_fkey',
     }).onDelete('set null'),
+  ],
+);
+
+// ─── Descansos y metas del picking ────────────────────────────────────────────
+//
+// Contador diario por picker: alimenta el umbral de descanso (cada N unidades)
+// y la meta diaria del bono. Se actualiza de forma transaccional al alistar.
+export const pickerDailyStats = pgTable(
+  'picker_daily_stats',
+  {
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    userId: bigint('user_id', { mode: 'number' }).notNull(),
+    day: date().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    branchId: bigint('branch_id', { mode: 'number' }),
+    productsPicked: integer('products_picked').default(0).notNull(),
+    breaksEarned: integer('breaks_earned').default(0).notNull(),
+    bonusAwarded: boolean('bonus_awarded').default(false).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({
+      columns: [table.userId, table.day],
+      name: 'picker_daily_stats_pkey',
+    }),
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: 'picker_daily_stats_user_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'picker_daily_stats_branch_id_fkey',
+    }).onDelete('set null'),
+  ],
+);
+
+// Libro de movimientos del banco de descanso y de los bonos.
+//   earned: +minutos (idempotente por threshold_index)
+//   used:   -minutos (descanso reclamado)
+//   bonus:  +importe (meta diaria cumplida)
+export const pickerBreakLedger = pgTable(
+  'picker_break_ledger',
+  {
+    id: bigserial({ mode: 'bigint' }).primaryKey().notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    userId: bigint('user_id', { mode: 'number' }).notNull(),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    branchId: bigint('branch_id', { mode: 'number' }),
+    day: date().notNull(),
+    type: varchar({ length: 16 }).notNull(),
+    minutes: integer().default(0).notNull(),
+    amount: numeric({ precision: 12, scale: 2 }).default('0').notNull(),
+    // Índice del umbral ganado (floor(productos / N)); evita doble crédito.
+    thresholdIndex: integer('threshold_index'),
+    // You can use { mode: "bigint" } if numbers are exceeding js number limitations
+    orderId: bigint('order_id', { mode: 'number' }),
+    note: text(),
+    createdAt: timestamp('created_at', { withTimezone: true, mode: 'string' })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    foreignKey({
+      columns: [table.userId],
+      foreignColumns: [users.id],
+      name: 'picker_break_ledger_user_id_fkey',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [table.branchId],
+      foreignColumns: [branches.id],
+      name: 'picker_break_ledger_branch_id_fkey',
+    }).onDelete('set null'),
+    foreignKey({
+      columns: [table.orderId],
+      foreignColumns: [orders.id],
+      name: 'picker_break_ledger_order_id_fkey',
+    }).onDelete('set null'),
+    uniqueIndex('picker_break_earned_uniq')
+      .on(table.userId, table.day, table.thresholdIndex)
+      .where(sql`type = 'earned'`),
+    index('idx_picker_break_ledger_user_day').using(
+      'btree',
+      table.userId.asc().nullsLast().op('int8_ops'),
+      table.day.asc().nullsLast().op('date_ops'),
+    ),
   ],
 );

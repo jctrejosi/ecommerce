@@ -15,6 +15,7 @@ import { useCategoryChangeConfirm, CategoryChangeConfirm } from './shelfCategori
 import UsersView from './UsersView'
 import OrdersView from './OrdersView'
 import { PickerChatDrawer } from './PickerChat'
+import { BreakSettingsModal } from './BreakSettingsModal'
 import { useChatAlerts } from './useChatAlerts'
 import { NotificationsBell } from './NotificationsBell'
 import { requestNotificationPermission } from './services/browserNotifications'
@@ -65,6 +66,8 @@ export default function App() {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Bandeja de chat del header (un hilo por picker).
   const [chatOpen, setChatOpen] = useState(false)
+  // Configuración de descansos y metas (dropdown del usuario).
+  const [settingsOpen, setSettingsOpen] = useState(false)
   // Tema activo (color + modo) y el menú desplegable de opciones del usuario.
   const [theme, setTheme] = useState<ThemeState>(() => getStoredTheme())
   const [userMenu, setUserMenu] = useState(false)
@@ -377,6 +380,22 @@ export default function App() {
                           )
                         })}
                       </div>
+
+                      {/* Abre el panel de configuración de descansos y metas. */}
+                      <div className="border-t border-white/10 mt-3 pt-2">
+                        <button
+                          onClick={() => {
+                            setUserMenu(false)
+                            setSettingsOpen(true)
+                          }}
+                          className="w-full flex items-center gap-2 px-2 py-2 rounded-lg text-white/80 hover:bg-white/10 transition-colors text-xs font-bold"
+                        >
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
+                            <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                          </svg>
+                          Configuración
+                        </button>
+                      </div>
                     </div>
                   </>
                 ) : null}
@@ -542,6 +561,12 @@ export default function App() {
         onClose={() => setChatOpen(false)}
         branches={branches}
         lockedBranchId={scopedBranchId}
+      />
+
+      <BreakSettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        notify={notify}
       />
     </div>
   )

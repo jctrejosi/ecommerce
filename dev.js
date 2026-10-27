@@ -1075,6 +1075,10 @@ function startService(svc) {
     stdio: ["ignore", fd, fd],
     detached: DETACHED, // POSIX: grupo propio · Windows: sin consola (sin ventana)
     shell: process.platform === "win32",
+    // Cada servicio escucha en SU puerto (`svc.url`), no en el `PORT` del
+    // backend que `loadEnvFile` dejó en `process.env` y se heredaría a todos
+    // (p. ej. el admin vite terminaba en :3000 y chocaba con el backend).
+    env: port ? { ...process.env, PORT: port } : process.env,
   });
 
   child.on("error", (err) => {

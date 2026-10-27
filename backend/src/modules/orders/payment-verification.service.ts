@@ -5,6 +5,7 @@ import { orders, orderStatusHistory } from '../../../drizzle/schema';
 import { OrdersGateway } from './orders.gateway';
 import { WompiService } from '../payments/wompi.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CouponsService } from '../coupons/coupons.service';
 
 @Injectable()
 export class PaymentVerificationService {
@@ -15,6 +16,7 @@ export class PaymentVerificationService {
     private readonly ordersGateway: OrdersGateway,
     private readonly wompiService: WompiService,
     private readonly notificationsService: NotificationsService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   async verifyAndNotify(orderId: number, referenceCode: string, cardTransaction: any) {
@@ -26,11 +28,12 @@ export class PaymentVerificationService {
 
     // Look up customer for notifications
     const orderRow = await this.drizzleService.db
-      .select({ customerId: orders.customerId })
+      .select({ customerId: orders.customerId, couponId: orders.couponId })
       .from(orders)
       .where(eq(orders.id, BigInt(orderId)))
       .limit(1);
     const customerId = orderRow[0]?.customerId;
+    const couponId = orderRow[0]?.couponId;
 
     let attempts = 0;
     const maxAttempts = 10;
@@ -82,6 +85,23 @@ export class PaymentVerificationService {
           await this.drizzleService.db.insert(orderStatusHistory).values({
             orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? null,
           });
+          // El pago nunca se completó: devolver el saldo del cupón descontado.
+          if (couponId) {
+            try {
+              await this.couponsService.reverseForOrder({
+                couponId: Number(couponId),
+                orderId,
+                customerId: customerId ? Number(customerId) : null,
+                note: `Reverso por pago rechazado: ${statusMessage}`,
+              });
+            } catch (reverseError) {
+              this.logger.warn(
+                `No se pudo revertir el cupón del pedido ${referenceCode}: ${
+                  reverseError instanceof Error ? reverseError.message : String(reverseError)
+                }`,
+              );
+            }
+          }
           if (customerId) {
             await this.notificationsService.create({
               type: 'ORDER',

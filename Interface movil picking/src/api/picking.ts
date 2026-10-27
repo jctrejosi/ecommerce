@@ -2,6 +2,7 @@ import { http, toApiError } from "./client";
 import type {
   AuthMe,
   LoginResponse,
+  PickerBreakSummary,
   PickerChatMessage,
   PickerChatSummary,
   PickingHistoryResponse,
@@ -54,6 +55,15 @@ export const pickingApi = {
 
   unreviewedCount: () => get<{ count: number }>("/picking/orders/unreviewed-count"),
 
+  // ─── Disponibilidad / cola ───────────────────────────────────────────────
+
+  /** El picker se marca disponible (true) o en pausa (false) para la cola. */
+  setAvailability: (available: boolean) =>
+    post<{ ok: boolean; available: boolean }>("/picking/availability", { available }),
+
+  /** Avisa al backend que la app sigue abierta (refresca last_seen_at). */
+  heartbeat: () => post<{ ok: boolean }>("/picking/heartbeat"),
+
   detail: (id: number) => get<PickingOrder>(`/picking/orders/${id}`),
 
   /** Historial del picker (pedidos cerrados en caja), paginado de 10. */
@@ -95,6 +105,15 @@ export const pickingApi = {
   chatMessages: () => get<PickerChatMessage[]>("/picking/chat"),
 
   chatSummary: () => get<PickerChatSummary>("/picking/chat/summary"),
+
+  // ─── Descansos y metas ────────────────────────────────────────────────────
+
+  /** Banco de minutos, progreso del día y últimos movimientos. */
+  breaks: () => get<PickerBreakSummary>("/picking/breaks"),
+
+  /** Reclama minutos acumulados para tomar el descanso. */
+  useBreak: (minutes: number) =>
+    post<PickerBreakSummary>("/picking/breaks/use", { minutes }),
 
   sendChatMessage: (body: string) =>
     post<PickerChatMessage>("/picking/chat", { body }),

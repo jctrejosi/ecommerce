@@ -32,7 +32,8 @@ export class CreateOrderAddressDto {
 
   @IsString()
   @Matches(/^3\d{9}$/, {
-    message: 'El teléfono debe ser un celular válido (10 dígitos, ej: 3001234567)',
+    message:
+      'El teléfono debe ser un celular válido (10 dígitos, ej: 3001234567)',
   })
   phone!: string;
 
@@ -160,4 +161,8 @@ export class CreateOrderDto {
   @ValidateNested()
   @Type(() => PaymentDetailsDto)
   paymentDetails?: PaymentDetailsDto;
+
+  @IsOptional()
+  @IsString()
+  couponCode?: string;
 }

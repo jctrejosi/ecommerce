@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { ActivityIndicator, StyleSheet, View } from "react-native";
 import { Redirect, Stack } from "expo-router";
+import { pickingApi } from "@/api";
 import { useAuthStore } from "@/auth/authStore";
 import { useNewOrderAlerts } from "@/notifications/newOrderAlerts";
 import { useAppBadge } from "@/notifications/badge";
@@ -44,6 +46,15 @@ function AuthedArea() {
   // Push: registra el dispositivo y abre el destino al tocar una notificación.
   usePushRegistration();
   useNotificationRouting();
+
+  // Heartbeat: mantiene `users.last_seen_at` fresco para que el admin vea al
+  // picker conectado y el despachador sepa que sigue en línea.
+  useEffect(() => {
+    const beat = () => void pickingApi.heartbeat().catch(() => undefined);
+    beat();
+    const id = setInterval(beat, 60_000);
+    return () => clearInterval(id);
+  }, []);
 
   return (
     <Stack

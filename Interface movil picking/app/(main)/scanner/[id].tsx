@@ -20,6 +20,7 @@ import {
 } from "expo-camera";
 import { makeStyles, radius, spacing, useTheme } from "@/theme";
 import type { ScanResult } from "@/api";
+import type { BreakInfo } from "@/api";
 import { isItemDone } from "@/picking/status";
 import { useConfirmItem, useLocations, useOrder, useScan, useShelves } from "@/picking/queries";
 import { saveSession } from "@/picking/sessionStore";
@@ -67,6 +68,8 @@ export default function ScannerScreen() {
   const [errorMsg, setErrorMsg] = useState("");
   const [successName, setSuccessName] = useState("");
   const [qty, setQty] = useState(0);
+  // Aviso de descanso ganado / meta cumplida (se descarta con la X).
+  const [breakNotice, setBreakNotice] = useState<BreakInfo | null>(null);
   // Miniatura de la estantería del producto activo.
   const [shelfOpen, setShelfOpen] = useState(false);
   const processingRef = useRef(false);
@@ -120,6 +123,11 @@ export default function ScannerScreen() {
     return () => clearTimeout(t);
   }, []);
 
+  const applyBreakInfo = useCallback((info?: BreakInfo | null) => {
+    if (!info) return;
+    if (info.earnedMinutes > 0 || info.bonusAwardedNow) setBreakNotice(info);
+  }, []);
+
   const scheduleReset = (fn: () => void, ms: number) => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(fn, ms);
@@ -162,6 +170,7 @@ export default function ScannerScreen() {
         setSuccessName(result.name);
         setScanState("success");
         setInput("");
+        applyBreakInfo(result.breakInfo);
         scheduleReset(() => advance(result), 800);
       } catch (e) {
         const payload = (e as { payload?: { expected?: string[] } })?.payload;
@@ -194,6 +203,7 @@ export default function ScannerScreen() {
       Vibration.vibrate(60);
       setSuccessName(result.name);
       setScanState("success");
+      applyBreakInfo(result.breakInfo);
       scheduleReset(() => advance(result), 800);
     } catch {
       Vibration.vibrate([120, 60, 120]);
@@ -301,6 +311,31 @@ export default function ScannerScreen() {
       {/* Tarjeta inferior: producto + ingreso manual. El paddingBottom
           respeta los botones de navegación del dispositivo. */}
       <View style={[styles.bottom, { paddingBottom: Math.max(spacing(4), insets.bottom + spacing(2)) }]}>
+        {breakNotice ? (
+          <View style={styles.breakBanner}>
+            <Ionicons
+              name={breakNotice.earnedMinutes > 0 ? "cafe" : "trophy"}
+              size={18}
+              color={colors.successText}
+            />
+            <View style={styles.breakBody}>
+              <Text style={styles.breakTitle}>
+                {breakNotice.earnedMinutes > 0
+                  ? `Ganaste ${breakNotice.earnedMinutes} min de descanso`
+                  : "¡Meta diaria cumplida!"}
+              </Text>
+              <Text style={styles.breakSub}>
+                {breakNotice.earnedMinutes > 0
+                  ? `Al terminar este pedido puedes descansar o seguir y acumularlo (banco: ${breakNotice.bankMinutes} min).`
+                  : `Bono de $${breakNotice.settings.dailyBonusAmount} registrado.`}
+              </Text>
+            </View>
+            <Pressable onPress={() => setBreakNotice(null)} hitSlop={10}>
+              <Ionicons name="close" size={18} color={colors.textMuted} />
+            </Pressable>
+          </View>
+        ) : null}
+
         {activeItem ? (
           <View style={styles.productCard}>
             <ProductImage uri={activeItem.image} seed={activeItem.sku ?? activeItem.name} size={52} />
@@ -575,6 +610,19 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   modalEmpty: { color: colors.textMuted, fontSize: 14, fontWeight: "600", textAlign: "center" },
   mapWrap: { alignItems: "center", gap: spacing(2) },
   noItem: { color: colors.textFaint, fontSize: 14, fontWeight: "600" },
+  breakBanner: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: spacing(3),
+    backgroundColor: "rgba(34,197,94,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.30)",
+    borderRadius: radius.md,
+    padding: spacing(3),
+  },
+  breakBody: { flex: 1, minWidth: 0 },
+  breakTitle: { color: colors.successText, fontSize: 13, fontWeight: "800" },
+  breakSub: { color: colors.textMuted, fontSize: 11, fontWeight: "500", marginTop: 2 },
   inputRow: { flexDirection: "row", alignItems: "center", gap: spacing(2) },
   input: {
     flex: 1,

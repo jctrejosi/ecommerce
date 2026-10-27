@@ -15,10 +15,15 @@ import {
   Copy,
   Check,
   Loader2,
+  Ticket,
 } from "lucide-react";
 import { Logo } from "../Logo";
 import type { CartItem } from "../types";
 import type { WompiConfigResponse } from "../../services/orders.service";
+import {
+  validateCoupon,
+  type CouponValidation,
+} from "../../services/coupons.service";
 import { CheckoutAddressMap, type LocateResult } from "./CheckoutAddressMap";
 
 type WompiConfig = WompiConfigResponse;
@@ -28,6 +33,8 @@ interface CheckoutModalProps {
   checkoutStep: number;
   cartItems: CartItem[];
   cartTotal: number;
+  /** Descuento por promociones automáticas (cotización del backend). */
+  promotionDiscount?: number;
   checkoutAddress: {
     name: string;
     phone: string;
@@ -55,6 +62,9 @@ interface CheckoutModalProps {
   customerPhone?: string;
   checkoutShipping: "standard" | "express";
   checkoutPayment: "efectivo" | "tarjeta" | "nequi" | "pse" | "breb";
+  /** Código del cupón aplicado (vacío si no hay). */
+  checkoutCouponCode: string;
+  onSetCheckoutCouponCode: (code: string) => void;
   wompiEnabled?: boolean;
   wompiMethods?: { card: boolean; pse: boolean; nequi: boolean };
   brebEnabled?: boolean;
@@ -121,7 +131,8 @@ interface CheckoutModalProps {
   ) => void;
   orderPending?: boolean;
   orderDeclineReason?: string | null;
-  onPlaceOrder: () => Promise<void>;
+  /** `skipPayment`: el cupón cubre el total, no se cobra por pasarela. */
+  onPlaceOrder: (options?: { skipPayment?: boolean }) => Promise<void>;
   fmt: (n: number) => string;
   /** Pide la ubicación al teléfono del cliente (para PCs). */
   onRequestLocation?: () => Promise<{ lat: number; lng: number } | null>;
@@ -134,6 +145,7 @@ export function CheckoutModal({
   checkoutStep,
   cartItems,
   cartTotal,
+  promotionDiscount = 0,
   checkoutAddress,
   addressConfirmed,
   onSetAddressConfirmed,
@@ -142,6 +154,8 @@ export function CheckoutModal({
   customerPhone = "",
   checkoutShipping,
   checkoutPayment,
+  checkoutCouponCode,
+  onSetCheckoutCouponCode,
   checkoutLoading,
   checkoutError,
   cardPayment,
@@ -245,7 +259,81 @@ export function CheckoutModal({
     savedAddresses.length,
     requestLocate,
   ]);
-  const totalConEnvio = cartTotal + (checkoutShipping === "express" ? 9900 : 4900);
+  // Cupón: el input es local y solo se propaga al estado del checkout cuando
+  // el backend lo acepta, para no enviar códigos inválidos en el pedido.
+  const [couponInput, setCouponInput] = useState(checkoutCouponCode);
+  const [couponPreview, setCouponPreview] = useState<CouponValidation | null>(
+    null,
+  );
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
+  // El cupón se calcula sobre el subtotal después de promociones automáticas
+  // (igual que el backend al crear el pedido).
+  const couponBase = Math.max(0, cartTotal - promotionDiscount);
+
+  // Revalida el cupón ya aplicado (se conserva entre pasos del checkout).
+  useEffect(() => {
+    if (!checkoutCouponCode) {
+      setCouponPreview(null);
+      return;
+    }
+    let cancelled = false;
+    validateCoupon(checkoutCouponCode, couponBase).then((result) => {
+      if (cancelled) return;
+      if (result.valid) {
+        setCouponPreview(result);
+        setCouponError(null);
+      } else {
+        setCouponPreview(null);
+        setCouponError(result.reason ?? "Cupón no válido");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [checkoutCouponCode, couponBase]);
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim().toUpperCase();
+    if (!code || couponChecking) return;
+    setCouponChecking(true);
+    setCouponError(null);
+    const result = await validateCoupon(code, couponBase);
+    setCouponChecking(false);
+    if (!result.valid) {
+      setCouponPreview(null);
+      setCouponError(result.reason ?? "Cupón no válido");
+      onSetCheckoutCouponCode("");
+      return;
+    }
+    setCouponPreview(result);
+    setCouponInput(code);
+    onSetCheckoutCouponCode(code);
+  };
+
+  const clearCoupon = () => {
+    setCouponInput("");
+    setCouponPreview(null);
+    setCouponError(null);
+    onSetCheckoutCouponCode("");
+  };
+
+  const shippingRate = checkoutShipping === "express" ? 9900 : 4900;
+  const couponDiscountApplied = Math.min(
+    couponPreview?.discountAmount ?? 0,
+    couponBase,
+  );
+  // Total antes del saldo del cupón (lo que el backend llama grandTotal).
+  const totalConEnvio =
+    Math.max(0, couponBase - couponDiscountApplied) + shippingRate;
+  // El saldo del cupón paga el resto, incluido el envío.
+  const couponBalanceApplied = Math.min(
+    couponPreview?.balance ?? 0,
+    totalConEnvio,
+  );
+  const amountToPay = Math.max(0, totalConEnvio - couponBalanceApplied);
+  const fullyPaidByCoupon = amountToPay <= 0 && couponBalanceApplied > 0;
 
   // Normaliza el teléfono a dígitos (móvil colombiano 3xx xxx xxxx)
   const normalizePhone = (raw: string) => {
@@ -466,18 +554,29 @@ export function CheckoutModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Envío</span>
-                <span className="font-semibold">
-                  {fmt(checkoutShipping === "express" ? 9900 : 4900)}
-                </span>
+                <span className="font-semibold">{fmt(shippingRate)}</span>
               </div>
+              {promotionDiscount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Descuento promociones</span>
+                  <span className="font-semibold">-{fmt(promotionDiscount)}</span>
+                </div>
+              )}
+              {couponDiscountApplied > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Descuento cupón</span>
+                  <span className="font-semibold">-{fmt(couponDiscountApplied)}</span>
+                </div>
+              )}
+              {couponBalanceApplied > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Saldo del cupón</span>
+                  <span className="font-semibold">-{fmt(couponBalanceApplied)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-black text-base border-t border-border pt-2">
                 <span>Total</span>
-                <span>
-                  {fmt(
-                    cartTotal +
-                      (checkoutShipping === "express" ? 9900 : 4900),
-                  )}
-                </span>
+                <span>{fmt(amountToPay)}</span>
               </div>
             </div>
             <button
@@ -1146,7 +1245,7 @@ export function CheckoutModal({
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-xs text-muted-foreground">Monto a transferir</span>
-                    <span className="text-sm font-bold text-foreground">{fmt(totalConEnvio)}</span>
+                    <span className="text-sm font-bold text-foreground">{fmt(amountToPay)}</span>
                   </div>
                   {brebQrImageUrl && (
                     <div className="flex justify-center pt-2">
@@ -1172,6 +1271,73 @@ export function CheckoutModal({
               </div>
             )}
 
+            <div className="bg-white rounded-2xl border border-border p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Ticket className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm font-bold">¿Tienes un cupón?</p>
+              </div>
+              {couponPreview ? (
+                <div className="flex items-center justify-between gap-2 rounded-xl border border-green-200 bg-green-50 px-3 py-2.5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-green-700 truncate">
+                      {checkoutCouponCode}
+                    </p>
+                    <p className="text-xs text-green-700">
+                      {couponDiscountApplied > 0 &&
+                        `Descuento ${fmt(couponDiscountApplied)}`}
+                      {couponDiscountApplied > 0 && couponBalanceApplied > 0 && " · "}
+                      {couponBalanceApplied > 0 &&
+                        `Saldo aplicado ${fmt(couponBalanceApplied)}`}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={clearCoupon}
+                    className="shrink-0 text-xs font-bold text-red-500 hover:underline"
+                  >
+                    Quitar
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex gap-2">
+                    <input
+                      value={couponInput}
+                      onChange={(e) => {
+                        setCouponInput(e.target.value.toUpperCase());
+                        setCouponError(null);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          void applyCoupon();
+                        }
+                      }}
+                      placeholder="CUP-XXXX-XXXX"
+                      autoCapitalize="characters"
+                      className="flex-1 min-w-0 px-3 py-2.5 rounded-xl border border-border bg-muted/50 text-sm font-mono uppercase focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => void applyCoupon()}
+                      disabled={!couponInput.trim() || couponChecking}
+                      className="shrink-0 px-4 rounded-xl text-sm font-bold disabled:opacity-50 disabled:cursor-not-allowed"
+                      style={{ background: "var(--secondary)", color: "var(--primary)" }}
+                    >
+                      {couponChecking ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Aplicar"
+                      )}
+                    </button>
+                  </div>
+                  {couponError && (
+                    <p className="text-xs text-red-500">{couponError}</p>
+                  )}
+                </>
+              )}
+            </div>
+
             <div className="bg-white rounded-2xl border border-border p-4 space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Subtotal</span>
@@ -1179,15 +1345,29 @@ export function CheckoutModal({
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Envío</span>
-                <span>
-                  {fmt(checkoutShipping === "express" ? 9900 : 4900)}
-                </span>
+                <span>{fmt(shippingRate)}</span>
               </div>
+              {promotionDiscount > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Descuento promociones</span>
+                  <span className="font-semibold">-{fmt(promotionDiscount)}</span>
+                </div>
+              )}
+              {couponDiscountApplied > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Descuento cupón</span>
+                  <span className="font-semibold">-{fmt(couponDiscountApplied)}</span>
+                </div>
+              )}
+              {couponBalanceApplied > 0 && (
+                <div className="flex justify-between text-green-600">
+                  <span>Saldo del cupón</span>
+                  <span className="font-semibold">-{fmt(couponBalanceApplied)}</span>
+                </div>
+              )}
               <div className="flex justify-between font-black text-base border-t border-border pt-2">
                 <span>Total a pagar</span>
-                <span>
-                  {fmt(totalConEnvio)}
-                </span>
+                <span>{fmt(amountToPay)}</span>
               </div>
             </div>
             {checkoutError && (
@@ -1196,19 +1376,23 @@ export function CheckoutModal({
               </div>
             )}
             <button
-              onClick={onPlaceOrder}
+              onClick={() => onPlaceOrder({ skipPayment: fullyPaidByCoupon })}
               disabled={
                 checkoutLoading ||
-                (checkoutPayment === "tarjeta" &&
+                (!fullyPaidByCoupon &&
+                  checkoutPayment === "tarjeta" &&
                   (!cardPayment.cardholderName ||
                     !cardPayment.cardNumber ||
                     !cardPayment.expiryMonth ||
                     !cardPayment.expiryYear ||
                     !cardPayment.cvv ||
-                    (!wompiAcceptance.terms ||
-                      !wompiAcceptance.personalData))) ||
-                (checkoutPayment === "pse" && !psePayment.bank) ||
-                (checkoutPayment === "nequi" &&
+                    !wompiAcceptance.terms ||
+                    !wompiAcceptance.personalData)) ||
+                (!fullyPaidByCoupon &&
+                  checkoutPayment === "pse" &&
+                  !psePayment.bank) ||
+                (!fullyPaidByCoupon &&
+                  checkoutPayment === "nequi" &&
                   !isValidPhone(nequiPayment.phone))
               }
               className="w-full py-4 rounded-2xl font-black text-base hover:brightness-95 active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1257,7 +1441,7 @@ export function CheckoutModal({
                   </h2>
                   <p className="text-muted-foreground mt-1 text-sm">
                     {checkoutPayment === "breb"
-                      ? `Transfiere ${fmt(totalConEnvio)} a la llave ${brebKey} (${brebBank}) y tu pedido será confirmado.`
+                      ? `Transfiere ${fmt(amountToPay)} a la llave ${brebKey} (${brebBank}) y tu pedido será confirmado.`
                       : `Tu pedido ${lastOrderId} está siendo procesado por Wompi.`}
                   </p>
                   {checkoutPayment === "breb" && (
@@ -1277,7 +1461,7 @@ export function CheckoutModal({
                       </div>
                       <div className="flex items-center justify-between">
                         <span className="text-xs text-muted-foreground">Monto</span>
-                        <span className="text-sm font-bold">{fmt(totalConEnvio)}</span>
+                        <span className="text-sm font-bold">{fmt(amountToPay)}</span>
                       </div>
                       {brebQrImageUrl && (
                         <div className="flex justify-center pt-2">

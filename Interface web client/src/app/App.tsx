@@ -16,7 +16,7 @@ import type { ThemeConfig } from "../hooks/useTheme";
 import { ChatbotWidget } from "../components/ChatbotWidget";
 import { OrderChatWidget } from "./components/OrderChatWidget";
 import type { BotCart } from "../services/chatbot.service";
-import { cartService } from "../services/cart.service";
+import { cartService, type CartQuote } from "../services/cart.service";
 import { apiStatusService } from "../services/api-status.service";
 import type {
   Brand,
@@ -92,6 +92,8 @@ export default function App() {
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
+  /** Descuentos vigentes del carrito (los calcula el backend). */
+  const [cartQuote, setCartQuote] = useState<CartQuote | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("");
   const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
@@ -162,6 +164,7 @@ export default function App() {
     const p = localStorage.getItem("checkout_payment");
     return p === "tarjeta" || p === "nequi" || p === "pse" ? p : "efectivo";
   });
+  const [checkoutCouponCode, setCheckoutCouponCode] = useState("");
   const [cardPayment, setCardPayment] = useState({
     cardholderName: "",
     cardNumber: "",
@@ -596,6 +599,38 @@ export default function App() {
     }
   }, [cartHydrated, cartItems, customer]);
 
+  // Cotización del carrito (promociones vigentes) para mostrar el descuento sin
+  // esperar al checkout. Se debounce para no consultar en cada clic.
+  useEffect(() => {
+    const valid = cartItems.filter(
+      (i) => i.id && Number(i.id) > 0 && i.quantity > 0,
+    );
+    if (valid.length === 0) {
+      setCartQuote(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      cartService
+        .quote(
+          valid.map((i) => ({
+            productId: Number(i.id),
+            quantity: i.quantity,
+          })),
+        )
+        .then((quote) => {
+          if (!cancelled) setCartQuote(quote);
+        })
+        .catch(() => {
+          if (!cancelled) setCartQuote(null);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [cartItems]);
+
   // Load orders
   const refreshOrders = useCallback(
     () =>
@@ -794,7 +829,7 @@ export default function App() {
     openModal("login");
   };
 
-  const placeOrder = async () => {
+  const placeOrder = async (options?: { skipPayment?: boolean }) => {
     try {
       setCheckoutLoading(true);
       setCheckoutError(null);
@@ -803,7 +838,7 @@ export default function App() {
       let cardToken = "";
       let last4 = "";
       let brand = "";
-      if (checkoutPayment === "tarjeta") {
+      if (checkoutPayment === "tarjeta" && !options?.skipPayment) {
         if (!wompiConfig || !wompiConfig.publicKey) {
           setCheckoutError(
             "El pago con tarjeta no está disponible en este momento. Intenta con otro medio de pago o recarga la página.",
@@ -841,9 +876,12 @@ export default function App() {
           lng: checkoutAddress.lng ?? undefined,
         },
         shippingType: checkoutShipping,
-        paymentMethod: checkoutPayment,
+        // Si el cupón cubre el total no hay pasarela: se registra como efectivo
+        // para que el backend no exija datos de tarjeta/PSE/Nequi.
+        paymentMethod: options?.skipPayment ? "efectivo" : checkoutPayment,
+        couponCode: checkoutCouponCode.trim() || undefined,
       };
-      if (checkoutPayment === "tarjeta") {
+      if (checkoutPayment === "tarjeta" && !options?.skipPayment) {
         payload.paymentDetails = {
           card: {
             provider: "wompi",
@@ -896,6 +934,7 @@ export default function App() {
       setOrders((prev) => [o, ...prev]);
       setLastOrderId(response.referenceCode);
       setCartItems([]);
+      setCheckoutCouponCode("");
       setOrderPending(response.status === "payment_pending");
       setCheckoutStep(4);
 
@@ -1145,6 +1184,8 @@ export default function App() {
         cartItems={cartItems}
         cartCount={cartCount}
         cartTotal={cartTotal}
+        discountTotal={cartQuote?.discountTotal ?? 0}
+        promotions={cartQuote?.appliedPromotions ?? []}
         onClose={() => setCartOpen(false)}
         onAdd={addToCart}
         onRemove={removeFromCart}
@@ -1183,6 +1224,7 @@ export default function App() {
         checkoutStep={checkoutStep}
         cartItems={cartItems}
         cartTotal={cartTotal}
+        promotionDiscount={cartQuote?.discountTotal ?? 0}
         checkoutAddress={checkoutAddress}
         addressConfirmed={addressConfirmed}
         onSetAddressConfirmed={setAddressConfirmed}
@@ -1191,6 +1233,8 @@ export default function App() {
         customerPhone={customer?.phone ?? ""}
         checkoutShipping={checkoutShipping}
         checkoutPayment={checkoutPayment}
+        checkoutCouponCode={checkoutCouponCode}
+        onSetCheckoutCouponCode={setCheckoutCouponCode}
         checkoutLoading={checkoutLoading}
         checkoutError={checkoutError}
         cardPayment={cardPayment}

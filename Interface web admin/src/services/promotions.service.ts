@@ -2,6 +2,32 @@ import { API_BASE_URL, apiFetch as fetchJson } from "../lib/api";
 
 export type PromotionStatus = "activo" | "programado" | "expirado" | "inactivo";
 export type DiscountType = "porcentaje" | "fijo" | "cupon";
+export type PromotionComboMode = "same_discount" | "per_product";
+
+export type PromotionProductRule = {
+  productId: number;
+  name: string;
+  discountValue: string | null;
+  isPercentage: boolean;
+  maximumDiscount: string | null;
+};
+
+export type PromotionComboItem = {
+  productId: number;
+  name: string;
+  discountValue: string;
+  isPercentage: boolean;
+};
+
+export type PromotionCombo = {
+  id: number;
+  name: string | null;
+  mode: PromotionComboMode;
+  quantityRequired: number;
+  discountValue: string;
+  isPercentage: boolean;
+  items: PromotionComboItem[];
+};
 
 export type Promotion = {
   id: number;
@@ -9,6 +35,15 @@ export type Promotion = {
   description: string | null;
   discountType: DiscountType;
   discountValue: string;
+  maximumDiscount: string | null;
+  weekdays: number[];
+  categoryIds: number[];
+  branchIds: number[];
+  productIds?: number[];
+  comboCount?: number;
+  appliesTo?: "all" | "targeted";
+  products?: PromotionProductRule[];
+  combos?: PromotionCombo[];
   couponCode: string | null;
   couponMaxUsesTotal: number | null;
   couponTimesUsed: number;
@@ -55,11 +90,39 @@ export type PromotionUsage = {
   } | null;
 };
 
+export type CreatePromotionProduct = {
+  productId: number;
+  discountValue?: number;
+  isPercentage?: boolean;
+  maximumDiscount?: number;
+};
+
+export type CreatePromotionComboItem = {
+  productId: number;
+  discountValue?: number;
+  isPercentage?: boolean;
+};
+
+export type CreatePromotionCombo = {
+  name?: string;
+  mode: PromotionComboMode;
+  quantityRequired?: number;
+  discountValue?: number;
+  isPercentage?: boolean;
+  items: CreatePromotionComboItem[];
+};
+
 export type CreatePromotionData = {
   name: string;
   description?: string;
   discountType: DiscountType;
   discountValue: number;
+  maximumDiscount?: number;
+  weekdays?: number[];
+  categoryIds?: number[];
+  branchIds?: number[];
+  products?: CreatePromotionProduct[];
+  combos?: CreatePromotionCombo[];
   couponCode?: string;
   maxUsesTotal?: number;
   maxUsesPerCustomer?: number;
@@ -75,8 +138,6 @@ export type CreatePromotionData = {
 
 export type UpdatePromotionData = Partial<CreatePromotionData>;
 
-
-
 export const promotionsService = {
   async getAll(params?: {
     status?: string;
@@ -88,7 +149,8 @@ export const promotionsService = {
     const searchParams = new URLSearchParams();
     if (params?.status) searchParams.set("status", params.status);
     if (params?.search) searchParams.set("search", params.search);
-    if (params?.usagesToday) searchParams.set("usagesToday", params.usagesToday);
+    if (params?.usagesToday)
+      searchParams.set("usagesToday", params.usagesToday);
     if (params?.limit) searchParams.set("limit", String(params.limit));
     if (params?.offset) searchParams.set("offset", String(params.offset));
     const qs = searchParams.toString();

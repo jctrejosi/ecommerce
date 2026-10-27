@@ -11,6 +11,7 @@ export const pickingKeys = {
   order: (id: number) => ["picking", "order", id] as const,
   history: () => ["picking", "history"] as const,
   shelves: (branchId: number) => ["picking", "shelves", branchId] as const,
+  breaks: () => ["picking", "breaks"] as const,
   locations: (branchId: number, variantIds: number[]) =>
     ["picking", "locations", branchId, variantIds.join(",")] as const,
 };
@@ -96,6 +97,27 @@ export function useMarkReviewed() {
     },
     onError: () => {
       void qc.invalidateQueries({ queryKey: PICKING_ROOT });
+    },
+  });
+}
+
+/** Banco de descanso y avance de la meta diaria (se refresca solo). */
+export function useBreaks(enabled = true) {
+  return useQuery({
+    queryKey: pickingKeys.breaks(),
+    queryFn: () => pickingApi.breaks(),
+    enabled,
+    refetchInterval: enabled ? 30_000 : false,
+  });
+}
+
+/** Reclama minutos del banco y deja el resumen actualizado. */
+export function useUseBreak() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (minutes: number) => pickingApi.useBreak(minutes),
+    onSuccess: (data) => {
+      qc.setQueryData(pickingKeys.breaks(), data);
     },
   });
 }

@@ -17,10 +17,17 @@ import {
   branchComparePriceSql,
   branchPriceSql,
 } from '../../common/pricing/branch-price';
+import {
+  PromotionEngineService,
+  type PromotionEngineItem,
+} from '../promotions/promotion-engine.service';
 
 @Injectable()
 export class CartService {
-  constructor(private readonly drizzleService: DrizzleService) {}
+  constructor(
+    private readonly drizzleService: DrizzleService,
+    private readonly promotionEngine: PromotionEngineService,
+  ) {}
 
   private get db() {
     return this.drizzleService.db;
@@ -97,6 +104,92 @@ export class CartService {
     return this.buildCartResponse(cartId);
   }
 
+  /**
+   * Cotiza una lista de ítems sin crear carrito ni cliente (carrito local del
+   * cliente web). Reutiliza el mismo motor de promociones del checkout.
+   */
+  async quote(
+    items: Array<{ productId: number; quantity: number }>,
+    branchId: number | null = null,
+  ) {
+    const wanted = items.filter(
+      (item) => item.productId > 0 && item.quantity > 0,
+    );
+
+    if (wanted.length === 0) {
+      return {
+        items: [],
+        subtotal: 0,
+        discountTotal: 0,
+        total: 0,
+        appliedPromotions: [],
+      };
+    }
+
+    const variants = await this.db
+      .select({
+        variantId: productVariants.id,
+        productId: productVariants.productId,
+        price: branchPriceSql(branchId),
+      })
+      .from(productVariants)
+      .innerJoin(products, eq(products.id, productVariants.productId))
+      .where(
+        and(
+          inArray(
+            productVariants.productId,
+            wanted.map((item) => item.productId),
+          ),
+          eq(productVariants.isActive, true),
+          isNull(productVariants.deletedAt),
+          eq(products.isActive, true),
+          isNull(products.deletedAt),
+        ),
+      )
+      .orderBy(asc(productVariants.productId), asc(productVariants.id));
+
+    const variantByProductId = new Map<number, (typeof variants)[number]>();
+    for (const variant of variants) {
+      const productId = Number(variant.productId);
+      if (!variantByProductId.has(productId)) {
+        variantByProductId.set(productId, variant);
+      }
+    }
+
+    const engineItems: PromotionEngineItem[] = [];
+    for (const item of wanted) {
+      const variant = variantByProductId.get(item.productId);
+      if (!variant) continue;
+      engineItems.push({
+        productId: item.productId,
+        productVariantId: Number(variant.variantId),
+        quantity: item.quantity,
+        unitPrice: Number(variant.price),
+      });
+    }
+
+    const evaluation = await this.promotionEngine.evaluate(
+      engineItems,
+      branchId,
+    );
+
+    return {
+      items: evaluation.items.map((line) => ({
+        productId: line.productId,
+        productVariantId: line.productVariantId,
+        quantity: line.quantity,
+        unitPrice: line.unitPrice,
+        subtotal: line.subtotal,
+        discount: line.discount,
+        total: line.total,
+      })),
+      subtotal: evaluation.subtotal,
+      discountTotal: evaluation.discountTotal,
+      total: evaluation.total,
+      appliedPromotions: evaluation.appliedPromotions,
+    };
+  }
+
   private async getOrCreateActiveCart(customerId: number) {
     const existing = await this.db
       .select({ id: carts.id, branchId: carts.branchId })
@@ -116,7 +209,9 @@ export class CartService {
       .limit(1);
 
     if (!branch.length) {
-      throw new NotFoundException('No hay sucursales activas para crear carrito');
+      throw new NotFoundException(
+        'No hay sucursales activas para crear carrito',
+      );
     }
 
     const inserted = await this.db
@@ -144,6 +239,7 @@ export class CartService {
     const rows = await this.db
       .select({
         productId: products.id,
+        productVariantId: cartItems.productVariantId,
         name: products.name,
         slug: products.slug,
         description: products.description,
@@ -156,31 +252,41 @@ export class CartService {
         isFeatured: products.featured,
       })
       .from(cartItems)
-      .innerJoin(productVariants, eq(productVariants.id, cartItems.productVariantId))
+      .innerJoin(
+        productVariants,
+        eq(productVariants.id, cartItems.productVariantId),
+      )
       .innerJoin(products, eq(products.id, productVariants.productId))
       .leftJoin(productCategories, eq(productCategories.productId, products.id))
       .leftJoin(categories, eq(categories.id, productCategories.categoryId))
       .leftJoin(
         productImages,
-        and(eq(productImages.productId, products.id), eq(productImages.isCover, true)),
+        and(
+          eq(productImages.productId, products.id),
+          eq(productImages.isCover, true),
+        ),
       )
       .leftJoin(media, eq(media.id, productImages.mediaId))
       .where(eq(cartItems.cartId, cartId))
       .orderBy(asc(cartItems.createdAt));
 
-    const items = new Map<number, {
-      id: number;
-      slug: string;
-      name: string;
-      description: string | null;
-      price: number;
-      originalPrice?: number;
-      image: string | null;
-      category: string;
-      categoryId: number;
-      quantity: number;
-      isFeatured: boolean;
-    }>();
+    const items = new Map<
+      number,
+      {
+        id: number;
+        variantId: number;
+        slug: string;
+        name: string;
+        description: string | null;
+        price: number;
+        originalPrice?: number;
+        image: string | null;
+        category: string;
+        categoryId: number;
+        quantity: number;
+        isFeatured: boolean;
+      }
+    >();
 
     for (const row of rows) {
       const productId = Number(row.productId);
@@ -188,11 +294,14 @@ export class CartService {
 
       items.set(productId, {
         id: productId,
+        variantId: Number(row.productVariantId),
         slug: row.slug,
         name: row.name,
         description: row.description,
         price: Number(row.price),
-        originalPrice: row.originalPrice ? Number(row.originalPrice) : undefined,
+        originalPrice: row.originalPrice
+          ? Number(row.originalPrice)
+          : undefined,
         image: row.image,
         category: row.category ?? '',
         categoryId: row.categoryId ? Number(row.categoryId) : 0,
@@ -201,8 +310,49 @@ export class CartService {
       });
     }
 
+    const cartItemsList = Array.from(items.values());
+
+    const engineItems: PromotionEngineItem[] = cartItemsList.map((item) => ({
+      productId: item.id,
+      productVariantId: item.variantId,
+      quantity: item.quantity,
+      unitPrice: item.price,
+    }));
+
+    const evaluation = await this.promotionEngine.evaluate(
+      engineItems,
+      branchId,
+    );
+
+    const discountByProduct = new Map<number, number>();
+    evaluation.items.forEach((line) => {
+      discountByProduct.set(line.productId, line.discount);
+    });
+
     return {
-      items: Array.from(items.values()),
+      items: cartItemsList.map((item) => {
+        const discount = discountByProduct.get(item.id) ?? 0;
+        return {
+          id: item.id,
+          slug: item.slug,
+          name: item.name,
+          description: item.description,
+          price: item.price,
+          originalPrice: item.originalPrice,
+          image: item.image,
+          category: item.category,
+          categoryId: item.categoryId,
+          quantity: item.quantity,
+          isFeatured: item.isFeatured,
+          discount,
+          total:
+            Math.round((item.price * item.quantity - discount) * 100) / 100,
+        };
+      }),
+      subtotal: evaluation.subtotal,
+      discountTotal: evaluation.discountTotal,
+      total: evaluation.total,
+      appliedPromotions: evaluation.appliedPromotions,
     };
   }
 }

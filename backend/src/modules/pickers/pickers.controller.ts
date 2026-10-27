@@ -20,6 +20,7 @@ import { BranchScopeService } from '../../common/branch-scope/branch-scope.servi
 import { SuperuserGuard } from '../delivery/superuser.guard';
 import { SendPickerMessageDto } from '../picking/dto/send-picker-message.dto';
 import { PickerChatService } from '../picking/picker-chat.service';
+import { PickerBreakService, type BreakSettings } from '../picking/picker-break.service';
 import {
   CreatePickerDto,
   ResetPickerPasswordDto,
@@ -42,6 +43,7 @@ export class PickersController {
     private readonly pickersService: PickersService,
     private readonly chat: PickerChatService,
     private readonly branchScope: BranchScopeService,
+    private readonly breaks: PickerBreakService,
   ) {}
 
   private scope(userId: bigint | null): Promise<number | null> {
@@ -193,6 +195,22 @@ export class PickersController {
       }
     }
     return this.pickersService.history(id);
+  }
+
+  // ─── Configuración de descansos y metas ────────────────────────────────────
+
+  @Get('settings')
+  @UseGuards(JwtAuthGuard, SuperuserGuard)
+  @ApiOperation({ summary: 'Configuración de descansos, metas y bono del picking' })
+  async getBreakSettings() {
+    return this.breaks.getSettings();
+  }
+
+  @Put('settings')
+  @UseGuards(JwtAuthGuard, SuperuserGuard)
+  @ApiOperation({ summary: 'Actualizar la configuración de descansos y metas' })
+  async updateBreakSettings(@Body() body: Partial<BreakSettings>) {
+    return this.breaks.updateSettings(body);
   }
 
   // ─── Chat con los pickers ──────────────────────────────────────────────────

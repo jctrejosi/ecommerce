@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Put, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Post, Put, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -7,9 +7,11 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
+import { Public } from '../../common/decorators/public.decorator';
 import { CustomerJwtAuthGuard } from '../customer-auth/guards/customer-jwt-auth.guard';
 import { CartService } from './cart.service';
 import { UpdateCartDto } from './dto/update-cart.dto';
+import { QuoteCartDto } from './dto/quote-cart.dto';
 
 interface AuthenticatedCustomer {
   sub: number;
@@ -21,6 +23,17 @@ interface AuthenticatedCustomer {
 @Controller('cart')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
+
+  @Public()
+  @Post('quote')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Cotizar ítems (subtotal, descuentos y total) sin persistir',
+  })
+  @ApiResponse({ status: 200, description: 'Cotización calculada' })
+  quote(@Body() dto: QuoteCartDto) {
+    return this.cartService.quote(dto.items, dto.branchId ?? null);
+  }
 
   @Get()
   @ApiOperation({ summary: 'Obtener carrito del cliente autenticado' })

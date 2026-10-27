@@ -89,6 +89,11 @@ export default function OrderDetailScreen() {
             </Text>
           </View>
           <ProgressBar value={total > 0 ? scanned / total : 0} />
+          {order.route ? (
+            <Text style={styles.eta}>
+              Ruta óptima · ~{order.route.estimatedMinutes} min · {order.route.totalCells} celdas
+            </Text>
+          ) : null}
         </View>
 
         <Text style={styles.sectionTitle}>Ordenado por ubicación</Text>
@@ -130,6 +135,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   progressHead: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: spacing(3) },
   progressLabel: { color: colors.textMuted, fontSize: 13, fontWeight: "600" },
   progressCount: { color: colors.text, fontSize: 13, fontWeight: "800" },
+  eta: { color: colors.textHint, fontSize: 11, fontWeight: "600", marginTop: spacing(2.5) },
   sectionTitle: {
     color: colors.textHint,
     fontSize: 11,

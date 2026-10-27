@@ -16,6 +16,7 @@ import { orders, orderStatusHistory } from '../../../drizzle/schema';
 import { eq } from 'drizzle-orm';
 import { OrdersGateway } from './orders.gateway';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { ConfigService } from '@nestjs/config';
 
 @Controller('webhooks')
@@ -27,6 +28,7 @@ export class WebhookController {
     private readonly ordersGateway: OrdersGateway,
     private readonly configService: ConfigService,
     private readonly notificationsService: NotificationsService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   @Public()
@@ -93,7 +95,7 @@ export class WebhookController {
       const reference = transaction.reference;
 
       const result = await this.drizzleService.db
-        .select({ id: orders.id, status: orders.status, customerId: orders.customerId })
+        .select({ id: orders.id, status: orders.status, customerId: orders.customerId, couponId: orders.couponId })
         .from(orders)
         .where(eq(orders.referenceCode, reference))
         .limit(1);
@@ -142,6 +144,23 @@ export class WebhookController {
         await this.drizzleService.db.insert(orderStatusHistory).values({
           orderId, status: 'cancelled', note: `Pago rechazado: ${statusMessage}`, createdBy: customerId ?? null,
         });
+        // El pago nunca se completó: devolver el saldo del cupón descontado.
+        if (order.couponId) {
+          try {
+            await this.couponsService.reverseForOrder({
+              couponId: Number(order.couponId),
+              orderId,
+              customerId: customerId ? Number(customerId) : null,
+              note: `Reverso por pago rechazado: ${statusMessage}`,
+            });
+          } catch (reverseError) {
+            this.logger.warn(
+              `No se pudo revertir el cupón del pedido ${reference}: ${
+                reverseError instanceof Error ? reverseError.message : String(reverseError)
+              }`,
+            );
+          }
+        }
         if (customerId) {
           await this.notificationsService.create({
             type: 'ORDER',

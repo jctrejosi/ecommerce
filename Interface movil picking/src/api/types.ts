@@ -15,6 +15,8 @@ export interface PickingItem {
   shelfCode: string | null;
   shelfName: string | null;
   rowNumber: number | null;
+  /** Paso de la ruta óptima (1 = primera estantería). Null si no tiene ubicación. */
+  routeStep: number | null;
   unitPriceGross: number;
   total: number;
 }
@@ -34,6 +36,8 @@ export interface PickingOrder {
   itemsCount: number;
   totalPieces: number;
   scannedPieces: number;
+  /** Ruta óptima + ETA del alistamiento (solo en el detalle). */
+  route?: { totalCells: number; estimatedMinutes: number } | null;
   items?: PickingItem[];
 }
 
@@ -47,6 +51,55 @@ export interface ScanResult {
   allDone: boolean;
   orderStatus: string;
   expected: string[];
+  /** Descansos/metas tras este alistamiento (si el pedido tiene picker). */
+  breakInfo?: BreakInfo | null;
+}
+
+/** Configuración de descansos y metas del picking (la define el admin). */
+export interface PickerBreakSettings {
+  productsPerBreak: number;
+  breakMinutes: number;
+  dailyProductGoal: number;
+  dailyBonusAmount: number;
+  bankExpiryDays: number;
+}
+
+/** Resultado de registrar unidades alistadas para descansos/metas. */
+export interface BreakInfo {
+  unitsAdded: number;
+  earnedMinutes: number;
+  bonusAwardedNow: boolean;
+  productsToday: number;
+  breaksEarnedToday: number;
+  bankMinutes: number;
+  settings: PickerBreakSettings;
+}
+
+/** Estado del picker: banco, progreso del día y últimos movimientos. */
+export interface PickerBreakSummary {
+  day: string;
+  settings: PickerBreakSettings;
+  productsToday: number;
+  breaksEarnedToday: number;
+  bankMinutes: number;
+  goal: {
+    target: number;
+    products: number;
+    remaining: number;
+    reached: boolean;
+    bonusAmount: number;
+    awarded: boolean;
+  };
+  nextBreakAt: number | null;
+  recent: {
+    id: number;
+    type: "earned" | "used" | "bonus";
+    minutes: number;
+    amount: number;
+    day: string;
+    note: string | null;
+    createdAt: string | null;
+  }[];
 }
 
 export interface PickingShelf {

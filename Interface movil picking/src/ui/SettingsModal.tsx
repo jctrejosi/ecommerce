@@ -5,6 +5,7 @@ import {
   Image,
   Modal,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -16,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { makeStyles, radius, spacing, THEME_OPTIONS, useTheme } from "@/theme";
 import { apiErrorMessage, pickingApi } from "@/api";
 import { useAuthStore } from "@/auth/authStore";
+import { useBreaks, useUseBreak } from "@/picking/queries";
 
 interface SettingsModalProps {
   visible: boolean;
@@ -41,6 +43,46 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
   const patchUser = useAuthStore((s) => s.patchUser);
 
   const [uploading, setUploading] = useState(false);
+  // Disponibilidad para la cola (true = puede recibir pedidos).
+  const [available, setAvailable] = useState(true);
+  const breaksQuery = useBreaks(visible);
+  const breaks = breaksQuery.data;
+  const useBreak = useUseBreak();
+
+  /** Alterna la disponibilidad del picker en la cola de pedidos. */
+  const toggleAvailability = async () => {
+    const next = !available;
+    setAvailable(next);
+    try {
+      await pickingApi.setAvailability(next);
+    } catch {
+      setAvailable(!next);
+      Alert.alert("No se pudo actualizar", "Intenta de nuevo.");
+    }
+  };
+
+  /** Reclama todo el banco acumulado (descanso). */
+  const claimBreak = () => {
+    const mins = breaks?.bankMinutes ?? 0;
+    if (mins <= 0) return;
+    Alert.alert(
+      "Tomar descanso",
+      `¿Reclamar ${mins} min acumulados?`,
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Reclamar",
+          onPress: () =>
+            useBreak.mutate(mins, {
+              onSuccess: () =>
+                Alert.alert("Descanso registrado", `Se descontaron ${mins} min de tu banco.`),
+              onError: (e) =>
+                Alert.alert("No se pudo reclamar", apiErrorMessage(e, "Intenta de nuevo.")),
+            }),
+        },
+      ],
+    );
+  };
 
   /** Sube la foto elegida y la refleja en la app (y en el panel, vía backend). */
   const uploadAvatar = async (uri: string) => {
@@ -107,6 +149,8 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
         >
           <View style={styles.handle} />
 
+          <ScrollView showsVerticalScrollIndicator={false}>
+
           {/* Usuario */}
           <View style={styles.userRow}>
             <Pressable
@@ -148,8 +192,84 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
             </View>
           </View>
 
+          {/* Descansos y metas del picker */}
+          {breaks ? (
+            <View style={styles.breakSection}>
+              <View style={styles.breakHeaderRow}>
+                <Text style={styles.themeLabel}>Descansos y metas</Text>
+                <Text style={styles.breakDay}>{breaks.productsToday} prod. hoy</Text>
+              </View>
+              <View style={styles.breakRow}>
+                <View style={styles.breakBank}>
+                  <Text style={styles.breakBankValue}>{breaks.bankMinutes}</Text>
+                  <Text style={styles.breakBankLabel}>min acumulados</Text>
+                </View>
+                <View style={styles.breakGoal}>
+                  <Text style={styles.breakGoalText}>
+                    {breaks.goal.target > 0
+                      ? `Meta diaria: ${breaks.goal.products}/${breaks.goal.target}`
+                      : "Sin meta diaria"}
+                  </Text>
+                  {breaks.goal.target > 0 ? (
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${Math.min(
+                              100,
+                              (breaks.goal.products / breaks.goal.target) * 100,
+                            )}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                  ) : null}
+                  {breaks.goal.awarded ? (
+                    <Text style={styles.bonusText}>
+                      Bono de ${breaks.goal.bonusAmount} registrado
+                    </Text>
+                  ) : breaks.goal.target > 0 ? (
+                    <Text style={styles.breakHint}>
+                      Faltan {breaks.goal.remaining} para el bono
+                    </Text>
+                  ) : null}
+                </View>
+              </View>
+              {breaks.bankMinutes > 0 ? (
+                <Pressable
+                  onPress={claimBreak}
+                  disabled={useBreak.isPending}
+                  style={({ pressed }) => [styles.claimBtn, pressed && { opacity: 0.85 }]}
+                >
+                  <Ionicons name="cafe-outline" size={16} color={colors.onAccent} />
+                  <Text style={styles.claimText}>
+                    {useBreak.isPending
+                      ? "Reclamando…"
+                      : `Reclamar ${breaks.bankMinutes} min`}
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Acciones sobre la cuenta */}
           <View style={styles.actions}>
+            {/* Disponibilidad en la cola */}
+            <Pressable
+              onPress={() => void toggleAvailability()}
+              style={({ pressed }) => [styles.actionBtn, pressed && { opacity: 0.8 }]}
+            >
+              <Ionicons
+                name={available ? "toggle" : "toggle-outline"}
+                size={20}
+                color={available ? colors.accent : colors.textMuted}
+              />
+              <Text style={styles.actionText}>
+                {available ? "Disponible para pedidos" : "En pausa"}
+              </Text>
+            </Pressable>
+
             {/* Tema */}
             <View style={styles.themeSection}>
               <Text style={styles.themeLabel}>Tema</Text>
@@ -232,6 +352,7 @@ export function SettingsModal({ visible, onClose, onSwitchUser }: SettingsModalP
               </Text>
             </Pressable>
           </View>
+        </ScrollView>
         </Pressable>
       </Pressable>
     </Modal>
@@ -247,6 +368,7 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
     paddingHorizontal: spacing(5),
     paddingBottom: spacing(8),
     paddingTop: spacing(2),
+    maxHeight: "90%",
   },
   handle: {
     alignSelf: "center",
@@ -329,6 +451,55 @@ const useStyles = makeStyles((colors) => StyleSheet.create({
   themeChipHint: { color: colors.textHint, fontSize: 10, fontWeight: "600" },
   themeChipHintActive: { color: colors.onAccent, opacity: 0.7 },
   actions: { gap: spacing(2), marginTop: spacing(6) },
+  breakSection: { gap: spacing(2), marginTop: spacing(5) },
+  breakHeaderRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  breakDay: { color: colors.textMuted, fontSize: 11, fontWeight: "700" },
+  breakRow: { flexDirection: "row", gap: spacing(2) },
+  breakBank: {
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(3),
+    alignItems: "center",
+    justifyContent: "center",
+    minWidth: 88,
+  },
+  breakBankValue: { color: colors.accent, fontSize: 24, fontWeight: "900" },
+  breakBankLabel: {
+    color: colors.textHint,
+    fontSize: 9,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
+  breakGoal: {
+    flex: 1,
+    backgroundColor: colors.chip,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: radius.md,
+    paddingVertical: spacing(2),
+    paddingHorizontal: spacing(3),
+    justifyContent: "center",
+    gap: 3,
+  },
+  breakGoalText: { color: colors.text, fontSize: 12, fontWeight: "800" },
+  progressTrack: { height: 6, backgroundColor: colors.border, borderRadius: 3, overflow: "hidden" },
+  progressFill: { height: 6, backgroundColor: colors.accent, borderRadius: 3 },
+  breakHint: { color: colors.textHint, fontSize: 10, fontWeight: "600" },
+  bonusText: { color: colors.successText, fontSize: 10, fontWeight: "800" },
+  claimBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: spacing(2),
+    backgroundColor: colors.accent,
+    borderRadius: radius.md,
+    paddingVertical: spacing(3),
+  },
+  claimText: { color: colors.onAccent, fontSize: 13, fontWeight: "800" },
   actionBtn: {
     flexDirection: "row",
     alignItems: "center",

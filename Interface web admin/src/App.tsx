@@ -39,12 +39,17 @@ import {
   Moon,
   Palette,
   Check,
+  Ticket,
 } from "lucide-react";
 import Dashboard from "./views/Dashboard";
 import Products from "./views/Products";
 import Orders from "./views/Orders";
 import { ordersService } from "./services/orders.service";
-import { authService, AuthApiError, type UserProfile } from "./services/auth.service";
+import {
+  authService,
+  AuthApiError,
+  type UserProfile,
+} from "./services/auth.service";
 import HomepageEditor from "./views/HomepageEditor";
 import {
   HomeHeroSection,
@@ -62,6 +67,7 @@ import General from "./views/General";
 import ProductTypes from "./views/ProductTypes";
 import Suppliers from "./views/Suppliers";
 import Promotions from "./views/Promotions";
+import Coupons from "./views/Coupons";
 import Marketplace from "./views/Marketplace";
 import UsersView from "./views/Users";
 import SettingsView from "./views/Settings";
@@ -71,11 +77,7 @@ import Popups from "./views/Popups";
 import Login from "./views/Login";
 import AppFooter from "./components/AppFooter";
 import ProfileModal from "./components/ProfileModal";
-import {
-  useTheme,
-  THEME_MODES,
-  THEME_ACCENTS,
-} from "./lib/theme";
+import { useTheme, THEME_MODES, THEME_ACCENTS } from "./lib/theme";
 import Newsletter from "./views/Newsletter";
 
 export type ViewId =
@@ -88,6 +90,7 @@ export type ViewId =
   | "orders"
   | "customers"
   | "promotions"
+  | "coupons"
   | "homepage"
   | "homeHero"
   | "homePromos"
@@ -134,6 +137,7 @@ const NAV: NavSection[] = [
       { id: "orders", label: "Pedidos", icon: ShoppingCart },
       { id: "customers", label: "Clientes", icon: Users },
       { id: "promotions", label: "Promociones", icon: Percent },
+      { id: "coupons", label: "Cupones", icon: Ticket },
     ],
   },
   {
@@ -172,6 +176,7 @@ const VIEW_PATHS: Record<string, ViewId> = {
   orders: "orders",
   customers: "customers",
   promotions: "promotions",
+  coupons: "coupons",
   "homepage-editor": "homepage",
   "home/hero": "homeHero",
   "home/promos": "homePromos",
@@ -200,6 +205,7 @@ const VIEW_SLUGS: Record<ViewId, string> = {
   orders: "orders",
   customers: "customers",
   promotions: "promotions",
+  coupons: "coupons",
   homepage: "homepage-editor",
   homeHero: "home/hero",
   homePromos: "home/promos",
@@ -268,6 +274,7 @@ const LABELS: Record<ViewId, string> = {
   orders: "Pedidos",
   customers: "Clientes",
   promotions: "Promociones",
+  coupons: "Cupones",
   homepage: "Editor de Inicio",
   homeHero: "Banners publicitarios",
   homePromos: "Banners Promocionales",
@@ -512,7 +519,9 @@ function Sidebar({
             <p className="text-[color:var(--chrome-text)] font-bold text-sm leading-tight">
               Mercaldas
             </p>
-            <p className="text-[color:var(--chrome-text-faint)] text-xs">Admin Panel</p>
+            <p className="text-[color:var(--chrome-text-faint)] text-xs">
+              Admin Panel
+            </p>
           </div>
         )}
       </div>
@@ -528,7 +537,10 @@ function Sidebar({
             )}
             {section.items.map((item) => {
               const active = current === item.id;
-              const badge = item.id === "orders" && unreviewedCount > 0 ? unreviewedCount : item.badge;
+              const badge =
+                item.id === "orders" && unreviewedCount > 0
+                  ? unreviewedCount
+                  : item.badge;
               return (
                 <button
                   key={item.id}
@@ -596,7 +608,9 @@ function TopBar({
         .filter(Boolean)
         .map((n) => n?.[0] ?? "")
         .join("")
-        .toUpperCase() || user.username?.[0]?.toUpperCase() || "U"
+        .toUpperCase() ||
+      user.username?.[0]?.toUpperCase() ||
+      "U"
     : "JR";
   const displayName = user?.fullName || "Jorge Ramírez";
   const displayEmail = user?.email || "jorge@mercaldas.com";
@@ -656,7 +670,11 @@ function TopBar({
           >
             <div className="w-7 h-7 rounded-full overflow-hidden bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center">
               {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                <img
+                  src={user.avatarUrl}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
               ) : (
                 <span className="text-xs font-bold text-white">{initials}</span>
               )}
@@ -671,16 +689,24 @@ function TopBar({
               <div className="flex items-center gap-2.5 px-4 py-3 border-b border-[color:var(--chrome-border)]">
                 <div className="w-8 h-8 rounded-full overflow-hidden bg-gradient-to-br from-amber-400 to-amber-600 flex items-center justify-center shrink-0">
                   {user?.avatarUrl ? (
-                    <img src={user.avatarUrl} alt="" className="w-full h-full object-cover" />
+                    <img
+                      src={user.avatarUrl}
+                      alt=""
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <span className="text-xs font-bold text-white">{initials}</span>
+                    <span className="text-xs font-bold text-white">
+                      {initials}
+                    </span>
                   )}
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-[color:var(--chrome-text)] truncate">
                     {displayName}
                   </p>
-                  <p className="text-xs text-[color:var(--chrome-text-faint)] truncate">{displayEmail}</p>
+                  <p className="text-xs text-[color:var(--chrome-text-faint)] truncate">
+                    {displayEmail}
+                  </p>
                 </div>
               </div>
               <div className="pt-1">
@@ -698,7 +724,10 @@ function TopBar({
                     }}
                     className="w-full flex items-center gap-2.5 px-4 py-2 text-sm text-[color:var(--chrome-text-muted)] hover:bg-[var(--chrome-hover)] hover:text-[color:var(--chrome-text)] transition-colors"
                   >
-                    <item.icon size={14} className="text-[color:var(--chrome-text-faint)]" />
+                    <item.icon
+                      size={14}
+                      className="text-[color:var(--chrome-text-faint)]"
+                    />
                     {item.label}
                   </button>
                 ))}
@@ -722,7 +751,11 @@ function TopBar({
                               : "text-[color:var(--chrome-text-muted)] hover:bg-[var(--chrome-hover)] hover:text-[color:var(--chrome-text)]"
                           }`}
                         >
-                          {m.id === "claro" ? <Sun size={13} /> : <Moon size={13} />}
+                          {m.id === "claro" ? (
+                            <Sun size={13} />
+                          ) : (
+                            <Moon size={13} />
+                          )}
                           {m.label}
                         </button>
                       );
@@ -752,7 +785,10 @@ function TopBar({
                           style={{ backgroundColor: a.swatch }}
                         >
                           {active && (
-                            <Check size={13} className="text-white drop-shadow" />
+                            <Check
+                              size={13}
+                              className="text-white drop-shadow"
+                            />
                           )}
                         </button>
                       );
@@ -786,12 +822,26 @@ function TopBar({
   );
 }
 
-function ViewRenderer({ view, user, onNavigate }: { view: ViewId; user: UserProfile | null; onNavigate: (v: ViewId) => void }) {
-  const userName = user?.firstName || user?.fullName?.split(" ")[0] || "Usuario";
-  
+function ViewRenderer({
+  view,
+  user,
+  onNavigate,
+}: {
+  view: ViewId;
+  user: UserProfile | null;
+  onNavigate: (v: ViewId) => void;
+}) {
+  const userName =
+    user?.firstName || user?.fullName?.split(" ")[0] || "Usuario";
+
   switch (view) {
     case "dashboard":
-      return <Dashboard userName={userName} onNavigate={(v) => onNavigate(v as ViewId)} />;
+      return (
+        <Dashboard
+          userName={userName}
+          onNavigate={(v) => onNavigate(v as ViewId)}
+        />
+      );
     case "products":
       return <Products />;
     case "orders":
@@ -851,7 +901,9 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [user, setUser] = useState<UserProfile | null>(null);
-  const [authState, setAuthState] = useState<"loading" | "out" | "in">("loading");
+  const [authState, setAuthState] = useState<"loading" | "out" | "in">(
+    "loading",
+  );
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -869,7 +921,10 @@ export default function App() {
   useEffect(() => {
     if (authState !== "in") return;
     const fetchCount = () => {
-      ordersService.getUnreviewedCount().then((r) => setUnreviewedCount(r.count)).catch(() => {});
+      ordersService
+        .getUnreviewedCount()
+        .then((r) => setUnreviewedCount(r.count))
+        .catch(() => {});
     };
     fetchCount();
     const interval = setInterval(fetchCount, 30000); // refresh every 30s
@@ -886,7 +941,8 @@ export default function App() {
       setAuthState("in");
     } catch (err) {
       const unauthorized =
-        err instanceof AuthApiError && (err.status === 401 || err.status === 403);
+        err instanceof AuthApiError &&
+        (err.status === 401 || err.status === 403);
       if (initial || unauthorized) {
         setUser(null);
         setAuthState("out");
@@ -932,7 +988,8 @@ export default function App() {
       setAuthState("out");
     };
     window.addEventListener("auth:unauthorized", onUnauthorized);
-    return () => window.removeEventListener("auth:unauthorized", onUnauthorized);
+    return () =>
+      window.removeEventListener("auth:unauthorized", onUnauthorized);
   }, []);
 
   const handleLogout = async () => {
@@ -962,7 +1019,12 @@ export default function App() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      <Sidebar current={view} onNavigate={navigate} collapsed={collapsed} unreviewedCount={unreviewedCount} />
+      <Sidebar
+        current={view}
+        onNavigate={navigate}
+        collapsed={collapsed}
+        unreviewedCount={unreviewedCount}
+      />
 
       <div className="flex flex-col flex-1 min-w-0">
         <TopBar
@@ -975,7 +1037,11 @@ export default function App() {
           onUserUpdated={setUser}
         />
         <main className="flex-1 overflow-y-auto">
-          <ViewRenderer view={view} user={user} onNavigate={(v) => navigate(v as ViewId)} />
+          <ViewRenderer
+            view={view}
+            user={user}
+            onNavigate={(v) => navigate(v as ViewId)}
+          />
         </main>
         <AppFooter />
       </div>
