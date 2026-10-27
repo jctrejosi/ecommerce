@@ -11,7 +11,7 @@ del ecommerce. Objetivo y alcance: `docs/PLAN-SINCRONIZACION-ERP.md`.
 
 | Script | Dirección | Qué |
 |---|---|---|
-| `erp-daemon.mjs` | ambas | **Demonio**: pull del catálogo y maestros cada 5 min + push cada 30 s (tarea de Windows). |
+| `erp-daemon.mjs` | ambas | **Demonio**: pull de catálogo cada 5 min + pull de maestras (clientes y proveedores) cada 15 min + push cada 30 s (tarea de Windows). |
 | `erp-sync.cmd` | — | Lanzador del demonio con reintento (lo usa la tarea "Mercaldas ERP Sync"). |
 | `sync-all.mjs` | ambas | **Runner completo**: entrada pesada + salida. Seguro por defecto; `--apply` escribe en el ERP. |
 | `sync-out.mjs` | ambas | **Runner de salida ligero** (clientes/precio-stock/pedidos/reconcile), para bucle/cron. |
@@ -21,7 +21,7 @@ del ecommerce. Objetivo y alcance: `docs/PLAN-SINCRONIZACION-ERP.md`.
 | `sync-categories.mjs` | ERP → PG | **Migración única**: árbol de **`TIDTAB`** → `categories`, `TIDMARCAS` + `INMARCAP` → `brands`, y reasigna `product_categories`/`products.brand_id`. Oculta las categorías viejas sin uso. |
 | `remap-shelves.mjs` | PG | **Migración única**: traduce `shelf_categories` de categorías viejas a las hojas equivalentes (dry-run por defecto). |
 | `sync-customers.mjs` | ERP → PG | Clientes `POSCLI` → `customers`. |
-| `sync-suppliers.mjs` | ERP → PG | Proveedores `TIDLISTA.INPROVEE` + `CONTERCE` → `suppliers`, y `TIDLISTA` → `supplier_products` (manual/bajo demanda; no va en el ciclo). |
+| `sync-suppliers.mjs` | ERP → PG | Proveedores `TIDLISTA.INPROVEE` + `CONTERCE` → `suppliers`, y `TIDLISTA` → `supplier_products` (corre en el ciclo lento del demonio, cada 15 min; también manual). |
 | `push-orders.mjs` | PG → ERP | `orders`/`order_items` → `DOMDIA`/`DOMITE`. Por defecto omite `DEMO-*` (`--include-demo` para probar). |
 | `push-customers.mjs` | PG → ERP | Clientes locales → `POSCLI` (crea o actualiza; `CODCLI` generado de 13 chars). |
 | `push-catalog.mjs` | PG → ERP | Drena `erp_outbox`: precio/stock → `TIDSAL`; marcas → `TIDMARCAS` (+ `TIDSAL.INMARCAP`); categorías → **`TIDTAB`**; tipos → `TIDTPRO`; producto (nombre, barcode, dimensiones y atributos ERP) → `TIDSAL`; activación → `TIDSAL.INACTIVO`; estado de pedido → `DOMDIA.FAESTADO` y, al cancelar, `DOMITE.IFESTADO`. |
@@ -130,5 +130,5 @@ Los cambios hechos en el backend encolan en `erp_outbox` vía triggers y los dre
 - `ERP_ADT_DIR` (def. `db/ads/fortuner-dicts`) — diccionarios `.ADT` de FORTUNER.
 - `ERP_ORDER_PREFIX` (def. `9`) — prefijo del `FAPEDIDO`/`IFPEDIDO` web (9 dígitos).
 - `ERP_NEW_CODE_PREFIX` (def. `9`) — prefijo de códigos nuevos de maestras.
-- `ERP_PULL_SECONDS` (def. `300`) y `ERP_PUSH_SECONDS` (def. `30`) — ritmo del demonio.
+- `ERP_PULL_SECONDS` (def. `300`), `ERP_PULL_SLOW_SECONDS` (def. `900`) y `ERP_PUSH_SECONDS` (def. `30`) — ritmo del demonio.
 - `ADMIN_USER_ID` (def. `1`).

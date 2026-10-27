@@ -1,7 +1,11 @@
 /**
  * Demonio de sincronización ERP (Advantage) ⇄ Postgres.
  *
- *   - Pull (ERP → PG): `sync-catalog.mjs` cada ERP_PULL_SECONDS (5 min).
+ *   - Pull catálogo (ERP → PG): `sync-catalog.mjs` + `sync-masters.mjs` cada
+ *     ERP_PULL_SECONDS (5 min).
+ *   - Pull maestras (ERP → PG): `sync-customers.mjs` + `sync-suppliers.mjs` cada
+ *     ERP_PULL_SLOW_SECONDS (15 min). Los clientes/proveedores cambian poco y
+ *     `sync-suppliers.mjs` barre CONTERCE (~765k filas), por eso va más lento.
  *   - Push (PG → ERP): `push-catalog.mjs` (outbox), `push-orders.mjs` y
  *     `reconcile.mjs` cada ERP_PUSH_SECONDS (30 s).
  *
@@ -13,7 +17,7 @@
  * Uso:
  *   node scripts-agent/erp/erp-daemon.mjs              # bucle infinito
  *   node scripts-agent/erp/erp-daemon.mjs --once       # un ciclo (prueba)
- *   ERP_PULL_SECONDS=600 ERP_PUSH_SECONDS=15 node ...
+ *   ERP_PULL_SECONDS=600 ERP_PULL_SLOW_SECONDS=900 ERP_PUSH_SECONDS=15 node ...
  */
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
@@ -23,6 +27,7 @@ const a = args();
 const ONCE = !!a.once;
 const PULL = Math.max(60, Number(a.pull ?? process.env.ERP_PULL_SECONDS ?? 300));
 const PUSH = Math.max(10, Number(a.push ?? process.env.ERP_PUSH_SECONDS ?? 30));
+const PULL_SLOW = Math.max(300, Number(a['pull-slow'] ?? process.env.ERP_PULL_SLOW_SECONDS ?? 900));
 
 // No permitir el fallback silencioso a OpenADS: el ERP real se escribe por
 // asqlcmd. Si falta la configuración, es mejor fallar y no tocar otra base.
@@ -61,6 +66,7 @@ function pushCycle() {
 }
 
 let lastPull = 0;
+let lastPullSlow = 0;
 for (;;) {
   const now = Date.now();
   if (!lastPull || now - lastPull >= PULL * 1000) {
@@ -68,6 +74,12 @@ for (;;) {
     run('sync-catalog', 'sync-catalog.mjs');
     run('sync-masters', 'sync-masters.mjs', ['--prune', '--types-active=erp']);
     lastPull = Date.now();
+  }
+  if (!lastPullSlow || now - lastPullSlow >= PULL_SLOW * 1000) {
+    log(`── ${new Date().toISOString()} pull maestras (clientes + proveedores) ──`);
+    run('sync-customers', 'sync-customers.mjs');
+    run('sync-suppliers', 'sync-suppliers.mjs');
+    lastPullSlow = Date.now();
   }
   log(`── ${new Date().toISOString()} push ──`);
   pushCycle();
