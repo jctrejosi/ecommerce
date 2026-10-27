@@ -200,10 +200,11 @@ bot-platform.jcti.xyz {
 # ── Restaurantes (Punto C) — contenedor `restaurants_app` en shared_edge ──
 # El Caddy interno de ese contenedor enruta por Host a cada SPA y /api/* al
 # backend NestJS. Aquí solo se termina TLS y se reenvía.
-# DNS requerido (tipo A → IP pública): restaurant, reservas, cocina, admin y
-# mesero (todos bajo jcti.xyz).
-restaurant.jcti.xyz, reservas.jcti.xyz, cocina.jcti.xyz,
-admin.jcti.xyz, mesero.jcti.xyz {
+# DNS requerido (tipo A → IP pública): restaurante, restaurante.reservas,
+# restaurante.cocina, restaurante.admin y restaurante.mesero (bajo jcti.xyz).
+restaurante.jcti.xyz, restaurante.reservas.jcti.xyz,
+restaurante.cocina.jcti.xyz, restaurante.admin.jcti.xyz,
+restaurante.mesero.jcti.xyz {
 	import edge_headers
 
 	log {
