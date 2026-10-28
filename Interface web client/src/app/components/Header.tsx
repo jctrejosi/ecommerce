@@ -407,7 +407,7 @@ export function Header({
     <>
       <header
         ref={headerRef}
-        className={`sticky top-0 z-50 bg-white border-b border-border transition-shadow ${isStuck ? "shadow-sm" : ""}`}
+        className={`sticky top-0 z-50 header-main border-b border-border transition-shadow ${isStuck ? "shadow-sm" : ""}`}
       >
 
       {/* Logos (solo móvil): tira superior en una sola fila */}
@@ -512,8 +512,8 @@ export function Header({
                 style={
                   searchOpen
                     ? {
-                        boxShadow: "0 0 0 2px var(--primary)",
-                        borderColor: "var(--primary)",
+                        boxShadow: "0 0 0 2px var(--secondary)",
+                        borderColor: "var(--secondary)",
                         borderBottomLeftRadius: searchOpen ? "0" : "",
                         borderBottomRightRadius: searchOpen ? "0" : "",
                       }
@@ -822,7 +822,7 @@ export function Header({
             {cartCount > 0 && (
               <span
                 className="absolute -top-0.5 -right-0.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center"
-                style={{ background: "var(--primary)", color: "var(--foreground)" }}
+                style={{ background: "var(--secondary)", color: "var(--secondary-foreground)" }}
               >
                 {cartCount}
               </span>

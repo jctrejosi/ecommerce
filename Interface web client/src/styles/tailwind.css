@@ -13,6 +13,12 @@
   }
 }
 
+/* Header con el color principal del tema (configurable desde el admin). */
+.header-main {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
 /* Fila seleccionada en los filtros (p. ej. categorías del catálogo): fondo
    claramente marcado y texto con contraste en ambos temas. En oscuro se usa
    una mezcla opaca con el popover para no depender del fondo del contenedor. */
