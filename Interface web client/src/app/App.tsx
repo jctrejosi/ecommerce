@@ -267,8 +267,8 @@ export default function App() {
   } | null>(null);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
-  const [landingProductTypes, setLandingProductTypes] = useState<
-    { id: number; code: string; name: string; imagePath: string | null; count: number }[]
+  const [landingFeaturedCategories, setLandingFeaturedCategories] = useState<
+    { id: number; code: string; name: string; slug: string; imagePath: string | null; count: number }[]
   >([]);
   const [featuredTabs, setFeaturedTabs] = useState<
     { id: number; name: string; slug: string; position: number }[]
@@ -438,8 +438,8 @@ export default function App() {
           })
           .catch(() => {});
         void catalogService
-          .getFeaturedProductTypes()
-          .then(setLandingProductTypes)
+          .getFeaturedCategories()
+          .then(setLandingFeaturedCategories)
           .catch(() => {});
         void catalogService
           .getFeaturedTabs()
@@ -780,16 +780,6 @@ export default function App() {
     navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const handleProductTypeClick = (code: string) => {
-    setCatalogProductType(code);
-    setCatalogCategory([]);
-    setCatalogProductIds([]);
-    setCatalogSearch("");
-    setCurrentView("catalog");
-    navigate("/catalog");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
   const handleApplyFilter = (f: {
     categoryIds?: number[];
     productIds?: number[];
@@ -817,6 +807,10 @@ export default function App() {
     setCurrentView("catalog");
     navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleFeaturedCategoryClick = (categoryId: number) => {
+    handleApplyFilter({ categoryIds: [categoryId] });
   };
 
   const handleAddressClick = () => {
@@ -1163,8 +1157,8 @@ export default function App() {
           featuredBrands={featuredBrands}
           branches={landingBranches}
           onBrandClick={handleBrandClick}
-          productTypes={landingProductTypes}
-          onProductTypeClick={handleProductTypeClick}
+          featuredCategories={landingFeaturedCategories}
+          onFeaturedCategoryClick={handleFeaturedCategoryClick}
           featuredTabs={featuredTabs}
           onApplyFilter={handleApplyFilter}
         />

@@ -87,6 +87,12 @@ export const catalogService = {
     return fetchJson(`${API_BASE_URL}/landing/product-types`);
   },
 
+  async getFeaturedCategories(): Promise<
+    { id: number; code: string; name: string; slug: string; imagePath: string | null; count: number }[]
+  > {
+    return fetchJson(`${API_BASE_URL}/landing/categories`);
+  },
+
   async getFeaturedTabs(): Promise<{ id: number; name: string; slug: string; position: number }[]> {
     return fetchJson(`${API_BASE_URL}/featured/tabs`);
   },

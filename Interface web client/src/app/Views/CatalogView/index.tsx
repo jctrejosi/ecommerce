@@ -41,6 +41,228 @@ const SORT_OPTIONS = [
 const EMPTY_PRODUCTS: Product[] = [];
 const EMPTY_CATEGORIES: CatalogCategory[] = [];
 
+type FlyoutAnchor = { top: number; left: number; right: number };
+
+const FLYOUT_WIDTH = 240;
+const FLYOUT_GAP = 6;
+
+/** Posición del panel flotante; si no cabe a la derecha, se abre a la izquierda. */
+function flyoutPosition(anchor: FlyoutAnchor, openToRight: boolean) {
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+
+  let left = openToRight
+    ? anchor.right + FLYOUT_GAP
+    : anchor.left - FLYOUT_WIDTH - FLYOUT_GAP;
+
+  if (openToRight && left + FLYOUT_WIDTH > viewportWidth - 8) {
+    left = anchor.left - FLYOUT_WIDTH - FLYOUT_GAP;
+  }
+  left = Math.max(8, left);
+
+  const top = Math.max(8, Math.min(anchor.top, viewportHeight - 160));
+
+  return {
+    top,
+    left,
+    // El panel nunca se sale por abajo ni por la derecha.
+    maxHeight: Math.max(
+      160,
+      Math.min(Math.round(viewportHeight * 0.7), viewportHeight - top - 8),
+    ),
+    maxWidth: Math.max(FLYOUT_WIDTH, viewportWidth - left - 8),
+  };
+}
+
+interface CategoryFlyoutProps {
+  nodes: CatalogCategory[];
+  anchor: FlyoutAnchor;
+  openToRight: boolean;
+  selectedIds: number[];
+  childrenOf: (categoryId: number) => CatalogCategory[];
+  onToggle: (categoryId: number) => void;
+  onEnter: () => void;
+  onLeave: () => void;
+}
+
+/**
+ * Menú de categorías en columnas contiguas, con el mismo estilado del
+ * mega-menú "Nuestros productos" del header: 240px por columna, filas planas
+ * con `hover:bg-muted`, icono de 24px y borde izquierdo entre columnas.
+ * Cada nivel se abre solo al pasar sobre su categoría padre.
+ */
+function CategoryFlyout({
+  nodes,
+  anchor,
+  openToRight,
+  selectedIds,
+  childrenOf,
+  onToggle,
+  onEnter,
+  onLeave,
+}: CategoryFlyoutProps) {
+  // Cadena de categorías sobre las que está el puntero: cada nivel abre una
+  // columna a la derecha, igual que el mega-menú "Nuestros productos".
+  const [path, setPath] = useState<number[]>([]);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(
+    () => () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
+  const cancelClose = () => {
+    if (closeTimer.current) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  };
+
+  const scheduleClose = () => {
+    cancelClose();
+    closeTimer.current = setTimeout(() => setPath([]), 100);
+  };
+
+  // Columna 0 = hijos de la categoría raíz; cada id del path añade una columna.
+  const columns: CatalogCategory[][] = [nodes];
+  for (const id of path) {
+    const current = columns[columns.length - 1];
+    const node = current.find((item) => item.id === id);
+    if (!node) break;
+    const kids = childrenOf(node.id);
+    if (kids.length === 0) break;
+    columns.push(kids);
+  }
+
+  const { top, left, maxHeight, maxWidth } = flyoutPosition(
+    anchor,
+    openToRight,
+  );
+
+  return (
+    <div
+      className="fixed z-40 flex overflow-x-auto overflow-y-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-xl"
+      style={{ top, left, maxHeight, maxWidth }}
+      onMouseEnter={() => {
+        cancelClose();
+        onEnter();
+      }}
+      onMouseLeave={() => {
+        scheduleClose();
+        onLeave();
+      }}
+    >
+      {columns.map((column, columnIndex) => {
+        const activeId = path[columnIndex] ?? null;
+
+        return (
+          <div
+            key={columnIndex}
+            className={`shrink-0 overflow-y-auto overflow-x-hidden ${
+              columnIndex > 0 ? "border-l border-border" : ""
+            }`}
+            style={{ maxHeight }}
+            onMouseEnter={() => {
+              cancelClose();
+              onEnter();
+            }}
+          >
+            <div className="w-[240px] py-2">
+              {column.map((node) => {
+                const kids = childrenOf(node.id);
+                const hasKids = kids.length > 0;
+                const checked = selectedIds.includes(node.id);
+                const isActive = activeId === node.id;
+                const icon = categoryIcon(node.slug, node.name);
+
+                return (
+                  <div
+                    key={node.id}
+                    className={`flex min-h-[32px] items-center transition-colors ${
+                      checked
+                        ? "filter-selected"
+                        : isActive
+                          ? "bg-muted"
+                          : "hover:bg-muted"
+                    }`}
+                    onMouseEnter={() => {
+                      cancelClose();
+                      onEnter();
+                      setPath(
+                        hasKids
+                          ? [...path.slice(0, columnIndex), node.id]
+                          : path.slice(0, columnIndex),
+                      );
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => onToggle(node.id)}
+                      title={node.name}
+                      className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2 text-left"
+                    >
+                      <div
+                        className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-lg text-[13px] leading-none"
+                        style={{
+                          background: node.bg || "var(--muted)",
+                          color: node.color || "var(--muted-foreground)",
+                        }}
+                      >
+                        {icon}
+                      </div>
+                      <span
+                        className={`min-w-0 flex-1 whitespace-normal text-xs font-medium uppercase tracking-wide ${
+                          checked ? "" : "text-foreground"
+                        }`}
+                      >
+                        {node.name}
+                      </span>
+                      {checked && (
+                        <Check className="h-3.5 w-3.5 flex-shrink-0" />
+                      )}
+                    </button>
+                    {hasKids && (
+                      <button
+                        type="button"
+                        aria-label={
+                          isActive
+                            ? `Contraer ${node.name}`
+                            : `Ver subcategorías de ${node.name}`
+                        }
+                        aria-expanded={isActive}
+                        onClick={() =>
+                          setPath(
+                            isActive
+                              ? path.slice(0, columnIndex)
+                              : [...path.slice(0, columnIndex), node.id],
+                          )
+                        }
+                        className={`mr-1 flex-shrink-0 rounded p-1 transition-colors ${
+                          checked
+                            ? "opacity-80 hover:opacity-100"
+                            : "text-muted-foreground hover:text-foreground"
+                        }`}
+                      >
+                        <ChevronRight
+                          className={`h-3 w-3 transition-transform ${
+                            isActive ? "rotate-90" : "rotate-0"
+                          }`}
+                        />
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // Productos por página del scroll infinito.
 const PAGE_SIZE = 20;
 
@@ -395,64 +617,6 @@ export function CatalogPage({
   }: {
     flyoutToRight?: boolean;
   }) => {
-    // Nodo del subárbol dentro del flyout flotante: cada subcategoría con su
-    // check visible (anidado por nivel, con scroll propio si es muy largo).
-    const renderFlyoutNode = (node: CatalogCategory) => {
-      const kids = getChildCategories(node.id);
-      const nodeChecked = catalogCategory.includes(node.id);
-      return (
-        <div key={node.id}>
-          <label
-            className={`flex items-center gap-2 py-1.5 px-2 rounded-lg cursor-pointer transition-colors ${
-              nodeChecked ? "bg-amber-50" : "hover:bg-muted"
-            }`}
-          >
-            <div
-              className="w-4 h-4 rounded border flex items-center justify-center flex-shrink-0 transition-all"
-              style={{
-                borderColor: nodeChecked ? "var(--secondary)" : "#D1D5DB",
-                background: nodeChecked ? "var(--secondary)" : "white",
-              }}
-              onClick={() => toggleCategory(node.id)}
-            >
-              {nodeChecked && (
-                <svg width="8" height="6" viewBox="0 0 10 8" fill="none">
-                  <path
-                    d="M1 4l2.5 2.5L9 1"
-                    stroke="#FFF200"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              )}
-            </div>
-            <span
-              className="text-xs flex-1 min-w-0 transition-colors leading-tight break-words"
-              style={{
-                color: nodeChecked ? "var(--foreground)" : "var(--muted-foreground)",
-                fontWeight: nodeChecked ? 600 : 400,
-              }}
-              onClick={() => toggleCategory(node.id)}
-            >
-              {node.name}
-            </span>
-            {kids.length > 0 && (
-              <ChevronRight
-                size={12}
-                className="text-gray-300 flex-shrink-0"
-              />
-            )}
-          </label>
-          {kids.length > 0 && (
-            <div className="ml-4 border-l border-border pl-1">
-              {kids.map((k) => renderFlyoutNode(k))}
-            </div>
-          )}
-        </div>
-      );
-    };
-
     return (
     <div className="space-y-6">
       {/* Categories */}
@@ -478,29 +642,13 @@ export function CatalogPage({
               >
                 <label
                   className={`flex items-center gap-2.5 py-1.5 px-2 rounded-lg cursor-pointer transition-colors ${
-                    isOpen ? "bg-muted" : "hover:bg-muted"
+                    checked
+                      ? "filter-selected"
+                      : isOpen
+                        ? "bg-muted"
+                        : "hover:bg-muted"
                   }`}
                 >
-                  <div
-                    className="w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 transition-all"
-                    style={{
-                      borderColor: checked ? "var(--secondary)" : "#D1D5DB",
-                      background: checked ? "var(--secondary)" : "white",
-                    }}
-                    onClick={() => toggleCategory(cat.id)}
-                  >
-                    {checked && (
-                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
-                        <path
-                          d="M1 4l2.5 2.5L9 1"
-                          stroke="#FFF200"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    )}
-                  </div>
                   <div
                     className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0 text-[12px] leading-none"
                     style={{ background: cat.bg ?? "var(--muted)" }}
@@ -508,11 +656,9 @@ export function CatalogPage({
                     {icon}
                   </div>
                   <span
-                    className="text-sm flex-1 min-w-0 transition-colors leading-tight break-words"
-                    style={{
-                      color: checked ? "var(--foreground)" : "var(--muted-foreground)",
-                      fontWeight: checked ? 600 : 400,
-                    }}
+                    className={`text-sm flex-1 min-w-0 transition-colors leading-tight break-words ${
+                      checked ? "font-semibold" : "text-muted-foreground"
+                    }`}
                     onClick={() => toggleCategory(cat.id)}
                   >
                     {cat.name}
@@ -525,10 +671,12 @@ export function CatalogPage({
                         setPinCat(isOpen ? null : cat.id);
                       }}
                       className={`p-0.5 rounded transition-all ${
-                        isOpen
-                          ? "text-foreground rotate-90"
-                          : "text-gray-300 hover:text-gray-500"
-                      }`}
+                        checked
+                          ? "opacity-80 hover:opacity-100"
+                          : isOpen
+                            ? "text-foreground"
+                            : "text-gray-300 hover:text-gray-500"
+                      } ${isOpen ? "rotate-90" : ""}`}
                       title={isOpen ? "Contraer" : "Expandir"}
                     >
                       <ChevronRight size={14} />
@@ -541,24 +689,16 @@ export function CatalogPage({
                   // header pegajoso (z-50) y de las capas flotantes (carrito,
                   // modales). El panel se dibuja justo debajo del header, nunca
                   // lo tapa. Con z-[60] se montaba encima del carrito.
-                  <div
-                    className="fixed z-40 w-64 max-h-[70vh] overflow-y-auto overflow-x-hidden bg-white border border-border rounded-xl shadow-2xl p-2"
-                    style={{
-                      top: Math.min(flyoutAnchor.top, window.innerHeight - 80),
-                      left: flyoutToRight
-                        ? flyoutAnchor.right + 4
-                        : Math.max(8, flyoutAnchor.left - 256 - 4),
-                    }}
-                    onMouseEnter={() => {
-                      cancelCloseCat();
-                      setHoverCat(cat.id);
-                    }}
-                    onMouseLeave={scheduleCloseCat}
-                  >
-                    {childCategories.map((child) =>
-                      renderFlyoutNode(child),
-                    )}
-                  </div>
+                  <CategoryFlyout
+                    nodes={childCategories}
+                    anchor={flyoutAnchor}
+                    openToRight={flyoutToRight}
+                    selectedIds={catalogCategory}
+                    childrenOf={getChildCategories}
+                    onToggle={toggleCategory}
+                    onEnter={cancelCloseCat}
+                    onLeave={scheduleCloseCat}
+                  />
                 )}
               </div>
             );

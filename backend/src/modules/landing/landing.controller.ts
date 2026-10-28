@@ -109,6 +109,11 @@ export class LandingPublicController {
   getFeatured() { return this.landingService.getFeaturedProductTypes(); }
 
   @Public()
+  @Get('categories')
+  @ApiOperation({ summary: 'Categorías raíz para "Nuestros productos" (público)' })
+  getFeaturedCategories() { return this.landingService.getFeaturedCategories(); }
+
+  @Public()
   @Get('daily-deals')
   @ApiOperation({ summary: 'Ofertas del día (público)' })
   getDailyDeals(@Query('branchId') branchId?: string) {

@@ -51,7 +51,44 @@ export class PickerQueueService {
       .update(users)
       .set({ isAvailable: available, lastSeenAt: now })
       .where(eq(users.id, BigInt(pickerId)));
+
+    // Al volver a estar disponible, despacha los pedidos sin asignar de su
+    // sucursal (los que llegaron cuando no había nadie libre).
+    if (available) {
+      await this.redispatchBranch(pickerId);
+    }
     return { ok: true, pickerId, available };
+  }
+
+  /** Despacha los pedidos sin picker de la sucursal de un picker. */
+  private async redispatchBranch(pickerId: number): Promise<void> {
+    const [ub] = await this.db
+      .select({ branchId: userBranches.branchId })
+      .from(userBranches)
+      .where(eq(userBranches.userId, pickerId))
+      .limit(1);
+    if (!ub) return;
+
+    const unassigned = await this.db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.branchId, ub.branchId),
+          isNull(orders.pickerId),
+          inArray(orders.status, [...DISPATCH_STATUSES]),
+        ),
+      );
+
+    for (const o of unassigned) {
+      try {
+        await this.dispatchNewOrder(Number(o.id));
+      } catch (e) {
+        this.logger.warn(
+          `No se pudo despachar el pedido ${Number(o.id)}: ${e instanceof Error ? e.message : String(e)}`,
+        );
+      }
+    }
   }
 
   /** La app avisa que sigue abierta: refresca `last_seen_at`. */

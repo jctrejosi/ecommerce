@@ -778,7 +778,7 @@ export class PickingService {
       if (nextStatus !== order.status) {
         await tx
           .update(orders)
-          .set({ status: nextStatus })
+          .set({ status: nextStatus, pickedAt: new Date().toISOString() })
           .where(eq(orders.id, BigInt(id)));
         await tx.insert(orderStatusHistory).values({
           orderId: id,

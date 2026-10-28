@@ -29,7 +29,7 @@ interface LandingViewProps {
   } | null;
   cartItems: CartItem[];
   branches: Branch[];
-  productTypes: { id: number; code: string; name: string; imagePath: string | null; count: number }[];
+  featuredCategories: { id: number; code: string; name: string; slug: string; imagePath: string | null; count: number }[];
   featuredTabs?: FeaturedTab[];
   onTabChange: (tab: string) => void;
   onAdd: (product: Product, quantity?: number) => void;
@@ -38,7 +38,7 @@ interface LandingViewProps {
   onCategoryClick: (categoryId: number) => void;
   onViewCatalog: () => void;
   onBrandClick: (brandId: number) => void;
-  onProductTypeClick: (code: string) => void;
+  onFeaturedCategoryClick: (categoryId: number) => void;
   onApplyFilter: (f: { categoryIds?: number[]; productIds?: number[]; brandId?: number | null; productTypeCode?: string; onSale?: boolean; search?: string; sort?: string; priceMin?: number; priceMax?: number }) => void;
   featuredBrands: Brand[];
 }
@@ -61,8 +61,8 @@ export function LandingView({
   featuredBrands,
   branches,
   onBrandClick,
-  productTypes,
-  onProductTypeClick,
+  featuredCategories,
+  onFeaturedCategoryClick,
   featuredTabs = [],
 }: LandingViewProps) {
   return (
@@ -70,8 +70,8 @@ export function LandingView({
       <HeroSection onApplyFilter={onApplyFilter} />
 
       <QuickCategoriesSection
-        productTypes={productTypes}
-        onProductTypeClick={onProductTypeClick}
+        categories={featuredCategories}
+        onCategoryClick={onFeaturedCategoryClick}
         onViewAll={onViewCatalog}
       />
       <PromoBanner />
