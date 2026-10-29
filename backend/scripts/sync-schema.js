@@ -60,6 +60,43 @@ const COLUMNS = [
      ADD COLUMN IF NOT EXISTS categorias_distintas double precision`,
   `ALTER TABLE campaign_recipients
      ADD COLUMN IF NOT EXISTS propensity double precision`,
+  // usuarios: disponibilidad del picker y heartbeat de la app móvil
+  `ALTER TABLE users
+     ADD COLUMN IF NOT EXISTS is_available boolean NOT NULL DEFAULT true`,
+  `ALTER TABLE users
+     ADD COLUMN IF NOT EXISTS last_seen_at timestamptz`,
+  // promociones: descuento base y días de la semana en que aplica
+  `ALTER TABLE promotions
+     ADD COLUMN IF NOT EXISTS discount_type varchar(20) NOT NULL DEFAULT 'percentage'`,
+  `ALTER TABLE promotions
+     ADD COLUMN IF NOT EXISTS discount_value numeric(12,2) NOT NULL DEFAULT '0'`,
+  `ALTER TABLE promotions
+     ADD COLUMN IF NOT EXISTS maximum_discount numeric(12,2)`,
+  `ALTER TABLE promotions
+     ADD COLUMN IF NOT EXISTS weekdays integer[]`,
+  // cupones: bono digital (saldo), estado, descuento propio y notas
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS kind varchar(20) NOT NULL DEFAULT 'discount'`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS discount_type varchar(20)`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS discount_value numeric(12,2)`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS maximum_discount numeric(12,2)`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS initial_balance numeric(12,2)`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS current_balance numeric(12,2)`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS currency varchar(3) NOT NULL DEFAULT 'COP'`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS status varchar(20) NOT NULL DEFAULT 'active'`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS issued_customer_id bigint`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS created_by bigint`,
+  `ALTER TABLE coupons
+     ADD COLUMN IF NOT EXISTS notes text`,
 ];
 
 function splitSQL(sql) {
