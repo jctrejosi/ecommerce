@@ -1,0 +1,12 @@
+images_static/media/categories/3121/electrodomesticos.png
+images_static/media/categories/3122/carnes-pollo-y-pescado.png
+images_static/media/categories/3124/frutas-y-verduras.png
+images_static/media/categories/3125/despensa.png
+images_static/media/categories/3126/lacteos-y-refrigerados.png
+images_static/media/categories/3127/vinos-y-licores.png
+images_static/media/categories/3128/cuidado-del-bebe.jpg
+images_static/media/categories/3129/mascotas.png
+images_static/media/categories/3130/limpieza.png
+images_static/media/categories/3131/cuidado-personal.png
+images_static/media/categories/3133/hogar.png
+images_static/media/categories/3135/tecnologia.png
