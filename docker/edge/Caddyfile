@@ -226,3 +226,25 @@ restaurante.mesero.jcti.xyz {
 
 	reverse_proxy restaurants_app:8080
 }
+
+# ── PRODDSI (Suite Producción) — contenedor `production_web` en shared_edge ──
+# SPA estática (Vite + React) servida por el Caddy interno de su contenedor en
+# :8080, sin API ni base de datos. Aquí solo se termina TLS y se reenvía.
+# DNS requerido (tipo A → IP pública): production (bajo jcti.xyz).
+production.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	tls {
+		issuer acme {
+			dir https://acme-v02.api.letsencrypt.org/directory
+			test_dir https://acme-v02.api.letsencrypt.org/directory
+		}
+	}
+
+	reverse_proxy production_web:8080
+}
