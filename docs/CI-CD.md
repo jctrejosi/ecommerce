@@ -106,6 +106,22 @@ sudo systemctl enable --now jcti-autodeploy.timer
 `AUTODEPLOY_PROJECTS="crm restaurants"` permite limitar la pasada a ciertos
 proyectos (útil para depurar uno solo).
 
+### Estado y fallos
+
+`/home/deploy/.autodeploy/<proyecto>.ok` guarda el SHA que quedó desplegado. Se
+usa en vez de `git rev-parse HEAD` porque `deploy.sh` hace el checkout **antes**
+de construir: si el build falla, `HEAD` ya apunta al commit nuevo y el sondeo no
+volvería a intentarlo nunca.
+
+Un commit que falla se anota en `<proyecto>.failed` y **no** se reintenta en
+bucle (sería un build cada 2 minutos): se espera a un push nuevo o a un
+despliegue manual con `deploy.sh`. Tras un despliegue manual correcto, borra el
+archivo `.failed` (o deja que el siguiente push lo haga).
+
+> El script que corre una pasada ya está en memoria cuando `deploy.sh` cambia de
+> versión: los cambios en el propio `deploy.sh` aplican a partir del siguiente
+> despliegue, no en el que los introduce.
+
 ## 3. Despliegue manual / reintento
 
 ```bash
