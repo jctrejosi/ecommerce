@@ -228,8 +228,7 @@ function printDns(cfg) {
   const W = 66;
   const bar = "━".repeat(W);
   const line = (s = "") => console.log(`  ${s}`);
-  const recordName = (d) =>
-    d === cfg.baseDomain ? "@ (raíz)" : d.slice(0, -(zone.length + 1));
+  const recordName = (d) => d.slice(0, -(zone.length + 1));
 
   const doms = [cfg.hosts.web, cfg.hosts.api, cfg.hosts.admin];
   for (const [key] of FRONTS) if (key !== "web" && key !== "admin" && cfg.hosts[key]) doms.push(cfg.hosts[key]);
@@ -242,11 +241,14 @@ function printDns(cfg) {
   line(`Modo         : ${edge ? "edge (el edge compartido publica 80/443 y hace TLS)" : "directo (este contenedor publica 80/443 y hace TLS)"}`);
   console.log(bar);
 
-  line(`${C.cyan}1) En GoDaddy → zona ${zone} → registros tipo A (TTL 600):${C.reset}`);
+  line(`${C.cyan}1) En Cloudflare → zona ${zone} → registros tipo A (proxied/naranja):${C.reset}`);
   line(`   Valor para todos: ${ip}`);
   line(`   ─────────────────────────────────────────────`);
   for (const d of doms) line(`   Nombre: ${recordName(d).padEnd(28)} →  ${d}`);
   line(`   ─────────────────────────────────────────────`);
+  line(`${C.warn}   Un solo nivel bajo ${zone}: el Universal SSL gratuito de Cloudflare${C.reset}`);
+  line(`${C.warn}   cubre ${zone} y *.${zone}. Un \`api.mercaldas.${zone}\` NO recibe${C.reset}`);
+  line(`${C.warn}   certificado en el borde (handshake TLS falla).${C.reset}`);
   line(`${C.dim}   (No crees picking.mercaldas ni ml.mercaldas: no se sirven aquí.${C.reset}`);
   line(`${C.dim}    ml.mercaldas es opcional y lo sirve el contenedor de Astaroth.)${C.reset}`);
 
@@ -255,6 +257,8 @@ function printDns(cfg) {
   if (edge) {
     line(`   Abre SOLO 80 y 443 (los publica el edge en docker/edge/).`);
     line(`   El contenedor publica ${cfg.edgePorts.http}/${cfg.edgePorts.https} en loopback: no abras nada más.`);
+    line(`   Con Cloudflare delante, 80/443 se restringen a sus rangos`);
+    line(`   (docker/edge/cloudflare-origin-firewall.sh + unit systemd).`);
   } else {
     line(`   Abre SOLO TCP 80 y 443 en el proveedor del VPS y en Windows.`);
   }
