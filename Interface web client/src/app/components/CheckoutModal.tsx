@@ -70,8 +70,6 @@ interface CheckoutModalProps {
   brebEnabled?: boolean;
   brebKey?: string;
   brebBank?: string;
-  brebQrImageUrl?: string;
-  brebQrMime?: string;
   efectivoEnabled?: boolean;
   checkoutLoading: boolean;
   checkoutError: string | null;
@@ -166,8 +164,6 @@ export function CheckoutModal({
   brebEnabled = true,
   brebKey = "@davi3148853458",
   brebBank = "Davivienda",
-  brebQrImageUrl = "",
-  brebQrMime = "",
   efectivoEnabled = true,
   psePayment,
   nequiPayment,
@@ -395,18 +391,13 @@ export function CheckoutModal({
     });
   };
 
-  // Un QR en PDF no se renderiza en <img>: se muestra en <iframe>
-  const brebQrIsPdf =
-    brebQrMime === "application/pdf" ||
-    brebQrImageUrl.startsWith("data:application/pdf");
-
   // Métodos de pago filtrados según config de Wompi
   const allMethods = [
     { key: "efectivo" as const, label: "Efectivo contra entrega", Icon: Banknote, desc: "Paga al recibir tu pedido", enabled: efectivoEnabled },
     { key: "nequi" as const, label: "Nequi", Icon: Smartphone, desc: "Transferencia inmediata", enabled: wompiEnabled && wompiMethods.nequi },
     { key: "pse" as const, label: "PSE", Icon: Building2, desc: "Débito bancario en línea", enabled: wompiEnabled && wompiMethods.pse },
     { key: "tarjeta" as const, label: "Tarjeta débito / crédito", Icon: CreditCard, desc: "Visa, Mastercard, Amex", enabled: wompiEnabled && wompiMethods.card },
-    { key: "breb" as const, label: "Bre-B (Transferencia entre bancos)", Icon: Building2, desc: `Transfiere a ${brebKey}`, enabled: brebEnabled },
+    { key: "breb" as const, label: "Bre-B", Icon: Building2, desc: `Transfiere a ${brebKey}`, enabled: brebEnabled },
   ];
   const paymentMethods = allMethods.filter((m) => m.enabled);
 
@@ -1233,6 +1224,7 @@ export function CheckoutModal({
                       <span className="text-sm font-bold text-foreground">{brebKey}</span>
                       <button
                         onClick={handleCopyLlave}
+                        aria-label="Copiar llave"
                         className="p-1 rounded-lg hover:bg-muted transition-colors"
                       >
                         {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
@@ -1247,23 +1239,6 @@ export function CheckoutModal({
                     <span className="text-xs text-muted-foreground">Monto a transferir</span>
                     <span className="text-sm font-bold text-foreground">{fmt(amountToPay)}</span>
                   </div>
-                  {brebQrImageUrl && (
-                    <div className="flex justify-center pt-2">
-                      {brebQrIsPdf ? (
-                        <iframe
-                          src={brebQrImageUrl}
-                          title="QR de pago"
-                          className="w-40 h-40 rounded-lg border border-border bg-white"
-                        />
-                      ) : (
-                        <img
-                          src={brebQrImageUrl}
-                          alt="QR de pago"
-                          className="w-40 h-40 object-contain rounded-lg border border-border"
-                        />
-                      )}
-                    </div>
-                  )}
                 </div>
                 <p className="text-xs text-amber-600 bg-amber-50 rounded-xl p-2">
                   Tu pedido se confirmará cuando verifiquemos la transferencia. Usa el código de referencia como concepto.
@@ -1450,7 +1425,11 @@ export function CheckoutModal({
                         <span className="text-xs text-muted-foreground">Llave</span>
                         <div className="flex items-center gap-1.5">
                           <span className="text-sm font-bold">{brebKey}</span>
-                          <button onClick={handleCopyLlave} className="p-1 rounded-lg hover:bg-amber-100">
+                          <button
+                            onClick={handleCopyLlave}
+                            aria-label="Copiar llave"
+                            className="p-1 rounded-lg hover:bg-amber-100"
+                          >
                             {copied ? <Check className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5 text-muted-foreground" />}
                           </button>
                         </div>
@@ -1463,23 +1442,6 @@ export function CheckoutModal({
                         <span className="text-xs text-muted-foreground">Monto</span>
                         <span className="text-sm font-bold">{fmt(amountToPay)}</span>
                       </div>
-                      {brebQrImageUrl && (
-                        <div className="flex justify-center pt-2">
-                          {brebQrIsPdf ? (
-                            <iframe
-                              src={brebQrImageUrl}
-                              title="QR de pago"
-                              className="w-36 h-36 rounded-lg border border-amber-200 bg-white"
-                            />
-                          ) : (
-                            <img
-                              src={brebQrImageUrl}
-                              alt="QR de pago"
-                              className="w-36 h-36 object-contain rounded-lg border border-amber-200"
-                            />
-                          )}
-                        </div>
-                      )}
                     </div>
                   )}
                   {checkoutPayment !== "breb" && (

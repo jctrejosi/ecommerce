@@ -219,8 +219,7 @@ export default function App() {
   const [brebEnabled, setBrebEnabled] = useState(true);
   const [brebKey, setBrebKey] = useState("@davi3148853458");
   const [brebBank, setBrebBank] = useState("Davivienda");
-  const [brebQrImageUrl, setBrebQrImageUrl] = useState("");
-  const [brebQrMime, setBrebQrMime] = useState("");
+
   const [efectivoEnabled, setEfectivoEnabled] = useState(true);
   const [wompiMethods, setWompiMethods] = useState({ card: true, pse: true, nequi: true });
   const [wompiAcceptance, setWompiAcceptance] = useState({
@@ -951,8 +950,6 @@ export default function App() {
         setBrebEnabled(d?.breb?.enabled ?? true);
         setBrebKey(d?.breb?.key ?? "@davi3148853458");
         setBrebBank(d?.breb?.bank ?? "Davivienda");
-        setBrebQrImageUrl(d?.breb?.qrImageUrl ?? "");
-        setBrebQrMime(d?.breb?.qrImageMime ?? "");
         setEfectivoEnabled(d?.efectivo?.enabled ?? true);
         setWompiMethods({
           card: d?.wompi?.methods?.card ?? true,
@@ -1239,8 +1236,6 @@ export default function App() {
         brebEnabled={brebEnabled}
         brebKey={brebKey}
         brebBank={brebBank}
-        brebQrImageUrl={brebQrImageUrl}
-        brebQrMime={brebQrMime}
         efectivoEnabled={efectivoEnabled}
         psePayment={psePayment}
         nequiPayment={nequiPayment}

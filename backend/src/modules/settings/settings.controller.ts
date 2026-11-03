@@ -124,7 +124,7 @@ export class SettingsController {
       }
     }
 
-    // Bre-B: requiere una llave válida.
+    // Bre-B: requiere una llave válida para mostrarle al cliente.
     if (next?.breb?.enabled === true && !wasEnabled('breb')) {
       const key = String(next?.breb?.key ?? '').trim();
       if (key.length < 3 || /\s/.test(key)) {
@@ -143,7 +143,7 @@ export class SettingsController {
     const defaults = {
       efectivo: { enabled: true },
       wompi: { enabled: true, methods: { card: true, pse: true, nequi: true } },
-      breb: { enabled: true, key: '@davi3148853458', bank: 'Davivienda', qrImageUrl: '' },
+      breb: { enabled: true, key: '@davi3148853458', bank: 'Davivienda' },
     };
     if (!row) {
       return defaults;
@@ -163,8 +163,6 @@ export class SettingsController {
         enabled: value?.breb?.enabled ?? true,
         key: value?.breb?.key ?? '@davi3148853458',
         bank: value?.breb?.bank ?? 'Davivienda',
-        qrImageUrl: value?.breb?.qrImageUrl ?? '',
-        qrImageMime: value?.breb?.qrImageMime ?? null,
       },
     };
   }
