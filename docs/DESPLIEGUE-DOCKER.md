@@ -376,11 +376,11 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 |---|---|
 | Bucle de reinicio del contenedor | Falta `CLOUDINARY_*` (obligatorias) u otro secreto; revisa `logs -f app`. |
 | `entrypoint.sh: /usr/bin/env: 'bash\r'` | El clon quedó en CRLF. La imagen lo normaliza con `sed`, pero si editas el `.sh` en Windows, guárdalo con **LF**. |
-| Caddy no emite certificados | 80/443 no llegan al host (firewall/router) o el DNS no apunta a la IP. Revisa `docker compose … logs app`. |
+| Caddy no emite certificados | Modo directo: 80/443 no llegan al host o el DNS no apunta a la IP. Con Cloudflare delante **no aplica**: el edge sirve el certificado de origen (§4.2). |
 | Un front no carga | Falta su `HOST_*` o `VITE_API_URL` no coincide con `HOST_WEB` al compilar. |
 | El navegador da CORS | `CORS_ORIGIN` debe incluir las URLs de las interfaces (se deriva solo de los `HOST_*` si lo dejas vacío). |
 | No conecta a la BD | `DATABASE_URL` incorrecta o el contenedor de BD no está en `mercaldas_internal`. |
-| Docker no responde | En este servidor: `wsl -d Ubuntu -u root -- systemctl status docker` y comprueba la tarea `MercaldasDockerEngine`. Docker Desktop está deshabilitado a propósito. |
+| Docker no responde | `systemctl status docker` (servidor Debian). En el VPS Windows antiguo: `wsl -d Ubuntu -u root -- systemctl status docker`. |
 
 ---
 
@@ -400,3 +400,61 @@ docker compose -f docker/docker-compose.yml down -v    # borra también certs/BD
 - [ ] Paneles de administración protegidos (`PROTECT_ADMIN=true` + `ADMIN_PASSWORD`).
 - [ ] `/bot/health` responde a través del backend (el bot ya no está expuesto por Caddy).
 - [ ] `3100`, `8001`, `5432` y `30180` **no** son accesibles desde fuera.
+- [ ] `curl -k https://<IP_DEL_SERVIDOR>/` **no** responde (origen cerrado a Cloudflare).
+- [ ] `docker exec mercaldas_app curl -s -o /dev/null -w '%{http_code}' https://www.google.com` → `200` (salida a internet intacta).
+
+---
+
+## 11. Servidor de producción actual y CI/CD
+
+### 11.1 Servidor
+
+| Dato | Valor |
+|---|---|
+| IP | `169.58.255.64` |
+| SO | Debian 12, Docker nativo (no WSL) |
+| Acceso | `ssh prod` → usuario `deploy` (llave `id_ed25519_prod`), `sudo` sin contraseña, en el grupo `docker` |
+| Red de administración | Tailscale (`srv-prod`) |
+| Repo | `/home/deploy/ecommerce` (rama `dev`) |
+| Secretos | `docker/.env` (600, no versionado) |
+| Servicios | `mercaldas_app`, `ecommerce_postgres`, `mercaldas_osrm`, `edge_caddy` |
+
+Todos los servicios van con `restart: unless-stopped` y `docker.service` está
+`enabled`: el stack vuelve solo tras un reinicio del servidor.
+
+### 11.2 Despliegue manual
+
+```bash
+cd /home/deploy/ecommerce
+git pull --ff-only && sudo docker compose -f docker/docker-compose.yml build \
+  && sudo docker compose -f docker/docker-compose.yml up -d \
+  && sudo docker compose -f docker/edge/docker-compose.yml up -d
+# o el script idempotente, que además valida el healthcheck y recarga el edge:
+bash deploy/deploy.sh
+```
+
+`node prod.js` sincroniza `docker/.env` desde `prod.config.json` (hosts, TLS,
+URLs, puertos) y reconstruye la imagen con el `VITE_API_URL` correcto.
+
+### 11.3 CI/CD (GitHub Actions)
+
+`.github/workflows/ci-cd.yml`: **CI** construye la imagen en cada push/PR a
+`master`/`dev`; **deploy** corre en pushes a `dev` sobre un runner self-hosted
+y ejecuta `deploy/deploy.sh`.
+
+Para dejarlo activo hacen falta dos pasos **en GitHub** (una sola vez):
+
+1. **Deploy key** (para que `git fetch` funcione en el servidor): repo →
+   *Settings → Deploy keys → Add deploy key*, pegar
+   `ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEH8w4i/9FOM2IefoB99Djwu3gnr3NX7UZht2G7URJis srv-prod-github`
+   (solo lectura).
+2. **Runner self-hosted**: repo → *Settings → Actions → Runners → New
+   self-hosted runner* (Linux x64) y en el servidor:
+
+   ```bash
+   cd /home/deploy/ecommerce
+   sudo RUNNER_USER=deploy bash deploy/install-runner.sh <TOKEN>
+   ```
+
+   El workflow espera labels `self-hosted, linux, mercaldas` y
+   `DEPLOY_PATH=/home/deploy/ecommerce` (variable de repositorio).

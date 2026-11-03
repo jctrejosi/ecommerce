@@ -48,6 +48,10 @@ Principio: **un solo proceso habla con internet (Caddy); nada más se publica.**
   porque los puertos publicados por Docker entran por `FORWARD` y **no pasan por
   las reglas INPUT de `ufw`**. `ufw` replica la política para servicios fuera de
   Docker. Verificación: `curl -k https://<IP_DEL_SERVIDOR>/` **no** responde.
+- ⚠️ `DOCKER-USER` **también ve el tráfico de salida** de los contenedores: todas
+  las reglas llevan `-i <WAN>` (más un `RETURN` para `tailscale0`). Sin esa
+  condición se rompe el HTTPS saliente (DeepSeek, Cloudinary, Google, Wompi).
+  Verificación: `docker exec mercaldas_app curl -s -o /dev/null -w '%{http_code}' https://www.google.com` → `200`.
 - **Un solo nivel de subdominio** bajo `jcti.xyz`: el *Universal SSL* gratuito
   cubre `jcti.xyz` y `*.jcti.xyz`. Un `api.mercaldas.jcti.xyz` no recibe
   certificado en el borde (handshake TLS falla). Por eso los hosts son

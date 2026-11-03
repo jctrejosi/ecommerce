@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-# Despliegue de producción del ecommerce en el VPS (WSL + Docker).
+# Despliegue de producción del ecommerce en el servidor (Docker, Debian).
 #
 # Uso:
 #   bash deploy/deploy.sh                 # despliega origin/dev
@@ -15,7 +15,7 @@
 # ============================================================
 set -Eeuo pipefail
 
-ROOT="${DEPLOY_PATH:-/mnt/c/Users/Desarrolo4/Documents/ecommerce}"
+ROOT="${DEPLOY_PATH:-/home/deploy/ecommerce}"
 TARGET="${1:-origin/dev}"
 COMPOSE_FILE="$ROOT/docker/docker-compose.yml"
 ENV_FILE="$ROOT/docker/.env"

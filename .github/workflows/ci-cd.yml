@@ -40,7 +40,7 @@ jobs:
           push: false
           load: false
           build-args: |
-            VITE_API_URL=${{ vars.PUBLIC_APP_URL || 'https://mercaldas.jcti.xyz' }}
+            VITE_API_URL=${{ vars.VITE_API_URL || 'https://mercaldas-api.jcti.xyz' }}
             VITE_BOT_API_URL=
             VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID }}
             VITE_GOOGLE_REDIRECT_URI=${{ vars.VITE_GOOGLE_REDIRECT_URI }}
@@ -62,9 +62,9 @@ jobs:
     steps:
       - name: Desplegar commit
         env:
-          # Ruta del clon de producción en el VPS (WSL). Se puede sobreescribir
+          # Ruta del clon de producción en el servidor. Se puede sobreescribir
           # con la variable de repositorio DEPLOY_PATH.
-          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/mnt/c/Users/Desarrolo4/Documents/ecommerce' }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/home/deploy/ecommerce' }}
           TARGET_SHA: ${{ github.sha }}
         run: |
           set -Eeuo pipefail
