@@ -50,7 +50,53 @@ mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
 	}
 
 	# Certificado de origen de Cloudflare (montado en /etc/caddy/edge-tls).
-	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
 
-	reverse_proxy mercaldas_app:8080
-}
+		reverse_proxy mercaldas_app:8080
+	}
+
+	# ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
+	# El panel y su API viven en el MISMO host: `/api/*` lo sirve el Caddy interno
+	# (API_BASE_PATH=/api), así que aquí se reenvía todo sin tocar rutas.
+	crm.jcti.xyz {
+		import edge_headers
+
+		log {
+			output stdout
+			format json
+		}
+
+		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+		reverse_proxy mercaldas_crm_app:8080
+	}
+
+	# ── Restaurantes / Punto C (`restaurants_app`, Caddy interno en :8080) ──
+	restaurante.jcti.xyz, restaurante-reservas.jcti.xyz, restaurante-cocina.jcti.xyz,
+	restaurante-admin.jcti.xyz, restaurante-mesero.jcti.xyz {
+		import edge_headers
+
+		log {
+			output stdout
+			format json
+		}
+
+		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+		reverse_proxy restaurants_app:8080
+	}
+
+	# ── WhatsApp Bot Platform (`whatsapp_bot_web`, nginx en :80) ──
+	# nginx sirve el panel y proxya /api y /webhook a `whatsapp_bot_api`.
+	bot-platform.jcti.xyz {
+		import edge_headers
+
+		log {
+			output stdout
+			format json
+		}
+
+		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+		reverse_proxy whatsapp_bot_web:80
+	}
