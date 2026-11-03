@@ -109,6 +109,11 @@ mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
 
 		header X-Robots-Tag "noindex, nofollow"
 
+		# El endpoint de salud es para el healthcheck interno del contenedor:
+		# no hace falta revelarlo en internet.
+		@health path /api/health
+		respond @health 404
+
 		log {
 			output stdout
 			format json
