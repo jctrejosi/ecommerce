@@ -100,3 +100,21 @@ mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
 
 		reverse_proxy whatsapp_bot_web:80
 	}
+
+	# ── Flauros (monitoreo del servidor, `flauros_web`, nginx en :8080) ──
+	# Login propio (usuario y contraseña en el .env del contenedor) y límite de
+	# intentos en la API. Se marca `noindex`: es un panel privado, no un sitio.
+	flauros.jcti.xyz {
+		import edge_headers
+
+		header X-Robots-Tag "noindex, nofollow"
+
+		log {
+			output stdout
+			format json
+		}
+
+		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+		reverse_proxy flauros_web:8080
+	}
