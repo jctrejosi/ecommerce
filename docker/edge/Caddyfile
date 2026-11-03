@@ -100,20 +100,3 @@ mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
 
 		reverse_proxy whatsapp_bot_web:80
 	}
-
-	# ── Flauros (monitoreo del servidor) ──
-	# Panel en `flauros_web:8080` (proyecto Viné/Flauros, red shared_edge).
-	# La API interna y el proxy de Docker nunca se publican: el edge es la
-	# única entrada y Cloudflare filtra el origen.
-	flauros.jcti.xyz {
-		import edge_headers
-
-		log {
-			output stdout
-			format json
-		}
-
-		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-		reverse_proxy flauros_web:8080
-	}
