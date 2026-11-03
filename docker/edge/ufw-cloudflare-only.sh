@@ -17,5 +17,6 @@ for cidr in $CF4 $CF6; do
   ufw allow from "$cidr" to any port 443 proto tcp comment 'Cloudflare' >/dev/null
 done
 
-ufw --force reload >/dev/null 2>&1
+# Sin `ufw reload`: las reglas ya se aplican al añadirlas y el reload deja la
+# unit systemd en estado `inactive` aunque el firewall siga activo.
 echo "ufw: 80/443 solo desde Cloudflare"
