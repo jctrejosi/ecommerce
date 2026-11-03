@@ -100,3 +100,70 @@ mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
 
 		reverse_proxy whatsapp_bot_web:80
 	}
+
+# ── Astaroth ML (`astaroth` en 8010-8015, `load-balancer` en 8016) ──────────
+# El contenedor expone cada API en su propio puerto; el edge replica el ruteo
+# por prefijo del Caddyfile interno (handle_path quita el prefijo).
+astaroth.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+	handle_path /clustering/* {
+		reverse_proxy astaroth:8010
+	}
+	handle_path /xgboost/* {
+		reverse_proxy astaroth:8011
+	}
+	handle_path /uplift/* {
+		reverse_proxy astaroth:8012
+	}
+	handle_path /transformer/* {
+		reverse_proxy astaroth:8013
+	}
+	handle_path /causal/* {
+		reverse_proxy astaroth:8014
+	}
+	handle_path /highs/* {
+		reverse_proxy astaroth:8015
+	}
+	handle_path /lb/* {
+		reverse_proxy load-balancer:8016
+	}
+
+	respond "Astaroth ML API — /clustering /xgboost /uplift /transformer /causal /highs /lb" 200
+}
+
+# ── Paimon (APIs de audio, imagen, procesamiento y voz) ────────────────────
+# Cada API exige clave (X-API-Key o Authorization: Bearer). El prefijo se quita
+# antes de reenviar, igual que hacía el portal Swagger local.
+paimon.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+	handle_path /audio/* {
+		reverse_proxy paimon-audio-processing:8000
+	}
+	handle_path /image/* {
+		reverse_proxy paimon-image-api:8000
+	}
+	handle_path /processing/* {
+		reverse_proxy paimon-image-processing:8000
+	}
+	handle_path /voice/* {
+		reverse_proxy paimon-audio-generator:8000
+	}
+
+	respond "Paimon API — /audio /image /processing /voice" 200
+}
