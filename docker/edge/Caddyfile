@@ -1,16 +1,27 @@
 # Edge compartido — Caddyfile (se edita a mano, NO lo genera gen-caddyfile.mjs).
 #
-# Un bloque por proyecto. Todos los dominios listados deben:
-#   1. existir en el DNS (registro A → IP pública del servidor), y
-#   2. estar configurados en el proyecto correspondiente (HOST_* en su .env).
-# El Host se conserva al reenviar, así que el Caddy interno de cada contenedor
-# enruta al vhost correcto.
+# ESTADO: servidor nuevo `srv-prod`. Solo está desplegado el ecommerce.
+#
+# TLS: certificado de ORIGEN de Cloudflare (15 años, CA propia de Cloudflare).
+# No se usa ACME/Let's Encrypt: Cloudflare es el único que habla con este
+# origen (proxy naranja) y él sí confía en esta CA (modo "Full (strict)").
+# El certificado NO es válido para navegadores: si algún registro se pone en
+# gris (DNS only), el navegador dará error de certificado.
+#
+# IMPORTANTE: añade aquí el bloque de cada proyecto SOLO cuando su contenedor
+# esté arriba y su DNS apunte ya a este servidor.
 
 {
 	email admin@jcti.xyz
-	# Producción explícita: evita el emisor ZeroSSL por defecto y cualquier
-	# intento contra el endpoint de staging (certs no confiables).
-	acme_ca https://acme-v02.api.letsencrypt.org/directory
+
+	# Cloudflare en modo proxy por delante del origen: recuperar la IP real del
+	# cliente desde CF-Connecting-IP para que el rate-limit y los logs no vean
+	# IPs de Cloudflare. Rangos de https://api.cloudflare.com/client/v4/ips
+	# (fijados el 2026-11-02); se actualizan a mano si Cloudflare publica otros.
+	servers {
+		trusted_proxies static private_ranges 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
 }
 
 # Cabeceras que aporta el edge (TLS/HSTS). El resto (CSP, X-Frame-Options,
@@ -24,227 +35,22 @@
 }
 
 # ── Ecommerce (contenedor `mercaldas_app`, Caddy interno en :8080 sin TLS) ──
-mercaldas.jcti.xyz, api.mercaldas.jcti.xyz, admin.mercaldas.jcti.xyz,
-picking-admin.mercaldas.jcti.xyz, delivery-admin.mercaldas.jcti.xyz {
+# OJO: los hosts deben ser de UN SOLO nivel bajo jcti.xyz. El certificado
+# Universal SSL (gratis) de Cloudflare cubre `jcti.xyz` y `*.jcti.xyz`; un
+# nombre como `api.mercaldas.jcti.xyz` NO recibe certificado en el borde y el
+# handshake TLS falla (alert 40). Para usar dos niveles haría falta Total TLS
+# (Advanced Certificate Manager, de pago).
+mercaldas.jcti.xyz, mercaldas-api.jcti.xyz, mercaldas-admin.jcti.xyz,
+mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
 	import edge_headers
 
-	# Log de acceso a stdout (visible con `docker logs edge_caddy`). Permite
-	# diagnosticar 4xx/5xx y auditar tráfico. No loguea cuerpos ni credenciales.
 	log {
 		output stdout
 		format json
 	}
 
-	# Emisor explícito. Caddy, por defecto, reintenta contra el CA de
-	# *staging* (`test_ca`) si el primario falla; eso puede dejar un
-	# certificado no confiable. Fijamos ambos al CA de producción.
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
+	# Certificado de origen de Cloudflare (montado en /etc/caddy/edge-tls).
+	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
 
 	reverse_proxy mercaldas_app:8080
-}
-
-# ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
-# Descomenta cuando el CRM esté desplegado. Si se deja activo sin el contenedor
-# ni DNS, Caddy acumula reintentos de ACME y errores de upstream.
-crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	reverse_proxy mercaldas_crm_app:8080
-}
-
-
-# ── Contabilidad (contenedor `contabdsi_app`, Caddy interno en :8080 sin TLS) ──
-#
-# Añadir este bloque al Caddyfile del EDGE COMPARTIDO que ya corre en 80/443
-# (el de ecommerce: docker/edge/Caddyfile). El edge conserva el Host y reenvía
-# a la red `shared_edge`, donde el contenedor de contabilidad escucha en 8080.
-#
-# Requisitos:
-#   1. DNS: contabilidad.jcti.xyz → IP pública del servidor (registro A).
-#   2. En docker/.env: HOST_APP=contabilidad.jcti.xyz (mismo host).
-#   3. `contabdsi_app` debe estar arriba y unido a `shared_edge`.
-#
-# Recarga del edge (sin cortar ecommerce/CRM):
-#   docker exec edge_caddy caddy reload --config /etc/caddy/Caddyfile
-#
-# `edge_headers` está definido en el Caddyfile compartido; si pegas este bloque
-# en otro archivo, incluye también ese snippet.
-
-contabilidad.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	# Emisor explícito: evita que Caddy reintente contra el CA de staging.
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	reverse_proxy contabdsi_app:8080
-}
-
-astaroth.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	# La autenticación la valida el servicio con API_KEYS (X-API-Key o Bearer).
-	handle_path /clustering/* {
-		reverse_proxy astaroth:8010
-	}
-	handle_path /xgboost/* {
-		reverse_proxy astaroth:8011
-	}
-	handle_path /uplift/* {
-		reverse_proxy astaroth:8012
-	}
-	handle_path /transformer/* {
-		reverse_proxy astaroth:8013
-	}
-	handle_path /causal/* {
-		reverse_proxy astaroth:8014
-	}
-	handle_path /highs/* {
-		reverse_proxy astaroth:8015
-	}
-
-	handle {
-		respond "Astaroth ML API — /clustering, /xgboost, /uplift, /transformer, /causal, /highs" 200
-	}
-}
-
-# ── Paimon (audio, imagen y procesamiento) ──
-paimon.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	# La autenticación la valida el servicio con API_KEYS (X-API-Key o Bearer).
-	handle_path /audio/* {
-		reverse_proxy paimon-audio-processing:8000
-	}
-	handle_path /image/* {
-		reverse_proxy paimon-image-api:8000
-	}
-	handle_path /processing/* {
-		reverse_proxy paimon-image-processing:8000
-	}
-
-	handle {
-		respond "Paimon — /audio, /image, /processing" 200
-	}
-}
-
-# ── WhatsApp Bot Platform — contenedor `whatsapp_bot_web` en shared_edge ──
-bot-platform.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	reverse_proxy whatsapp_bot_web:80
-}
-
-# ── Restaurantes (Punto C) — contenedor `restaurants_app` en shared_edge ──
-# El Caddy interno de ese contenedor enruta por Host a cada SPA y /api/* al
-# backend NestJS. Aquí solo se termina TLS y se reenvía.
-# DNS requerido (tipo A → IP pública): restaurante, restaurante.reservas,
-# restaurante.cocina, restaurante.admin y restaurante.mesero (bajo jcti.xyz).
-restaurante.jcti.xyz, restaurante.reservas.jcti.xyz,
-restaurante.cocina.jcti.xyz, restaurante.admin.jcti.xyz,
-restaurante.mesero.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	# Límite defensivo del cuerpo (el backend ya limita a 10 MB).
-	request_body {
-		max_size 10MB
-	}
-
-	reverse_proxy restaurants_app:8080
-}
-
-# ── PRODDSI (Suite Producción) — contenedor `production_web` en shared_edge ──
-# SPA estática (Vite + React) servida por el Caddy interno de su contenedor en
-# :8080, sin API ni base de datos. Aquí solo se termina TLS y se reenvía.
-# DNS requerido (tipo A → IP pública): production (bajo jcti.xyz).
-production.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	reverse_proxy production_web:8080
 }
