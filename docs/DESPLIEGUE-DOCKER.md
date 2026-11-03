@@ -200,25 +200,64 @@ Deja vacío (o borra) el `HOST_*` de una interfaz que **no** quieras publicar.
 
 ---
 
-## 4. DNS y router
+## 4. DNS, TLS y Cloudflare
 
-- Un registro **A** por cada `HOST_*` → IP pública del servidor.
-- Reenvía en el router/firewall **solo** TCP `80` y `443` a este host.
+Producción actual: zona `jcti.xyz`, servidor **`169.58.255.64`**, DNS y proxy en
+**Cloudflare** (el registrador sigue siendo GoDaddy, pero los nameservers ya son
+los de Cloudflare).
 
-Registros para este despliegue (`jcti.xyz` en GoDaddy, TTL 600):
+### 4.1 Registros DNS
 
-| Tipo | Nombre | Valor |
-|---|---|---|
-| A | `mercaldas` | `170.254.229.68` |
-| A | `api.mercaldas` | `170.254.229.68` | *(solo si usas webhooks)* |
-| A | `admin.mercaldas` | `170.254.229.68` |
-| A | `picking-admin.mercaldas` | `170.254.229.68` |
-| A | `delivery-admin.mercaldas` | `170.254.229.68` |
+Todos **proxied** (nube naranja):
 
-> Si `mercaldas` ya existe apuntando a un *parking* de GoDaddy, **edítalo** (no
-> crees un segundo registro A). No crees `picking.mercaldas` (no se sirve).
-- Con `TLS=true`, Caddy emite los certificados al primer arranque (necesita que
-  80/443 lleguen al servidor).
+| Tipo | Nombre | Valor | Interfaz |
+|---|---|---|---|
+| A | `mercaldas` | `169.58.255.64` | tienda web (`HOST_WEB`) |
+| A | `mercaldas-api` | `169.58.255.64` | API/backend (`HOST_API`) |
+| A | `mercaldas-admin` | `169.58.255.64` | panel admin |
+| A | `mercaldas-picking` | `169.58.255.64` | picking admin |
+| A | `mercaldas-delivery` | `169.58.255.64` | delivery admin |
+
+> ⚠️ **Los hosts deben ser de UN SOLO nivel bajo `jcti.xyz`.** El certificado
+> *Universal SSL* (gratis) cubre `jcti.xyz` y `*.jcti.xyz`; un nombre de dos
+> niveles como `api.mercaldas.jcti.xyz` **no recibe certificado en el borde** y
+> el handshake TLS falla (`ssl alert 40`). Para dos niveles haría falta *Total
+> TLS* (Advanced Certificate Manager, de pago) o dejar el registro en gris y
+> emitir Let's Encrypt en el origen (expone la IP). De ahí `mercaldas-api…`.
+
+### 4.2 TLS en el origen
+
+El edge (`docker/edge/`) **no usa ACME**: sirve un **certificado de origen de
+Cloudflare** (15 años) desde `/etc/mercaldas/edge-tls/{origin.pem,origin.key}`,
+montado de solo lectura en `/etc/caddy/edge-tls`. Cloudflare lo valida en modo
+**Full (strict)**. Si un registro se pone en gris (DNS only), el navegador dará
+error de certificado: ese certificado no lo confía ningún navegador.
+
+### 4.3 Origen cerrado a Cloudflare
+
+`docker/edge/cloudflare-origin-firewall.sh` + su unit systemd
+(`cloudflare-origin-firewall.service`) dejan `80`/`443` accesibles **solo**
+desde los rangos de Cloudflare. Se aplica en la cadena **`DOCKER-USER`** porque
+los puertos publicados por Docker entran por `FORWARD` y **no pasan por las
+reglas INPUT de `ufw`**. `ufw` mantiene la misma política para cualquier
+servicio que no vaya por Docker. Resultado: golpear la IP del servidor en
+80/443 no responde.
+
+### 4.4 Ajustes de Cloudflare (panel, no automatizables con el token actual)
+
+- SSL/TLS → Overview: **Full (strict)**.
+- SSL/TLS → Edge Certificates: **Always Use HTTPS ON**, **Minimum TLS 1.2**,
+  **TLS 1.3 ON**, **Automatic HTTPS Rewrites ON**.
+- **Rocket Loader OFF** (rompe las SPAs).
+- **Bot Fight Mode OFF** (bloquearía webhooks de Wompi/ePayco y las apps
+  móviles, que no mandan `Origin`).
+- Network: **WebSockets ON** (chat/socket.io).
+- Caching → Cache Rules: **bypass** para `mercaldas-api.jcti.xyz/*` y para
+  `*/index.html` (si no, un `index` cacheado apunta a bundles viejos).
+
+- En modo **directo** (sin edge, `TLS=true`), Caddy emite los certificados por
+  ACME al primer arranque; eso exige que 80/443 lleguen al servidor desde
+  internet (sin Cloudflare delante).
 
 ---
 

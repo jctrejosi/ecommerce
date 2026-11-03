@@ -17,7 +17,7 @@ Principio: **un solo proceso habla con internet (Caddy); nada más se publica.**
 | Proceso | Escucha en | Publicado | Notas |
 |---|---|---|---|
 | Caddy interno (proxy + TLS + estáticos) | `:8080` (HTTP) / `:8443` (HTTPS) | `127.0.0.1:30180` / `127.0.0.1:30181` | lo alcanza el edge (red `shared_edge`) |
-| **Edge compartido** (`docker/edge/`, otro contenedor) | `:80` / `:443` | **Sí** → internet | único punto de entrada; TLS Let's Encrypt |
+| **Edge compartido** (`docker/edge/`, otro contenedor) | `:80` / `:443` | **Sí** → solo Cloudflare | único punto de entrada; TLS con certificado de origen (§1.1) |
 | Backend NestJS | `127.0.0.1:3100` | ❌ | loopback dentro del contenedor |
 | Bot FastAPI | `127.0.0.1:8001` | ❌ | loopback dentro del contenedor |
 | PostgreSQL | red `mercaldas_internal` (`internal: true`) | ❌ | sin ruta a internet |
@@ -29,16 +29,40 @@ Principio: **un solo proceso habla con internet (Caddy); nada más se publica.**
   (red compartida con el edge).
 - Los puertos de cada proyecto son PROPIOS y solo en `127.0.0.1` (ecommerce
   `30180/30181`): no compiten con 80/443 ni con servicios «genéricos».
-- En el VPS Windows el motor Docker vive en la distro **WSL Ubuntu** y su API
-  escucha solo en `127.0.0.1:2375` (nunca en LAN ni en internet). Los 80/443 del
-  edge se publican con `netsh interface portproxy` hacia la IP de WSL.
+- Servidor de producción actual: **Debian 12** (`169.58.255.64`), Docker nativo.
+  SSH solo con llave (22), `ufw` deny-in por defecto, `fail2ban`, swap 20 GB y
+  `unattended-upgrades`. Administración además por **Tailscale**.
 - Modo directo (un solo proyecto en el servidor): `PUBLIC_HTTP_PORT=80`,
   `PUBLIC_HTTPS_PORT=443` y `TLS=true`.
+
+### 1.1 Borde de producción: Cloudflare delante, origen cerrado
+
+- **DNS + proxy en Cloudflare** (nube naranja en todos los registros). El
+  navegador habla con Cloudflare; Cloudflare habla con el origen.
+- **TLS origen**: certificado de origen de Cloudflare (15 años) en
+  `/etc/mercaldas/edge-tls/`, montado de solo lectura. Modo **Full (strict)**.
+  Sin proxy naranja el navegador no confía en esa CA (es correcto).
+- **Restricción por IP**: `cloudflare-origin-firewall.service` carga
+  `docker/edge/cloudflare-origin-firewall.sh`, que en la cadena **`DOCKER-USER`**
+  deja 80/443 solo a los rangos de Cloudflare y descarta el resto. Es necesario
+  porque los puertos publicados por Docker entran por `FORWARD` y **no pasan por
+  las reglas INPUT de `ufw`**. `ufw` replica la política para servicios fuera de
+  Docker. Verificación: `curl -k https://<IP_DEL_SERVIDOR>/` **no** responde.
+- **Un solo nivel de subdominio** bajo `jcti.xyz`: el *Universal SSL* gratuito
+  cubre `jcti.xyz` y `*.jcti.xyz`. Un `api.mercaldas.jcti.xyz` no recibe
+  certificado en el borde (handshake TLS falla). Por eso los hosts son
+  `mercaldas`, `mercaldas-api`, `mercaldas-admin`, `mercaldas-picking`,
+  `mercaldas-delivery`.
+- **Webhooks** (Wompi/ePayco) y **apps móviles** deben apuntar al host del API
+  (`https://mercaldas-api.jcti.xyz`). Las apps nativas no envían `Origin`, por
+  eso no se puede activar *Bot Fight Mode* ni exigir preflight.
 
 ## 2. Transporte y TLS
 
 - **Let's Encrypt automático** vía Caddy cuando `TLS=true` (por defecto).
   Requiere que 80 y 443 lleguen al servidor y que el DNS apunte a él.
+  (**No** es el caso del despliegue actual: con Cloudflare delante, el origen
+  sirve el certificado de origen de Cloudflare y Let's Encrypt queda sin uso.)
 - **Certificados persistentes** en los volúmenes `mercaldas_caddy_data` /
   `mercaldas_caddy_config` (no se re-emiten en cada `up`).
 - **HSTS**: `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
@@ -226,11 +250,11 @@ algún `429`.
 
 | # | Riesgo | Mitigación recomendada |
 |---|---|---|
-| 1 | **Sin WAF ni anti-DDoS**: el origen queda expuesto con su IP real | Poner **Cloudflare** delante (proxy) y restringir 80/443 a sus IPs |
+| 1 | ~~Sin WAF ni anti-DDoS~~ **mitigado en producción** | Cloudflare (DNS + proxy) delante y 80/443 restringidos a sus rangos en `DOCKER-USER` + `ufw` (ver `docs/DESPLIEGUE-DOCKER.md` §4). La IP de origen ya no responde en 80/443 |
 | 2 | **Sin 2FA** en las cuentas de administración | Añadirlo en la app o restringir los paneles por VPN / Cloudflare Access |
-| 3 | **Host (Windows Server)**: RDP (3389) sigue expuesto | Restringir 3389 por IP/VPN, cambiar puerto, 2FA; parchear el SO |
-| 11 | **Puertos heredados del host abiertos a internet**: 5002 (Apache/XAMPP), 6262 (Advantage DB), 8501, 19955 | Cerrarlos en el firewall o en el *security group* del proveedor si no se usan externamente. WinRM (5985) ya está bloqueado. |
-| 12 | **Gestión del servidor por Tailscale** | Si Tailscale cae, el acceso de administración queda en RDP público; mantener 3389 restringido a IPs conocidas. |
+| 3 | **Servidor anterior (Windows Server)**: RDP (3389) expuesto | Ya no es el servidor de producción; si se reutiliza, restringir 3389 por IP/VPN y parchearlo |
+| 11 | **Puertos heredados del host Windows**: 5002 (Apache/XAMPP), 6262 (Advantage DB), 8501, 19955 | No existen en el servidor nuevo; en el viejo, cerrarlos si no se usan externamente |
+| 12 | **Gestión del servidor por Tailscale** | El servidor nuevo solo admite SSH con llave (22); Tailscale es la vía de administración. Si cae, queda SSH por IP pública con llave |
 | 4 | **Token de respaldo en `localStorage`** (client) cuando no hay cookie httpOnly | Un XSS podría leerlo; por eso la CSP importa |
 | 5 | **Rate limit en memoria**: no sobrevive reinicios ni se comparte entre réplicas | Un WAF o un almacén compartido si algún día se escala |
 | 6 | **`/api-status` es público** | Es necesario para el cliente (espera al backend); expone solo estado |
