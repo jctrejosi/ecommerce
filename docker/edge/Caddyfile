@@ -1,6 +1,7 @@
 # Edge compartido — Caddyfile (se edita a mano, NO lo genera gen-caddyfile.mjs).
 #
-# ESTADO: servidor nuevo `srv-prod`. Solo está desplegado el ecommerce.
+# ESTADO: servidor `srv-prod` (Debian 12). Sirve el ecommerce, CRM,
+# restaurantes, bot-platform, Astaroth y Paimon.
 #
 # TLS: certificado de ORIGEN de Cloudflare (15 años, CA propia de Cloudflare).
 # No se usa ACME/Let's Encrypt: Cloudflare es el único que habla con este
