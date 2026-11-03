@@ -125,10 +125,20 @@ fi
 # proyecto o estar reiniciando.
 # El edge presenta el certificado de ORIGEN de Cloudflare (CA propia), que no
 # está en el almacén del sistema; se valida con --cacert y no con -k.
+# El healthcheck del contenedor pasa antes de que el edge pueda alcanzarlo, así
+# que se reintenta unos segundos para no reportar un falso negativo.
 if command -v curl >/dev/null 2>&1 && docker inspect edge_caddy >/dev/null 2>&1; then
-  if curl -fsS --max-time 10 --cacert /etc/mercaldas/edge-tls/origin.pem \
-      --resolve mercaldas.jcti.xyz:443:127.0.0.1 \
-      "$PUBLIC_HEALTH_URL" >/dev/null 2>&1; then
+  edge_ok=""
+  for _ in $(seq 1 8); do
+    if curl -fsS --max-time 10 --cacert /etc/mercaldas/edge-tls/origin.pem \
+        --resolve mercaldas.jcti.xyz:443:127.0.0.1 \
+        "$PUBLIC_HEALTH_URL" >/dev/null 2>&1; then
+      edge_ok=1
+      break
+    fi
+    sleep 3
+  done
+  if [[ -n "$edge_ok" ]]; then
     log "HTTPS público OK: $PUBLIC_HEALTH_URL"
   else
     warn "El contenedor está sano, pero $PUBLIC_HEALTH_URL no respondió por el edge."
