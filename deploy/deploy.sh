@@ -123,8 +123,10 @@ fi
 # Comprobación opcional de punta a punta a través del edge compartido. Un fallo
 # aquí es un aviso: el contenedor ya está sano y el edge puede ser de otro
 # proyecto o estar reiniciando.
+# El edge presenta el certificado de ORIGEN de Cloudflare (CA propia), que no
+# está en el almacén del sistema; se valida con --cacert y no con -k.
 if command -v curl >/dev/null 2>&1 && docker inspect edge_caddy >/dev/null 2>&1; then
-  if curl -fsS --max-time 10 \
+  if curl -fsS --max-time 10 --cacert /etc/mercaldas/edge-tls/origin.pem \
       --resolve mercaldas.jcti.xyz:443:127.0.0.1 \
       "$PUBLIC_HEALTH_URL" >/dev/null 2>&1; then
     log "HTTPS público OK: $PUBLIC_HEALTH_URL"
