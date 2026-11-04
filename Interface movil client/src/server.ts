@@ -14,7 +14,7 @@ import { WEB_CLIENT_URL } from "./webview";
  *
  * En los tres primeros casos, y también al encontrar el servidor por escaneo, se
  * usa la URL configurada. En producción es el dominio público
- * (`https://mercaldas.jcti.xyz`), que sirve la web y su API por el mismo origen;
+ * (`https://ecommerce.jcti.xyz`), que sirve la web y su API por el mismo origen;
  * en desarrollo se compila con `EXPO_PUBLIC_WEB_URL` apuntando a la IP local.
  *
  * La URL que responde se guarda para los siguientes arranques.

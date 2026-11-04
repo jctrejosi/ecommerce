@@ -9,4 +9,4 @@
  *
  * Para desarrollo local, compila con EXPO_PUBLIC_WEB_URL=http://192.168.x.x:4173.
  */
-export const WEB_CLIENT_URL = "https://mercaldas.jcti.xyz";
+export const WEB_CLIENT_URL = "https://ecommerce.jcti.xyz";

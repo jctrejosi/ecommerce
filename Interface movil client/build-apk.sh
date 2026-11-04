@@ -21,7 +21,7 @@ export ANDROID_HOME="${ANDROID_HOME:-/home/jk/Android/Sdk}"
 
 # Producción por defecto: el APK abre la tienda pública (y su API same-origin).
 # Se puede sobrescribir con EXPO_PUBLIC_WEB_URL=... ./build-apk.sh
-export EXPO_PUBLIC_WEB_URL="${EXPO_PUBLIC_WEB_URL:-https://mercaldas.jcti.xyz}"
+export EXPO_PUBLIC_WEB_URL="${EXPO_PUBLIC_WEB_URL:-https://ecommerce.jcti.xyz}"
 
 if [ ! -x "$JAVA_HOME/bin/javac" ]; then
   echo "ERROR: JAVA_HOME ($JAVA_HOME) no tiene un JDK válido (falta bin/javac)." >&2

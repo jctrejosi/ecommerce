@@ -13,7 +13,7 @@ import Constants from "expo-constants";
 export const API_BASE_URL =
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ||
   process.env.EXPO_PUBLIC_API_URL ||
-  "https://mercaldas.jcti.xyz";
+  "https://ecommerce.jcti.xyz";
 
 const ACCESS_KEY = "mercaldas.accessToken";
 const REFRESH_KEY = "mercaldas.refreshToken";
