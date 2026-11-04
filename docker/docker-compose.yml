@@ -1,81 +1,107 @@
-# Contenedor ÚNICO de Mercaldas (backend + bot + interfaces web + Caddy).
-# Solo se publican 80/443: backend y bot escuchan en 127.0.0.1 dentro del
-# contenedor (en :3100/:8001) y la base de datos vive en la red interna (nunca
-# publicada). El proceso NO corre como root: Caddy escucha en :8080/:8443 y el
-# compose los publica como 80/443.
+# ============================================================
+# Proyecto compose `ecommerce` — un contenedor por servicio.
+#
+#   ecommerce_db       PostGIS                  (solo red interna + loopback)
+#   ecommerce_backend  NestJS                  (:3100, interno)
+#   ecommerce_bot      FastAPI                 (:8001, interno)
+#   ecommerce_client   SPA cliente             (nginx :8080)
+#   ecommerce_admin    SPA administración      (nginx :8080)
+#   ecommerce_delivery SPA delivery admin      (nginx :8080)
+#   ecommerce_picking  SPA picking admin       (nginx :8080)
+#   ecommerce_proxy    Caddy interno           (:8080 → lo alcanza el edge)
+#   ecommerce_osrm     motor de rutas delivery (:5000, interno)
+#
+# Solo el proxy y la BD publican algo en el host, y ambos SOLO en loopback.
+# El edge compartido (docker/edge/) es el único que publica 80/443 y termina
+# TLS; él reenvía a `ecommerce_proxy:8080` por la red `shared_edge`.
 #
 # Uso:
-#   cp docker/.env.example docker/.env   # edita dominios, TLS y secretos
-#   docker compose -f docker/docker-compose.yml build --build-arg VITE_API_URL=https://api.tudominio.com
-#   docker compose -f docker/docker-compose.yml up -d
+#   cp docker/.env.example docker/.env   # edita dominios y secretos
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env build
+#   docker compose -f docker/docker-compose.yml --env-file docker/.env up -d
 #
-# Guía completa (incluye Windows Server, firewall y DNS): docs/DESPLIEGUE-DOCKER.md
-name: mercaldas
+# Guía completa: docs/DESPLIEGUE-DOCKER.md
+# ============================================================
+name: ecommerce
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+# El compilado de las 4 SPAs se comparte entre los 4 contenedores web; cada
+# servicio solo cambia el `target` final (nginx + su dist).
+x-front-build: &front-build
+  context: ..
+  dockerfile: docker/Dockerfile
+  args:
+    # URL pública del API: se hornea en el bundle.
+    VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
+    VITE_BOT_API_URL: ${VITE_BOT_API_URL:-}
+    VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+    VITE_GOOGLE_REDIRECT_URI: ${VITE_GOOGLE_REDIRECT_URI:-}
 
 services:
-  app:
+  # ── Base de datos ─────────────────────────────────────────────────────────
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: ecommerce_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-ecommerce}
+    volumes:
+      # Volumen heredado del proyecto `db`: se conserva para no perder datos.
+      - db_data:/var/lib/postgresql/data
+      - ../db/docker/init.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    # Solo loopback: scripts y herramientas del host. Nunca a internet.
+    ports:
+      - "127.0.0.1:${DB_PUBLISH_PORT:-5432}:5432"
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-ecommerce}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: *default-logging
+
+  # ── Backend NestJS ────────────────────────────────────────────────────────
+  backend:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-      args:
-        # Debe coincidir con https://${HOST_API}. Se hornea en los fronts.
-        VITE_API_URL: ${VITE_API_URL:-http://localhost:3000}
-        # Opcional. Si se deja vacía, el front deriva la URL del bot desde
-        # VITE_API_URL + /bot (mismo host del backend).
-        VITE_BOT_API_URL: ${VITE_BOT_API_URL:-}
-        # Google OAuth (el client ID es público). Sin esto el botón de Google
-        # queda deshabilitado en el bundle de producción.
-        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
-        VITE_GOOGLE_REDIRECT_URI: ${VITE_GOOGLE_REDIRECT_URI:-}
-    image: mercaldas/app:latest
-    # Nombre fijo: el edge compartido (docker/edge/) alcanza este contenedor por
-    # nombre en la red `shared_edge`.
-    container_name: mercaldas_app
+      target: backend-runtime
+    image: ecommerce/backend:latest
+    container_name: ecommerce_backend
+    restart: unless-stopped
     env_file:
       - .env
     environment:
       BACKEND_PORT: "3100"
-      BOT_PORT: "8001"
-      # Proxy interno del bot: el backend reenvía /bot/* por loopback. El bot
-      # no se publica en Caddy ni tiene puerto en el host.
-      BOT_INTERNAL_URL: "http://127.0.0.1:8001"
-      # Puertos internos de Caddy (no root); el host publica los de abajo.
-      HTTP_PORT: "8080"
-      HTTPS_PORT: "8443"
-      # Detrás de Caddy: confiar en X-Forwarded-For para el rate limit por IP.
-      # `uniquelocal` cubre el salto extra del edge compartido (red Docker
-      # privada → el backend resuelve la IP real del cliente).
+      # El bot vive en su propio contenedor; el backend lo proxya en /bot.
+      BOT_INTERNAL_URL: "http://bot:8001"
+      # OSRM ya no se resuelve por nombre de contenedor suelto.
+      OSRM_URL: "http://osrm:5000"
+      # Medios locales (volumen `media`, montado en /app/db).
+      MEDIA_STATIC_DIR: "/app/db"
+      # Detrás del proxy de confianza de la red interna.
       TRUST_PROXY: ${TRUST_PROXY:-loopback,uniquelocal}
       RATE_LIMIT_ENABLED: "true"
-      # Certificados/estado de Caddy → volúmenes (no se re-emiten en cada up).
-      XDG_DATA_HOME: /data
-      XDG_CONFIG_HOME: /config
-      CADDYFILE_OUT: /config/Caddyfile.generated
-      # Motor de rutas por calles del delivery (OSRM, ver servicio `osrm`).
-      # Se resuelve por DNS interno; no se publica ningún puerto.
-      OSRM_URL: "http://mercaldas_osrm:5000"
-    # ── Puertos publicados en el host ──────────────────────────────────────
-    # Por defecto SOLO en loopback y en puertos propios (30180/30181), para no
-    # chocar con 80/443 ni con servicios «genéricos» (8080, 8443…). Pensados
-    # para el despliegue con EDGE COMPARTIDO (docker/edge/), que es el único
-    # que publica 80/443 y termina TLS.
-    # Modo directo (este contenedor es el único en el servidor): pon en
-    # docker/.env  PUBLIC_HTTP_PORT=80  PUBLIC_HTTPS_PORT=443  (y TLS=true).
-    ports:
-      - "${PUBLIC_HTTP_PORT:-127.0.0.1:30180}:8080"
-      - "${PUBLIC_HTTPS_PORT:-127.0.0.1:30181}:8443"
     volumes:
-      - caddy_data:/data
-      - caddy_config:/config
-      # Medios locales del backend (fallback sin Cloudinary): persisten.
       - media:/app/db
+    depends_on:
+      db:
+        condition: service_healthy
+      bot:
+        condition: service_started
     networks:
-      - edge      # salida a internet (DeepSeek, Cloudinary, ACME…) y puertos publicados
-      - internal  # red interna (BD/ERP) — no publicada
-      - shared_edge  # la usa el edge compartido (docker/edge/) para alcanzar este contenedor
-    # Endurecimiento: sin capacidades extra y sin escalada de privilegios. Al
-    # correr como usuario sin privilegios en puertos altos no hace falta
-    # NET_BIND_SERVICE.
+      - edge      # salida a internet (Cloudinary, DeepSeek, ACME…)
+      - internal  # BD y bot
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -86,21 +112,171 @@ services:
       timeout: 5s
       retries: 5
       start_period: 60s
-    # Evita que los logs llenen el disco (el backend registra cada petición).
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "5"
-    restart: unless-stopped
+    logging: *default-logging
 
-  # ── Motor de rutas OSRM (delivery) ──────────────────────────────────────────
-  # Calcula rutas por calles para el mapa de flota. Los datos se preparan con
-  # delivery-routing/prepare.sh y viven en delivery-routing/data (no versionados).
-  # Solo está en la red interna: el backend lo consume por DNS, nunca internet.
+  # ── Bot FastAPI ───────────────────────────────────────────────────────────
+  bot:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: bot-runtime
+    image: ecommerce/bot:latest
+    container_name: ecommerce_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      BOT_PORT: "8001"
+      OSRM_URL: "http://osrm:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - edge
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          python -c "import sys,urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8001/health', timeout=3).status == 200 else 1)"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    logging: *default-logging
+
+  # ── Interfaces web (una por contenedor) ───────────────────────────────────
+  client:
+    build:
+      <<: *front-build
+      target: web-client
+    image: ecommerce/web-client:latest
+    container_name: ecommerce_client
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  admin:
+    build:
+      <<: *front-build
+      target: web-admin
+    image: ecommerce/web-admin:latest
+    container_name: ecommerce_admin
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  delivery:
+    build:
+      <<: *front-build
+      target: web-delivery
+    image: ecommerce/web-delivery:latest
+    container_name: ecommerce_delivery
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  picking:
+    build:
+      <<: *front-build
+      target: web-picking
+    image: ecommerce/web-picking:latest
+    container_name: ecommerce_picking
+    restart: unless-stopped
+    networks:
+      - internal
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    logging: *default-logging
+
+  # ── Proxy interno (Caddy) ─────────────────────────────────────────────────
+  # Enruta por Host + ruta: el API al backend, cada SPA a su contenedor y el
+  # mismo origen de la web del cliente para /catalog, /orders, /static, /bot…
+  proxy:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: proxy
+    image: ecommerce/proxy:latest
+    container_name: ecommerce_proxy
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      HTTP_PORT: "8080"
+      BACKEND_UPSTREAM: "backend:3100"
+      CLIENT_UPSTREAM: "client:8080"
+      ADMIN_UPSTREAM: "admin:8080"
+      PICKING_UPSTREAM: "picking:8080"
+      DELIVERY_UPSTREAM: "delivery:8080"
+    depends_on:
+      - backend
+      - client
+      - admin
+      - delivery
+      - picking
+    ports:
+      # Solo loopback y puerto propio: no choca con 80/443 ni con 8080/8443.
+      - "${PUBLIC_HTTP_PORT:-127.0.0.1:30180}:8080"
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - internal     # alcanza backend y SPAs
+      - shared_edge  # el edge compartido lo alcanza por `ecommerce_proxy`
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    logging: *default-logging
+
+  # ── Motor de rutas OSRM (delivery) ────────────────────────────────────────
+  # Los datos se preparan con delivery-routing/prepare.sh y viven en
+  # delivery-routing/data (no versionados). Solo red interna.
   osrm:
     image: osrm/osrm-backend:latest
-    container_name: mercaldas_osrm
+    container_name: ecommerce_osrm
     restart: unless-stopped
     command: ["osrm-routed", "--algorithm", "mld", "/data/manizales.osrm"]
     volumes:
@@ -109,27 +285,26 @@ services:
       - internal
     security_opt:
       - no-new-privileges:true
-    logging:
-      driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+    logging: *default-logging
 
 networks:
   edge:
-    name: mercaldas_edge
+    name: ecommerce_edge
   internal:
-    name: mercaldas_internal
+    name: ecommerce_internal
     internal: true
-  # Red que comparte con el edge compartido (docker/edge/) cuando 80/443 los
-  # publica ESE contenedor en vez de este. La crea el proyecto al arrancar.
+  # La crea el proyecto del edge compartido (docker/edge/).
   shared_edge:
+    external: true
     name: shared_edge
 
 volumes:
-  caddy_data:
-    name: mercaldas_caddy_data
-  caddy_config:
-    name: mercaldas_caddy_config
+  # Se conservan los nombres heredados para no perder datos al migrar.
+  db_data:
+    name: db_postgres_data
   media:
     name: mercaldas_media
+  caddy_data:
+    name: ecommerce_caddy_data
+  caddy_config:
+    name: ecommerce_caddy_config

@@ -1,21 +1,21 @@
-# Edge compartido — Caddyfile (se edita a mano, NO lo genera gen-caddyfile.mjs).
+# Edge compartido — configuración GLOBAL.
 #
-# ESTADO: servidor `srv-prod` (Debian 12). Sirve el ecommerce, CRM,
-# restaurantes, bot-platform, Astaroth y Paimon.
+# El edge es INFRAESTRUCTURA: no vive dentro del repo de ninguna aplicación.
+# En este repo se versiona como referencia/plantilla; la fuente de verdad del
+# servidor es /home/deploy/edge (manager/edge/ en el workspace).
 #
-# TLS: certificado de ORIGEN de Cloudflare (15 años, CA propia de Cloudflare).
-# No se usa ACME/Let's Encrypt: Cloudflare es el único que habla con este
-# origen (proxy naranja) y él sí confía en esta CA (modo "Full (strict)").
-# El certificado NO es válido para navegadores: si algún registro se pone en
-# gris (DNS only), el navegador dará error de certificado.
+# Los hosts NO se declaran aquí. Cada host (o grupo de hosts de un mismo
+# proyecto) tiene su propio archivo en sites/*.caddy. Así dos proyectos nunca
+# escriben el mismo archivo y un despliegue de app no puede borrar los demás.
 #
-# IMPORTANTE: añade aquí el bloque de cada proyecto SOLO cuando su contenedor
-# esté arriba y su DNS apunte ya a este servidor.
-
+# TLS: certificado de ORIGEN de Cloudflare (CA propia, 15 años). No se usa
+# ACME: Cloudflare es el único que habla con el origen (proxy naranja) y él
+# confía en esta CA (modo "Full (strict)"). Si un registro se pone en gris
+# (DNS only), el navegador fallará el handshake.
 {
 	email admin@jcti.xyz
 
-	# Cloudflare en modo proxy por delante del origen: recuperar la IP real del
+	# Cloudflare en modo proxy delante del origen: recuperar la IP real del
 	# cliente desde CF-Connecting-IP para que el rate-limit y los logs no vean
 	# IPs de Cloudflare. Rangos de https://api.cloudflare.com/client/v4/ips
 	# (fijados el 2026-11-02); se actualizan a mano si Cloudflare publica otros.
@@ -26,7 +26,7 @@
 }
 
 # Cabeceras que aporta el edge (TLS/HSTS). El resto (CSP, X-Frame-Options,
-# Permissions-Policy…) ya las añade el Caddy interno de cada contenedor.
+# Permissions-Policy…) ya las añade el proxy interno de cada contenedor.
 (edge_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -35,150 +35,6 @@
 	}
 }
 
-# ── Ecommerce (contenedor `mercaldas_app`, Caddy interno en :8080 sin TLS) ──
-# OJO: los hosts deben ser de UN SOLO nivel bajo jcti.xyz. El certificado
-# Universal SSL (gratis) de Cloudflare cubre `jcti.xyz` y `*.jcti.xyz`; un
-# nombre como `api.mercaldas.jcti.xyz` NO recibe certificado en el borde y el
-# handshake TLS falla (alert 40). Para usar dos niveles haría falta Total TLS
-# (Advanced Certificate Manager, de pago).
-mercaldas.jcti.xyz, mercaldas-api.jcti.xyz, mercaldas-admin.jcti.xyz,
-mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	# Certificado de origen de Cloudflare (montado en /etc/caddy/edge-tls).
-		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-		reverse_proxy mercaldas_app:8080
-	}
-
-	# ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
-	# El panel y su API viven en el MISMO host: `/api/*` lo sirve el Caddy interno
-	# (API_BASE_PATH=/api), así que aquí se reenvía todo sin tocar rutas.
-	crm.jcti.xyz {
-		import edge_headers
-
-		log {
-			output stdout
-			format json
-		}
-
-		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-		reverse_proxy mercaldas_crm_app:8080
-	}
-
-	# ── Restaurantes / Punto C (`restaurants_app`, Caddy interno en :8080) ──
-	restaurante.jcti.xyz, restaurante-reservas.jcti.xyz, restaurante-cocina.jcti.xyz,
-	restaurante-admin.jcti.xyz, restaurante-mesero.jcti.xyz {
-		import edge_headers
-
-		log {
-			output stdout
-			format json
-		}
-
-		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-		reverse_proxy restaurants_app:8080
-	}
-
-	# ── WhatsApp Bot Platform (`whatsapp_bot_web`, nginx en :80) ──
-	# nginx sirve el panel y proxya /api y /webhook a `whatsapp_bot_api`.
-	bot-platform.jcti.xyz {
-		import edge_headers
-
-		log {
-			output stdout
-			format json
-		}
-
-		tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-		reverse_proxy whatsapp_bot_web:80
-	}
-
-# ── Astaroth ML (`astaroth` en 8010-8015, `load-balancer` en 8016) ──────────
-# El contenedor expone cada API en su propio puerto; el edge replica el ruteo
-# por prefijo del Caddyfile interno (handle_path quita el prefijo).
-astaroth.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-	handle_path /clustering/* {
-		reverse_proxy astaroth:8010
-	}
-	handle_path /xgboost/* {
-		reverse_proxy astaroth:8011
-	}
-	handle_path /uplift/* {
-		reverse_proxy astaroth:8012
-	}
-	handle_path /transformer/* {
-		reverse_proxy astaroth:8013
-	}
-	handle_path /causal/* {
-		reverse_proxy astaroth:8014
-	}
-	handle_path /highs/* {
-		reverse_proxy astaroth:8015
-	}
-	handle_path /lb/* {
-		reverse_proxy load-balancer:8016
-	}
-
-	respond "Astaroth ML API — /clustering /xgboost /uplift /transformer /causal /highs /lb" 200
-}
-
-# ── Paimon (APIs de audio, imagen, procesamiento y voz) ────────────────────
-# Cada API exige clave (X-API-Key o Authorization: Bearer). El prefijo se quita
-# antes de reenviar, igual que hacía el portal Swagger local.
-paimon.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-	handle_path /audio/* {
-		reverse_proxy paimon-audio-processing:8000
-	}
-	handle_path /image/* {
-		reverse_proxy paimon-image-api:8000
-	}
-	handle_path /processing/* {
-		reverse_proxy paimon-image-processing:8000
-	}
-	handle_path /voice/* {
-		reverse_proxy paimon-audio-generator:8000
-	}
-
-	respond "Paimon API — /audio /image /processing /voice" 200
-}
-
-# ── TerraExpert (app Expo servida como web estática por nginx) ─────────────
-terraexpert.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
-
-	reverse_proxy terraexpert_web:8080
-}
+# Un archivo por proyecto/host. El orden no importa: cada bloque es un site
+# independiente y Caddy enruta por nombre de host.
+import /etc/caddy/sites/*.caddy

@@ -1,0 +1,24 @@
+# ── Ecommerce (proyecto compose `ecommerce`, proxy interno en :8080) ──
+# Hosts canónicos nuevos (ecommerce*) y alias heredados (mercaldas*) apuntando
+# al MISMO upstream. Los alias se mantienen mientras las APKs ya instaladas,
+# Google OAuth y las URLs de Wompi sigan apuntando a mercaldas*.
+#
+# Los hosts deben ser de UN SOLO nivel bajo jcti.xyz: el Universal SSL de
+# Cloudflare cubre `jcti.xyz` y `*.jcti.xyz`. Un nombre como
+# `api.mercaldas.jcti.xyz` no recibe certificado en el borde (alert 40).
+
+ecommerce.jcti.xyz, ecommerce-api.jcti.xyz, ecommerce-admin.jcti.xyz,
+ecommerce-picking.jcti.xyz, ecommerce-delivery.jcti.xyz,
+mercaldas.jcti.xyz, mercaldas-api.jcti.xyz, mercaldas-admin.jcti.xyz,
+mercaldas-picking.jcti.xyz, mercaldas-delivery.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+	reverse_proxy ecommerce_proxy:8080
+}

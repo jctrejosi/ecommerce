@@ -1,20 +1,27 @@
 # syntax=docker/dockerfile:1
 # ============================================================
-# Imagen ÚNICA (un solo contenedor) del stack Mercaldas:
-#   backend NestJS + bot FastAPI + las interfaces web (Vite) + Caddy.
+# Imágenes del stack Mercaldas, UNA POR SERVICIO.
 #
-# Caddy expone el puerto público y enruta por dominio/host a cada interfaz;
-# backend y bot escuchan solo en 127.0.0.1 (red interna). El proceso corre como
-# usuario SIN privilegios y Caddy escucha en :8080/:8443 (el compose los publica
-# como 80/443). Los dominios/hosts se configuran por variables de entorno en
-# runtime (ver docker/gen-caddyfile.mjs y docker/docker-compose.yml).
+# El proyecto compose `ecommerce` (docker/docker-compose.yml) construye estos
+# targets y los levanta como contenedores independientes:
 #
-# Construir: docker compose -f docker/docker-compose.yml build
+#   backend-runtime → ecommerce_backend   (NestJS, :3100)
+#   bot-runtime     → ecommerce_bot       (FastAPI, :8001)
+#   web-client      → ecommerce_client    (SPA cliente, nginx :8080)
+#   web-admin       → ecommerce_admin     (SPA admin)
+#   web-delivery    → ecommerce_delivery  (SPA delivery admin)
+#   web-picking     → ecommerce_picking   (SPA picking admin)
+#   proxy           → ecommerce_proxy     (Caddy interno, :8080)
+#
+# Todos los runtime corren como usuario SIN privilegios. Los dominios/hosts se
+# configuran por variables de entorno del proxy en runtime
+# (ver docker/gen-caddyfile.mjs), no se hornean en las imágenes.
+#
 # El contexto de build es la raíz del repo.
 # ============================================================
 
-# ── 1. Backend NestJS ───────────────────────────────────────
-FROM node:20-bookworm-slim AS backend
+# ── 1. Backend NestJS (build) ───────────────────────────────
+FROM node:20-bookworm-slim AS backend-build
 WORKDIR /build/backend
 
 # Dependencias primero (capa cacheable).
@@ -30,10 +37,10 @@ RUN yarn build \
       --esModuleInterop --skipLibCheck --declaration false --sourceMap false \
       drizzle/schema.ts drizzle/relations.ts
 
-# ── 2. Interfaces web (Vite) ────────────────────────────────
+# ── 2. Interfaces web (build de las 4 SPAs) ─────────────────
 # `VITE_API_URL` se hornea en el bundle: pásalo como --build-arg con la URL
-# pública del API (p. ej. https://api.tudominio.com).
-FROM node:20-bookworm-slim AS fronts
+# pública del API (p. ej. https://ecommerce-api.tudominio.com).
+FROM node:20-bookworm-slim AS fronts-build
 ARG VITE_API_URL=http://localhost:3000
 ARG VITE_BOT_API_URL=
 # Client ID público de Google OAuth. Se pasa como build-arg para no depender
@@ -56,66 +63,96 @@ RUN set -eux; \
       ( cd "$d" && pnpm install --frozen-lockfile && pnpm run build ); \
     done
 
-# ── 3. Runtime: Node + Python + Caddy ───────────────────────
-FROM node:20-bookworm-slim AS runtime
+# ── 3. Backend (runtime) ────────────────────────────────────
+FROM node:20-bookworm-slim AS backend-runtime
 
 ENV NODE_ENV=production \
-    PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    BACKEND_PORT=3100 \
-    BOT_PORT=8001 \
-    HTTP_PORT=8080 \
-    HTTPS_PORT=8443 \
-    XDG_DATA_HOME=/data \
-    XDG_CONFIG_HOME=/config \
-    CADDYFILE_OUT=/config/Caddyfile.generated
+    BACKEND_PORT=3100
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-      python3 python3-venv \
       curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Caddy: reverse proxy (TLS automático) y servidor de estáticos.
-ARG CADDY_VERSION=2.11.7
-RUN curl -fsSL "https://github.com/caddyserver/caddy/releases/download/v${CADDY_VERSION}/caddy_${CADDY_VERSION}_linux_amd64.tar.gz" \
-      | tar -xz -C /usr/local/bin caddy \
-    && chmod +x /usr/local/bin/caddy
-
 WORKDIR /app
 
-# Backend compilado.
-COPY --from=backend /build/backend/dist ./backend/dist
-COPY --from=backend /build/backend/node_modules ./backend/node_modules
-COPY --from=backend /build/backend/package.json ./backend/package.json
-COPY --from=backend /build/backend/scripts/sync-schema.js ./backend/scripts/sync-schema.js
-COPY --from=backend /build/backend/scripts/picking-shelves.sql ./backend/scripts/picking-shelves.sql
+COPY --from=backend-build /build/backend/dist ./backend/dist
+COPY --from=backend-build /build/backend/node_modules ./backend/node_modules
+COPY --from=backend-build /build/backend/package.json ./backend/package.json
+COPY --from=backend-build /build/backend/scripts/sync-schema.js ./backend/scripts/sync-schema.js
+COPY --from=backend-build /build/backend/scripts/picking-shelves.sql ./backend/scripts/picking-shelves.sql
 
-# Interfaces compiladas (una carpeta por interfaz).
-COPY --from=fronts /fronts/web/dist /srv/web
-COPY --from=fronts /fronts/admin/dist /srv/admin
-COPY --from=fronts /fronts/picking-admin/dist /srv/picking-admin
-COPY --from=fronts /fronts/delivery-admin/dist /srv/delivery-admin
+COPY docker/backend-entrypoint.sh ./backend/entrypoint.sh
 
-# Bot (Python).
-COPY bot/ ./bot
-RUN python3 -m venv /opt/bot-venv \
- && /opt/bot-venv/bin/pip install --no-cache-dir -r ./bot/requirements.txt
-
-# Proxy + arranque.
-COPY docker/entrypoint.sh ./entrypoint.sh
-COPY docker/gen-caddyfile.mjs ./gen-caddyfile.mjs
 # Normaliza CRLF (el repo puede clonarse/trabajarse en Windows), da permisos,
-# crea los directorios persistentes (certificados ACME en /data y medios locales
-# del backend en /app/db) y un usuario SIN privilegios con el que se ejecuta todo.
-RUN sed -i 's/\r$//' ./entrypoint.sh \
- && chmod +x ./entrypoint.sh \
- && mkdir -p /data /config /app/db /app/backend/logs \
+# crea los directorios persistentes (medios locales en /app/db, logs) y un
+# usuario SIN privilegios con el que se ejecuta el backend.
+RUN sed -i 's/\r$//' ./backend/entrypoint.sh \
+ && chmod +x ./backend/entrypoint.sh \
+ && mkdir -p /app/db /app/backend/logs \
  && groupadd --system --gid 10001 merc \
  && useradd --system --uid 10001 --gid merc --home-dir /app --shell /usr/sbin/nologin merc \
- && chown -R merc:merc /data /config /app/db /app/backend/logs
+ && chown -R merc:merc /app/db /app/backend/logs
 
-# No root: Caddy escucha en 8080/8443 (el host publica 80/443).
+WORKDIR /app/backend
 USER merc
+EXPOSE 3100
+ENTRYPOINT ["./entrypoint.sh"]
 
-EXPOSE 8080 8443
-CMD ["./entrypoint.sh"]
+# ── 4. Bot FastAPI (runtime) ────────────────────────────────
+FROM python:3.12-slim AS bot-runtime
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    BOT_PORT=8001
+
+WORKDIR /app
+COPY bot/ ./
+RUN pip install --no-cache-dir -r ./requirements.txt \
+ && useradd --system --uid 10002 --home-dir /app --shell /usr/sbin/nologin botuser \
+ && chown -R botuser:botuser /app
+USER botuser
+EXPOSE 8001
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
+
+# ── 5. Interfaces web (runtime: nginx sin privilegios) ──────
+FROM nginxinc/nginx-unprivileged:1.27-alpine AS web-base
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 8080
+
+FROM web-base AS web-client
+COPY --from=fronts-build /fronts/web/dist /usr/share/nginx/html
+
+FROM web-base AS web-admin
+COPY --from=fronts-build /fronts/admin/dist /usr/share/nginx/html
+
+FROM web-base AS web-delivery
+COPY --from=fronts-build /fronts/delivery-admin/dist /usr/share/nginx/html
+
+FROM web-base AS web-picking
+COPY --from=fronts-build /fronts/picking-admin/dist /usr/share/nginx/html
+
+# ── 6. Proxy interno (Caddy) ────────────────────────────────
+# Solo enruta por host al backend y a cada contenedor de interfaz. El TLS lo
+# termina el edge compartido (docker/edge/), así que aquí va en HTTP puro.
+FROM caddy:2.11.7-alpine AS proxy
+
+RUN apk add --no-cache nodejs
+
+WORKDIR /app
+COPY docker/proxy-entrypoint.sh ./entrypoint.sh
+COPY docker/gen-caddyfile.mjs ./gen-caddyfile.mjs
+
+RUN mkdir -p /data /config \
+ && chmod +x ./entrypoint.sh \
+ && addgroup -g 10001 -S merc \
+ && adduser -u 10001 -S -G merc -h /app merc \
+ && chown -R merc:merc /data /config /app
+
+ENV XDG_DATA_HOME=/data \
+    XDG_CONFIG_HOME=/config \
+    CADDYFILE_OUT=/config/Caddyfile.generated \
+    HTTP_PORT=8080
+
+USER merc
+EXPOSE 8080
+ENTRYPOINT ["./entrypoint.sh"]

@@ -1,78 +1,76 @@
-# `docker/` — despliegue en un contenedor único
+# `docker/` — despliegue del ecommerce (un contenedor por servicio)
 
-Imagen única con **backend + bot + las interfaces web + Caddy**. Solo se publican
-`80`/`443`; backend, bot y BD quedan internos.
+Proyecto compose **`ecommerce`**. Cada parte del stack corre en su propio
+contenedor, con nombre explícito y reinicio independiente:
 
-| Proceso | Puerto (interno) | Publicado | Internet |
+| Contenedor | Servicio | Puerto | Expuesto a internet |
 |---|---|---|---|
-| Backend NestJS | `127.0.0.1:3100` | ❌ | ❌ |
-| Bot FastAPI | `127.0.0.1:8001` | ❌ | ❌ |
-| Caddy (proxy + TLS + estáticos) | `:8080` / `:8443` | `127.0.0.1:30180` / `127.0.0.1:30181` | ❌ (lo alcanza el edge) |
-| **Edge compartido** (`edge/`) | `:80` / `:443` | `80` / `443` | ✅ **único** |
+| `ecommerce_db` | PostgreSQL + PostGIS | `127.0.0.1:5432` (solo host) | ❌ |
+| `ecommerce_backend` | NestJS | `3100` (red interna) | ❌ |
+| `ecommerce_bot` | FastAPI | `8001` (red interna) | ❌ |
+| `ecommerce_client` | SPA cliente (nginx) | `8080` (red interna) | ❌ |
+| `ecommerce_admin` | SPA administración (nginx) | `8080` (red interna) | ❌ |
+| `ecommerce_delivery` | SPA delivery admin (nginx) | `8080` (red interna) | ❌ |
+| `ecommerce_picking` | SPA picking admin (nginx) | `8080` (red interna) | ❌ |
+| `ecommerce_proxy` | Caddy interno (enrutado por host/ruta) | `127.0.0.1:30180` | ❌ (lo alcanza el edge) |
+| `ecommerce_osrm` | Motor de rutas | `5000` (red interna) | ❌ |
+| **`edge_caddy`** | Edge compartido (otro proyecto) | `80` / `443` | ✅ **único** |
 
-Puertos propios de cada proyecto (nada «genérico» que choque con IIS u otros
-servicios): ecommerce `30180/30181`, CRM `30280/30281` (en loopback). El edge es
-el único que publica 80/443 y el único que habla TLS con internet.
+Solo el **edge compartido** publica `80/443` y termina TLS (certificado de
+origen de Cloudflare). El proxy interno habla HTTP en `:8080` y el backend es el
+único que llega al bot, por `/bot/*`.
 
-📖 **Guía completa (Windows Server, firewall, DNS, seguridad y checklist):
-[`docs/DESPLIEGUE-DOCKER.md`](../docs/DESPLIEGUE-DOCKER.md)**
+📖 Guía completa (DNS, TLS, firewall, Cloudflare, checklist):
+[`docs/DESPLIEGUE-DOCKER.md`](../docs/DESPLIEGUE-DOCKER.md).
 
 ## Rápido
 
-> Dos formas, ambas válidas: **solo Docker** (los comandos de abajo; no necesitas
-> node) o el lanzador `node prod.js` (sincroniza `docker/.env` desde
-> `prod.config.json`, valida secretos y construye/levanta; `--with-db` levanta
-> también la BD; `--dns` imprime qué configurar).
-
 ```bash
-cp docker/.env.example docker/.env    # dominios, TLS, DATABASE_URL, secretos
+cp docker/.env.example docker/.env    # dominios, DATABASE_URL, secretos
 
-# VITE_API_URL se toma de docker/.env (o pásalo con --build-arg si prefieres)
-docker compose -f docker/docker-compose.yml build
+# Construye las 7 imágenes (backend, bot, 4 SPAs y proxy)
+docker compose -f docker/docker-compose.yml --env-file docker/.env build
 
-# Base de datos (fuera del contenedor) + red interna
-docker compose -f db/docker/docker-compose.yml up -d
-docker network connect mercaldas_internal ecommerce_postgres
+# Levanta todo (la BD incluida) y espera healthchecks
+docker compose -f docker/docker-compose.yml --env-file docker/.env up -d
 
-docker compose -f docker/docker-compose.yml up -d
-# Rutas por calles del delivery: el servicio `osrm` arranca con el compose y
-# queda solo en la red interna. Requiere los datos de delivery-routing/data
-# (no versionados; si faltan, ejecuta ./delivery-routing/prepare.sh).
-docker compose -f docker/docker-compose.yml ps
-
-# Edge compartido: publica 80/443 y hace TLS para todos los dominios
-cd docker/edge && docker compose up -d
+docker compose -f docker/docker-compose.yml --env-file docker/.env ps
 ```
 
-> En `docker/.env` (modo edge, recomendado si hay más proyectos en el servidor):
-> `TLS=false`, `ALLOW_INSECURE=true`, `PUBLIC_SCHEME=https`,
-> `PUBLIC_HTTP_PORT=127.0.0.1:30180`, `PUBLIC_HTTPS_PORT=127.0.0.1:30181`.
-> Para desplegar el ecommerce **solo** (sin edge): `TLS=true` y
-> `PUBLIC_HTTP_PORT=80` / `PUBLIC_HTTPS_PORT=443`.
-> Detalles: [`edge/README.md`](./edge/README.md).
+Con `node prod.js` se hace lo mismo, sincronizando `docker/.env` desde
+`prod.config.json` y validando secretos antes de construir.
+
+> Los volúmenes conservan los nombres heredados (`db_postgres_data`,
+> `mercaldas_media`) **a propósito**: así la migración desde el contenedor único
+> no pierde datos ni imágenes ya subidas.
 
 ## Archivos
 
 | Archivo | Rol |
 |---|---|
-| `Dockerfile` | Multi-stage: backend + fronts (Vite) + bot → runtime con Node, Python y Caddy. |
-| `entrypoint.sh` | Arranca backend/bot (127.0.0.1) y Caddy (`:80/:443`) + genera el Caddyfile. |
-| `gen-caddyfile.mjs` | Vhosts por dominio, cabeceras de seguridad, HSTS y Basic Auth opcional. |
-| `docker-compose.yml` | Un servicio, redes `edge`+`internal`, volúmenes de Caddy, `cap_drop`, healthcheck. |
-| `.env.example` | Dominios (`HOST_*`), TLS, secretos y BD. |
+| `Dockerfile` | Multi-target: `backend-runtime`, `bot-runtime`, `web-client/admin/delivery/picking`, `proxy`. |
+| `backend-entrypoint.sh` | Sync de esquema idempotente + arranque de NestJS. |
+| `proxy-entrypoint.sh` | Arranque de Caddy y generación del Caddyfile. |
+| `gen-caddyfile.mjs` | Vhosts por dominio (con alias heredados), cabeceras de seguridad y Basic Auth opcional. |
+| `nginx.conf` | Servidor estático de cada SPA: fallback SPA, caché de assets, `/healthz`. |
+| `docker-compose.yml` | Proyecto `ecommerce`, 9 servicios, redes `ecommerce_edge`/`ecommerce_internal`/`shared_edge`. |
+| `edge/sites/ecommerce.caddy` | Bloque del edge para este proyecto (se sincroniza desde `deploy.sh`). |
+| `.env.example` | Dominios (`HOST_*` + `*_LEGACY`), BD, secretos y OAuth. |
 
 ## Seguridad (resumen)
 
-- Solo el edge publica `80`/`443`; el contenedor publica `127.0.0.1:30180/30181` (loopback) y `3100`/`8001` escuchan en `127.0.0.1` dentro del contenedor.
-- El **API se sirve en el mismo origen que `HOST_WEB`** (`/catalog/*`, `/orders`, `/static/*`, `/socket.io/*`, `/bot/*`, …). `HOST_API` queda como alias **solo para `/webhooks/*`**.
-- **El contenedor no corre como root** (usuario `merc`); Caddy escucha en `8080`/`8443`.
-- BD en la red `mercaldas_internal` (`internal: true`), nunca publicada.
-- TLS Let's Encrypt + HSTS + `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`, `Permissions-Policy`, `Content-Security-Policy`; se oculta `Server`.
-- `PROTECT_ADMIN=true` **por defecto** (fail-closed si falta la contraseña). El bot no se publica en Caddy: el backend proxya `/bot/*` por loopback.
-- **Rate limit** en `/auth/*` y `/customer-auth/*` (backend) y en `/chat`/`/cart*` (bot), por IP.
-- `TLS=false` exige `ALLOW_INSECURE=true`; `MAX_REQUEST_BODY` acota el cuerpo; API de admin de Caddy desactivada.
-- Certificados persistentes en los volúmenes `mercaldas_caddy_data`/`mercaldas_caddy_config`; medios locales en `mercaldas_media`.
-- Contenedor con `no-new-privileges` y `cap_drop: ALL`, rotación de logs de Docker.
+- Solo el edge publica `80/443`. La BD y el proxy se publican **solo en loopback**.
+- El API se sirve en el mismo origen que `HOST_WEB` (`/catalog/*`, `/orders`,
+  `/static/*`, `/socket.io/*`, `/bot/*`, …). `HOST_API` sirve el API completo.
+- Todos los runtime corren como usuario **sin privilegios** (`merc`, `botuser`,
+  usuario de nginx-unprivileged) con `no-new-privileges` y `cap_drop: ALL`.
+- Redes separadas: los fronts y la BD viven en `ecommerce_internal`
+  (`internal: true`), sin salida a internet. Backend y bot sí salen (APIs externas).
+- HSTS lo añade el edge; el proxy añade CSP, `X-Content-Type-Options`,
+  `X-Frame-Options`, `Referrer-Policy`, `Cross-Origin-Opener-Policy`,
+  `Permissions-Policy` y oculta `Server`.
+- `PROTECT_ADMIN=true` es fail-closed (sin contraseña, el proxy no arranca).
+- Rotación de logs de Docker (`10m` × 3) en todos los servicios.
 
 > Cambiar un dominio no requiere rebuild (edita `docker/.env` y `up -d`).
 > Cambiar `VITE_API_URL` **sí** requiere rebuild (va horneado en los fronts).

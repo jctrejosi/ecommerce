@@ -1,55 +1,53 @@
 #!/usr/bin/env node
 /**
- * Genera el Caddyfile del contenedor único de Mercaldas a partir de variables
- * de entorno, de modo que los dominios/hosts NO queden horneados en la imagen.
+ * Genera el Caddyfile del contenedor `ecommerce_proxy` a partir de variables de
+ * entorno, de modo que los dominios/hosts y los upstreams NO queden horneados
+ * en la imagen. El TLS lo termina el edge compartido (Cloudflare Origin CA):
+ * este proxy solo habla HTTP en :8080 dentro de la red Docker.
  *
  * Modo multi-host (recomendado): define `HOST_API` y, por cada interfaz que
- *   quieras publicar, su `HOST_<APP>` (p. ej. HOST_WEB=client.tudominio.com).
- *   Cada interfaz se sirve en su propio subdominio y el API (backend) en
- *   HOST_API. El backend y el bot solo escuchan en 127.0.0.1 dentro del
- *   contenedor; Caddy solo publica el backend, y este proxya /bot internamente.
+ *   quieras publicar, su `HOST_<APP>` (p. ej. HOST_WEB=ecommerce.tudominio.com).
+ *   Cada interfaz se sirve desde su propio contenedor (`client`, `admin`,
+ *   `picking`, `delivery`) y el API (backend) en HOST_API. El bot no se publica:
+ *   el backend proxya /bot internamente.
  *
  * Si no defines ningún HOST_*, se genera un único vhost en el puerto HTTP que
- *   solo proxya al backend (útil como smoke-test del contenedor).
+ *   solo proxya al backend (útil como smoke-test).
  *
  * Variables:
- *   HOST_API            API completa. La raíz se reescribe a /webhooks/wompi
- *                        para pasarelas configuradas con el host pelado.
- *                        Los frontends se compilan con VITE_API_URL apuntando
- *                        a este host.
- *   HOST_WEB            cliente web; además proxya el API en el mismo origen
- *                        (rutas /catalog/*, /orders, /static/*, /bot/*, …)
- *   HOST_WEB            cliente web          → /srv/web
- *   HOST_ADMIN          admin                → /srv/admin
- *   HOST_PICKING_ADMIN  picking admin        → /srv/picking-admin
- *   HOST_DELIVERY_ADMIN delivery admin       → /srv/delivery-admin
- *   TLS                 "true" (def.) | "false"  (false ⇒ HTTP, pensado para ir
- *                       detrás del edge compartido que hace TLS; requiere ALLOW_INSECURE)
- *   ACME_EMAIL          email para Let's Encrypt (avisos de expiración)
- *   PROTECT_ADMIN       "true" (def.) ⇒ Basic Auth en los paneles de administración
- *   ADMIN_USER          usuario del Basic Auth           (def. admin)
- *   ADMIN_PASSWORD      contraseña en claro (se hashea con caddy bcrypt)
- *   ADMIN_PASSWORD_HASH hash bcrypt ya calculado (tiene prioridad)
- *   BACKEND_PORT        puerto interno del backend  (def. 3100)
- *   BOT_PORT            puerto interno del bot (lo usa el backend para su proxy) (def. 8001)
- *   HTTP_PORT           puerto HTTP interno de Caddy  (def. 8080; el compose publica 80)
- *   HTTPS_PORT          puerto HTTPS interno de Caddy (def. 8443; el compose publica 443)
- *   MAX_REQUEST_BODY    tamaño máximo de cuerpo (def. 50MB; "0" ⇒ sin límite)
- *   CSP_POLICY          política CSP ("off"/"" ⇒ sin cabecera; por defecto una segura)
- *   CADDYFILE_OUT       ruta de salida (def. /config/Caddyfile.generated)
+ *   HOST_API              API completa. La raíz se reescribe a /webhooks/wompi
+ *                         para pasarelas configuradas con el host pelado.
+ *   HOST_WEB              cliente web; además proxya el API en el mismo origen
+ *                         (rutas /catalog/*, /orders, /static/*, /bot/*, …)
+ *   HOST_ADMIN            admin                → contenedor `admin`
+ *   HOST_PICKING_ADMIN    picking admin        → contenedor `picking`
+ *   HOST_DELIVERY_ADMIN   delivery admin       → contenedor `delivery`
+ *   HOST_*_LEGACY         hosts heredados separados por comas que sirven lo
+ *                         mismo (p. ej. HOST_WEB_LEGACY=mercaldas.jcti.xyz).
+ *                         Permiten migrar el dominio sin romper APKs ya
+ *                         instaladas, Google OAuth ni webhooks configurados.
+ *   BACKEND_UPSTREAM      backend              (def. backend:3100)
+ *   CLIENT_UPSTREAM       SPA cliente          (def. client:8080)
+ *   ADMIN_UPSTREAM        SPA admin            (def. admin:8080)
+ *   PICKING_UPSTREAM      SPA picking admin    (def. picking:8080)
+ *   DELIVERY_UPSTREAM     SPA delivery admin   (def. delivery:8080)
+ *   HTTP_PORT             puerto interno de Caddy (def. 8080)
+ *   PROTECT_ADMIN         "true" (def.) ⇒ Basic Auth en los paneles de administración
+ *   ADMIN_USER            usuario del Basic Auth           (def. admin)
+ *   ADMIN_PASSWORD        contraseña en claro (se hashea con caddy bcrypt)
+ *   ADMIN_PASSWORD_HASH   hash bcrypt ya calculado (tiene prioridad)
+ *   MAX_REQUEST_BODY      tamaño máximo de cuerpo (def. 50MB; "0" ⇒ sin límite)
+ *   CSP_POLICY            política CSP ("off"/"" ⇒ sin cabecera; por defecto una segura)
+ *   CADDYFILE_OUT         ruta de salida (def. /config/Caddyfile.generated)
  */
 import fs from "node:fs";
 import { spawnSync } from "node:child_process";
 
 const env = process.env;
-const TLS = String(env.TLS ?? "true").toLowerCase() !== "false";
-const EMAIL = (env.ACME_EMAIL || "").trim();
-const BACKEND = `127.0.0.1:${env.BACKEND_PORT || 3100}`;
 
-// Caddy NO corre como root dentro del contenedor, así que escucha en puertos
-// altos; el compose publica 80/443 hacia ellos.
 const HTTP_PORT = String(env.HTTP_PORT || "8080").trim();
-const HTTPS_PORT = String(env.HTTPS_PORT || "8443").trim();
+
+const BACKEND = (env.BACKEND_UPSTREAM || "backend:3100").trim();
 
 // Límite de tamaño de cuerpo en el borde: evita que un cliente envíe cargas
 // enormes (el backend acepta hasta 50 MB de JSON). "0"/vacío ⇒ sin límite.
@@ -88,23 +86,30 @@ const CSP =
       ? ""
       : cspEnv.trim();
 
-// Interfaz → variable de entorno del host y directorio dentro de la imagen.
-// `admin: true` ⇒ es un panel de administración (candidato a Basic Auth).
+// Interfaz → variable de host, upstream y si es panel de administración.
 const FRONTS = [
-  { envKey: "HOST_WEB", dir: "/srv/web" },
-  { envKey: "HOST_ADMIN", dir: "/srv/admin", admin: true },
-  { envKey: "HOST_PICKING_ADMIN", dir: "/srv/picking-admin", admin: true },
-  { envKey: "HOST_DELIVERY_ADMIN", dir: "/srv/delivery-admin", admin: true },
+  { envKey: "HOST_WEB", upstream: (env.CLIENT_UPSTREAM || "client:8080").trim(), web: true },
+  { envKey: "HOST_ADMIN", upstream: (env.ADMIN_UPSTREAM || "admin:8080").trim(), admin: true },
+  { envKey: "HOST_PICKING_ADMIN", upstream: (env.PICKING_UPSTREAM || "picking:8080").trim(), admin: true },
+  { envKey: "HOST_DELIVERY_ADMIN", upstream: (env.DELIVERY_UPSTREAM || "delivery:8080").trim(), admin: true },
 ];
 
 const hostOf = (k) => (env[k] || "").trim();
+const hostList = (k) =>
+  (env[k] || "")
+    .split(",")
+    .map((h) => h.trim())
+    .filter(Boolean);
 const HOST_API = hostOf("HOST_API");
 const HOST_WEB = hostOf("HOST_WEB");
-const frontHosts = FRONTS.map((f) => ({ ...f, host: hostOf(f.envKey) })).filter((f) => f.host);
-const anyHost = Boolean(HOST_API) || frontHosts.length > 0;
+const apiHosts = [...new Set([HOST_API, ...hostList("HOST_API_LEGACY")].filter(Boolean))];
+const frontHosts = FRONTS.map((f) => ({
+  ...f,
+  hosts: [...new Set([hostOf(f.envKey), ...hostList(`${f.envKey}_LEGACY`)].filter(Boolean))],
+})).filter((f) => f.hosts.length > 0);
+const anyHost = apiHosts.length > 0 || frontHosts.length > 0;
 
 // ── Basic Auth de los paneles admin ──
-// El bot NO se publica aquí: el backend lo proxya en /bot por loopback.
 const PROTECT_ADMIN = String(env.PROTECT_ADMIN ?? "true").toLowerCase() !== "false";
 let basicAuth = "";
 if (PROTECT_ADMIN) {
@@ -126,6 +131,7 @@ if (PROTECT_ADMIN) {
 }
 
 // ── Cabeceras de seguridad comunes a todos los vhosts ───────
+// HSTS lo añade el edge (es quien termina TLS), no se duplica aquí.
 const headerLines = [
   `\tX-Content-Type-Options "nosniff"`,
   `\tX-Frame-Options "SAMEORIGIN"`,
@@ -135,13 +141,10 @@ const headerLines = [
   `\t-Server`,
 ];
 if (CSP) headerLines.push(`\tContent-Security-Policy "${CSP}"`);
-if (TLS) headerLines.unshift(`\tStrict-Transport-Security "max-age=31536000; includeSubDomains"`);
 const headerBlock = `\theader {\n${headerLines.join("\n")}\n\t}\n`;
 
-// Con TLS desactivado este Caddy va detrás de un edge que SÍ hace TLS (modo
-// edge compartido): el backend debe ver el esquema público real (p. ej. para
-// construir URLs absolutas), así que se fija X-Forwarded-Proto=https.
-const protoUp = TLS ? "" : " {\n\t\theader_up X-Forwarded-Proto https\n\t}";
+// El edge termina TLS y reenvía HTTP: el backend debe ver el esquema público.
+const protoUp = " {\n\t\theader_up X-Forwarded-Proto https\n\t}";
 
 const apiBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
 	handle {
@@ -190,26 +193,16 @@ const API_PATHS = [
   "/webhooks/*",
 ];
 
-// Caché de estáticos: el HTML nunca se cachea (un index viejo apunta a
-// bundles viejos); los assets con hash son inmutables.
-const cacheHeaders = `\t@assets path /assets/*
-\theader @assets Cache-Control "public, max-age=31536000, immutable"
-\t@notAssets not path /assets/*
-\theader @notAssets Cache-Control "no-cache"
-`;
-
 // Con HOST_WEB el API se sirve en el MISMO origen que la web del cliente
 // (como en local con serve-webclient.mjs). El resto de fronts lo consume
 // cross-origin; CORS ya los autoriza.
-const webClientBlock = (dir) => `${headerBlock}${bodyLimit}\tencode zstd gzip
+const webClientBlock = (upstream) => `${headerBlock}${bodyLimit}\tencode zstd gzip
 	@api path ${API_PATHS.join(" ")}
 	handle @api {
 		reverse_proxy ${BACKEND}${protoUp}
 	}
 	handle {
-${cacheHeaders}		root * ${dir}
-		try_files {path} /index.html
-		file_server
+		reverse_proxy ${upstream}${protoUp}
 	}`;
 
 // Host del API cuando ya existe HOST_WEB: sirve TODO el backend. Los frontends
@@ -225,41 +218,30 @@ const apiHostBlock = `${headerBlock}${bodyLimit}\tencode zstd gzip
 		reverse_proxy ${BACKEND}${protoUp}
 	}`;
 
-const staticBlock = (dir, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
-${cacheHeaders}	root * ${dir}
-	try_files {path} /index.html
-	file_server`;
+const staticBlock = (upstream, withAuth) => `${headerBlock}${withAuth ? basicAuth : ""}${bodyLimit}\tencode zstd gzip
+	reverse_proxy ${upstream}${protoUp}`;
 
 let out = "";
 
-// Con TLS desactivado hay que forzar el esquema `http://`: un hostname sin
-// esquema hace que Caddy asuma HTTPS (y escucharía en :443, no en :80).
-const siteAddr = (host) => (TLS ? host : `http://${host}`);
-
 if (anyHost) {
-  // Opciones globales: sin API de administración, puertos altos (no root),
-  // email ACME y HTTP puro si TLS=false.
-  const opts = ["\tadmin off", `\thttp_port ${HTTP_PORT}`, `\thttps_port ${HTTPS_PORT}`];
-  if (EMAIL) opts.push(`\temail ${EMAIL}`);
-  if (!TLS) {
-    opts.push("\tauto_https off");
+  const opts = [
+    "\tadmin off",
+    `\thttp_port ${HTTP_PORT}`,
+    "\tauto_https off",
     // Detrás del edge compartido: el edge es un proxy de confianza (red Docker
     // privada) y envía el X-Forwarded-For del cliente; sin esto Caddy lo
     // reemplazaría por la IP del edge y el rate limit sería un único cubo.
-    opts.push("\tservers {\n\t\ttrusted_proxies static private_ranges\n\t}");
-  }
+    "\tservers {\n\t\ttrusted_proxies static private_ranges\n\t}",
+  ];
   out += `{\n${opts.join("\n")}\n}\n`;
 
-  if (HOST_API && HOST_API !== HOST_WEB) {
-    out += `\n${siteAddr(HOST_API)} {\n${apiHostBlock}\n}\n`;
+  if (apiHosts.length > 0 && !apiHosts.includes(HOST_WEB)) {
+    out += `\n${apiHosts.map((h) => `http://${h}`).join(", ")} {\n${apiHostBlock}\n}\n`;
   }
   for (const f of frontHosts) {
     const withAuth = PROTECT_ADMIN && Boolean(f.admin) && Boolean(basicAuth);
-    const block =
-      f.envKey === "HOST_WEB"
-        ? webClientBlock(f.dir)
-        : staticBlock(f.dir, withAuth);
-    out += `\n${siteAddr(f.host)} {\n${block}\n}\n`;
+    const block = f.web ? webClientBlock(f.upstream) : staticBlock(f.upstream, withAuth);
+    out += `\n${f.hosts.map((h) => `http://${h}`).join(", ")} {\n${block}\n}\n`;
   }
 } else {
   // Sin dominios configurados: vhost mínimo en el puerto HTTP (solo API).
