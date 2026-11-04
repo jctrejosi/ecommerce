@@ -136,7 +136,12 @@ COPY --from=fronts-build /fronts/picking-admin/dist /usr/share/nginx/html
 # termina el edge compartido (docker/edge/), así que aquí va en HTTP puro.
 FROM caddy:2.11.7-alpine AS proxy
 
-RUN apk add --no-cache nodejs bash
+RUN apk add --no-cache nodejs bash \
+ # El binario oficial lleva la file-capability NET_BIND_SERVICE; con
+ # `cap_drop: ALL` el exec falla con EPERM. La copia no conserva xattrs,
+ # así que el Caddy sin privilegios arranca en :8080 sin capabilities.
+ && cp /usr/bin/caddy /usr/local/bin/caddy \
+ && chmod 755 /usr/local/bin/caddy
 
 WORKDIR /app
 COPY docker/proxy-entrypoint.sh ./entrypoint.sh
