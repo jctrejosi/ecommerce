@@ -6,10 +6,12 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  UnauthorizedException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Request } from 'express';
-import { createHash } from 'crypto';
+import { createHash, timingSafeEqual } from 'crypto';
 import { Public } from '../../common/decorators/public.decorator';
 import { DrizzleService } from '../../database/drizzle.service';
 import { orders, orderStatusHistory } from '../../../drizzle/schema';
@@ -58,37 +60,52 @@ export class WebhookController {
       ? signature.properties
       : [];
     const providedChecksum = checksum || signature?.checksum;
-    if (integrityKey && signedProperties.length && providedChecksum) {
-      // Las propiedades firmadas (p. ej. "transaction.id") se resuelven
-      // contra el objeto `data` del evento de Wompi.
-      const values = signedProperties
-        .map((prop: string) =>
-          prop
-            .split('.')
-            .reduce((acc: any, key: string) => acc?.[key], body?.data),
-        )
-        .join('');
-      const expectedA = createHash('sha256')
-        .update(`${integrityKey}${values}`)
-        .digest('hex');
-      const expectedB = createHash('sha256')
-        .update(`${values}${integrityKey}`)
-        .digest('hex');
-      const valid =
-        String(providedChecksum).toLowerCase() === expectedA.toLowerCase() ||
-        String(providedChecksum).toLowerCase() === expectedB.toLowerCase();
-      if (!valid) {
-        this.logger.warn(
-          `Checksum inválido en webhook para ${transaction.reference}: ignorado`,
-        );
-        return { ok: true };
-      }
-      this.logger.log('Webhook firmado correctamente (checksum válido)');
-    } else {
-      this.logger.warn(
-        'Webhook sin firma verificable (falta integrity key o signature) — procesando igual',
+
+    // ── Fail-closed: sin firma verificable no se procesa nada ──
+    // Un evento sin `signature.properties` o sin checksum puede venir de
+    // cualquiera: antes se procesaba igual y permitía marcar pedidos como
+    // pagados (o cancelados) sin pasar por Wompi.
+    if (!integrityKey) {
+      this.logger.error(
+        'WOMPI_INTEGRITY_KEY no configurada: se rechazan los webhooks de Wompi',
       );
+      throw new ServiceUnavailableException('Webhook no configurado');
     }
+    if (!signedProperties.length || !providedChecksum) {
+      this.logger.warn(
+        `Webhook sin firma para ${transaction.reference}: rechazado`,
+      );
+      throw new UnauthorizedException('Firma ausente');
+    }
+
+    // Las propiedades firmadas (p. ej. "transaction.id") se resuelven
+    // contra el objeto `data` del evento de Wompi.
+    const values = signedProperties
+      .map((prop: string) =>
+        prop
+          .split('.')
+          .reduce((acc: any, key: string) => acc?.[key], body?.data),
+      )
+      .join('');
+    const expectedA = createHash('sha256')
+      .update(`${integrityKey}${values}`)
+      .digest('hex');
+    const expectedB = createHash('sha256')
+      .update(`${values}${integrityKey}`)
+      .digest('hex');
+    const provided = String(providedChecksum).toLowerCase();
+    const valid = [expectedA, expectedB].some((expected) => {
+      const a = Buffer.from(provided);
+      const b = Buffer.from(expected);
+      return a.length === b.length && timingSafeEqual(a, b);
+    });
+    if (!valid) {
+      this.logger.warn(
+        `Checksum inválido en webhook para ${transaction.reference}: rechazado`,
+      );
+      throw new UnauthorizedException('Firma inválida');
+    }
+    this.logger.log('Webhook firmado correctamente (checksum válido)');
 
     if (event === 'transaction.updated') {
       const status = transaction.status;
