@@ -2,9 +2,9 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const KEY = "picking.apiUrl";
 
-/** URL por defecto: EXPO_PUBLIC_API_URL al compilar, o localhost para emulador. */
+/** URL por defecto: EXPO_PUBLIC_API_URL al compilar (producción), o localhost para emulador. */
 export const DEFAULT_API_URL = (
-  process.env.EXPO_PUBLIC_API_URL ?? "http://10.0.2.2:3000"
+  process.env.EXPO_PUBLIC_API_URL ?? "https://ecommerce-api.jcti.xyz"
 ).replace(/\/+$/, "");
 
 let current = DEFAULT_API_URL;

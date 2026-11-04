@@ -13,11 +13,9 @@ import { WEB_CLIENT_URL } from "./webview";
  *   4. escanea la subred local (misma /24 que el celular) buscando `GET /discovery`.
  *
  * En los tres primeros casos, y también al encontrar el servidor por escaneo, se
- * usa la **IP literal** (`http://192.168.0.132:4173`), no un hostname: el login
- * con Google se hace por redirección de página completa y su `redirect_uri`
- * registrado en Google Cloud Console es la IP. (Antes se prefería el alias
- * `sslip.io` porque Google Identity Services exigía un hostname; ese flujo con
- * popup se eliminó por no funcionar dentro del WebView.)
+ * usa la URL configurada. En producción es el dominio público
+ * (`https://mercaldas.jcti.xyz`), que sirve la web y su API por el mismo origen;
+ * en desarrollo se compila con `EXPO_PUBLIC_WEB_URL` apuntando a la IP local.
  *
  * La URL que responde se guarda para los siguientes arranques.
  */

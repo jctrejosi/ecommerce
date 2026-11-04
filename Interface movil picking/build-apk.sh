@@ -19,6 +19,10 @@ cd "$(dirname "$0")"
 export JAVA_HOME="${JAVA_HOME:-/home/jk/jdks/jdk-17.0.20.1+1}"
 export ANDROID_HOME="${ANDROID_HOME:-/home/jk/Android/Sdk}"
 
+# Producción por defecto: el APK habla con el API canónico del servidor.
+# Se puede sobrescribir con EXPO_PUBLIC_API_URL=... ./build-apk.sh
+export EXPO_PUBLIC_API_URL="${EXPO_PUBLIC_API_URL:-https://ecommerce-api.jcti.xyz}"
+
 if [ ! -x "$JAVA_HOME/bin/javac" ]; then
   echo "ERROR: JAVA_HOME ($JAVA_HOME) no tiene un JDK válido (falta bin/javac)." >&2
   exit 1

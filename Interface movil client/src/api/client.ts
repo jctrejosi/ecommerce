@@ -8,12 +8,12 @@ import Constants from "expo-constants";
 
 /**
  * URL de la API. Precedencia: `app.json` → `extra.apiUrl` → `EXPO_PUBLIC_API_URL`
- * (`.env`) → localhost. Así se puede cambiar sin editar el `.env` (que está bloqueado).
+ * (build) → host público por defecto. Así se puede cambiar sin editar el `.env`.
  */
 export const API_BASE_URL =
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ||
   process.env.EXPO_PUBLIC_API_URL ||
-  "http://localhost:3000";
+  "https://mercaldas.jcti.xyz";
 
 const ACCESS_KEY = "mercaldas.accessToken";
 const REFRESH_KEY = "mercaldas.refreshToken";

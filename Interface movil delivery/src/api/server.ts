@@ -18,8 +18,10 @@ import { Platform } from "react-native";
 export const SERVICE_ID = "mercaldas-backend";
 const DEFAULT_PORT = 3000;
 const STORAGE_KEY = "dsi_delivery_server_url";
-/** Pista compilada en el APK (puede venir vacía). */
-const BUILD_HINT = (process.env.EXPO_PUBLIC_API_URL ?? "").replace(/\/+$/, "");
+/** Pista compilada en el APK (producción por defecto; vacía en builds de desarrollo). */
+const BUILD_HINT = (
+  process.env.EXPO_PUBLIC_API_URL ?? "https://ecommerce-api.jcti.xyz"
+).replace(/\/+$/, "");
 
 let currentUrl = BUILD_HINT;
 
