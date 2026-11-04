@@ -136,7 +136,7 @@ COPY --from=fronts-build /fronts/picking-admin/dist /usr/share/nginx/html
 # termina el edge compartido (docker/edge/), así que aquí va en HTTP puro.
 FROM caddy:2.11.7-alpine AS proxy
 
-RUN apk add --no-cache nodejs
+RUN apk add --no-cache nodejs bash
 
 WORKDIR /app
 COPY docker/proxy-entrypoint.sh ./entrypoint.sh
