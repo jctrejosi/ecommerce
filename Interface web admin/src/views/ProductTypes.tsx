@@ -1,4 +1,5 @@
 import { resolveApiBaseUrl } from "../lib/api";
+import { useCan } from "../lib/auth-context";
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Plus,
@@ -73,11 +74,14 @@ function ProductTypeRow({
   onLanding: boolean;
   onToggleLanding: (t: AdminProductType) => void;
 }) {
+  const canEdit = useCan("admin:catalog:product-types:edit");
+  const canDelete = useCan("admin:catalog:product-types:delete");
+
   return (
     <div className="divide-y divide-gray-50">
       <div
         className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group cursor-pointer"
-        onClick={() => onEdit(t)}
+        onClick={() => canEdit && onEdit(t)}
       >
         <div className="w-7 h-7 rounded-lg bg-gray-100 overflow-hidden shrink-0 flex items-center justify-center">
           {t.imagePath ? (
@@ -105,60 +109,68 @@ function ProductTypeRow({
             Inactivo
           </span>
         )}
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleLanding(t);
-          }}
-          className={`flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-semibold transition-colors shrink-0 ${
-            onLanding
-              ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
-              : "bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
-          }`}
-          title={
-            onLanding
-              ? "Quitar de la landing"
-              : "Mostrar en la landing"
-          }
-        >
-          <Globe size={11} />
-          {onLanding ? "En landing" : "Landing"}
-        </button>
+        {canEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleLanding(t);
+            }}
+            className={`flex items-center gap-1 h-6 px-2 rounded-full text-[10px] font-semibold transition-colors shrink-0 ${
+              onLanding
+                ? "bg-amber-50 text-amber-700 hover:bg-amber-100"
+                : "bg-gray-100 text-gray-400 hover:bg-gray-200 hover:text-gray-600"
+            }`}
+            title={
+              onLanding
+                ? "Quitar de la landing"
+                : "Mostrar en la landing"
+            }
+          >
+            <Globe size={11} />
+            {onLanding ? "En landing" : "Landing"}
+          </button>
+        )}
         <span className="text-xs text-gray-400 w-16 text-right font-medium">
           {t.productCount} prod.
         </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleActive(t.id, !t.isActive);
-          }}
-          className={`w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
-            t.isActive
-              ? "text-green-500 hover:bg-green-50"
-              : "text-gray-300 hover:bg-gray-100"
-          }`}
-          title={t.isActive ? "Inactivar" : "Activar"}
-        >
-          {t.isActive ? <Eye size={13} /> : <EyeOff size={13} />}
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(t);
-          }}
-          className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-        >
-          <Edit size={13} />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(t.id);
-          }}
-          className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 text-gray-400 hover:text-red-500"
-        >
-          <Trash2 size={13} />
-        </button>
+        {canEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleActive(t.id, !t.isActive);
+            }}
+            className={`w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
+              t.isActive
+                ? "text-green-500 hover:bg-green-50"
+                : "text-gray-300 hover:bg-gray-100"
+            }`}
+            title={t.isActive ? "Inactivar" : "Activar"}
+          >
+            {t.isActive ? <Eye size={13} /> : <EyeOff size={13} />}
+          </button>
+        )}
+        {canEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(t);
+            }}
+            className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+          >
+            <Edit size={13} />
+          </button>
+        )}
+        {canDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(t.id);
+            }}
+            className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 text-gray-400 hover:text-red-500"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -195,6 +207,11 @@ export default function ProductTypes() {
   const [statusFilter, setStatusFilter] = useState<
     "todas" | "activas" | "inactivas"
   >("todas");
+
+  const canCreate = useCan("admin:catalog:product-types:create");
+  const canEdit = useCan("admin:catalog:product-types:edit");
+  const canDelete = useCan("admin:catalog:product-types:delete");
+  const canSave = creating ? canCreate : canEdit;
 
   const loadTypes = useCallback(async () => {
     try {
@@ -506,12 +523,14 @@ export default function ProductTypes() {
             Clasifica los productos por tipo y elige cuáles mostrar en la landing
           </p>
         </div>
-        <button
-          onClick={openNew}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
-        >
-          <Plus size={15} /> Nuevo tipo de producto
-        </button>
+        {canCreate && (
+          <button
+            onClick={openNew}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+          >
+            <Plus size={15} /> Nuevo tipo de producto
+          </button>
+        )}
       </div>
 
       {/* Buscador + filtro de estado */}
@@ -763,28 +782,32 @@ export default function ProductTypes() {
 
                 {saveError && <p className="text-xs text-red-500">{saveError}</p>}
 
-                <button
-                  onClick={saveEdit}
-                  disabled={uploading}
-                  className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
-                >
-                  {uploading
-                    ? "Guardando..."
-                    : creating
-                      ? "Crear tipo de producto"
-                      : "Guardar cambios"}
-                </button>
+                {canSave && (
+                  <button
+                    onClick={saveEdit}
+                    disabled={uploading}
+                    className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                  >
+                    {uploading
+                      ? "Guardando..."
+                      : creating
+                        ? "Crear tipo de producto"
+                        : "Guardar cambios"}
+                  </button>
+                )}
               </div>
             )}
 
             {editTab === "products" && editing && (
               <div className="px-5 py-4 space-y-4">
-                <button
-                  onClick={() => setShowAddProduct(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
-                >
-                  <Plus size={14} /> Añadir productos
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setShowAddProduct(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                  >
+                    <Plus size={14} /> Añadir productos
+                  </button>
+                )}
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Productos ({typeProducts.length})
                 </p>
@@ -815,13 +838,15 @@ export default function ProductTypes() {
                         <span className="text-xs text-gray-700 truncate flex-1">
                           {p.name}
                         </span>
-                        <button
-                          onClick={() => removeProduct(p.id)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                          title="Quitar del tipo"
-                        >
-                          <X size={12} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => removeProduct(p.id)}
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                            title="Quitar del tipo"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -913,30 +938,55 @@ export default function ProductTypes() {
               ) : searchResults.length > 0 ? (
                 <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto">
                   {searchResults.map((p) => (
-                    <button
-                      key={p.id}
-                      onClick={() => addProduct(p.id)}
-                      className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
-                    >
-                      <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
-                        {p.image && (
-                          <img
-                            src={p.image}
-                            alt={p.name}
-                            className="w-full h-full object-cover"
-                          />
-                        )}
+                    canEdit ? (
+                      <button
+                        key={p.id}
+                        onClick={() => addProduct(p.id)}
+                        className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg hover:bg-amber-50 transition-colors text-left"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
+                          {p.image && (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-700 truncate">
+                            {p.name}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            {currency.format(p.price)}
+                          </p>
+                        </div>
+                        <Plus size={14} className="text-amber-500 shrink-0" />
+                      </button>
+                    ) : (
+                      <div
+                        key={p.id}
+                        className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg text-left"
+                      >
+                        <div className="w-9 h-9 rounded-lg bg-gray-200 overflow-hidden shrink-0">
+                          {p.image && (
+                            <img
+                              src={p.image}
+                              alt={p.name}
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-700 truncate">
+                            {p.name}
+                          </p>
+                          <p className="text-[10px] text-gray-400">
+                            {currency.format(p.price)}
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs font-medium text-gray-700 truncate">
-                          {p.name}
-                        </p>
-                        <p className="text-[10px] text-gray-400">
-                          {currency.format(p.price)}
-                        </p>
-                      </div>
-                      <Plus size={14} className="text-amber-500 shrink-0" />
-                    </button>
+                    )
                   ))}
                 </div>
               ) : searchQuery.trim() ? (

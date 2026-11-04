@@ -1,9 +1,14 @@
-import { Controller, Get, Query } from '@nestjs/common';
+import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { DashboardService } from './dashboard.service';
 
 @ApiTags('Admin - Dashboard')
 @Controller('admin/dashboard')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:dashboard:view')
 export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 

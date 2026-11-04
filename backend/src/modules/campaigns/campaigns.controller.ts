@@ -11,9 +11,13 @@ import {
   Put,
   Query,
   Sse,
+  UseGuards,
 } from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CampaignsService } from './campaigns.service';
 import {
   ApplyAudienceDto,
@@ -29,6 +33,8 @@ import {
 
 @ApiTags('Admin - Campañas')
 @Controller('admin/campaigns')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:content:manage')
 export class CampaignsController {
   constructor(private readonly campaignsService: CampaignsService) {}
 

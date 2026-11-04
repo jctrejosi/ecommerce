@@ -25,14 +25,19 @@ setAppTitle('admin')
 // expirado), se avisa a la app para que vuelva siempre al login.
 const originalFetch = window.fetch.bind(window)
 window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
-  const res = await originalFetch(input, init)
+  const url =
+    typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url
+  // Las peticiones al API viajan con cookies httpOnly (sesión del panel),
+  // incluso en las vistas que usan `fetch` directo en lugar de `apiFetch`.
+  const finalInit: RequestInit | undefined = url.startsWith(API_URL)
+    ? { credentials: 'include', ...init }
+    : init
+  const res = await originalFetch(input, finalInit)
   try {
-    const url =
-      typeof input === 'string'
-        ? input
-        : input instanceof URL
-          ? input.href
-          : input.url
     if (res.status === 401 && url.startsWith(API_URL) && !url.includes('/auth/login')) {
       window.dispatchEvent(new Event('auth:unauthorized'))
     }

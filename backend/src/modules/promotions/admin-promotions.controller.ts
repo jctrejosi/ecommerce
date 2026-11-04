@@ -9,8 +9,12 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { PromotionsService } from './promotions.service';
 import {
   CreatePromotionDto,
@@ -20,6 +24,8 @@ import {
 
 @ApiTags('Admin - Promociones')
 @Controller('admin/promotions')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:promotions:manage')
 export class AdminPromotionsController {
   constructor(private readonly promotionsService: PromotionsService) {}
 

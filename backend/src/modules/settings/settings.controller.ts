@@ -6,14 +6,20 @@ import {
   HttpStatus,
   BadRequestException,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { DrizzleService } from '../../database/drizzle.service';
 import { WompiService } from '../payments/wompi.service';
 import { store, settings } from '../../../drizzle/schema';
 
 @Controller('admin/settings')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:settings:manage')
 export class SettingsController {
   constructor(
     private readonly drizzle: DrizzleService,

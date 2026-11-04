@@ -168,3 +168,17 @@ paimon.jcti.xyz {
 
 	respond "Paimon API — /audio /image /processing /voice" 200
 }
+
+# ── TerraExpert (app Expo servida como web estática por nginx) ─────────────
+terraexpert.jcti.xyz {
+	import edge_headers
+
+	log {
+		output stdout
+		format json
+	}
+
+	tls /etc/caddy/edge-tls/origin.pem /etc/caddy/edge-tls/origin.key
+
+	reverse_proxy terraexpert_web:8080
+}

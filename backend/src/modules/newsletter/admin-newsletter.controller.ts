@@ -9,8 +9,12 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { NewsletterService } from './newsletter.service';
 import {
   CreateCampaignDto,
@@ -20,6 +24,8 @@ import {
 
 @ApiTags('Admin - Newsletter')
 @Controller('admin/newsletter')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:content:manage')
 export class AdminNewsletterController {
   constructor(private readonly newsletterService: NewsletterService) {}
 

@@ -7,12 +7,18 @@ import {
   Param,
   Post,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequireModule } from '../../common/decorators/permissions.decorator';
 import { OrdersService } from './orders.service';
 
 @ApiTags('Admin Orders')
 @Controller('admin/orders')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequireModule('admin:orders')
 export class AdminOrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 

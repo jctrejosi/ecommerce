@@ -8,8 +8,12 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { CouponsService } from './coupons.service';
 import {
   IssueCouponDto,
@@ -19,6 +23,8 @@ import {
 
 @ApiTags('Admin - Cupones')
 @Controller('admin/coupons')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:promotions:manage')
 export class AdminCouponsController {
   constructor(private readonly couponsService: CouponsService) {}
 

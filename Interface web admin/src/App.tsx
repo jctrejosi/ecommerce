@@ -1,5 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import sidebarLogo from "./assets/logo.png";
+import { resolveApiBaseUrl } from "./lib/api";
+import { hasPermission } from "./lib/permissions";
+import { AuthProvider } from "./lib/auth-context";
 import {
   LayoutDashboard,
   Package,
@@ -113,6 +116,8 @@ interface NavItem {
   label: string;
   icon: React.ElementType;
   badge?: number;
+  /** Permiso requerido para ver la sección (manage implica view). */
+  permission?: string;
 }
 
 interface NavSection {
@@ -123,44 +128,51 @@ interface NavSection {
 const NAV: NavSection[] = [
   {
     title: "Visión General",
-    items: [{ id: "dashboard", label: "Dashboard", icon: LayoutDashboard }],
+    items: [
+      {
+        id: "dashboard",
+        label: "Dashboard",
+        icon: LayoutDashboard,
+        permission: "admin:dashboard:view",
+      },
+    ],
   },
   {
     title: "Catálogo",
     items: [
-      { id: "products", label: "Productos", icon: Package },
-      { id: "categories", label: "Categorías", icon: FolderTree },
-      { id: "productTypes", label: "Tipos de Producto", icon: Layers },
-      { id: "brands", label: "Marcas", icon: Tag },
-      { id: "suppliers", label: "Proveedores", icon: Building2 },
-      { id: "branches", label: "Sucursales", icon: Building2 },
-      { id: "orders", label: "Pedidos", icon: ShoppingCart },
-      { id: "customers", label: "Clientes", icon: Users },
-      { id: "promotions", label: "Promociones", icon: Percent },
-      { id: "coupons", label: "Cupones", icon: Ticket },
+      { id: "products", label: "Productos", icon: Package, permission: "admin:catalog:products:view" },
+      { id: "categories", label: "Categorías", icon: FolderTree, permission: "admin:catalog:categories:view" },
+      { id: "productTypes", label: "Tipos de Producto", icon: Layers, permission: "admin:catalog:product-types:view" },
+      { id: "brands", label: "Marcas", icon: Tag, permission: "admin:catalog:brands:view" },
+      { id: "suppliers", label: "Proveedores", icon: Building2, permission: "admin:catalog:suppliers:view" },
+      { id: "branches", label: "Sucursales", icon: Building2, permission: "admin:catalog:branches:view" },
+      { id: "orders", label: "Pedidos", icon: ShoppingCart, permission: "admin:orders:view" },
+      { id: "customers", label: "Clientes", icon: Users, permission: "admin:customers:view" },
+      { id: "promotions", label: "Promociones", icon: Percent, permission: "admin:promotions:manage" },
+      { id: "coupons", label: "Cupones", icon: Ticket, permission: "admin:promotions:manage" },
     ],
   },
   {
     title: "Contenido",
     items: [
-      { id: "homeHero", label: "Banners publicitarios", icon: LayoutTemplate },
-      { id: "homeBenefitsBar", label: "Barra de Beneficios", icon: Zap },
-      { id: "homeFeatured", label: "Productos Destacados", icon: Package },
-      { id: "homePromos", label: "Banners Promocionales", icon: Megaphone },
-      { id: "homeDeals", label: "Ofertas del Día", icon: Clock },
-      { id: "homeBenefits", label: "Beneficios", icon: Star },
-      { id: "homeFooter", label: "Footer", icon: LayoutTemplate },
-      { id: "popups", label: "Popups", icon: Megaphone },
-      { id: "newsletter", label: "Newsletter", icon: Mail },
-      { id: "general", label: "General", icon: SlidersHorizontal },
+      { id: "homeHero", label: "Banners publicitarios", icon: LayoutTemplate, permission: "admin:content:manage" },
+      { id: "homeBenefitsBar", label: "Barra de Beneficios", icon: Zap, permission: "admin:content:manage" },
+      { id: "homeFeatured", label: "Productos Destacados", icon: Package, permission: "admin:content:manage" },
+      { id: "homePromos", label: "Banners Promocionales", icon: Megaphone, permission: "admin:content:manage" },
+      { id: "homeDeals", label: "Ofertas del Día", icon: Clock, permission: "admin:content:manage" },
+      { id: "homeBenefits", label: "Beneficios", icon: Star, permission: "admin:content:manage" },
+      { id: "homeFooter", label: "Footer", icon: LayoutTemplate, permission: "admin:content:manage" },
+      { id: "popups", label: "Popups", icon: Megaphone, permission: "admin:content:manage" },
+      { id: "newsletter", label: "Newsletter", icon: Mail, permission: "admin:content:manage" },
+      { id: "general", label: "General", icon: SlidersHorizontal, permission: "admin:content:manage" },
     ],
   },
   {
     title: "Administración",
     items: [
-      { id: "users", label: "Usuarios y Permisos", icon: Shield },
-      { id: "settings", label: "Configuración", icon: Settings },
-      { id: "paymentMethods", label: "Métodos de pago", icon: CreditCard },
+      { id: "users", label: "Usuarios y Permisos", icon: Shield, permission: "admin:users:view" },
+      { id: "settings", label: "Configuración", icon: Settings, permission: "admin:settings:manage" },
+      { id: "paymentMethods", label: "Métodos de pago", icon: CreditCard, permission: "admin:settings:manage" },
     ],
   },
 ];
@@ -496,30 +508,42 @@ function Sidebar({
   onNavigate,
   collapsed,
   unreviewedCount,
+  branding,
+  nav,
 }: {
   current: ViewId;
   onNavigate: (v: ViewId) => void;
   collapsed: boolean;
   unreviewedCount: number;
+  /** Logo y nombre de la tienda configurados en /contenido/general. */
+  branding?: { url?: string; title?: string } | null;
+  /** Secciones visibles según los permisos del usuario. */
+  nav: NavSection[];
 }) {
   return (
     <aside
       className="flex flex-col h-full border-r border-[color:var(--chrome-border)] transition-all duration-300 [&_button:not(:disabled)]:cursor-pointer"
       style={{ background: "var(--chrome-bg)", width: collapsed ? 56 : 240 }}
     >
-      {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-[color:var(--chrome-border)] shrink-0">
+      {/* Logo de la tienda + nombre y subtítulo debajo */}
+      <div
+        className={`flex flex-col items-center gap-2 border-b border-[color:var(--chrome-border)] shrink-0 ${
+          collapsed ? "px-2 py-4" : "px-4 py-5"
+        }`}
+      >
         <img
-          src={sidebarLogo}
-          alt="Mercaldas"
-          className={`shrink-0 object-contain ${collapsed ? "w-7 h-7" : "h-6 w-auto"}`}
+          src={branding?.url || sidebarLogo}
+          alt={branding?.title || "Tienda"}
+          className={`shrink-0 object-contain ${
+            collapsed ? "w-7 h-7" : "h-10 w-auto max-w-[168px]"
+          }`}
         />
         {!collapsed && (
-          <div>
-            <p className="text-[color:var(--chrome-text)] font-bold text-sm leading-tight">
-              Mercaldas
+          <div className="text-center w-full min-w-0">
+            <p className="text-[color:var(--chrome-text)] font-bold text-sm leading-tight truncate">
+              {branding?.title?.trim() || "Mercaldas"}
             </p>
-            <p className="text-[color:var(--chrome-text-faint)] text-xs">
+            <p className="text-[color:var(--chrome-text-faint)] text-xs truncate">
               Admin Panel
             </p>
           </div>
@@ -528,7 +552,7 @@ function Sidebar({
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto py-3 px-2">
-        {NAV.map((section) => (
+        {nav.map((section) => (
           <div key={section.title} className="mb-4">
             {!collapsed && (
               <p className="text-[color:var(--chrome-text-faint)] text-[10px] font-semibold uppercase tracking-widest px-2 mb-1">
@@ -901,6 +925,11 @@ export default function App() {
   const [collapsed, setCollapsed] = useState(false);
   const [unreviewedCount, setUnreviewedCount] = useState(0);
   const [user, setUser] = useState<UserProfile | null>(null);
+  // Logo y nombre de la tienda (Configuración → General).
+  const [storeBranding, setStoreBranding] = useState<{
+    url?: string;
+    title?: string;
+  } | null>(null);
   const [authState, setAuthState] = useState<"loading" | "out" | "in">(
     "loading",
   );
@@ -992,6 +1021,53 @@ export default function App() {
       window.removeEventListener("auth:unauthorized", onUnauthorized);
   }, []);
 
+  // Marca de la tienda para el sidebar (se refresca al guardar en General).
+  const loadStoreBranding = useCallback(() => {
+    fetch(`${resolveApiBaseUrl()}/admin/landing/general-logo`, {
+      credentials: "include",
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => setStoreBranding(d))
+      .catch(() => {
+        /* sin configuración: se usa el logo por defecto */
+      });
+  }, []);
+
+  useEffect(() => {
+    if (authState !== "in") return;
+    loadStoreBranding();
+    const onUpdated = () => loadStoreBranding();
+    window.addEventListener("store-branding:updated", onUpdated);
+    return () =>
+      window.removeEventListener("store-branding:updated", onUpdated);
+  }, [authState, loadStoreBranding]);
+
+  // Secciones del sidebar visibles según los permisos del usuario. El
+  // superusuario (permissions = ["*"]) ve todo.
+  const visibleNav = useMemo(
+    () =>
+      NAV.map((section) => ({
+        ...section,
+        items: section.items.filter((item) =>
+          hasPermission(user, item.permission),
+        ),
+      })).filter((section) => section.items.length > 0),
+    [user],
+  );
+
+  const currentNavItem = NAV.flatMap((section) => section.items).find(
+    (item) => item.id === view,
+  );
+  const canViewCurrent = hasPermission(user, currentNavItem?.permission);
+
+  // Si entra directo a una sección sin permiso, lo lleva a la primera que sí
+  // pueda ver (p. ej. un usuario de consulta sin dashboard).
+  useEffect(() => {
+    if (authState !== "in" || !user || canViewCurrent) return;
+    const first = visibleNav[0]?.items[0];
+    if (first && first.id !== view) navigate(first.id);
+  }, [authState, user, canViewCurrent, visibleNav, view, navigate]);
+
   const handleLogout = async () => {
     await authService.logout();
     setUser(null);
@@ -1018,12 +1094,15 @@ export default function App() {
   }
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <AuthProvider user={user}>
+      <div className="flex h-screen overflow-hidden bg-gray-50">
       <Sidebar
         current={view}
         onNavigate={navigate}
         collapsed={collapsed}
         unreviewedCount={unreviewedCount}
+        branding={storeBranding}
+        nav={visibleNav}
       />
 
       <div className="flex flex-col flex-1 min-w-0">
@@ -1037,11 +1116,24 @@ export default function App() {
           onUserUpdated={setUser}
         />
         <main className="flex-1 overflow-y-auto">
-          <ViewRenderer
-            view={view}
-            user={user}
-            onNavigate={(v) => navigate(v as ViewId)}
-          />
+          {canViewCurrent ? (
+            <ViewRenderer
+              view={view}
+              user={user}
+              onNavigate={(v) => navigate(v as ViewId)}
+            />
+          ) : (
+            <div className="h-full flex flex-col items-center justify-center text-center px-6 py-16">
+              <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center mb-4">
+                <Shield className="w-7 h-7 text-gray-400" />
+              </div>
+              <h2 className="text-lg font-bold text-gray-900">Sin acceso</h2>
+              <p className="text-sm text-gray-500 mt-1 max-w-sm">
+                Tu rol no tiene permiso para ver esta sección. Pide a un
+                administrador que te asigne el permiso correspondiente.
+              </p>
+            </div>
+          )}
         </main>
         <AppFooter />
       </div>
@@ -1052,6 +1144,7 @@ export default function App() {
           onClose={() => setCmdOpen(false)}
         />
       )}
-    </div>
+      </div>
+    </AuthProvider>
   );
 }

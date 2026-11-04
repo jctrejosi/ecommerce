@@ -22,6 +22,7 @@ import {
   type Brand,
   type ProductType,
 } from "../services/catalog.service";
+import { useCan } from "../lib/auth-context";
 
 /* ─── Helpers ─────────────────────────── */
 const PAGE_SIZE = 20;
@@ -161,6 +162,9 @@ export default function Products() {
     branches.find((b) => b.id === priceBranch)?.name ?? null;
 
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const canCreate = useCan("admin:catalog:products:create");
+  const canEdit = useCan("admin:catalog:products:edit");
 
   // Load categories, brands, product-types, and total count on mount
   useEffect(() => {
@@ -456,12 +460,14 @@ export default function Products() {
                   }
                 }}
               />
-              <button
-                onClick={() => setDrawer({ mode: "create" })}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
-              >
-                <Plus size={14} /> Nuevo producto
-              </button>
+              {canCreate && (
+                <button
+                  onClick={() => setDrawer({ mode: "create" })}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+                >
+                  <Plus size={14} /> Nuevo producto
+                </button>
+              )}
             </div>
           </div>
 
@@ -744,7 +750,7 @@ export default function Products() {
                       <tr
                         key={p.id}
                         className="hover:bg-gray-50 transition-colors group cursor-pointer"
-                        onClick={() => setDrawer({ mode: "edit", product: p })}
+                        onClick={() => canEdit && setDrawer({ mode: "edit", product: p })}
                       >
                         <td className="px-4 py-3">
                           <input
@@ -829,7 +835,7 @@ export default function Products() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDrawer({ mode: "edit", product: p });
+                                canEdit && setDrawer({ mode: "edit", product: p });
                               }}
                               className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
                             >
@@ -917,6 +923,10 @@ function ProductDrawer({
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const canCreate = useCan("admin:catalog:products:create");
+  const canEdit = useCan("admin:catalog:products:edit");
+  const canSave = mode === "create" ? canCreate : canEdit;
+
   const [tab, setTab] = useState<"general" | "stock">("general");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -1360,15 +1370,17 @@ function ProductDrawer({
                         </div>
                       ))}
                     </div>
-                    <button
-                      onClick={saveBranchPrices}
-                      disabled={savingBranchPrices}
-                      className="mt-3 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white disabled:opacity-50"
-                    >
-                      {savingBranchPrices
-                        ? "Guardando..."
-                        : "Guardar precios por sucursal"}
-                    </button>
+                    {canEdit && (
+                      <button
+                        onClick={saveBranchPrices}
+                        disabled={savingBranchPrices}
+                        className="mt-3 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white disabled:opacity-50"
+                      >
+                        {savingBranchPrices
+                          ? "Guardando..."
+                          : "Guardar precios por sucursal"}
+                      </button>
+                    )}
                   </div>
                 )}
                 <div>
@@ -1736,7 +1748,7 @@ function ProductDrawer({
                   <label className="text-xs font-semibold text-gray-600">
                     Proveedores
                   </label>
-                  {mode === "edit" && product?.id && (
+                  {mode === "edit" && product?.id && canEdit && (
                     <button
                       onClick={() => setShowAddSupplier(true)}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
@@ -1770,12 +1782,14 @@ function ProductDrawer({
                             {s.leadTimeDays && ` · ${s.leadTimeDays} días`}
                           </p>
                         </div>
-                        <button
-                          onClick={() => removeSupplier(s.supplierId)}
-                          className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                        >
-                          <X size={11} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => removeSupplier(s.supplierId)}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                          >
+                            <X size={11} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1792,17 +1806,19 @@ function ProductDrawer({
           >
             Cancelar
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors disabled:opacity-50"
-          >
-            {saving
-              ? "Guardando..."
-              : mode === "create"
-                ? "Publicar Producto"
-                : "Guardar Cambios"}
-          </button>
+          {canSave && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors disabled:opacity-50"
+            >
+              {saving
+                ? "Guardando..."
+                : mode === "create"
+                  ? "Publicar Producto"
+                  : "Guardar Cambios"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1844,7 +1860,7 @@ function ProductDrawer({
                   supplierSearchResults.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => addSupplier(s.id)}
+                      onClick={() => canEdit && addSupplier(s.id)}
                       className="w-full text-left px-3 py-2.5 text-sm hover:bg-amber-50 rounded-lg transition-colors flex items-center gap-2"
                     >
                       <Building2 size={14} className="text-gray-400 shrink-0" />

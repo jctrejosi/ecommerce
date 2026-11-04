@@ -10,13 +10,19 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { FeaturedProductsService } from './featured-products.service';
 
 @ApiTags('Admin - Featured Products')
 @Controller('admin/featured')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:content:manage')
 export class AdminFeaturedProductsController {
   constructor(private readonly featuredService: FeaturedProductsService) {}
 

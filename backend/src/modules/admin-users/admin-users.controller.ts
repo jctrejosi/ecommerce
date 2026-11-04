@@ -14,7 +14,8 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
-import { SuperuserGuard } from '../delivery/superuser.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequireModule } from '../../common/decorators/permissions.decorator';
 import { AdminUsersService } from './admin-users.service';
 import {
   CreateAdminUserDto,
@@ -27,11 +28,13 @@ import {
 
 /**
  * Administración de usuarios, roles y permisos para el panel web admin.
- * Acceso solo para administradores (users.isSuperuser = true).
+ * Requiere `admin:users:view` (lectura) o `admin:users:manage` (escritura);
+ * el superusuario siempre tiene acceso.
  */
 @ApiTags('Admin Users & Permissions')
 @Controller('admin')
-@UseGuards(JwtAuthGuard, SuperuserGuard)
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequireModule('admin:users')
 export class AdminUsersController {
   constructor(private readonly adminUsers: AdminUsersService) {}
 

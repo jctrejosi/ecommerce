@@ -13,6 +13,7 @@ import {
 import { catalogService, CatalogProduct } from "../services/catalog.service";
 import { BrandEditorPanel, type AdminBrand } from "../components/BrandEditorPanel";
 import { apiFetch, API_BASE_URL } from "../lib/api";
+import { useCan } from "../lib/auth-context";
 
 interface LandingBrandRow {
   id: number;
@@ -55,6 +56,10 @@ export default function Brands() {
   const [savingSelection, setSavingSelection] = useState(false);
   const [selectionDirty, setSelectionDirty] = useState(false);
   const [batchBusy, setBatchBusy] = useState(false);
+
+  const canCreate = useCan("admin:catalog:brands:create");
+  const canEdit = useCan("admin:catalog:brands:edit");
+  const canDelete = useCan("admin:catalog:brands:delete");
 
   const loadUnbranded = async (reset = false) => {
     setUnbrandedLoading(true);
@@ -260,13 +265,15 @@ export default function Brands() {
             {brands.length} marcas · {brands.filter((b) => b.isActive).length} visibles · {selectedCount} en la landing
           </p>
         </div>
-        <button
-          onClick={() => setEditorOpen("new")}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all hover:brightness-95"
-          style={{ background: "#FFF200", color: "#1A1A2E" }}
-        >
-          <Plus size={15} /> Nueva marca
-        </button>
+        {canCreate && (
+          <button
+            onClick={() => setEditorOpen("new")}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all hover:brightness-95"
+            style={{ background: "#FFF200", color: "#1A1A2E" }}
+          >
+            <Plus size={15} /> Nueva marca
+          </button>
+        )}
       </div>
 
       {/* Search + filtro de estado */}
@@ -310,19 +317,25 @@ export default function Brands() {
           {selectedCount > 0 && (
             <>
               <span className="text-[11px] font-semibold text-amber-700">{selectedCount} seleccionada{selectedCount !== 1 ? "s" : ""}</span>
-              <button onClick={() => batchSelected(true)} disabled={batchBusy} className="px-2.5 py-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50">Activar</button>
-              <button onClick={() => batchSelected(false)} disabled={batchBusy} className="px-2.5 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 disabled:opacity-50">Inactivar</button>
+              {canEdit && (
+                <>
+                  <button onClick={() => batchSelected(true)} disabled={batchBusy} className="px-2.5 py-1.5 text-xs font-semibold text-green-700 bg-green-50 border border-green-200 rounded-lg hover:bg-green-100 disabled:opacity-50">Activar</button>
+                  <button onClick={() => batchSelected(false)} disabled={batchBusy} className="px-2.5 py-1.5 text-xs font-semibold text-gray-600 bg-gray-100 border border-gray-200 rounded-lg hover:bg-gray-200 disabled:opacity-50">Inactivar</button>
+                </>
+              )}
             </>
           )}
-          <button
-            onClick={saveSelection}
-            disabled={savingSelection || !selectionDirty}
-            title="Guardar qué marcas se muestran en la landing"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg disabled:opacity-50"
-          >
-            {savingSelection && <Loader2 size={12} className="animate-spin" />}
-            Guardar selección
-          </button>
+          {canEdit && (
+            <button
+              onClick={saveSelection}
+              disabled={savingSelection || !selectionDirty}
+              title="Guardar qué marcas se muestran en la landing"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-lg disabled:opacity-50"
+            >
+              {savingSelection && <Loader2 size={12} className="animate-spin" />}
+              Guardar selección
+            </button>
+          )}
         </div>
       </div>
 
@@ -349,7 +362,7 @@ export default function Brands() {
                 !b.isActive ? "opacity-60" : ""
               }`}
               style={{ borderColor: b.isFeatured ? "#FFF200" : "#E5E7EB" }}
-              onClick={() => setEditorOpen(b)}
+              onClick={() => canEdit && setEditorOpen(b)}
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-2">
@@ -381,24 +394,28 @@ export default function Brands() {
                   {b.isFeatured && (
                     <Star size={12} className="text-amber-400" fill="#FACC15" />
                   )}
-                  <button
-                    className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-all"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setEditorOpen(b);
-                    }}
-                  >
-                    <Edit size={13} />
-                  </button>
-                  <button
-                    className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setDeleteConfirm(b);
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
+                  {canEdit && (
+                    <button
+                      className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setEditorOpen(b);
+                      }}
+                    >
+                      <Edit size={13} />
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button
+                      className="opacity-0 group-hover:opacity-100 w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setDeleteConfirm(b);
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
                 </div>
               </div>
               <h3 className="font-bold text-gray-900">{b.name}</h3>
@@ -436,15 +453,17 @@ export default function Brands() {
                 <span className={`text-xs font-semibold ${b.isActive ? "text-green-600" : "text-gray-400"}`}>
                   {b.isActive ? "Visible" : "Oculta"}
                 </span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); toggleActive(b); }}
-                  title={b.isActive ? "Ocultar en la landing" : "Mostrar en la landing"}
-                  className="flex items-center gap-1.5"
-                >
-                  <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}>
-                    <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`} />
-                  </span>
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); toggleActive(b); }}
+                    title={b.isActive ? "Ocultar en la landing" : "Mostrar en la landing"}
+                    className="flex items-center gap-1.5"
+                  >
+                    <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}>
+                      <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`} />
+                    </span>
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -607,13 +626,15 @@ export default function Brands() {
                   </div>
                 )}
               </div>
-              <button
-                onClick={assignBrandToProduct}
-                disabled={!assignBrandId}
-                className="w-full py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
-              >
-                Asignar marca
-              </button>
+              {canEdit && (
+                <button
+                  onClick={assignBrandToProduct}
+                  disabled={!assignBrandId}
+                  className="w-full py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                >
+                  Asignar marca
+                </button>
+              )}
             </div>
           </div>
         </>

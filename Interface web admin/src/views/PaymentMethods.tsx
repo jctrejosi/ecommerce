@@ -1,5 +1,6 @@
 import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect, useRef } from "react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 
 const API_BASE = resolveApiBaseUrl();
 
@@ -8,6 +9,9 @@ export default function PaymentMethodsView() {
   const [payLoading, setPayLoading] = useState(false);
   const [payError, setPayError] = useState("");
   const payMethodsRef = useRef<any>(null);
+  const [qrServiceAvailable, setQrServiceAvailable] = useState<boolean | null>(
+    null,
+  );
 
   const loadPaymentMethods = () => {
     setPayLoading(true);
@@ -66,6 +70,10 @@ export default function PaymentMethodsView() {
       .then((d) => setQrServiceAvailable(d?.available === true))
       .catch(() => setQrServiceAvailable(false));
   };
+
+  useEffect(() => {
+    checkQrService();
+  }, []);
 
   const toggleWompi = () => {
     const prev = payMethodsRef.current;

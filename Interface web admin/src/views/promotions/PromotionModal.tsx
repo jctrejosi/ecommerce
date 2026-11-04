@@ -191,6 +191,7 @@ export function PromotionModal({
   );
   const [weekdays, setWeekdays] = useState<number[]>(promotion?.weekdays ?? []);
   const [couponCode, setCouponCode] = useState(promotion?.couponCode ?? "");
+  const [generatingCode, setGeneratingCode] = useState(false);
   const [maxUsesTotal, setMaxUsesTotal] = useState(
     promotion?.couponMaxUsesTotal?.toString() ?? "",
   );

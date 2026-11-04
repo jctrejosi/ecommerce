@@ -1,10 +1,15 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Put, Query } from '@nestjs/common';
+import { Body, Controller, Get, HttpCode, HttpStatus, Param, Patch, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { LandingService } from './landing.service';
 
 @ApiTags('Admin - Landing')
 @Controller('admin/landing')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:content:manage')
 export class AdminLandingController {
   constructor(private readonly landingService: LandingService) {}
 
@@ -68,6 +73,9 @@ export class AdminLandingController {
     return this.landingService.updateLandingBenefits(body);
   }
 
+  // Público: lo consumen el login del admin, picking y delivery para mostrar
+  // el logo de la tienda antes de iniciar sesión.
+  @Public()
   @Get('general-logo')
   @ApiOperation({ summary: 'Obtener logo de la empresa' })
   getGeneralLogo() {

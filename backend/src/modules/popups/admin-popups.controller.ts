@@ -8,8 +8,12 @@ import {
   Param,
   Post,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { PopupsService } from './popups.service';
 import { CreatePopupDto, UpdatePopupDto } from './dto/popup.dto';
 import { DrizzleService } from '../../database/drizzle.service';
@@ -17,6 +21,8 @@ import { media } from '../../../drizzle/schema';
 
 @ApiTags('Admin - Popups')
 @Controller('admin/popups')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:content:manage')
 export class AdminPopupsController {
   constructor(
     private readonly popupsService: PopupsService,
