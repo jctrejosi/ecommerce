@@ -1,39 +1,41 @@
-# SECURITY — Especificación de seguridad (contenedor único)
+# SECURITY — Especificación de seguridad (Docker, un contenedor por servicio)
 
 Documento de referencia del **modelo de seguridad** del despliegue de Mercaldas
-en un contenedor único (`docker/`). Describe qué se protege, cómo, con qué
+(proyecto compose `ecommerce`, `docker/`). Describe qué se protege, cómo, con qué
 valores concretos, cómo verificarlo y **qué NO queda cubierto**.
 
-> Ámbito: la imagen `docker/Dockerfile` (backend NestJS + bot FastAPI +
-> interfaces web + Caddy) y su `docker-compose.yml`. No aplica al
+> Ámbito: `docker/Dockerfile` (targets `backend-runtime`, `bot-runtime`,
+> `web-*`, `proxy`) y su `docker-compose.yml`. No aplica al
 > `Dockerfile`/`Caddyfile` de la raíz, que son para Render.
 
 ---
 
 ## 1. Superficie expuesta
 
-Principio: **un solo proceso habla con internet (Caddy); nada más se publica.**
+Principio: **un solo contenedor habla con internet (el edge); nada más se publica.**
 
-| Proceso | Escucha en | Publicado | Notas |
+| Contenedor | Escucha en | Publicado | Notas |
 |---|---|---|---|
-| Caddy interno (proxy + TLS + estáticos) | `:8080` (HTTP) / `:8443` (HTTPS) | `127.0.0.1:30180` / `127.0.0.1:30181` | lo alcanza el edge (red `shared_edge`) |
-| **Edge compartido** (`docker/edge/`, otro contenedor) | `:80` / `:443` | **Sí** → solo Cloudflare | único punto de entrada; TLS con certificado de origen (§1.1) |
-| Backend NestJS | `127.0.0.1:3100` | ❌ | loopback dentro del contenedor |
-| Bot FastAPI | `127.0.0.1:8001` | ❌ | loopback dentro del contenedor |
-| PostgreSQL | red `mercaldas_internal` (`internal: true`) | ❌ | sin ruta a internet |
+| **`edge_caddy`** (compartido) | `:80` / `:443` | **Sí** → solo Cloudflare | único punto de entrada; TLS con certificado de origen (§1.1) |
+| `ecommerce_proxy` (Caddy) | `:8080` | `127.0.0.1:30180` | lo alcanza el edge (red `shared_edge`) |
+| `ecommerce_backend` | `:3100` | ❌ | solo red interna |
+| `ecommerce_bot` | `:8001` | ❌ | solo red interna |
+| `ecommerce_client/admin/delivery/picking` | `:8080` | ❌ | nginx sin privilegios |
+| `ecommerce_db` | `:5432` | `127.0.0.1:5432` | loopback para scripts del host |
+| `ecommerce_osrm` | `:5000` | ❌ | solo red interna |
 
-- El contenedor **no corre como root**: usuario `merc` (uid/gid 10001). Por eso
-  Caddy escucha en puertos altos.
-- Redes: `mercaldas_edge` (salida a internet y puertos publicados),
-  `mercaldas_internal` (**sin** ruta a internet) para la BD/ERP y `shared_edge`
-  (red compartida con el edge).
-- Los puertos de cada proyecto son PROPIOS y solo en `127.0.0.1` (ecommerce
-  `30180/30181`): no compiten con 80/443 ni con servicios «genéricos».
+- Cada runtime corre como usuario **sin privilegios**: `merc` (backend/proxy,
+  uid 10001), `botuser` (uid 10002) y el usuario de `nginx-unprivileged`.
+- Redes: `ecommerce_edge` (salida a internet del backend/bot),
+  `ecommerce_internal` (**sin** ruta a internet: BD, OSRM y fronts) y
+  `shared_edge` (red compartida con el edge).
+- Solo se publica en `127.0.0.1` y en puertos propios (ecommerce `30180`,
+  `5432` de la BD): no compiten con 80/443 ni con servicios «genéricos».
 - Servidor de producción actual: **Debian 12** (`169.58.255.64`), Docker nativo.
   SSH solo con llave (22), `ufw` deny-in por defecto, `fail2ban`, swap 20 GB y
   `unattended-upgrades`. Administración además por **Tailscale**.
-- Modo directo (un solo proyecto en el servidor): `PUBLIC_HTTP_PORT=80`,
-  `PUBLIC_HTTPS_PORT=443` y `TLS=true`.
+- El edge es el único que publica 80/443; el proxy interno queda en
+  `127.0.0.1:30180` y la BD en `127.0.0.1:5432`.
 
 ### 1.1 Borde de producción: Cloudflare delante, origen cerrado
 
@@ -51,29 +53,27 @@ Principio: **un solo proceso habla con internet (Caddy); nada más se publica.**
 - ⚠️ `DOCKER-USER` **también ve el tráfico de salida** de los contenedores: todas
   las reglas llevan `-i <WAN>` (más un `RETURN` para `tailscale0`). Sin esa
   condición se rompe el HTTPS saliente (DeepSeek, Cloudinary, Google, Wompi).
-  Verificación: `docker exec mercaldas_app curl -s -o /dev/null -w '%{http_code}' https://www.google.com` → `200`.
+  Verificación: `docker exec ecommerce_backend curl -s -o /dev/null -w '%{http_code}' https://www.google.com` → `200`.
 - **Un solo nivel de subdominio** bajo `jcti.xyz`: el *Universal SSL* gratuito
-  cubre `jcti.xyz` y `*.jcti.xyz`. Un `api.mercaldas.jcti.xyz` no recibe
+  cubre `jcti.xyz` y `*.jcti.xyz`. Un `api.ecommerce.jcti.xyz` no recibe
   certificado en el borde (handshake TLS falla). Por eso los hosts son
-  `mercaldas`, `mercaldas-api`, `mercaldas-admin`, `mercaldas-picking`,
-  `mercaldas-delivery`.
+  `ecommerce`, `ecommerce-api`, `ecommerce-admin`, `ecommerce-picking`,
+  `ecommerce-delivery`; los `mercaldas*` se mantienen como alias mientras se
+  migran APKs, OAuth y webhooks.
 - **Webhooks** (Wompi/ePayco) y **apps móviles** deben apuntar al host del API
-  (`https://mercaldas-api.jcti.xyz`). Las apps nativas no envían `Origin`, por
+  (`https://ecommerce-api.jcti.xyz`). Las apps nativas no envían `Origin`, por
   eso no se puede activar *Bot Fight Mode* ni exigir preflight.
 
 ## 2. Transporte y TLS
 
-- **Let's Encrypt automático** vía Caddy cuando `TLS=true` (por defecto).
-  Requiere que 80 y 443 lleguen al servidor y que el DNS apunte a él.
-  (**No** es el caso del despliegue actual: con Cloudflare delante, el origen
-  sirve el certificado de origen de Cloudflare y Let's Encrypt queda sin uso.)
-- **Certificados persistentes** en los volúmenes `mercaldas_caddy_data` /
-  `mercaldas_caddy_config` (no se re-emiten en cada `up`).
+- **TLS terminado en el edge** (certificado de origen de Cloudflare). El proxy
+  interno sirve HTTP en `:8080`.
+- **Estado de Caddy persistente** en los volúmenes `ecommerce_caddy_data` /
+  `ecommerce_caddy_config`.
 - **HSTS**: `Strict-Transport-Security: max-age=31536000; includeSubDomains`.
-- **`TLS=false` es fail-closed**: el contenedor **no arranca** salvo que se
-  acepte explícitamente con `ALLOW_INSECURE=true` (y entonces avisa por stderr).
-  Nunca debe usarse en producción: expone credenciales y tokens en claro.
-- El correo ACME se configura con `ACME_EMAIL`.
+- **`cap_drop: ALL` en todos los servicios**: por eso el binario de Caddy se
+  copia en la imagen (la copia pierde la file-capability `NET_BIND_SERVICE` y el
+  proxy puede ejecutarse sin capabilities).
 
 ## 3. Cabeceras de seguridad
 
@@ -176,9 +176,9 @@ Implementación **propia, en memoria**, sin dependencias ni servicios externos
   llenar el disco (el backend registra cada petición).
 - **API de administración de Caddy desactivada** (`admin off`).
 - `restart: unless-stopped` + `healthcheck` contra `http://127.0.0.1:3100/api-status`.
-- Volúmenes: `mercaldas_caddy_data`, `mercaldas_caddy_config` y
-  `mercaldas_media` (medios locales del backend, para que sobrevivan a recrear
-  el contenedor).
+- Volúmenes: `ecommerce_caddy_data`, `ecommerce_caddy_config` y
+  `mercaldas_media` (medios locales del backend; conserva el nombre heredado
+  para no perder imágenes ya subidas).
 
 ## 8. Secretos
 
@@ -199,8 +199,8 @@ Implementación **propia, en memoria**, sin dependencias ni servicios externos
 
 ## 9. Base de datos
 
-- **Nunca publicada**: en producción vive en `mercaldas_internal`
-  (`internal: true`).
+- **Nunca publicada**: vive en `ecommerce_internal` (`internal: true`) y solo
+  se publica en `127.0.0.1` para scripts del host.
 - En el compose de desarrollo (`db/docker`) el puerto está bindeado a
   **`127.0.0.1`** (no a `0.0.0.0`), igual que OSRM en `delivery-routing`.
 - Credenciales de desarrollo (`postgres/postgres`) **no** deben usarse en
@@ -214,7 +214,8 @@ Implementación **propia, en memoria**, sin dependencias ni servicios externos
 ```bash
 # 1. Solo el EDGE publica 80/443; la app solo en loopback
 docker compose -f docker/docker-compose.yml ps
-docker port mercaldas_app        # espera 127.0.0.1:30180->8080
+docker port ecommerce_proxy      # espera 127.0.0.1:30180->8080
+docker port ecommerce_db         # espera 127.0.0.1:5432->5432
 docker port edge_caddy           # espera 0.0.0.0:80->80 y 0.0.0.0:443->443
 
 # 2. Desde fuera, los puertos internos NO responden
@@ -282,9 +283,10 @@ algún `429`.
 | `RATE_LIMIT_ENABLED` | `false` | Activa el límite de `/auth/*` en el backend (el compose lo pone `true`) |
 | `TRUST_PROXY` | — | Debe ser `loopback,uniquelocal` detrás del edge/Caddy para el rate limit por IP |
 | `CHAT_RATE_LIMIT` / `CHAT_RATE_WINDOW` | `20` / `60` | Límite del bot por IP y ventana |
-| `PUBLIC_HTTP_PORT` / `PUBLIC_HTTPS_PORT` | `127.0.0.1:30180` / `127.0.0.1:30181` | Puertos publicados en el host (loopback en modo edge) |
+| `PUBLIC_HTTP_PORT` | `127.0.0.1:30180` | Puerto publicado del proxy (loopback) |
+| `DB_PUBLISH_PORT` | `5432` | Puerto de la BD solo en loopback |
 | `PUBLIC_SCHEME` | `https` | Esquema público real (CORS derivado detrás del edge) |
-| `HOST_*`, `VITE_API_URL` | — | Dominios publicados y URL pública del API |
+| `HOST_*`, `HOST_*_LEGACY`, `VITE_API_URL` | — | Dominios publicados (canónicos + alias) y URL pública del API |
 
 ## 13. Respuesta ante incidentes (mínimo)
 
