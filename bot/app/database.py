@@ -185,6 +185,7 @@ SELECT
   pv.current_compare_price::float8 AS compare_price,
   c.name               AS category,
   b.name               AS brand,
+  MIN(m.path)          AS image,
   CASE WHEN COUNT(i.id) = 0 THEN NULL
        ELSE COALESCE(SUM(i.stock - i.reserved_stock) FILTER (WHERE i.stock - i.reserved_stock > 0), 0)::int
   END AS stock
@@ -195,6 +196,8 @@ LEFT JOIN product_categories pc ON pc.product_id = p.id
 LEFT JOIN categories c
   ON c.id = pc.category_id AND c.is_active = true AND c.deleted_at IS NULL
 LEFT JOIN brands b ON b.id = p.brand_id
+LEFT JOIN product_images pi ON pi.product_id = p.id AND pi.is_cover = true
+LEFT JOIN media m ON m.id = pi.media_id
 LEFT JOIN inventory i ON i.product_variant_id = pv.id {branch_filter}
 WHERE p.is_active = true AND p.deleted_at IS NULL AND p.is_public = true
   AND ($1 = 0 OR p.id = $1)

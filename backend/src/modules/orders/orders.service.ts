@@ -52,6 +52,7 @@ import { PromotionEngineService } from '../promotions/promotion-engine.service';
 import { CouponsService } from '../coupons/coupons.service';
 import { toIsoTimestamp } from '../../utils/date-utils';
 import { parsePointText, calculateDistance } from '../../utils/geolocation';
+import { calculateOrderTotals, shippingCostFor } from './order-pricing';
 
 const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
 
@@ -204,7 +205,7 @@ export class OrdersService {
 
     this.validatePaymentDetails(dto);
 
-    const shippingCost = dto.shippingType === 'express' ? 9900 : 4900;
+    const shippingCost = shippingCostFor(dto.shippingType);
 
     const productIds = dto.items.map((item) => item.productId);
     const variants = await this.db
@@ -295,23 +296,21 @@ export class OrdersService {
       : null;
 
     const couponDiscount = couponPreview?.discountAmount ?? 0;
-    const discountTotal = Math.min(
-      promotionDiscount + couponDiscount,
-      subtotal,
-    );
-    const totalBeforeCouponBalance =
-      Math.max(0, subtotal - discountTotal) + shippingCost;
-    const couponBalanceApplied = Math.min(
-      couponPreview?.balance ?? 0,
+    const {
+      discountTotal,
       totalBeforeCouponBalance,
-    );
-    const amountToCharge = Math.max(
-      0,
-      totalBeforeCouponBalance - couponBalanceApplied,
-    );
-    const fullyPaidByCoupon = amountToCharge <= 0 && couponBalanceApplied > 0;
-    const grandTotal = totalBeforeCouponBalance;
-    const amountInCents = amountToCharge * 100;
+      couponBalanceApplied,
+      amountToCharge,
+      fullyPaidByCoupon,
+      grandTotal,
+      amountInCents,
+    } = calculateOrderTotals({
+      itemsSubtotal: subtotal,
+      promotionDiscount,
+      couponDiscount,
+      couponBalance: couponPreview?.balance ?? 0,
+      shippingType: dto.shippingType,
+    });
     const referenceCode = this.buildReferenceCode();
 
     const cardProvider = dto.paymentDetails?.card?.provider ?? 'epayco';

@@ -1,0 +1,21 @@
+{
+  "name": "mercaldas-e2e",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Suite Playwright autocontenida para las SPAs de Mercaldas",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:client": "playwright test --project=client",
+    "test:admin": "playwright test --project=admin",
+    "test:picking": "playwright test --project=picking",
+    "test:delivery": "playwright test --project=delivery",
+    "test:smoke": "playwright test --project=smoke",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}
