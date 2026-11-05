@@ -64,7 +64,9 @@ export default defineConfig({
   // Los tests de cada SPA se aíslan por proyecto; el smoke es global.
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
-  retries: 0,
+  // En CI se permite un reintento: el arranque en frío de varios Vite en un
+  // runner compartido provoca fallos transitorios (no del test).
+  retries: process.env.CI ? 1 : 0,
   // Un solo worker: levantar 4 Vite + 4 Chromium en paralelo satura CPU/disco
   // en equipos modestos y provoca timeouts de navegación. La suite es corta.
   workers: 1,

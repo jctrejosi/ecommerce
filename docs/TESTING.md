@@ -21,8 +21,8 @@ Python y 3 apps móviles.
 | E2E web | **Playwright** | Flujos de las 4 SPAs con API mockeada | `cd e2e && npx playwright test` |
 | Smoke web | **Playwright** | Hosts reales sin mocks | `PLAYWRIGHT_BASE_URL=... npx playwright test --project=smoke` |
 
-**Totales verificados:** 100 unitarias + 10 integración backend + 257 Pytest +
-21 Playwright = **388 pruebas en verde**.
+**Totales verificados:** 530 unitarias + 10 integración backend + 257 Pytest +
+28 Playwright = **825 pruebas en verde**.
 
 ## Requisitos
 
@@ -47,6 +47,23 @@ Python y 3 apps móviles.
 | `picking/picker-queue.service.spec.ts` | 16 | ruteo (vecino más cercano/ETA) y despacho de cola |
 | `orders/order-pricing.spec.ts` | 8 | subtotal, envío, descuentos, `grand_total`, saldo de cupón y `amount_to_charge` |
 | `orders/webhook.controller.spec.ts` | 18 | firma Wompi válida/inválida/ausente, fail-closed y confirmación server-side |
+| `payments/wompi.service.spec.ts` | 30 | aceptación, cargo con tarjeta, Bre-B, consulta de transacción (privada o pública) y errores |
+| `payments/epayco.service.spec.ts` | 17 | tokenización, configuración y manejo de errores |
+| `payments/payments.controller.spec.ts` | 10 | configuración pública y métodos disponibles |
+| `customer-auth/customer-auth.service.spec.ts` | 76 | whitelist de `redirect_uri`, intercambio del `code`, tokens, registro, verificación y recuperación |
+| `customer-auth/customer-auth.controller.spec.ts` | 24 | contratos de los endpoints de autenticación de cliente |
+| `customer-auth/customers.service.spec.ts` | 13 | consulta y actualización de datos del cliente |
+| `inventory/inventory.service.spec.ts` | 14 | filtros, stock bajo, reservas y agregados por sucursal |
+| `delivery/delivery-orders.service.spec.ts` | 32 | máquina de estados del repartidor, ofertas, chat y notificaciones |
+| `delivery/delivery-admin.service.spec.ts` | 29 | repartidores, credenciales, historial y listados con paginación |
+| `delivery/delivery.service.spec.ts` | 24 | ubicación, rutas OSRM (mock) y errores 422/502/404 |
+| `delivery/delivery-load.service.spec.ts` | 23 | cálculo de carga, capacidad y sobrecarga de flota |
+| `delivery/driver-chat.service.spec.ts` | 17 | mensajes, límites y push tolerante a fallos |
+| `delivery/delivery-auth.service.spec.ts` | 9 | login, perfil y refresh del repartidor |
+| `delivery/delivery.gateway.spec.ts` | 10 | autenticación de sockets y emisiones |
+| `delivery/driver-colors.spec.ts` | 4 | asignación de color de ruta |
+| `campaigns/campaigns.service.spec.ts` | 72 | audiencias, deduplicación, destinatarios, relanzamiento, IA y SSE |
+| `campaigns/campaigns.controller.spec.ts` | 26 | parseo de parámetros y propagación de errores en 19 endpoints |
 
 Infraestructura: `backend/vitest.config.ts` (proyectos `unit` y `e2e`,
 `unplugin-swc` para `emitDecoratorMetadata`), `backend/test/setup.ts`,
@@ -86,6 +103,14 @@ Cobertura medida: **100 % de líneas** en `app/` (`--cov=app`).
 | `delivery` | 5473 | login, pantalla principal, pestañas Repartidores y Pedidos |
 | `smoke` | `PLAYWRIGHT_BASE_URL` | salud de hosts reales sin mocks |
 
+Además, sobre escritura y compra:
+
+- `tests/admin/admin-write.spec.ts` (5): alta y edición de producto, alta y
+  edición de banner con subida simulada, y validación de obligatorios sin
+  petición.
+- `tests/client/checkout.spec.ts` (2): compra completa con pago aprobado y
+  pago rechazado (`DECLINED`), emulando el evento Socket.IO de estado.
+
 La API se intercepta con `page.route('**/api/**')` en `tests/support/mockApi.ts`,
 así que las pruebas no dependen de la BD ni del backend.
 
@@ -98,24 +123,24 @@ así que las pruebas no dependen de la BD ni del backend.
 | auth | 6 | ● 16 | ● login/me/401 | ● login mock | ● |
 | coupons | 7 | ● 26 | — | — | ● |
 | promotions | 7 | ● 13 | — | — | ● |
-| orders | 15 | ● 26 | ◐ login/API | — | ◐ |
+| orders | 15 | ● 26 | ◐ login/API | ● checkout aprobado/rechazado | ● |
 | cart | 3 | ● 3 | — | ● contador | ◐ |
 | picking | 16 | ● 16 | — | ● login/cola | ◐ |
-| catalog | 59 | — | ◐ categorías/producto | ● catálogo/búsqueda | ◐ |
-| banners | 10 | — | ◐ listado + 401 | — | ◐ |
+| payments | 4 | ● 57 | — | ● pago mock | ● |
+| customer-auth | 24 | ● 113 | ◐ login/me | ● login mock | ● |
+| inventory | 5 | ● 14 | — | — | ● |
+| delivery | 32 | ● 131 | — | ● pantalla principal | ● |
+| campaigns | 18 | ● 98 | — | — | ● |
+| catalog | 59 | — | ◐ categorías/producto | ● catálogo/búsqueda + escritura | ◐ |
+| banners | 10 | — | ◐ listado + 401 | ● alta/edición | ◐ |
 | admin-users | 12 | — | ◐ 401 | ● login admin | ◐ |
-| customer-auth | 24 | — | — | ● login mock | ○ |
-| payments | 4 | — | — | — | ○ |
-| delivery | 32 | — | — | ● pantalla principal | ◐ |
 | pickers | 16 | — | — | ● login picking | ◐ |
 | branches | 11 | — | — | — | ○ |
-| campaigns | 18 | — | — | — | ○ |
 | cloudinary | 1 | — | — | — | ○ |
 | dashboard | 14 | — | — | — | ○ |
 | featured-products | 11 | — | — | — | ○ |
 | filters | 6 | — | — | — | ○ |
 | geocoding | 2 | — | — | — | ○ |
-| inventory | 5 | — | — | — | ○ |
 | landing | 21 | — | — | — | ○ |
 | newsletter | 14 | — | — | — | ○ |
 | notifications | 2 | — | — | — | ○ |
@@ -129,14 +154,14 @@ Cobertura global de líneas del backend: **~56 %** (incluye
 
 ## Backlog priorizado
 
-1. **payments**: `wompi.service` (creación de transacciones, Bre-B, errores de
-   red) y `payment-verification` (polling hasta 10 intentos).
-2. **customer-auth**: OAuth de Google, magic links, verificación de correo.
-3. **inventory + picking**: concurrencia, reservas y descuento de stock.
-4. **delivery**: cálculo de rutas con OSRM (mockear HTTP) y zonas de entrega.
-5. **campaigns + newsletter**: generación de audiencias y envíos.
-6. **E2E de escritura** en admin: alta/edición de productos y banners.
-7. **Checkout completo** con pago aprobado (mock de Wompi en Playwright).
+1. **catálogo/branches**: altas, variantes e imágenes (más allá del smoke).
+2. **shelves + pickers**: CRUD y asignación de estanterías.
+3. **landing, popups y featured-products**: contenido editable del storefront.
+4. **newsletter + notifications**: envíos y preferencias.
+5. **dashboard**: agregados y métricas.
+6. **settings, qr, filters, geocoding, cloudinary**: utilidades.
+7. **admin-users**: roles y permisos (más allá del 401).
+8. E2E: edición de banners con recorte de imagen real y multi-sucursal.
 
 ## Convenciones
 
@@ -159,3 +184,10 @@ Cobertura global de líneas del backend: **~56 %** (incluye
   de importes se extrajo a `orders/order-pricing.ts` para poder probarlo puro.
 - `getTransaction` de Wompi acepta la llave pública como respaldo (no hay
   `WOMPI_PRIVATE_KEY` en producción).
+- **Bugs observados en `campaigns` (documentados, sin corregir):**
+  1. `list` pierde los productos secundarios de campañas multi-producto
+     (resuelve solo el `productId` principal).
+  2. `relaunch` no valida el estado de la campaña y fuerza `audienceMode: 'auto'`,
+     así que una campaña con público manual pierde ese modo al relanzarse.
+  3. La nota de audiencia mixta usa `extra.clients.length` en vez del número
+     realmente añadido tras el deduplicado (cosmético).
