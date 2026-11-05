@@ -37,6 +37,28 @@ interface AdminCategory {
   productCount: number;
 }
 
+/**
+ * Orden de las categorías dentro de su nivel: primero por `display_order`
+ * explícito (si existe), luego por `code` en orden natural (V1, V2, …, V10,
+ * V11) y, por último, por nombre. Las categorías se reorganizaron codificando
+ * el orden en `code` (V1, V2, …), así que esto respeta ese orden.
+ */
+function compareCategories(a: AdminCategory, b: AdminCategory): number {
+  if ((a.displayOrder ?? 0) !== (b.displayOrder ?? 0)) {
+    return (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
+  }
+  const ac = a.code ?? "";
+  const bc = b.code ?? "";
+  if (ac || bc) {
+    const cmp = ac.localeCompare(bc, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (cmp !== 0) return cmp;
+  }
+  return a.name.localeCompare(b.name);
+}
+
 function CategoryRow({
   cat,
   depth = 0,
@@ -669,7 +691,7 @@ export default function Categories() {
                 );
               }
               if (catTreeDebounced) {
-                return filtered.map((cat) => (
+                return [...filtered].sort(compareCategories).map((cat) => (
                   <CategoryRow
                     key={cat.id}
                     cat={cat}
@@ -685,9 +707,7 @@ export default function Categories() {
               ): any => {
                 const items = statusFiltered
                   .filter((c) => c.parentId === parentId)
-                  .sort((a: AdminCategory, b: AdminCategory) =>
-                    a.name.localeCompare(b.name),
-                  );
+                  .sort(compareCategories);
                 return items.flatMap((cat) => (
                   <div key={cat.id}>
                     <CategoryRow
