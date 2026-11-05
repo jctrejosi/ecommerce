@@ -26,7 +26,10 @@ WORKDIR /build/backend
 
 # Dependencias primero (capa cacheable).
 COPY backend/package.json backend/yarn.lock ./
-RUN yarn install --frozen-lockfile --network-timeout 600000
+# `--ignore-engines`: las devDependencies de pruebas (vitest, testcontainers)
+# declaran Node >=22, pero la imagen corre en Node 20 y nunca las ejecuta;
+# sin este flag `yarn install` aborta y tumba el build de producción.
+RUN yarn install --frozen-lockfile --ignore-engines --network-timeout 600000
 
 COPY backend/ ./
 # Nest compila src/ a dist/; drizzle/ (importado por el runtime) se compila aparte.
