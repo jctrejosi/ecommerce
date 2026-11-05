@@ -790,7 +790,7 @@ export default function App() {
     priceMin?: number;
     priceMax?: number;
   }) => {
-    if (f.categoryIds?.length) setCatalogCategory(f.categoryIds);
+    if (f.categoryIds?.length) setCatalogCategory(f.categoryIds.slice(0, 1));
     else setCatalogCategory([]);
     setCatalogProductIds(f.productIds?.length ? f.productIds : []);
     setCatalogBrand(f.brandId ?? null);

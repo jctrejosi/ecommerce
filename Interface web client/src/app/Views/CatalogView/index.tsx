@@ -571,17 +571,12 @@ export function CatalogPage({
     }, 0);
   };
 
+  // Selección única: el filtro de categorías no combina categorías. Volver a
+  // pulsar la categoría activa la quita.
   const toggleCategory = (categoryId: number) => {
-    const isChecked = catalogCategory.includes(categoryId);
-    if (isChecked) {
-      // Al deseleccionar un padre se deseleccionan también todos sus hijos:
-      // si el padre deja de estar marcado, las subcategorías quedarían
-      // huérfanas (se ven marcadas bajo un padre sin check).
-      const remove = new Set(getDescendantIds(categoryId));
-      setCatalogCategory(catalogCategory.filter((id) => !remove.has(id)));
-    } else {
-      setCatalogCategory([...catalogCategory, categoryId]);
-    }
+    setCatalogCategory(
+      catalogCategory.includes(categoryId) ? [] : [categoryId],
+    );
   };
 
   const catalogProducts = products.length > 0 ? products : EMPTY_PRODUCTS;
