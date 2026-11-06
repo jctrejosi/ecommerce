@@ -5,7 +5,30 @@ parches de seguridad que exigían subir de minor), evitando los saltos major que
 cambian APIs. Todo se compiló y se volvió a ejecutar; el detalle de
 vulnerabilidades vigente está en `docs/DEPENDENCIA_AUDITORIA.md`.
 
-## Qué se actualizó
+## Segunda ronda (misma fecha)
+
+Tras el primer despliegue se cerraron las vulnerabilidades de runtime que
+quedaban y se alineó el `web client` con el resto del monorepo.
+
+- **`backend`**: `sharp` (vía `@imgly`) **0.32.6 → 0.35.5** y `zod`
+  **3.21.4 → 3.25.76** con `resolutions` (libvips/libheif/librsvg y DoS de zod);
+  `qs 6.17.1`, `js-yaml 4.3.2`; `@testcontainers/postgresql` **10 → 12.2.1**
+  (arrastra `undici` 8 y elimina el `@fastify/busboy` viejo); `dotenv` 18,
+  `nest-winston` 2, `@types/supertest` 7.
+  - `zod 4` no es viable: `@imgly` usa `z.function().args()`, eliminado en v4.
+    Se queda en la última 3.x; el advisory `<4.6.6` no es explotable aquí
+    (imgly sólo valida su propia configuración interna).
+- **`Interface web client`**: **React 18.3.1 → 19.3.1**, **Vite 6.4.5 →
+  8.3.6** y `@vitejs/plugin-react` **4.7 → 6.2.1**. Se mantienen MUI 7,
+  recharts 2 y react-router 7, que ya declaran soporte de React 19.
+- **SPAs**: `tailwindcss`/`@tailwindcss/vite` **4.3.5**; `@types/node` **26.6.6**
+  en las tres admin.
+- **Móviles**: `pnpm.overrides` para `node-forge ^1.4.1`,
+  `decode-uri-component ^0.5.1` y `brace-expansion ^5.0.12`. Las versiones de
+  React/React Native las fija Expo SDK 57 y no se tocaron.
+- **`backend-tracking`**: `tower-http` **0.6 → 0.7.1** (`cargo check` OK).
+
+## Primera ronda
 
 | Proyecto | Gestor | Cambios principales |
 |---|---|---|
@@ -35,31 +58,43 @@ En `Interface web client`: `browserslist ^4.28.7`.
 
 ## Resultado de seguridad
 
-| Métrica | Antes | Después |
-|---|---|---|
-| Críticas (todo el monorepo) | 6 | **0** |
-| Altas en `backend` | 35 | 23 |
-| Vulnerabilidades `Interface web client` | 11 | **0** |
-| Paneles web admin/delivery/picking | 4 / 3 / 2 | **0 / 0 / 0** |
-| Python | 1 | **0** |
+| Métrica | Inicial | Tras 1.ª ronda | Ahora |
+|---|---|---|---|
+| Críticas (todo el monorepo) | 6 | 0 | **0** |
+| Altas en `backend` | 35 | 23 | **13** (todas de tooling) |
+| Vulnerabilidades `Interface web client` | 11 | 0 | **0** |
+| Paneles web admin/delivery/picking | 4 / 3 / 2 | 0 / 0 / 0 | **0 / 0 / 0** |
+| Móviles client/delivery/picking | 5 / 3 / 5 | 5 / 3 / 5 | **2 / 2 / 2** (CLI de Expo) |
+| Python | 1 | 0 | **0** |
+| Rust | — | 1 | **1** (`rsa`, sin parche) |
 
 ## Riesgos pendientes (no se tocaron a propósito)
 
-- **`@imgly/background-removal-node`** (backend, runtime) fija `sharp ~0.32.4`,
-  `zod ~3.21.4`: parchearlas exige saltos incompatibles. No hay versión nueva de
-  imgly. Recomendación: aislarlo en un worker/servicio o reemplazarlo.
-- **`brace-expansion`, `js-yaml` (vía `@nestjs/cli`), `undici`/`@fastify/busboy`
-  (vía `@testcontainers`)**: DoS en herramientas de build/test, no en runtime.
-  Se arreglarían moviendo `@nestjs/cli`, `drizzle-kit`, `ts-node`, `tsconfig-paths`
-  y `@types/*` a `devDependencies`, y fijando resoluciones por línea de major.
-- **`node-forge`** en apps móviles: el advisory no tiene versión corregida.
-- **`@electron/packager`/`@electron/asar`** (desktop): el "fix" que propone npm es
-  un downgrade a 18.4.4; no se aplicó.
-- **Saltos major pendientes**: NestJS 11 → 12, React 18 → 19 y MUI 7 → 9
-  (`web client`), TypeScript 5/6 → 7, Expo 57 → 58. No se ejecutaron porque
-  cambian APIs y el objetivo era no perder funcionalidad.
+- **`brace-expansion`, `glob`, `minimatch`, `esbuild`** (backend y apps
+  móviles): DoS en herramientas de build/test (CLI de Nest, eslint, CLI de
+  Expo, drizzle-kit), no en runtime. `yarn` 1 no admite `resolutions` por rango
+  de major y forzar una sola versión rompería los consumidores de 1.x/2.x/5.x.
+- **`uuid 8.3.2`** (vía `exceljs`): el advisory sólo aplica a v3/v5/v6 cuando
+  se pasa un `buf`; exceljs usa v4 y nunca proporciona buffer.
+- **`@electron/packager`/`@electron/asar`** (desktop): sin versión corregida
+  (el "fix" de npm es un downgrade); sólo afecta al empaquetado.
+- **Rust `rsa 0.9.10`** (vía `sqlx`): RUSTSEC-2023-0071 no tiene parche.
+- **Saltos major de framework no ejecutados**: NestJS 11 → 12, TypeScript
+  5.9 → 7, MUI 7 → 9, react-router 7 → 8, recharts 2 → 3, react-day-picker
+  8 → 10, Expo 57 → 58. Cambian APIs y el objetivo era no perder funcionalidad.
 
-## Validación ejecutada
+## Validación ejecutada (2.ª ronda)
+
+- `backend`: `yarn build` OK; **530** unit y **10** e2e (Testcontainers 12 +
+  PostgreSQL real) OK; `removeBackground` probado con un PNG real (sharp 0.35).
+- `Interface web client`: `pnpm build` OK y **7/7** E2E con React 19 + Vite 8.
+- Admin/delivery/picking: `pnpm build` OK con Tailwind 4.3.5.
+- Móviles: `expo install --fix`, `tsc --noEmit` y `expo export --platform
+  android` OK en las 3.
+- `backend-tracking`: `cargo check --all-targets` OK.
+- Suite E2E completa: **29/29** (client, admin, picking, delivery, mapa y smoke).
+
+## Validación de la 1.ª ronda
 
 - `backend`: `yarn build` OK y `yarn test:unit` → **530 tests OK**.
 - SPAs (client/admin/delivery/picking): `pnpm build` OK.
