@@ -10,6 +10,7 @@
     "test:admin": "playwright test --project=admin",
     "test:picking": "playwright test --project=picking",
     "test:delivery": "playwright test --project=delivery",
+    "test:map": "playwright test --project=map",
     "test:smoke": "playwright test --project=smoke",
     "report": "playwright show-report"
   },

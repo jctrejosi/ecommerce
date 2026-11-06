@@ -32,3 +32,6 @@ db/pg-raw/**
 
 # Artefactos locales de despliegue (claves, tarballs, scripts ad-hoc)
 .scratch/
+
+# Salidas de scripts de análisis (auditorías de dependencias, informes largos)
+scripts-agent/out/

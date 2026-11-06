@@ -1,7 +1,10 @@
 import { defineConfig } from "@playwright/test";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { CHROMIUM_LAUNCH_OPTIONS } from "./tests/support/browser";
+import {
+  CHROMIUM_LAUNCH_OPTIONS,
+  MAP_CHROMIUM_LAUNCH_OPTIONS,
+} from "./tests/support/browser";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const spaDir = (name: string) => path.resolve(here, "..", name);
@@ -104,6 +107,17 @@ export default defineConfig({
       name: "delivery",
       testMatch: /delivery\/.*\.spec\.ts/,
       use: { baseURL: localUrl(PORTS.delivery), browserName: "chromium" },
+    },
+    {
+      // Mapa real con WebGL (MapLibre). Se aísla del resto porque SwiftShader
+      // es lento y el panel general corre mejor sin WebGL.
+      name: "map",
+      testMatch: /map\/.*\.spec\.ts/,
+      use: {
+        baseURL: localUrl(PORTS.delivery),
+        browserName: "chromium",
+        launchOptions: MAP_CHROMIUM_LAUNCH_OPTIONS,
+      },
     },
     {
       // Smoke: local recorre los 4 hosts; con PLAYWRIGHT_BASE_URL apunta al host

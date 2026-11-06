@@ -23,3 +23,19 @@ export const CHROMIUM_LAUNCH_OPTIONS = {
   // fallback de "mapa no disponible" y el resto del panel funciona igual.
   args: ["--no-sandbox", "--disable-dev-shm-usage", "--disable-webgl"],
 };
+
+/**
+ * Variante con WebGL activo (SwiftShader) para el proyecto `map`: MapLibre
+ * necesita un contexto WebGL real para pintar el canvas. Sólo se usa en los
+ * tests del mapa, que son lentos a propósito.
+ */
+export const MAP_CHROMIUM_LAUNCH_OPTIONS = {
+  ...(SYSTEM_CHROMIUM ? { executablePath: SYSTEM_CHROMIUM } : {}),
+  args: [
+    "--no-sandbox",
+    "--disable-dev-shm-usage",
+    "--enable-unsafe-swiftshader",
+    "--use-gl=angle",
+    "--use-angle=swiftshader",
+  ],
+};

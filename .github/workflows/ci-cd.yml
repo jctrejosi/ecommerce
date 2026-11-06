@@ -91,6 +91,11 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      # Las SPAs usan pnpm (igual que docker/Dockerfile). El job instala con el
+      # pnpm-lock.yaml versionado; `npm ci` con un package-lock desfasado falla.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.34.3
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -100,7 +105,7 @@ jobs:
         run: |
           set -Eeuo pipefail
           for dir in "Interface web client" "Interface web admin" "Interface web picking admin" "Interface web delivery admin"; do
-            (cd "$dir" && npm ci --no-audit --no-fund)
+            (cd "$dir" && pnpm install --frozen-lockfile)
           done
       - name: Instalar Playwright
         run: |

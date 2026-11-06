@@ -10,6 +10,7 @@ todas las llamadas al API se interceptan con `page.route`.
 | `admin` | `Interface web admin` | 5273 |
 | `picking` | `Interface web picking admin` | 5373 |
 | `delivery` | `Interface web delivery admin` | 5473 |
+| `map` | Mapa de flota real (MapLibre + WebGL) en delivery admin | 5473 |
 | `smoke` | Smoke global (4 hosts o `PLAYWRIGHT_BASE_URL`) | — |
 
 ## Requisitos
@@ -29,11 +30,15 @@ npx playwright install chromium
 Si alguna SPA no arranca porque le falta `node_modules`:
 
 ```bash
-cd "../Interface web client" && npm ci
-cd "../Interface web admin" && npm ci
-cd "../Interface web picking admin" && npm ci
-cd "../Interface web delivery admin" && npm ci
+pnpm --dir "../Interface web client" install --frozen-lockfile
+pnpm --dir "../Interface web admin" install --frozen-lockfile
+pnpm --dir "../Interface web picking admin" install --frozen-lockfile
+pnpm --dir "../Interface web delivery admin" install --frozen-lockfile
 ```
+
+> Las SPAs usan **pnpm** (`pnpm-lock.yaml`), igual que el `Dockerfile` de
+> producción y el job `test-e2e` del CI. Ya no se versionan `package-lock.json`
+> en esas interfaces.
 
 > La primera ejecución de Vite puede tardar: `playwright.config.ts` da 180 s de
 > margen para el arranque de cada servidor.
@@ -63,6 +68,7 @@ npx playwright test --project=client
 npx playwright test --project=admin
 npx playwright test --project=picking
 npx playwright test --project=delivery
+npx playwright test --project=map
 npx playwright test --project=smoke
 ```
 
@@ -73,7 +79,23 @@ npm run test:client
 npm run test:admin
 npm run test:picking
 npm run test:delivery
+npm run test:map
 npm run test:smoke
+```
+
+### Proyecto `map` (WebGL)
+
+El resto de la suite corre con `--disable-webgl` porque SwiftShader es lento y
+hace inestable el panel. El proyecto `map` habilita WebGL a propósito
+(`MAP_CHROMIUM_LAUNCH_OPTIONS`) para ejercitar MapLibre de verdad: comprueba que
+el canvas se pinta, que están los pines (repartidor, destino y sucursal al
+seleccionar), que el arrastre mueve la cámara y que la rueda hace zoom. Los
+tiles y el estilo se sirven offline, así que no necesita internet.
+
+Es más lento (~35 s) y conviene ejecutarlo aparte:
+
+```bash
+npm run test:map
 ```
 
 ## Smoke contra producción (sin mocks)

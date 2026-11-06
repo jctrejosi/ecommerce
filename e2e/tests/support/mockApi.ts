@@ -16,6 +16,8 @@ import { API_ORIGIN } from "./urls";
 export type ApiMockState = {
   /** Se pone en true al responder POST /auth/login. */
   loggedIn: boolean;
+  /** Repartidores que devuelve /delivery/admin/drivers. */
+  drivers: unknown[];
 };
 
 /** Usuario que satisface el perfil de admin, picking y delivery. */
@@ -301,6 +303,37 @@ export const MOCK_FLEET_ORDER = {
   volume: { cm3: null, estimated: false },
 };
 
+/**
+ * Repartidor con GPS y pedido activo: el mapa de flota pinta los tres pines
+ * (moto, casa de destino y sucursal de recogida), todos en puntos distintos.
+ * Se usa en `tests/map` para ejercitar MapLibre de verdad.
+ */
+export const MOCK_DRIVER_ACTIVE = {
+  ...MOCK_DRIVER,
+  location: { lat: 5.067, lng: -75.517 },
+  lastLocationAt: new Date().toISOString(),
+  lastSeenAt: new Date().toISOString(),
+  activeAssignment: {
+    assignmentId: 1,
+    orderId: 1001,
+    referenceCode: MOCK_FLEET_ORDER.referenceCode,
+    status: "ASSIGNED",
+    assignedAt: "2025-01-01T10:30:00.000Z",
+    acceptedAt: null,
+    pickedUpAt: null,
+    inDeliveryAt: null,
+    customerName: MOCK_FLEET_ORDER.customerName,
+    customerPhone: MOCK_FLEET_ORDER.customerPhone,
+    // Manizales: el mapa tiene maxBounds sobre la ciudad, así que los pines
+    // deben caer dentro para poder interactuar con ellos.
+    destination: { lat: 5.055, lng: -75.505 },
+    addressLine1: MOCK_FLEET_ORDER.addressLine1,
+    city: "Manizales",
+    branchName: MOCK_FLEET_ORDER.branchName,
+    branchLocation: { lat: 5.08, lng: -75.53 },
+  },
+};
+
 const API_HOST_PATTERN = /^https?:\/\/(?:localhost|127\.0\.0\.1):3000(?:\/|$)/;
 
 function corsHeaders(route: Route): Record<string, string> {
@@ -578,7 +611,7 @@ async function handleApi(
 
   // ── Delivery admin ──
   if (path === "/delivery/admin/branches") return respond(route, [MOCK_BRANCH]);
-  if (path === "/delivery/admin/drivers") return respond(route, [MOCK_DRIVER]);
+  if (path === "/delivery/admin/drivers") return respond(route, state.drivers);
   if (path === "/delivery/admin/chats") return respond(route, []);
   if (path === "/delivery/admin/orders") {
     return respond(route, {
@@ -608,9 +641,12 @@ async function handleApi(
  */
 export async function installApiMocks(
   page: Page,
-  options: { loggedIn?: boolean } = {},
+  options: { loggedIn?: boolean; activeDriver?: boolean } = {},
 ): Promise<ApiMockState> {
-  const state: ApiMockState = { loggedIn: options.loggedIn ?? false };
+  const state: ApiMockState = {
+    loggedIn: options.loggedIn ?? false,
+    drivers: options.activeDriver ? [MOCK_DRIVER_ACTIVE] : [MOCK_DRIVER],
+  };
 
   const handler = async (route: Route) => {
     const request = route.request();
@@ -653,17 +689,41 @@ export async function installApiMocks(
   return state;
 }
 
+/** Estilo mínimo de MapLibre para tests: sólo fondo, sin capas que pidan red. */
+const OFFLINE_MAP_STYLE = {
+  version: 8,
+  name: "e2e-offline",
+  sources: {},
+  layers: [
+    {
+      id: "background",
+      type: "background",
+      paint: { "background-color": "#e5e7eb" },
+    },
+  ],
+};
+
 /** Evita que MapLibre salga a internet durante los tests. */
 export async function blockMapTiles(page: Page): Promise<void> {
   await page.route("**/ofm/**", (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    // El estilo lee el TileJSON de `/ofm/planet`. Se responde sin tiles para
-    // que caiga de inmediato al fallback empaquetado y no reintente 5 veces.
+    // El estilo base (`/ofm/styles/…`) se sirve offline con un spec válido:
+    // MapLibre inicializa el canvas y la cámara sin descargar tiles ni sprites.
+    if (pathname.startsWith("/ofm/styles/")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(OFFLINE_MAP_STYLE),
+      });
+    }
+    // El estilo lee el TileJSON de `/ofm/planet` y exige al menos una URL de
+    // tiles para aceptar el estilo. Se devuelve una plantilla local que el
+    // test bloquea con 404: MapLibre pinta el fondo y los pines igual.
     if (pathname === "/ofm/planet") {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ tiles: [] }),
+        body: JSON.stringify({ tiles: ["/ofm/planet/{z}/{x}/{y}.pbf"] }),
       });
     }
     return route.fulfill({
