@@ -38,7 +38,7 @@ Cada proyecto es un **clon git real** en el servidor, en `dev`:
 | restaurants | `/home/deploy/restaurants` | `jctrejosi/restaurants` |
 | Astaroth | `/home/deploy/Astaroth` | `jctrejosi/Astaroth` |
 | Paimon | `/home/deploy/Paimon` | `jctrejosi/Paimon` |
-| Flauros (Vine) | `/home/deploy/vine` | `jctrejosi/Vine` |
+| Haures | `/home/deploy/haures` | `jctrejosi/Haures` |
 
 Todos los archivos pertenecen al usuario `deploy`, que está en el grupo
 `docker` y **no** tiene sudo.
