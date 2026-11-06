@@ -111,6 +111,12 @@ CREATE TABLE carts (
     last_activity_at timestamptz NOT NULL DEFAULT now(),
     expires_at timestamptz NOT NULL DEFAULT now() + interval '1 day'
 );
+-- Mínimo de `orders` para reproducir la FK real `orders_guest_session_id_fkey`
+-- que impide borrar sesiones invitado con pedidos.
+CREATE TABLE orders (
+    id serial PRIMARY KEY,
+    guest_session_id int REFERENCES guest_sessions(id)
+);
 CREATE UNIQUE INDEX carts_un_carrito_activo
     ON carts (guest_session_id) WHERE status = 'ACTIVE';
 CREATE TABLE cart_items (
@@ -191,9 +197,9 @@ async def db(monkeypatch, dsn, postgres_container):
             await conn.execute(DDL)
             _schema_creado = True
         await conn.execute(
-            "TRUNCATE cart_items, carts, guest_sessions, inventory, product_images, "
-            "media, product_categories, categories, brands, product_variants, "
-            "products, settings RESTART IDENTITY CASCADE"
+            "TRUNCATE orders, cart_items, carts, guest_sessions, inventory, "
+            "product_images, media, product_categories, categories, brands, "
+            "product_variants, products, settings RESTART IDENTITY CASCADE"
         )
         await conn.execute(SEED)
 
@@ -410,6 +416,29 @@ async def test_cleanup_expired_borra_carritos_y_sesiones(db):
     carritos, sesiones = await cart.cleanup_expired()
 
     assert (carritos, sesiones) == (1, 1)
+
+
+async def test_cleanup_expired_conserva_sesiones_con_pedidos(db):
+    """Una sesión expirada con pedidos no se borra (la referencia `orders`)."""
+    async with db.acquire() as conn:
+        sesion_vieja = await conn.fetchval(
+            "INSERT INTO guest_sessions (session_token, expires_at) "
+            "VALUES ('vieja-con-pedido', now() - interval '2 days') RETURNING id"
+        )
+        await conn.execute(
+            "INSERT INTO orders (guest_session_id) VALUES ($1)", sesion_vieja
+        )
+
+    carritos, sesiones = await cart.cleanup_expired()
+
+    assert (carritos, sesiones) == (0, 0)
+    async with db.acquire() as conn:
+        assert (
+            await conn.fetchval(
+                "SELECT count(*) FROM guest_sessions WHERE id = $1", sesion_vieja
+            )
+            == 1
+        )
 
 
 # ─── End-to-end HTTP contra la BD real ──────────────────────────
