@@ -1,6 +1,10 @@
 # Plan de integración Ecommerce ⇄ ERP Advantage
 
-> **Estado**: propuesta para revisión.
+> **Estado**: propuesta histórica. **Actualización 2026-10-22**: la operación real
+> ya está conectada al ERP Advantage 12 (`asqlcmd` contra `PUBLIDATA.add`), con
+> categorías en `TIDTAB` y el demonio `erp-daemon.mjs`. Lo vigente está en
+> `docs/RUNBOOK-ERP.md` y `docs/PLAN-SINCRONIZACION-ERP.md`; este documento se
+> conserva como diseño y mapeo original.
 > **Alcance**: sincronización bidireccional entre la base Postgres del ecommerce
 > y la base Advantage (ADS) del ERP de Mercaldas.
 > **Documentos relacionados**:
@@ -26,8 +30,9 @@
 >   `scripts-agent/erp/push-orders.mjs` (`orders`/`order_items` → `DOMDIA`/`DOMITE`,
 >   idempotente por `FACONTROL`). Lote del piloto enviado: **87 pedidos** (`80` en
 >   la última corrida, `0` fallidos); los `cancelled`/`refunded` se excluyen.
->   Falta confirmar con el ERP la numeración (`FAPEDIDO`), estados
->   (`FAESTADO`/`IFESTADO`), tipo de domicilio y el trato del envío (`FAVARIOS`).
+>   Códigos cerrados con FORTUNER: `FAPEDIDO`/`IFPEDIDO` de 9 dígitos,
+>   `FAESTADO` 0/5/9, `IFESTADO` vacío (normal)/5, `FATIPODOM=01` y envío en
+>   `FAVARIOS` (ver `docs/ESCRITURA-FORTUNER-READINESS.md`).
 > - ⏳ **Fase 5** — triggers `DSI_EVENTO` en el ERP **pendiente** (o plan B,
 >   que es el diff por huella ya implementado).
 
@@ -331,7 +336,7 @@ se guardan como atributos o se ignoran (decisión de producto).
 | `document_type` | `TIPODOC` (2) | `13` = cédula (visto en datos) |
 | `phone` | `TELCELU` (12) / `TELCLI1` (10) | |
 | `email` | `EMAIL` (50) | |
-| dirección | `DIRCLI1`, `BARRIO1`, `CIUCLI`, `CIUDAD` (DANE) | ciudades en `POSDANE` |
+| dirección | `DIRCLI1`, `BARRIO1`, `CIUCLI`, `CIUDAD` | sin diccionario DANE confirmado (`POSDANE` no contiene ciudades) |
 | — | `SUCURSAL` (3) | sucursal del cliente |
 | — | `ORIGENW='W'`, `NEWWEB`, `CLAWEB` | marcas del canal web (**preguntar significado**) |
 | `is_active` | `BLOQUE` (inverso) | bloqueado |
@@ -392,7 +397,7 @@ inversa, para `puntos` (`PUNTOS`), bloqueo (`BLOQUE`), consumo (`CONSUMO`), cupo
 | `IFSUCUR` | char(3) | sucursal | |
 | `IFFECHA` | int32 | fecha `YYYYMMDD` | |
 | `IFTIPO` | char(2) | tipo de línea | `E`/`I`/`C`/`J`/`D` |
-| `IFESTADO` | bin(2) | estado | **por descifrar** |
+| `IFESTADO` | bin(2) | estado | vacío normal / `5` cancelada |
 | `IFOBSER` | char(100) | observaciones | |
 
 **Invariantes a respetar** (según los datos observados):
@@ -440,11 +445,11 @@ desde el propio ERP.
 | Tipo de factura | `FADDIA.FATIPO` | `FA`, `CO`, `RE`, `AN`, `IN` |
 | Estado factura | `FADDIA.FAESTADO` | `1`, `2` |
 | Tipo de línea | `FADITE.IFTIPO` | `E`, `I`, `C`, `J`, `D` |
-| Tipo de domicilio | `FADOMITIPO` / `IFDOMITIPO` | `01`,`02`,`03`,`05`,`10`,`11`,`15` |
-| Estado pedido/ítem | `DOMDIA.FAESTADO` / `DOMITE.IFESTADO` | `9`, `32768`, `5`, `0`, `1` |
-| Impuestos | `TIDTIPOS` (`CLASE`,`TIPO`,`IMPUESTO`,`BASE`) | tarifa por clase |
+| Tipo de domicilio | `FADOMITIPO` / `IFDOMITIPO` | `01` domicilio (usado por el ecommerce) |
+| Estado pedido/ítem | `DOMDIA.FAESTADO` / `DOMITE.IFESTADO` | cabecera `0` pendiente / `5` cancelado / `9` facturado; línea vacía normal (0x8000 en disco) / `5` cancelada |
+| Impuestos | `TIDTIPOS` (`CLASE`,`TIPO`,`VALOR`) | sólo `CLASE='IM'`; `VALOR` es el porcentaje (`J=19`, `C=5`, `E=0`) |
 | Tipo doc. cliente | `POSCLI.TIPODOC` | `13` cédula |
-| Ciudad | `POSDANE` (`CODIGO`,`NOMBRE`) | 1.647 códigos DANE |
+| Ciudad | — | `DOMDIA.FACIUDAD` es texto libre de 12; `POSDANE` no contiene ciudades |
 | Sucursal / bodega | `TIDSAL.INSUC`, `TIDBODE.CODIGO` | `1`,`2`,`11` |
 
 **Propuesta inicial de mapeo de medios de pago** (a confirmar con el ERP):
@@ -509,8 +514,9 @@ stateDiagram-v2
 | `delivered` | evidencia de entrega | Ecommerce |
 | `refunded` | nota crédito del ERP | **ERP** (conciliación) |
 
-> El mapeo fino estado-ecommerce ↔ `DOMDIA.FAESTADO` queda pendiente de descifrar
-> los códigos (`9`, `32768`, `5`, `0`).
+> El mapeo estado-ecommerce ↔ `DOMDIA.FAESTADO` está cerrado: `0` pendiente,
+> `5` cancelado, `9` facturado; la línea usa vacío (normal, 0x8000 en disco) o `5`
+> (cancelada).
 
 **Factura** (ERP): creada al facturar → `FAESTADO=1`; anulada → `AN`/`2`.
 
@@ -730,7 +736,7 @@ CREATE UNIQUE INDEX ON customers (erp_customer_code) WHERE erp_customer_code IS 
 |---|---|---|
 | **0 · Descubrimiento** | Respuestas a §11; copia fresca de `DOMDIA`/`DOMITE`; diccionario de estados | ERP |
 | **1 · Contrato** | Este documento cerrado (campos, códigos, endpoints) | Fase 0 |
-| **2 · Núcleo Postgres** | Migraciones de §6, codecs, `erp_code_map` poblado desde `POSPAGO`/`TIDTIPOS`/`POSDANE` | — |
+| **2 · Núcleo Postgres** | Migraciones de §6, codecs, `erp_code_map` poblado desde `POSPAGO`/`TIDTIPOS`/`TIDBODE`/`TIDMARCAS`/`TIDTPRO` | — |
 | **3 · Entrada** | Endpoint `/erp/events` + proyectores de catálogo/precios/stock probados con la copia | Fase 2 |
 | **4 · Salida** | Outbox + endpoint de pedidos + agente escribiendo en una copia local | Fase 2 |
 
@@ -765,7 +771,7 @@ CREATE UNIQUE INDEX ON customers (erp_customer_code) WHERE erp_customer_code IS 
 1. ¿Las tablas del ERP están en un diccionario ADS (requisito de triggers)? ¿O vamos a plan B?
 2. ¿Nos dan una copia fresca de `DOMDIA`/`DOMITE`? (la actual termina en 2023-12-13)
 3. ¿Quién asigna `FAPEDIDO`/`FAFACTURA` y con qué prefijos? ¿Hay rango propio para el canal web?
-4. ¿Qué significan `FAESTADO`/`IFESTADO` (`9`, `32768`, `5`, `0`, `1`), `FATIPODOM` (`01/02/03`) y `CLAWEB`?
+4. ✅ `FAESTADO`: `0` pendiente, `5` cancelado, `9` facturado; `IFESTADO` vacío normal / `5` cancelada; `FATIPODOM=01`. Falta `CLAWEB`.
 5. ¿El stock web es `INSALDO00` o `INSALDOWEB`?
 6. ¿El pedido web lleva la sucursal de despacho (`01/02/11`) o una sucursal virtual (tipo la 14)?
 7. ¿Qué medios de pago del ecommerce (`NEQUI`, `DAVIPLATA`, `PSE`) corresponden a qué código de `POSPAGO`?

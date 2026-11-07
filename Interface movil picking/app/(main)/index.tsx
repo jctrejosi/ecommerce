@@ -51,12 +51,9 @@ export default function OrderListScreen() {
       sortQueue(
         (orders ?? []).filter((o) => {
           if (orderStatus(o) !== filter) return false;
-          // "Preparando" y "Completado" se ven por usuario: solo los del picker
-          // activo. "Nuevo" es la cola por reclamar, así que la ven todos.
-          if (filter === "preparando" || filter === "completado") {
-            return o.pickerId === user?.id;
-          }
-          return true;
+          // Con el sistema de colas cada pedido se asigna a un solo picker: las
+          // tres pestañas muestran únicamente los pedidos del picker activo.
+          return o.pickerId === user?.id;
         }),
       ),
     [orders, filter, user?.id],
@@ -180,9 +177,7 @@ export default function OrderListScreen() {
           {QUEUE_FILTERS.map((t) => {
             const active = filter === t.key;
             const count = (orders ?? []).filter(
-              (o) =>
-                orderStatus(o) === t.key &&
-                (t.key === "nuevo" || o.pickerId === user?.id),
+              (o) => orderStatus(o) === t.key && o.pickerId === user?.id,
             ).length;
             return (
               <Pressable

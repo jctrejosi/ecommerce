@@ -1,19 +1,18 @@
 # Edge compartido: el ÚNICO contenedor que publica 80/443.
 #
-# Termina TLS (Let's Encrypt) para TODOS los dominios de los dos proyectos
-# (ecommerce y CRM) y reenvía a cada contenedor de aplicación por la red Docker
-# `shared_edge`:
+# Termina TLS para todos los dominios desplegados en este servidor y reenvía a
+# cada contenedor de aplicación por la red Docker `shared_edge`:
 #   - ecommerce → mercaldas_app:8080      (su Caddy interno sirve HTTP en :8080)
-#   - CRM       → mercaldas_crm_app:8080  (idem)
 #
-# Así cada proyecto conserva sus puertos PROPIOS (30180/30181 y 30280/30281, solo
-# en loopback) sin chocar con 80/443 ni con ningún servicio «genérico».
+# TLS: certificado de ORIGEN de Cloudflare (ver Caddyfile y README). El
+# certificado y su llave viven FUERA del repo, en /etc/mercaldas/edge-tls, y se
+# montan de solo lectura. Sin proxy de Cloudflare delante, el navegador no
+# confía en esa CA.
 #
 # Requisitos:
-#   1. Los dos proyectos deben estar arriba al menos una vez (el CRM y el
-#      ecommerce crean la red `shared_edge` al arrancar).
-#   2. El DNS de TODOS los dominios del `Caddyfile` debe apuntar a este servidor
-#      (Let's Encrypt los valida por HTTP-01 en el puerto 80).
+#   1. El proyecto correspondiente debe estar arriba al menos una vez (crea la
+#      red `shared_edge` al arrancar).
+#   2. El DNS de los dominios del `Caddyfile` debe apuntar a este servidor.
 #
 # Uso:
 #   docker compose -f docker-compose.yml up -d
@@ -29,6 +28,8 @@ services:
       - "${EDGE_HTTPS_PORT:-443}:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificado de origen + llave (600, root). Se gestionan en el host.
+      - /etc/mercaldas/edge-tls:/etc/caddy/edge-tls:ro
       - edge_data:/data
       - edge_config:/config
     networks:

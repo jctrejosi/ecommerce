@@ -9,6 +9,10 @@ import {
   productImages,
   media,
 } from '../../../drizzle/schema';
+import {
+  branchComparePriceSql,
+  branchPriceSql,
+} from '../../common/pricing/branch-price';
 
 export interface FeaturedTabResponse {
   id: number;
@@ -360,6 +364,7 @@ export class FeaturedProductsService {
   async getPublicTabProducts(
     slug: string,
     limit = 12,
+    branchId?: number | null,
   ): Promise<FeaturedProductResponse[]> {
     const [tab] = await this.db
       .select({ id: featuredProductTabs.id })
@@ -383,8 +388,8 @@ export class FeaturedProductsService {
         slug: products.slug,
         name: products.name,
         description: products.description,
-        price: productVariants.currentPrice,
-        originalPrice: productVariants.currentComparePrice,
+        price: branchPriceSql(branchId),
+        originalPrice: branchComparePriceSql(branchId),
         image: media.path,
         plu: products.plu,
         barcode: productVariants.barcode,

@@ -141,6 +141,8 @@ export interface PickingOrderDetailItem {
   /** Estantería sugerida (derivada de la categoría del producto). */
   shelfCode: string | null;
   shelfName: string | null;
+  /** Paso de la ruta óptima (1 = primera estantería). Null sin ubicación. */
+  routeStep: number | null;
   unitPriceGross: number;
   total: number;
 }
@@ -197,6 +199,8 @@ export interface PickingOrderDetail {
   itemsCount: number;
   totalPieces: number;
   scannedPieces: number;
+  /** Ruta óptima + ETA del alistamiento. */
+  route: { totalCells: number; estimatedMinutes: number };
   items: PickingOrderDetailItem[];
   timeline: PickingOrderStatusEvent[];
 }
@@ -261,4 +265,19 @@ export interface PickerChatConversation {
   branchName: string | null;
   unread: number;
   lastMessage: { body: string; senderType: 'picker' | 'admin'; createdAt: string | null } | null;
+}
+
+// ── Descansos y metas del picking ──
+
+export interface PickingBreakSettings {
+  /** Unidades alistadas por cada descanso ganado. */
+  productsPerBreak: number;
+  /** Minutos por descanso ganado. */
+  breakMinutes: number;
+  /** Unidades diarias para el bono (0 = sin meta). */
+  dailyProductGoal: number;
+  /** Importe del bono diario. */
+  dailyBonusAmount: number;
+  /** Días de vigencia del banco (0 = nunca caduca). */
+  bankExpiryDays: number;
 }

@@ -521,6 +521,10 @@ function OrderDetailModal({
                   <DetailField label="Picker" value={detail.pickerName?.trim() || 'Sin asignar'} />
                   <DetailField label="Revisado" value={detail.reviewed ? 'Sí' : 'No'} />
                   <DetailField label="Duración" value={fmtDuration(pickingMillisFromDetail(detail))} />
+                  <DetailField
+                    label="Ruta (ETA)"
+                    value={`~${detail.route?.estimatedMinutes ?? '—'} min · ${detail.route?.totalCells ?? '—'} celdas`}
+                  />
                 </DetailCard>
               </div>
 
@@ -618,6 +622,7 @@ function OrderDetailModal({
                             <p className="text-amber-400/80 text-[11px] font-semibold mt-0.5">
                               📍 Estantería {it.shelfCode}
                               {it.shelfName ? ` · ${it.shelfName}` : ''}
+                              {it.routeStep != null ? ` · paso ${it.routeStep}` : ''}
                             </p>
                           )}
                         </div>

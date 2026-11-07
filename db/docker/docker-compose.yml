@@ -8,8 +8,10 @@ services:
 
     restart: unless-stopped
 
-    # Sin `ports`: la BD solo se consume desde la red interna
-    # (mercaldas_internal), nunca desde el host ni desde internet.
+    # Publicado sólo en loopback: el backend y los scripts corren en el host.
+    # Para exponerlo a la LAN, cambia 127.0.0.1 por la IP o 0.0.0.0 (con firewall).
+    ports:
+      - "127.0.0.1:5432:5432"
 
     environment:
       POSTGRES_USER: postgres

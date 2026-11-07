@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { eq, and, gte, desc, asc, sql, count, sum, isNull } from 'drizzle-orm';
+import { eq, and, gte, desc, asc, sql, count, sum, isNull, inArray } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
   orders,
@@ -19,6 +19,20 @@ import {
   suppliers,
   supplierProducts,
 } from '../../../drizzle/schema';
+
+/**
+ * Estados en los que el pedido ya representa dinero cobrado (o en curso de
+ * alistamiento/entrega). Excluye `created`/`payment_pending` (aún sin pago),
+ * `cancelled` y `refunded`. Antes solo se contaba `paid`, lo que subestimaba
+ * los ingresos en cuanto el pedido avanzaba a preparación/entrega.
+ */
+const REVENUE_STATUSES = [
+  'paid',
+  'preparing',
+  'ready',
+  'shipped',
+  'delivered',
+] as const;
 
 @Injectable()
 export class DashboardService {
@@ -66,7 +80,7 @@ export class DashboardService {
           and(
             gte(orders.createdAt, todayStart),
             sql`${orders.createdAt} <= ${todayEnd}`,
-            eq(orders.status, 'paid'),
+            inArray(orders.status, REVENUE_STATUSES),
           ),
         )
         .then((r) => r[0]?.total ?? 0),
@@ -161,17 +175,92 @@ export class DashboardService {
       )
       .then((r) => r[0]?.count ?? 0);
 
+    // Pedidos de hoy por estado (para el panel operativo)
+    const statusRows = await this.db
+      .select({ status: orders.status, count: count() })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.createdAt, todayStart),
+          sql`${orders.createdAt} <= ${todayEnd}`,
+        ),
+      )
+      .groupBy(orders.status);
+    const ordersByStatus: Record<string, number> = {};
+    for (const row of statusRows) {
+      if (!row.status) continue;
+      ordersByStatus[row.status] = Number(row.count ?? 0);
+    }
+
+    // Comparativo con ayer (mismo día calendario anterior)
+    const yesterdayStart = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() - 1,
+    ).toISOString();
+    const yesterdayEnd = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0,
+      0,
+      0,
+      0,
+    ).toISOString();
+
+    const [yesterdayRevenue] = await this.db
+      .select({ total: sql<number>`coalesce(sum(${orders.grandTotal}), 0)` })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.createdAt, yesterdayStart),
+          sql`${orders.createdAt} < ${yesterdayEnd}`,
+          inArray(orders.status, REVENUE_STATUSES),
+        ),
+      );
+
+    const [yesterdayOrders] = await this.db
+      .select({ count: count() })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.createdAt, yesterdayStart),
+          sql`${orders.createdAt} < ${yesterdayEnd}`,
+        ),
+      );
+
+    // Pedidos con ingreso hoy, para el ticket promedio
+    const [todayPaid] = await this.db
+      .select({ count: count() })
+      .from(orders)
+      .where(
+        and(
+          gte(orders.createdAt, todayStart),
+          sql`${orders.createdAt} <= ${todayEnd}`,
+          inArray(orders.status, REVENUE_STATUSES),
+        ),
+      );
+    const paidTodayCount = Number(todayPaid?.count ?? 0);
+    const avgTicketToday = paidTodayCount
+      ? Number(todayRevenue) / paidTodayCount
+      : 0;
+
     return {
-      todayRevenue,
-      todayOrders,
-      activeCustomers,
-      activeProducts,
-      pendingDeliveries,
-      lowStockAlerts: lowStock,
-      activePromotions,
-      activeBanners,
-      activePopups,
-      newCustomersToday,
+      todayRevenue: Number(todayRevenue),
+      todayOrders: Number(todayOrders),
+      activeCustomers: Number(activeCustomers),
+      activeProducts: Number(activeProducts),
+      pendingDeliveries: Number(pendingDeliveries),
+      lowStockAlerts: Number(lowStock),
+      activePromotions: Number(activePromotions),
+      activeBanners: Number(activeBanners),
+      activePopups: Number(activePopups),
+      newCustomersToday: Number(newCustomersToday),
+      yesterdayRevenue: Number(yesterdayRevenue?.total ?? 0),
+      yesterdayOrders: Number(yesterdayOrders?.count ?? 0),
+      todayPaidOrders: paidTodayCount,
+      avgTicketToday,
+      ordersByStatus,
     };
   }
 
@@ -190,7 +279,7 @@ export class DashboardService {
       .where(
         and(
           gte(orders.createdAt, since.toISOString()),
-          eq(orders.status, 'paid'),
+          inArray(orders.status, REVENUE_STATUSES),
         ),
       )
       .groupBy(sql`to_char(${orders.createdAt}, 'YYYY-MM-DD')`)
@@ -201,7 +290,7 @@ export class DashboardService {
     return rows.map((r) => ({
       day: formatDayLabel(r.day),
       date: r.day,
-      revenue: r.revenue,
+      revenue: Number(r.revenue),
       orders: r.orderCount,
     }));
   }
@@ -225,7 +314,7 @@ export class DashboardService {
       .where(
         and(
           gte(orders.createdAt, since),
-          sql`${orders.status} not in ('cancelled')`,
+          inArray(orders.status, REVENUE_STATUSES),
         ),
       )
       .groupBy(categories.id, categories.name)
@@ -235,8 +324,8 @@ export class DashboardService {
     return rows.map((r) => ({
       id: r.categoryId,
       name: r.categoryName ?? `Cat ${r.categoryId}`,
-      total: r.total,
-      count: r.count,
+      total: Number(r.total),
+      count: Number(r.count),
     }));
   }
 
@@ -258,7 +347,7 @@ export class DashboardService {
       .where(
         and(
           gte(orders.createdAt, since),
-          sql`${orders.status} not in ('cancelled')`,
+          inArray(orders.status, REVENUE_STATUSES),
         ),
       )
       .groupBy(brands.id, brands.name)
@@ -268,8 +357,8 @@ export class DashboardService {
     return rows.map((r) => ({
       id: r.brandId,
       name: r.brandName ?? `Marca ${r.brandId}`,
-      total: r.total,
-      count: r.count,
+      total: Number(r.total),
+      count: Number(r.count),
     }));
   }
 
@@ -289,7 +378,7 @@ export class DashboardService {
       .where(
         and(
           gte(orders.createdAt, since),
-          sql`${orders.status} not in ('cancelled')`,
+          inArray(orders.status, REVENUE_STATUSES),
           sql`${products.productType} is not null`,
         ),
       )
@@ -300,8 +389,8 @@ export class DashboardService {
     return rows.map((r) => ({
       id: 0,
       name: r.code ?? 'Sin tipo',
-      total: r.total,
-      count: r.count,
+      total: Number(r.total),
+      count: Number(r.count),
     }));
   }
 
@@ -320,7 +409,7 @@ export class DashboardService {
       .where(
         and(
           gte(orders.createdAt, since),
-          sql`${orders.status} not in ('cancelled')`,
+          inArray(orders.status, REVENUE_STATUSES),
         ),
       )
       .groupBy(branches.id, branches.name)
@@ -330,8 +419,8 @@ export class DashboardService {
     return rows.map((r) => ({
       id: r.branchId,
       name: r.branchName ?? `Sucursal ${r.branchId}`,
-      total: r.total,
-      count: r.count,
+      total: Number(r.total),
+      count: Number(r.count),
     }));
   }
 
@@ -352,7 +441,7 @@ export class DashboardService {
       .where(
         and(
           gte(orders.createdAt, since),
-          sql`${orders.status} not in ('cancelled')`,
+          inArray(orders.status, REVENUE_STATUSES),
         ),
       )
       .groupBy(suppliers.id, suppliers.legalName)
@@ -362,8 +451,8 @@ export class DashboardService {
     return rows.map((r) => ({
       id: r.supplierId,
       name: r.supplierName ?? `Proveedor ${r.supplierId}`,
-      total: r.total,
-      count: r.count,
+      total: Number(r.total),
+      count: Number(r.count),
     }));
   }
 
@@ -670,6 +759,16 @@ export interface DashboardStats {
   activeBanners: number;
   activePopups: number;
   newCustomersToday: number;
+  /** Ingresos de ayer (mismos estados que hoy), para comparativos. */
+  yesterdayRevenue: number;
+  /** Pedidos creados ayer (todos los estados). */
+  yesterdayOrders: number;
+  /** Pedidos de hoy que ya representan ingreso. */
+  todayPaidOrders: number;
+  /** Ticket promedio de los pedidos con ingreso de hoy. */
+  avgTicketToday: number;
+  /** Conteo de pedidos de hoy agrupado por estado de la BD. */
+  ordersByStatus: Record<string, number>;
 }
 
 export interface DayStat {

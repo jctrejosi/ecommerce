@@ -166,11 +166,15 @@ export class WompiService {
   }
 
   async getTransaction(transactionId: string) {
-    if (!this.config.privateKey) {
-      throw new Error('Wompi private key no configurada');
+    // La llave pública también permite consultar transacciones; se usa como
+    // respaldo cuando no hay llave privada configurada (p. ej. pagos con el
+    // widget, donde el backend nunca crea la transacción).
+    const key = this.config.privateKey || this.config.publicKey;
+    if (!key) {
+      throw new Error('Wompi no está configurado (falta llave privada y pública)');
     }
     const response = await fetch(`${this.config.apiUrl}/transactions/${transactionId}`, {
-      headers: { Authorization: `Bearer ${this.config.privateKey}` },
+      headers: { Authorization: `Bearer ${key}` },
     });
     return response.json();
   }

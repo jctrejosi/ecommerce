@@ -19,6 +19,8 @@ import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../../common/guards/optional-jwt-auth.guard';
 import { SendPickerMessageDto } from './dto/send-picker-message.dto';
 import { PickerChatService } from './picker-chat.service';
+import { PickerBreakService } from './picker-break.service';
+import { PickerQueueService } from './picker-queue.service';
 import { PickingService } from './picking.service';
 
 @ApiTags('Picking')
@@ -27,6 +29,8 @@ export class PickingController {
   constructor(
     private readonly pickingService: PickingService,
     private readonly chat: PickerChatService,
+    private readonly breaks: PickerBreakService,
+    private readonly queueService: PickerQueueService,
   ) {}
 
   /** Cola de picking: pedidos que entran al alistamiento (o filtrados por estado). */
@@ -73,6 +77,29 @@ export class PickingController {
   @ApiOperation({ summary: 'Marcar pedido como revisado (reviewedAt)' })
   async markReviewed(@Param('id', ParseIntPipe) id: number) {
     return this.pickingService.markReviewed(id);
+  }
+
+  // ─── Disponibilidad del picker (sistema de colas) ─────────────────────────
+
+  /** El picker se marca disponible o en pausa para recibir pedidos. */
+  @Post('availability')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Marcar disponibilidad del picker (true|false)' })
+  async setAvailability(
+    @CurrentUser('sub') userId: bigint,
+    @Body() body: { available: boolean },
+  ) {
+    return this.queueService.setAvailability(Number(userId), Boolean(body?.available));
+  }
+
+  /** La app avisa que sigue abierta (heartbeat): refresca last_seen_at. */
+  @Post('heartbeat')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Heartbeat del picker (última señal de vida)' })
+  async heartbeat(@CurrentUser('sub') userId: bigint) {
+    return this.queueService.heartbeat(Number(userId));
   }
 
   @Post('orders/:id/claim')
@@ -132,6 +159,28 @@ export class PickingController {
       if (e instanceof NotFoundException || e instanceof ConflictException) throw e;
       throw new BadRequestException(e instanceof Error ? e.message : 'Error al completar');
     }
+  }
+
+  // ─── Descansos y metas ─────────────────────────────────────────────────────
+
+  /** Banco de minutos, progreso del día, meta/bono y últimos movimientos. */
+  @Get('breaks')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Descansos acumulados y avance de la meta diaria del picker' })
+  async breaksSummary(@CurrentUser('sub') userId: bigint) {
+    return this.breaks.summary(Number(userId));
+  }
+
+  /** Reclama minutos del banco para tomar el descanso. */
+  @Post('breaks/use')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Reclamar minutos de descanso acumulados' })
+  async useBreak(
+    @CurrentUser('sub') userId: bigint,
+    @Body() body: { minutes: number },
+  ) {
+    return this.breaks.useBreak(Number(userId), Number(body?.minutes));
   }
 
   // ─── Chat con el panel (administración) ────────────────────────────────────

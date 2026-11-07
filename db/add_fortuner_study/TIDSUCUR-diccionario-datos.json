@@ -1,0 +1,165 @@
+{
+  "tabla": "TIDSUCUR",
+  "nombre_completo": "Sucursales y puntos de venta",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDSUCUR.adt",
+  "descripcion": "Maestro de sucursales/puntos de venta con 151 registros (S.MERCALDAS CENTRO, F.MERCALDAS CENTRO, C.MERCALDAS CENTRO, MERCALDAS ELECTROD...): codigo de 3 posiciones, nombre, direccion, carpeta de red de traslados y pedidos. OJO: no son las bodegas de inventario; esas son TIDBODE (3 registros: 1, 2 y 11).",
+  "registros": 151,
+  "clave_primaria": null,
+  "total_columnas": 12,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [
+    {
+      "campo": "CODIGO",
+      "referencia": "TIDSAL.INSUC / FADDIA.FASUCUR",
+      "nota": "Sucursal usada en todo el ERP.",
+      "confianza": "alta"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "SUCURSAL",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo de la sucursal/punto de venta (3 posiciones)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "CTNOMBRE",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre de la sucursal/punto",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "CTDIREC",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Direccion",
+      "confianza": "media"
+    },
+    {
+      "idx": 3,
+      "columna": "CTANOANT",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Año anterior (comparativo)",
+      "confianza": "baja"
+    },
+    {
+      "idx": 4,
+      "columna": "MARCA",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Marca/indicador de la sucursal",
+      "confianza": "baja"
+    },
+    {
+      "idx": 5,
+      "columna": "CANT",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Cantidad configurada",
+      "confianza": "baja"
+    },
+    {
+      "idx": 6,
+      "columna": "CANT2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Segunda cantidad configurada",
+      "confianza": "baja"
+    },
+    {
+      "idx": 7,
+      "columna": "CARGA",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Carga/parametro de la sucursal",
+      "confianza": "baja"
+    },
+    {
+      "idx": 8,
+      "columna": "CARPETA",
+      "tipo": "char",
+      "bytes": 40,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Carpeta de red de traslados",
+      "confianza": "media"
+    },
+    {
+      "idx": 9,
+      "columna": "CTNPED",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Numero de pedidos asociado",
+      "confianza": "baja"
+    },
+    {
+      "idx": 10,
+      "columna": "SUCUR2",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo de sucursal secundario",
+      "confianza": "baja"
+    },
+    {
+      "idx": 11,
+      "columna": "CLACOMP",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Clase/compania de la sucursal",
+      "confianza": "baja"
+    }
+  ]
+}

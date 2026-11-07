@@ -78,6 +78,23 @@ cp .env.example .env   # pon DATABASE_URL (local o Supabase) y DEEPSEEK_API_KEY
 La BD local se levanta con `cd db/docker && docker compose up -d`
 (`postgresql://postgres:postgres@localhost:5432/ecommerce`).
 
+## Pruebas
+
+```bash
+cd bot
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest -q            # suite completa
+.venv/bin/python -m pytest -q -m "not integration"   # sin Docker
+.venv/bin/python -m pytest -q --cov=app --cov-report=term-missing
+```
+
+- Las pruebas unitarias mockean `app.database` y `app.deepseek`: nunca tocan
+  la BD real ni la API de DeepSeek (hay una red de seguridad en `conftest.py`
+  que prohíbe abrir conexiones asyncpg).
+- `tests/test_integration_postgres.py` levanta `postgres:16-alpine` con
+  Testcontainers y se salta con motivo explícito si Docker no está disponible
+  o la imagen no está descargada localmente.
+
 ## Despliegue (Render)
 
 1. Crea un servicio *Web Service* apuntando a `jctrejosi/mercaldas-ecommerce`,

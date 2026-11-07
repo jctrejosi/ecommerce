@@ -1,0 +1,125 @@
+{
+  "tabla": "CONREMAE",
+  "nombre_completo": "Encabezado de relacion de costos",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\CONREMAE.adt",
+  "descripcion": "Cabecera del lote de relacion (RMLOTE) con concepto, fecha, valor total y documento de origen. Uso contable interno.",
+  "registros": null,
+  "clave_primaria": null,
+  "total_columnas": 9,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "RMLOTE",
+      "tipo": "char",
+      "bytes": 12,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Lote",
+      "confianza": "media"
+    },
+    {
+      "idx": 1,
+      "columna": "RMCONCEP",
+      "tipo": "char",
+      "bytes": 50,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 2,
+      "columna": "RMFECHA",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha",
+      "confianza": "media"
+    },
+    {
+      "idx": 3,
+      "columna": "RMVLRTOT",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 4,
+      "columna": "RMCODCON",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 5,
+      "columna": "RMTDOCUM",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Unidad de medida",
+      "confianza": "media"
+    },
+    {
+      "idx": 6,
+      "columna": "RMTCOMPR",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 7,
+      "columna": "RMACTU",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 8,
+      "columna": "CIA",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    }
+  ]
+}

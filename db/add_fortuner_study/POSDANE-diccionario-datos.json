@@ -1,0 +1,57 @@
+{
+  "tabla": "POSDANE",
+  "nombre_completo": "Catalogo DANE de departamentos y municipios",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\POSDANE.adt",
+  "descripcion": "Division politico-administrativa de Colombia; se usa en direcciones y codigos de ciudad (CODIGO es texto).",
+  "registros": 1647,
+  "clave_primaria": null,
+  "total_columnas": 2,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {
+    "CODIGO": "Es texto, aunque parezca numerico."
+  },
+  "relaciones": [
+    {
+      "campo": "CODIGO",
+      "referencia": "TIDBODE.CODCIU",
+      "nota": "Codigo de ciudad de la bodega.",
+      "confianza": "media"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "CODIGO",
+      "tipo": "char",
+      "bytes": 15,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo DANE del departamento/municipio",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "NOMBRE",
+      "tipo": "char",
+      "bytes": 25,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre del departamento/municipio",
+      "confianza": "alta"
+    }
+  ]
+}

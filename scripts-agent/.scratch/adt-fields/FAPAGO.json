@@ -1,7 +1,7 @@
 {
   "table": "FAPAGO",
-  "source": "db/ADD_ANALITICA/FAPAGO.ADT",
-  "bytes": 363996330,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/FAPAGO.ADT",
+  "bytes": 262144,
   "recordCount": 2141129,
   "recordLength": 170,
   "headerLength": 4400,

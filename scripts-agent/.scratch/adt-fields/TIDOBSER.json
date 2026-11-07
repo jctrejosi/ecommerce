@@ -1,7 +1,7 @@
 {
   "table": "TIDOBSER",
-  "source": "db/ADD_ANALITICA/TIDOBSER.ADT",
-  "bytes": 346589,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDOBSER.ADT",
+  "bytes": 262144,
   "recordCount": 1281,
   "recordLength": 269,
   "headerLength": 2000,

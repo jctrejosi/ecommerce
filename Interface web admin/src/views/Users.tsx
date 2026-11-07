@@ -64,9 +64,9 @@ function Modal({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
-      <div className="mt-10 w-full max-w-lg bg-white rounded-2xl shadow-xl">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="flex flex-col w-full max-w-lg max-h-[90vh] bg-white rounded-2xl shadow-xl">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 shrink-0">
           <h3 className="font-semibold text-gray-900">{title}</h3>
           <button
             onClick={onClose}
@@ -75,7 +75,7 @@ function Modal({
             <X size={16} />
           </button>
         </div>
-        <div className="p-5">{children}</div>
+        <div className="p-5 overflow-y-auto flex-1 min-h-0">{children}</div>
       </div>
     </div>
   );
@@ -187,6 +187,16 @@ export default function UsersView() {
     });
   }
 
+  function toggleGroup(codes: string[]) {
+    setSelectedCodes((prev) => {
+      const next = new Set(prev);
+      const allSelected = codes.every((c) => next.has(c));
+      if (allSelected) codes.forEach((c) => next.delete(c));
+      else codes.forEach((c) => next.add(c));
+      return next;
+    });
+  }
+
   async function savePermissions() {
     if (!selectedRole) return;
     setSavingPerms(true);
@@ -280,6 +290,7 @@ export default function UsersView() {
                 }
               }}
               onTogglePermission={togglePermission}
+              onToggleGroup={toggleGroup}
               onSavePermissions={savePermissions}
             />
           )}
@@ -460,6 +471,90 @@ function UserTab({
 
 /* ── Roles y permisos ─────────────────────────────────────────────────────── */
 
+type PermItem = { id: number; code: string; description: string | null; module: string };
+
+type PermGroup = {
+  key: string;
+  title: string | null;
+  items: PermItem[];
+};
+
+type PermSection = {
+  key: string;
+  title: string;
+  groups: PermGroup[];
+};
+
+const CATALOG_SUBMODULE_LABELS: Record<string, string> = {
+  products: "Productos",
+  categories: "Categorías",
+  "product-types": "Tipos de producto",
+  brands: "Marcas",
+  suppliers: "Proveedores",
+  branches: "Sucursales",
+  inventory: "Inventario",
+  filters: "Filtros",
+};
+const CATALOG_SUBMODULE_ORDER = Object.keys(CATALOG_SUBMODULE_LABELS);
+const ADMIN_SECTION_LABELS = [
+  "Pedidos",
+  "Clientes",
+  "Promociones",
+  "Contenido",
+  "Configuración",
+  "Usuarios",
+];
+
+/**
+ * Convierte la lista plana agrupada por `module` (que devuelve el backend) en
+ * una jerarquía legible: Web Admin (Dashboard → Catálogo por submódulo → resto),
+ * Delivery Admin y Picking Admin.
+ */
+function buildPermissionSections(modules: PermissionModule[]): PermSection[] {
+  const flat: PermItem[] = modules.flatMap((m) =>
+    m.permissions.map((p) => ({ ...p, module: m.module })),
+  );
+  const groups: PermGroup[] = [];
+  const push = (key: string, title: string | null, items: PermItem[]) => {
+    if (items.length) groups.push({ key, title, items });
+  };
+
+  push("dashboard", null, flat.filter((p) => p.module === "Dashboard"));
+
+  for (const sub of CATALOG_SUBMODULE_ORDER) {
+    push(
+      `catalog:${sub}`,
+      CATALOG_SUBMODULE_LABELS[sub],
+      flat.filter((p) => p.code.startsWith(`admin:catalog:${sub}:`)),
+    );
+  }
+
+  for (const label of ADMIN_SECTION_LABELS) {
+    push(label.toLowerCase(), null, flat.filter((p) => p.module === label));
+  }
+
+  const delivery = flat.filter((p) => p.code.startsWith("delivery:"));
+  const picking = flat.filter((p) => p.code.startsWith("picking:"));
+
+  const sections: PermSection[] = [];
+  if (groups.length) sections.push({ key: "admin", title: "Web Admin", groups });
+  if (delivery.length) {
+    sections.push({
+      key: "delivery",
+      title: "Delivery Admin",
+      groups: [{ key: "delivery", title: null, items: delivery }],
+    });
+  }
+  if (picking.length) {
+    sections.push({
+      key: "picking",
+      title: "Picking Admin",
+      groups: [{ key: "picking", title: null, items: picking }],
+    });
+  }
+  return sections;
+}
+
 function RoleTab({
   roles,
   permissionModules,
@@ -471,6 +566,7 @@ function RoleTab({
   onEditRole,
   onDeleteRole,
   onTogglePermission,
+  onToggleGroup,
   onSavePermissions,
 }: {
   roles: Role[];
@@ -483,6 +579,7 @@ function RoleTab({
   onEditRole: (r: Role) => void;
   onDeleteRole: (r: Role) => void;
   onTogglePermission: (code: string) => void;
+  onToggleGroup: (codes: string[]) => void;
   onSavePermissions: () => void;
 }) {
   return (
@@ -563,38 +660,62 @@ function RoleTab({
           </div>
 
           <div className="divide-y divide-gray-50">
-            {permissionModules.map((mod) => (
-              <div key={mod.module} className="px-5 py-4">
+            {buildPermissionSections(permissionModules).map((section) => (
+              <div key={section.key} className="px-5 py-4">
                 <p className="text-xs font-bold uppercase tracking-wide text-gray-500 mb-3">
-                  {mod.module === "admin"
-                    ? "Web Admin"
-                    : mod.module === "delivery"
-                      ? "Delivery Admin"
-                      : "Picking Admin"}
+                  {section.title}
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                  {mod.permissions.map((p) => {
-                    const active = selectedCodes.has(p.code);
+                <div className="space-y-4">
+                  {section.groups.map((group) => {
+                    const allSelected =
+                      group.items.length > 0 &&
+                      group.items.every((p) => selectedCodes.has(p.code));
                     return (
-                      <button
-                        key={p.code}
-                        onClick={() => onTogglePermission(p.code)}
-                        className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-sm transition-colors ${
-                          active ? "bg-amber-50 text-gray-800" : "text-gray-500 hover:bg-gray-50"
-                        }`}
-                      >
-                        <span
-                          className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
-                            active ? "bg-amber-400 border-amber-400 text-amber-900" : "border-gray-300"
-                          }`}
-                        >
-                          {active && <Check size={11} />}
-                        </span>
-                        <span>
-                          <span className="block font-medium">{p.description}</span>
-                          <span className="block text-[11px] text-gray-400 font-mono">{p.code}</span>
-                        </span>
-                      </button>
+                      <div key={group.key}>
+                        {group.title && (
+                          <div className="flex items-center justify-between mb-2">
+                            <p className="text-sm font-semibold text-gray-700">
+                              {group.title}
+                            </p>
+                            {group.items.length > 1 && (
+                              <button
+                                onClick={() =>
+                                  onToggleGroup(group.items.map((p) => p.code))
+                                }
+                                className="text-xs font-semibold text-amber-600 hover:text-amber-700"
+                              >
+                                {allSelected ? "Quitar todos" : "Seleccionar todo"}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+                          {group.items.map((p) => {
+                            const active = selectedCodes.has(p.code);
+                            return (
+                              <button
+                                key={p.code}
+                                onClick={() => onTogglePermission(p.code)}
+                                className={`flex items-center gap-2 px-3 py-2 rounded-xl text-left text-sm transition-colors ${
+                                  active ? "bg-amber-50 text-gray-800" : "text-gray-500 hover:bg-gray-50"
+                                }`}
+                              >
+                                <span
+                                  className={`w-4 h-4 rounded flex items-center justify-center shrink-0 border ${
+                                    active ? "bg-amber-400 border-amber-400 text-amber-900" : "border-gray-300"
+                                  }`}
+                                >
+                                  {active && <Check size={11} />}
+                                </span>
+                                <span>
+                                  <span className="block font-medium">{p.description}</span>
+                                  <span className="block text-[11px] text-gray-400 font-mono">{p.code}</span>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>

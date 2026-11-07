@@ -6,14 +6,20 @@ import {
   HttpStatus,
   BadRequestException,
   Put,
+  UseGuards,
 } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { DrizzleService } from '../../database/drizzle.service';
 import { WompiService } from '../payments/wompi.service';
 import { store, settings } from '../../../drizzle/schema';
 
 @Controller('admin/settings')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:settings:manage')
 export class SettingsController {
   constructor(
     private readonly drizzle: DrizzleService,
@@ -124,7 +130,7 @@ export class SettingsController {
       }
     }
 
-    // Bre-B: requiere una llave válida.
+    // Bre-B: requiere una llave válida para mostrarle al cliente.
     if (next?.breb?.enabled === true && !wasEnabled('breb')) {
       const key = String(next?.breb?.key ?? '').trim();
       if (key.length < 3 || /\s/.test(key)) {
@@ -143,7 +149,7 @@ export class SettingsController {
     const defaults = {
       efectivo: { enabled: true },
       wompi: { enabled: true, methods: { card: true, pse: true, nequi: true } },
-      breb: { enabled: true, key: '@davi3148853458', bank: 'Davivienda', qrImageUrl: '' },
+      breb: { enabled: true, key: '@davi3148853458', bank: 'Davivienda' },
     };
     if (!row) {
       return defaults;
@@ -163,8 +169,6 @@ export class SettingsController {
         enabled: value?.breb?.enabled ?? true,
         key: value?.breb?.key ?? '@davi3148853458',
         bank: value?.breb?.bank ?? 'Davivienda',
-        qrImageUrl: value?.breb?.qrImageUrl ?? '',
-        qrImageMime: value?.breb?.qrImageMime ?? null,
       },
     };
   }

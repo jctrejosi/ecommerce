@@ -6,6 +6,7 @@ import type {
   CategoryOrganization,
   PickerChatConversation,
   PickerChatMessage,
+  PickingBreakSettings,
   PickerHistory,
   PickerSummary,
   PickingAdminOrdersResponse,
@@ -259,6 +260,16 @@ export const api = {
 
   pickerHistory: (id: number) =>
     fetchJson<PickerHistory>(`/picking-admin/pickers/${id}/history`),
+
+  // ─── Configuración de descansos/metas ──────────────────────────────────────
+  pickingSettings: () =>
+    fetchJson<PickingBreakSettings>('/picking-admin/settings'),
+
+  updatePickingSettings: (patch: Partial<PickingBreakSettings>) =>
+    fetchJson<PickingBreakSettings>('/picking-admin/settings', {
+      method: 'PUT',
+      body: JSON.stringify(patch),
+    }),
 
   // ─── Chat con pickers ──────────────────────────────────────────────────────
   chatConversations: () => fetchJson<PickerChatConversation[]>('/picking-admin/chats'),

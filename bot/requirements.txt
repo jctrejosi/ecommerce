@@ -1,9 +1,9 @@
-fastapi==0.141.1
-uvicorn[standard]==0.52.1
-python-dotenv==1.2.2
+fastapi==0.162.0
+uvicorn[standard]==0.54.0
+python-dotenv==1.2.4
 
 # PostgreSQL
-asyncpg==0.31.0
+asyncpg==0.32.0
 
 # HTTP client (DeepSeek API)
 httpx==0.28.1

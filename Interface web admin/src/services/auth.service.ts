@@ -13,6 +13,10 @@ export type UserProfile = {
   avatarUrl?: string | null;
   isSuperuser: boolean;
   isActive: boolean;
+  /** Nombres de los roles asignados. */
+  roles?: string[];
+  /** Códigos de permiso efectivos (`*` para superusuario). */
+  permissions?: string[];
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;

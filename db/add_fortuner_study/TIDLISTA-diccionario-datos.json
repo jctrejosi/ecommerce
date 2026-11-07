@@ -1,0 +1,299 @@
+{
+  "tabla": "TIDLISTA",
+  "nombre_completo": "Lista de precios y descuentos por proveedor y articulo",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDLISTA.adt",
+  "descripcion": "Valores y descuentos que fija cada proveedor para cada articulo: valor de lista, valores alternos (costo con descuento), hasta seis descuentos escalonados y vigencia. 1.587 proveedores, 60.826 articulos, 68.017 filas. OJO: no es la lista de precios de venta del catalogo; esos precios viven en TIDSAL.INVRVENTA1..INVRVENTA0.",
+  "registros": 68017,
+  "clave_primaria": null,
+  "total_columnas": 24,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {
+    "llave": "Los precios por lista/articulo viven en TIDPRECI."
+  },
+  "relaciones": [
+    {
+      "campo": "CODIGO",
+      "referencia": "TIDPRECI.LISTA",
+      "nota": "Lista de precios.",
+      "confianza": "media"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "INPROVEE",
+      "tipo": "char",
+      "bytes": 10,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo del proveedor que fija la lista",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "INARTIC",
+      "tipo": "char",
+      "bytes": 19,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo del articulo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "INDCTO1",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Porcentaje de descuento 1",
+      "confianza": "media"
+    },
+    {
+      "idx": 3,
+      "columna": "INDCTO2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Porcentaje de descuento 2",
+      "confianza": "media"
+    },
+    {
+      "idx": 4,
+      "columna": "INDCTO3",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Porcentaje de descuento 3",
+      "confianza": "media"
+    },
+    {
+      "idx": 5,
+      "columna": "INVLRANT",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor anterior",
+      "confianza": "baja"
+    },
+    {
+      "idx": 6,
+      "columna": "INVALOR",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor de lista del proveedor",
+      "confianza": "media"
+    },
+    {
+      "idx": 7,
+      "columna": "INVALOR1",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor alterno (costo con descuento)",
+      "confianza": "media"
+    },
+    {
+      "idx": 8,
+      "columna": "INFECHA1",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha inicial de vigencia (YYYYMMDD)",
+      "confianza": "media"
+    },
+    {
+      "idx": 9,
+      "columna": "INFECHA2",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha final de vigencia (YYYYMMDD)",
+      "confianza": "media"
+    },
+    {
+      "idx": 10,
+      "columna": "INFECHA3",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha",
+      "confianza": "media"
+    },
+    {
+      "idx": 11,
+      "columna": "INVALOR2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Segundo valor alterno",
+      "confianza": "baja"
+    },
+    {
+      "idx": 12,
+      "columna": "INACTIVO",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Estado de la lista (A = activa)",
+      "confianza": "media"
+    },
+    {
+      "idx": 13,
+      "columna": "INDCTO4",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Porcentaje de descuento 4",
+      "confianza": "baja"
+    },
+    {
+      "idx": 14,
+      "columna": "INDCTO5",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Porcentaje de descuento 5",
+      "confianza": "baja"
+    },
+    {
+      "idx": 15,
+      "columna": "INDCTO6",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Porcentaje de descuento 6",
+      "confianza": "baja"
+    },
+    {
+      "idx": 16,
+      "columna": "INVLRAN2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor anterior alterno",
+      "confianza": "baja"
+    },
+    {
+      "idx": 17,
+      "columna": "INVALO2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Tercer valor alterno",
+      "confianza": "baja"
+    },
+    {
+      "idx": 18,
+      "columna": "MODPRE",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Modo/parametro de precio",
+      "confianza": "baja"
+    },
+    {
+      "idx": 19,
+      "columna": "INNOMBRE",
+      "tipo": "char",
+      "bytes": 50,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre del articulo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 20,
+      "columna": "INIMPC",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Impoconsumo",
+      "confianza": "baja"
+    },
+    {
+      "idx": 21,
+      "columna": "INFCHREG",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha de registro",
+      "confianza": "baja"
+    },
+    {
+      "idx": 22,
+      "columna": "INIMP3",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Tercer impuesto",
+      "confianza": "baja"
+    },
+    {
+      "idx": 23,
+      "columna": "CODVER",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo de version",
+      "confianza": "baja"
+    }
+  ]
+}

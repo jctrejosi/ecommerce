@@ -67,6 +67,7 @@ function ZoomImage({ src, alt }: { src?: string; alt: string }) {
 
 export function ProductDetailModal({
   product,
+  branchId,
   cartItems,
   onAdd,
   onRemove,
@@ -103,7 +104,10 @@ export function ProductDetailModal({
 
     const loadRelatedProducts = async () => {
       if (!product) return;
-      const related = await catalogService.getRelatedProducts(product);
+      const related = await catalogService.getRelatedProducts(
+        product,
+        branchId ?? undefined,
+      );
       if (mounted) {
         setRelatedProducts(related.slice(0, 4));
       }
@@ -114,7 +118,7 @@ export function ProductDetailModal({
     return () => {
       mounted = false;
     };
-  }, [product]);
+  }, [product, branchId]);
 
   useEffect(() => {
     let mounted = true;
@@ -123,7 +127,7 @@ export function ProductDetailModal({
       return;
     }
     catalogService
-      .getProductDetail(product.id)
+      .getProductDetail(product.id, branchId ?? undefined)
       .then((d) => {
         if (mounted) setDetail(d);
       })
@@ -131,7 +135,7 @@ export function ProductDetailModal({
     return () => {
       mounted = false;
     };
-  }, [product?.id]);
+  }, [product?.id, branchId]);
 
   if (!product) return null;
 

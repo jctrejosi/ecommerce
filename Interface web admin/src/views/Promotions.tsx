@@ -7,11 +7,9 @@ import {
   Edit,
   Trash2,
   Loader2,
-  ChevronDown,
   Clock,
   Package,
   User,
-  Tag,
   Zap,
 } from "lucide-react";
 import {
@@ -19,9 +17,8 @@ import {
   type Promotion,
   type PromotionStats,
   type PromotionUsage,
-  type CreatePromotionData,
-  type DiscountType,
 } from "../services/promotions.service";
+import { PromotionModal } from "./promotions/PromotionModal";
 
 const STATUS_BADGE: Record<string, string> = {
   activo: "bg-green-50 text-green-700 border-green-200",
@@ -37,11 +34,7 @@ const STATUS_LABEL: Record<string, string> = {
   expirado: "Expirado",
 };
 
-const DISCOUNT_TYPES: { id: DiscountType; label: string; icon: string }[] = [
-  { id: "porcentaje", label: "% Descuento", icon: "%" },
-  { id: "fijo", label: "Monto fijo", icon: "$" },
-  { id: "cupon", label: "Cupón", icon: "🎟️" },
-];
+const WEEKDAY_LABEL = ["D", "L", "M", "X", "J", "V", "S"];
 
 function formatCurrency(n: number): string {
   return "$" + n.toLocaleString("es-CO");
@@ -55,346 +48,7 @@ function formatDate(dateStr: string): string {
   });
 }
 
-function toLocalDatetime(dateStr: string): string {
-  if (!dateStr) return "";
-  const d = new Date(dateStr);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 type ActiveCard = "activas" | "programadas" | "usosHoy" | null;
-
-// ── Modal for creating / editing ──
-
-function PromotionModal({
-  promotion,
-  onClose,
-  onSaved,
-}: {
-  promotion: Promotion | null;
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const isEdit = !!promotion;
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-
-  const [name, setName] = useState(promotion?.name ?? "");
-  const [description, setDescription] = useState(promotion?.description ?? "");
-  const [discountType, setDiscountType] = useState<DiscountType>(
-    promotion?.discountType ?? "porcentaje",
-  );
-  const [discountValue, setDiscountValue] = useState(
-    promotion?.discountValue ? promotion.discountValue.replace(/\D/g, "") : "",
-  );
-  const [couponCode, setCouponCode] = useState(promotion?.couponCode ?? "");
-  const [maxUsesTotal, setMaxUsesTotal] = useState(
-    promotion?.couponMaxUsesTotal?.toString() ?? "",
-  );
-  const [maxUsesPerCustomer, setMaxUsesPerCustomer] = useState(
-    promotion?.couponMaxUsesPerCustomer?.toString() ?? "1",
-  );
-  const [usageLimit, setUsageLimit] = useState(
-    promotion?.usageLimit?.toString() ?? "",
-  );
-  const [startDate, setStartDate] = useState(
-    toLocalDatetime(promotion?.startDate ?? new Date().toISOString()),
-  );
-  const [endDate, setEndDate] = useState(
-    toLocalDatetime(
-      promotion?.endDate ??
-        new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-    ),
-  );
-  const [isActive, setIsActive] = useState(promotion?.isActive ?? true);
-  const [priority, setPriority] = useState(promotion?.priority?.toString() ?? "0");
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      setError("El nombre es obligatorio");
-      return;
-    }
-    if (!discountValue || parseInt(discountValue) <= 0) {
-      setError("Ingresa un valor de descuento válido");
-      return;
-    }
-    if (discountType === "cupon" && !couponCode.trim()) {
-      setError("El código de cupón es obligatorio");
-      return;
-    }
-    if (!startDate || !endDate) {
-      setError("Las fechas de inicio y fin son obligatorias");
-      return;
-    }
-
-    setError("");
-    setSaving(true);
-    try {
-      const data: CreatePromotionData = {
-        name: name.trim(),
-        description: description.trim() || undefined,
-        discountType,
-        discountValue: parseInt(discountValue),
-        couponCode: discountType === "cupon" ? couponCode.trim().toUpperCase() : undefined,
-        maxUsesTotal: maxUsesTotal ? parseInt(maxUsesTotal) : undefined,
-        maxUsesPerCustomer: parseInt(maxUsesPerCustomer) || 1,
-        usageLimit: usageLimit ? parseInt(usageLimit) : undefined,
-        startDate: new Date(startDate).toISOString(),
-        endDate: new Date(endDate).toISOString(),
-        isActive,
-        priority: parseInt(priority) || 0,
-      };
-
-      if (isEdit && promotion) {
-        await promotionsService.update(promotion.id, data);
-      } else {
-        await promotionsService.create(data);
-      }
-      onSaved();
-    } catch (e: any) {
-      setError(e.message || "Error al guardar la promoción");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const valuePrefix = discountType === "porcentaje" ? "%" : "$";
-  const valuePlaceholder = discountType === "porcentaje" ? "20" : "10000";
-
-  return (
-    <div className="fixed inset-0 z-50 flex">
-      <div className="flex-1 bg-black/40" onClick={onClose} />
-      <div className="w-full max-w-xl bg-white shadow-2xl flex flex-col overflow-y-auto">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 sticky top-0 bg-white z-10">
-          <h2 className="font-bold text-gray-900">
-            {isEdit ? "Editar Promoción" : "Nueva Promoción"}
-          </h2>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-500"
-          >
-            <X size={16} />
-          </button>
-        </div>
-
-        <div className="p-6 space-y-5">
-          {error && (
-            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl px-4 py-2.5">
-              {error}
-            </div>
-          )}
-
-          {/* Nombre */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Nombre de la promoción *
-            </label>
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-              placeholder="Ej: Flash Sale Viernes"
-            />
-          </div>
-
-          {/* Descripción */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Descripción
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={2}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 resize-none"
-              placeholder="Descripción opcional..."
-            />
-          </div>
-
-          {/* Tipo de descuento */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-2">
-              Tipo de descuento
-            </label>
-            <div className="grid grid-cols-4 gap-2">
-              {DISCOUNT_TYPES.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => setDiscountType(t.id)}
-                  className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border-2 transition-all ${
-                    discountType === t.id
-                      ? "border-amber-400 bg-amber-50"
-                      : "border-gray-200 hover:border-gray-300"
-                  }`}
-                >
-                  <span className="text-lg">{t.icon}</span>
-                  <span className="text-xs font-medium text-gray-600">
-                    {t.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Valor + Código */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                Valor del descuento *
-              </label>
-              <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden focus-within:ring-2 focus-within:ring-amber-300">
-                <span className="px-3 py-2.5 text-sm text-gray-500 bg-gray-50 border-r border-gray-200">
-                  {valuePrefix}
-                </span>
-                <input
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value.replace(/\D/g, ""))}
-                  className="flex-1 px-3 py-2.5 text-sm focus:outline-none"
-                  placeholder={valuePlaceholder}
-                />
-              </div>
-            </div>
-            {discountType === "cupon" && (
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Código del cupón *
-                </label>
-                <input
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 uppercase font-mono"
-                  placeholder="FRUTAS20"
-                />
-              </div>
-            )}
-          </div>
-
-          {/* Límites de uso (cupón) */}
-          {discountType === "cupon" && (
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Máx. usos totales
-                </label>
-                <input
-                  value={maxUsesTotal}
-                  onChange={(e) => setMaxUsesTotal(e.target.value.replace(/\D/g, ""))}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-                  placeholder="Sin límite"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-                  Máx. usos por cliente
-                </label>
-                <input
-                  value={maxUsesPerCustomer}
-                  onChange={(e) => setMaxUsesPerCustomer(e.target.value.replace(/\D/g, ""))}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-                  placeholder="1"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Límite de usos general */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-1.5">
-              Límite de usos de la promoción
-            </label>
-            <input
-              value={usageLimit}
-              onChange={(e) => setUsageLimit(e.target.value.replace(/\D/g, ""))}
-              className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-              placeholder="Sin límite (vacío = ilimitado)"
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              Cantidad máxima de veces que se puede aplicar esta promoción.
-            </p>
-          </div>
-
-          {/* Fechas - Programación */}
-          <div>
-            <label className="block text-xs font-semibold text-gray-600 mb-2">
-              Programación
-            </label>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Fecha y hora de inicio *
-                </label>
-                <input
-                  type="datetime-local"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-                />
-              </div>
-              <div>
-                <label className="block text-xs text-gray-500 mb-1">
-                  Fecha y hora de fin *
-                </label>
-                <input
-                  type="datetime-local"
-                  value={endDate}
-                  onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Configuración */}
-          <div className="space-y-3">
-            <label className="block text-xs font-semibold text-gray-600">
-              Configuración adicional
-            </label>
-
-            <label className="flex items-center gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={isActive}
-                onChange={(e) => setIsActive(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-300 text-amber-500 focus:ring-amber-300"
-              />
-              <span className="text-sm text-gray-700">Promoción activa</span>
-            </label>
-
-            <div className="flex items-center gap-4">
-              <label className="text-xs text-gray-500 w-20">Prioridad</label>
-              <input
-                value={priority}
-                onChange={(e) => setPriority(e.target.value.replace(/\D/g, ""))}
-                className="w-20 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-300 text-center"
-              />
-              <span className="text-xs text-gray-400">
-                Mayor número = más prioridad
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-6 py-4 border-t border-gray-100 bg-gray-50 sticky bottom-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 disabled:opacity-50 rounded-xl transition-colors"
-          >
-            {saving && <Loader2 size={14} className="animate-spin" />}
-            {isEdit ? "Guardar cambios" : "Crear Promoción"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Usages detail modal ──
 
@@ -464,14 +118,10 @@ function UsagesModal({
                 {u.order && (
                   <div className="flex items-center gap-2 text-xs text-gray-500">
                     <Package size={12} />
-                    <span className="font-mono">
-                      #{u.order.orderNumber}
-                    </span>
+                    <span className="font-mono">#{u.order.orderNumber}</span>
                     <span className="text-gray-300">·</span>
                     <span>
-                      {formatCurrency(
-                        parseInt(u.order.total || "0"),
-                      )}
+                      {formatCurrency(parseInt(u.order.total || "0"))}
                     </span>
                     <span className="text-gray-300">·</span>
                     <span>{u.order.status}</span>
@@ -487,8 +137,7 @@ function UsagesModal({
                 )}
                 {u.discountAmount && (
                   <div className="text-xs font-medium text-green-600">
-                    Descuento:{" "}
-                    {formatCurrency(parseInt(u.discountAmount))}
+                    Descuento: {formatCurrency(parseInt(u.discountAmount))}
                   </div>
                 )}
               </div>
@@ -509,7 +158,9 @@ export default function Promotions() {
   const [search, setSearch] = useState("");
   const [activeCard, setActiveCard] = useState<ActiveCard>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(null);
+  const [editingPromotion, setEditingPromotion] = useState<Promotion | null>(
+    null,
+  );
   const [usagesModal, setUsagesModal] = useState<{
     promotionId: number;
     promotionName: string;
@@ -521,7 +172,8 @@ export default function Promotions() {
     try {
       const [promos, statsData] = await Promise.all([
         promotionsService.getAll({
-          status: activeCard === "usosHoy" ? undefined : activeCard ?? undefined,
+          status:
+            activeCard === "usosHoy" ? undefined : (activeCard ?? undefined),
           usagesToday: activeCard === "usosHoy" ? "true" : undefined,
           search: search || undefined,
         }),
@@ -545,8 +197,13 @@ export default function Promotions() {
     setActiveCard((prev) => (prev === card ? null : card));
   };
 
-  const handleEdit = (promo: Promotion) => {
-    setEditingPromotion(promo);
+  const handleEdit = async (promo: Promotion) => {
+    try {
+      const full = await promotionsService.getById(promo.id);
+      setEditingPromotion(full);
+    } catch {
+      setEditingPromotion(promo);
+    }
     setModalOpen(true);
   };
 
@@ -640,7 +297,9 @@ export default function Promotions() {
               className={`rounded-2xl border p-4 ${s.color} ${
                 s.clickable
                   ? "cursor-pointer hover:shadow-md transition-shadow " +
-                    (activeCard === s.key ? "ring-2 ring-amber-400 ring-offset-1" : "")
+                    (activeCard === s.key
+                      ? "ring-2 ring-amber-400 ring-offset-1"
+                      : "")
                   : ""
               }`}
             >
@@ -708,7 +367,11 @@ export default function Promotions() {
                   className="bg-white rounded-2xl border border-gray-100 p-4 flex items-center gap-4 hover:shadow-sm transition-shadow"
                 >
                   <div className="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl shrink-0">
-                    {p.discountType === "cupon" ? "🎟️" : p.discountType === "fijo" ? "💵" : "⚡"}
+                    {p.discountType === "cupon"
+                      ? "🎟️"
+                      : p.discountType === "fijo"
+                        ? "💵"
+                        : "⚡"}
                   </div>
 
                   <div className="flex-1 min-w-0">
@@ -730,6 +393,34 @@ export default function Promotions() {
                         <span className="font-mono bg-gray-100 px-1.5 py-0.5 rounded text-gray-600">
                           {p.couponCode}
                         </span>
+                      )}
+                      <span>
+                        {p.appliesTo === "targeted"
+                          ? [
+                              p.categoryIds?.length
+                                ? `${p.categoryIds.length} cat.`
+                                : null,
+                              p.productIds?.length
+                                ? `${p.productIds.length} prod.`
+                                : null,
+                              p.comboCount ? `${p.comboCount} combos` : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" · ") || "Alcance específico"
+                          : "Todo el catálogo"}
+                      </span>
+                      {p.weekdays?.length > 0 && (
+                        <span className="font-semibold text-amber-600">
+                          {p.weekdays.map((d) => WEEKDAY_LABEL[d]).join(" ")}
+                        </span>
+                      )}
+                      {p.branchIds?.length > 0 ? (
+                        <span>
+                          {p.branchIds.length} sucursal
+                          {p.branchIds.length === 1 ? "" : "es"}
+                        </span>
+                      ) : (
+                        <span>Todas las sucursales</span>
                       )}
                       <span className="flex items-center gap-1">
                         <Zap size={10} />
@@ -760,17 +451,13 @@ export default function Promotions() {
 
                   <div className="text-right shrink-0">
                     <p className="text-lg font-bold text-amber-600">
-                      {p.discountType === "fijo"
-                        ? formatCurrency(
-                            parseInt(
-                              p.discountValue.replace(/\D/g, "") || "0",
-                            ),
-                          )
-                        : p.discountValue
-                          ? `${p.discountValue}%`
-                          : "—"}
+                      {p.discountValue
+                        ? p.discountType === "fijo"
+                          ? formatCurrency(Number(p.discountValue))
+                          : `${Number(p.discountValue)}%`
+                        : "—"}
                     </p>
-                    <p className="text-xs text-gray-400">descuento</p>
+                    <p className="text-xs text-gray-400">descuento base</p>
                   </div>
 
                   <div className="flex items-center gap-1 shrink-0">

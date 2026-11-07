@@ -1,149 +1,188 @@
-# CI/CD — `master` → VPS (Docker + WSL)
+# CI/CD — `dev` → VPS (Debian 12 + Docker)
 
-Pipeline único en `.github/workflows/ci-cd.yml`:
+Hay **dos caminos** para llevar `dev` al servidor, y ambos usan el mismo
+`deploy/deploy.sh`:
 
 ```mermaid
 flowchart LR
-    A[PR a master] --> C[CI: docker build]
-    B[Push a prod] --> C
-    D[Push a master] --> C
-    C -->|solo push/manual en master| E[Runner self-hosted]
-    E --> F[git checkout master]
-    F --> G[docker compose build app]
-    G --> H[recreate app + healthcheck]
+    A[push a dev] --> B{GitHub Actions CI}
+    B -->|build de la imagen| C[check en GitHub]
+    A --> D[Timer del VPS, cada 2 min]
+    D -->|git fetch origin/dev| E{¿cambió HEAD?}
+    E -->|sí| F[bash deploy/deploy.sh]
+    E -->|no| D
+    F --> G[build + recreate + healthcheck]
 ```
 
-- **CI** (`ubuntu-latest`): construye la imagen completa (`docker/Dockerfile`:
-  backend, bot y las 4 interfaces). No publica nada.
-- **Deploy** (runner self-hosted en el VPS): solo se ejecuta si CI pasó, el ref
-  es `master` y el evento es `push` o `workflow_dispatch`. No corre en PRs.
-- El runner corre **dentro de WSL Ubuntu**, donde vive el motor Docker. El
-  checkout de producción está en
-  `/mnt/c/Users/Desarrolo4/Documents/ecommerce`.
-- `deploy/deploy.sh` hace `fetch` + `checkout -f master`, reconstruye **solo**
-  `app`, la recrea y espera `healthy`. **No toca** `docker/.env`, la BD, OSRM
-  ni los volúmenes.
+- **CI (GitHub, `ubuntu-latest`)**: en cada push a `dev`/`master` construye la
+  imagen de producción. Es la verificación temprana; no despliega nada.
+- **Despliegue automático (VPS)**: un *timer* de systemd sondea `origin/dev`
+  cada 2 minutos y llama a `deploy.sh` solo si el checkout quedó atrás. No
+  necesita runners, tokens ni abrir puertos: el servidor **sale** hacia GitHub.
+- **Despliegue manual**: `bash deploy/deploy.sh` en el servidor, cuando se
+  quiera desplegar un commit concreto sin esperar al timer.
 
-## 1. Requisitos en GitHub (una vez)
+El job `deploy` de `.github/workflows/ci-cd.yml` sigue existiendo para quien
+prefiera runners self-hosted (ver §5), pero **no es necesario** para que
+producción se actualice.
 
-1. **Rama por defecto:** `master` (Settings → General → Default branch).
-2. **Ruleset de `master`:** hoy exige Pull Request. El push directo a `master`
-   queda bloqueado (`GH013`). Dos opciones:
-   - Mantener la regla y **mergear siempre por PR** (`prod` → `master`), o
-   - Settings → Rules → Rulesets → regla de `master` → permitir *bypass* al
-     administrador del repositorio.
-3. **Runner:** Settings → Actions → Runners → **New self-hosted runner**
-   (Linux, x64) → copia el token de registro.
+## 1. El checkout de producción
 
-> El token de registro es temporal (~1 h), no es un secret del workflow.
+Cada proyecto es un **clon git real** en el servidor, en `dev`:
 
-## 2. Instalar el runner en el VPS (una vez)
+| Proyecto | Ruta | Repo |
+|---|---|---|
+| ecommerce | `/home/deploy/ecommerce` | `jctrejosi/ecommerce` |
+| crm | `/home/deploy/crm` | `jctrejosi/crm` |
+| whatsapp-bot-platform | `/home/deploy/whatsapp-bot-platform` | `AlejandraPachonVargas/whatsapp-bot-platform` |
+| restaurants | `/home/deploy/restaurants` | `jctrejosi/restaurants` |
+| Astaroth | `/home/deploy/Astaroth` | `jctrejosi/Astaroth` |
+| Paimon | `/home/deploy/Paimon` | `jctrejosi/Paimon` |
+| Haures | `/home/deploy/haures` | `jctrejosi/Haures` |
 
-```powershell
-ssh dsi-vps
-wsl -d Ubuntu -u root
-cd /mnt/c/Users/Desarrolo4/Documents/ecommerce
-bash deploy/install-runner.sh <REGISTRATION_TOKEN>
+Todos los archivos pertenecen al usuario `deploy`, que está en el grupo
+`docker` y **no** tiene sudo.
+
+### Clave SSH del servidor
+
+El `git fetch` usa `/home/deploy/.ssh/id_github` (sin passphrase), autorizada en
+GitHub a nivel de cuenta. Está declarada en `/home/deploy/.ssh/config`:
+
+```
+Host github.com
+  IdentityFile ~/.ssh/id_github
+  IdentitiesOnly yes
+  StrictHostKeyChecking accept-new
 ```
 
-El script:
-
-- descarga la última release de `actions/runner`;
-- crea el usuario de servicio `ghrunner` y lo añade al grupo `docker`;
-- registra el runner con labels `mercaldas,linux`;
-- instala y arranca el servicio **systemd** (`actions.runner.*`).
-
-Verificación:
+Comprobación:
 
 ```bash
-systemctl status 'actions.runner.*'
-su -s /bin/bash ghrunner -c 'docker info >/dev/null && echo docker-ok'
+sudo -u deploy ssh -T git@github.com   # "Hi jctrejosi! You've successfully authenticated"
 ```
 
-En GitHub → Settings → Actions → Runners debe aparecer **Idle**.
+Si se rota: `ssh-keygen -t ed25519 -f /home/deploy/.ssh/id_github -N ''` y se
+pega el `.pub` en GitHub → Settings → SSH and GPG keys.
 
-> La distro WSL debe seguir viva para que el servicio exista. La tarea de
-> Windows `MercaldasDockerEngine` (`wsl ... sleep infinity`) ya cumple eso; ver
-> `docs/VPS-WINDOWS.md`. Si el runner no vuelve tras reiniciar Windows, revisa
-> esa tarea.
+## 2. Auto-despliegue por sondeo
 
-### Clave SSH para el `git fetch`
+Instalado en el VPS:
 
-El `.git/config` del checkout del VPS quedó apuntando al `ssh.exe` de Git para
-Windows, que no existe dentro de WSL. `deploy/deploy.sh` usa una clave propia
-solo para su proceso (no cambia la config de Windows):
+| Pieza | Ruta |
+|---|---|
+| Script | `/home/deploy/ci-tools/autodeploy.sh` |
+| Unit | `/etc/systemd/system/jcti-autodeploy.service` |
+| Timer | `/etc/systemd/system/jcti-autodeploy.timer` |
+
+Copias versionadas en `deploy/ci/` (junto con `install-runner.sh` y
+`adopt-checkout.sh`).
+
+Comportamiento:
+
+- compara `HEAD` con `origin/dev`; si son iguales, no hace nada;
+- si cambió, ejecuta `deploy/deploy.sh origin/dev`;
+- un proyecto roto **no** bloquea a los demás;
+- si el build falla, `deploy.sh` aborta antes de recrear: el servicio sigue con
+  la versión anterior;
+- `flock` evita que dos pasadas se solapen mientras una imagen compila.
+
+Operación:
 
 ```bash
-install -d -m 755 /etc/mercaldas
-install -m 600 -o ghrunner -g ghrunner \
-  /mnt/c/Users/Desarrolo4/.ssh/id_ed25519_deploy \
-  /etc/mercaldas/deploy_key
+# ver próximo sondeo y estado
+systemctl list-timers jcti-autodeploy.timer
+
+# forzar una pasada ahora
+sudo systemctl start jcti-autodeploy.service
+
+# logs
+journalctl -u jcti-autodeploy.service -f
+
+# desactivar / reactivar
+sudo systemctl disable --now jcti-autodeploy.timer
+sudo systemctl enable --now jcti-autodeploy.timer
 ```
 
-Puedes sobreescribir la ruta con `GIT_SSH_KEY=/otra/clave`.
+`AUTODEPLOY_PROJECTS="crm restaurants"` permite limitar la pasada a ciertos
+proyectos (útil para depurar uno solo).
 
-## 3. Primera promoción a `master`
+### Estado y fallos
 
-La ruleset actual impide el push directo. Desde GitHub:
+`/home/deploy/.autodeploy/<proyecto>.ok` guarda el SHA que quedó desplegado. Se
+usa en vez de `git rev-parse HEAD` porque `deploy.sh` hace el checkout **antes**
+de construir: si el build falla, `HEAD` ya apunta al commit nuevo y el sondeo no
+volvería a intentarlo nunca.
 
-1. **Pull requests → New pull request**: `prod` → `master`.
-2. Espera el check **CI / Build de la imagen**.
-3. **Merge pull request**.
+Un commit que falla se anota en `<proyecto>.failed` y **no** se reintenta en
+bucle (sería un build cada 2 minutos): se espera a un push nuevo o a un
+despliegue manual con `deploy.sh`. Tras un despliegue manual correcto, borra el
+archivo `.failed` (o deja que el siguiente push lo haga).
 
-El merge dispara el job de deploy. El runner cambia el checkout del VPS a
-`master` y despliega el commit mergeado.
+> El script que corre una pasada ya está en memoria cuando `deploy.sh` cambia de
+> versión: los cambios en el propio `deploy.sh` aplican a partir del siguiente
+> despliegue, no en el que los introduce.
 
-Si prefieres no usar PR, primero ajusta la ruleset (ver punto 1) y luego:
+## 3. Despliegue manual / reintento
 
 ```bash
-git push origin master
+cd /home/deploy/<proyecto>
+sudo -u deploy bash deploy/deploy.sh              # origin/dev
+sudo -u deploy bash deploy/deploy.sh <sha|ref>    # un commit concreto
 ```
 
-## 4. Despliegue manual / reintento
+`deploy.sh` hace `fetch` + `checkout -f -B dev`, valida `docker compose config`,
+construye y recrea **solo** los contenedores del proyecto, y espera los
+healthchecks. **No toca** `.env`, la BD ni los volúmenes.
 
-Desde GitHub: **Actions → CI/CD → Run workflow** (rama `master`).
+## 4. Qué NO debe cambiarse
 
-Desde el VPS, sin esperar a GitHub:
-
-```bash
-wsl -d Ubuntu -u root
-cd /mnt/c/Users/Desarrolo4/Documents/ecommerce
-bash deploy/deploy.sh            # origin/master
-bash deploy/deploy.sh <sha>      # un commit concreto
-```
-
-## 5. Qué NO debe cambiarse
-
-- **No** pongas el job de deploy en `pull_request`: un PR de un fork podría
-  ejecutar código en el servidor.
-- **No** añadas secretos de despliegue al workflow: el runner ya tiene acceso
-  al checkout y a `docker/.env`.
+- **No** edites archivos versionados en el servidor: el siguiente despliegue los
+  descarta (`checkout -f`). Los cambios van al repo.
+- **No** pongas el job de deploy en `pull_request`: un PR podría ejecutar código
+  en el servidor.
+- **No** añadas secretos de despliegue al workflow: el servidor ya tiene el
+  checkout y el `.env`.
 - **No** edites `docker/.env` desde el CI. Dominios, JWT, API keys y
-  credenciales se configuran en el servidor. `prod.js` sigue siendo la vía para
-  sincronizar dominios/puertos desde `prod.config.json`.
-- El checkout de producción **se fuerza** a `master`; no dejes cambios locales
-  versionados allí (usa `.env` o un archivo ignorado para lo local).
+  credenciales se configuran en el servidor (`prod.config.json` para
+  puertos/dominios del ecommerce).
+- La configuración del **edge** (`docker/edge/Caddyfile`) sí vive en el repo: al
+  cambiar, `deploy.sh` reinicia `edge_caddy` porque es un bind mount de archivo.
+
+## 5. Opcional: runner self-hosted
+
+Si en algún momento se quiere que GitHub dispare el despliegue en vez del
+sondeo, `deploy/ci/install-runner.sh` instala un runner por repositorio como
+servicio systemd (usuario `deploy`, labels `linux,mercaldas`). Requiere un token
+de registro por repo (Settings → Actions → Runners → *New self-hosted runner*,
+caduca en ~1 h):
+
+```bash
+sudo bash deploy/ci/install-runner.sh ecommerce https://github.com/jctrejosi/ecommerce <TOKEN>
+```
+
+Con el runner activo, el job `deploy` del workflow funciona tal cual
+(`runs-on: [self-hosted, linux, mercaldas]`); el sondeo puede desactivarse para
+no duplicar trabajo.
 
 ## 6. Seguridad
 
-- El runner es self-hosted y pertenece al grupo `docker` (equivalente a root en
-  el host). Cualquiera con permiso de escritura sobre el repo o de aprobar un
-  PR a `master` puede ejecutar código en el VPS. Mantén la ruleset de PR y
-  revisa los cambios antes de mergear.
-- El workflow de CI usa runners de GitHub; el de deploy solo corre tras un
-  merge/push a `master`.
-- No se expone SSH ni ningún puerto nuevo; el runner **sale** hacia GitHub.
+- El servidor no expone SSH ni puertos nuevos para el CI: todo el tráfico de
+  despliegue sale del VPS hacia GitHub.
+- La clave de despliegue es de **solo lectura** en la práctica (no se usa para
+  push) y sin passphrase; vive en `/home/deploy/.ssh/` con permisos `600`.
 - `deploy.sh` no hace `docker system prune` ni borra volúmenes.
-- Los logs de Docker siguen rotando (`10m × 5`).
+- Los logs de Docker rotan (`10m × 5`).
+- `adopt-checkout.sh` fue el script de migración (carpetas desplegadas a mano →
+  clones). No se usa en operación normal; queda como referencia.
 
 ## 7. Problemas comunes
 
 | Síntoma | Causa / arreglo |
 |---|---|
-| El job queda en *Waiting for a runner* | Runner offline: `systemctl status 'actions.runner.*'`. |
-| `permission denied` sobre `/mnt/c/...` | El usuario `ghrunner` no puede escribir el checkout. Revisa permisos de WSL/DrvFs o instala el runner como root. |
-| `docker: permission denied` | `usermod -aG docker ghrunner` y `systemctl restart 'actions.runner.*'`. |
-| `GH013: Changes must be made through a pull request` | Ruleset de `master`: usa PR o habilita bypass. |
-| Healthcheck falla | `docker logs --tail 200 mercaldas_app`; el script imprime las últimas 120 líneas. |
-| El deploy no actualiza dominios/API keys | `.env` es persistente y no se toca; edítalo en el VPS y ejecuta `bash deploy/deploy.sh`. |
-| WSL se reinicia y no hay runner | Revisa la tarea `MercaldasDockerEngine` y reinicia el servicio del runner. |
+| El push no llega a producción en ~2 min | `systemctl list-timers jcti-autodeploy.timer`; revisa `journalctl -u jcti-autodeploy.service`. |
+| `fallo el fetch (¿red o clave SSH?)` | `sudo -u deploy ssh -T git@github.com`; revisa `/home/deploy/.ssh/id_github`. |
+| `dubious ownership` al usar git como root | Ejecuta como `deploy` (`sudo -u deploy git ...`) o añade `safe.directory`. |
+| `Healthcheck falla` | `docker logs --tail 200 <contenedor>`; el script imprime las últimas líneas. |
+| Un proyecto no se despliega nunca | ¿Tiene `deploy/deploy.sh` ejecutable y está en `AUTODEPLOY_PROJECTS`? |
+| El deploy no actualiza dominios/API keys | `.env` es persistente y no se toca: edítalo en el servidor. |
+| Cambios del edge no aplican | El Caddyfile es bind mount de archivo: reinicia `edge_caddy` (lo hace `deploy.sh`). |

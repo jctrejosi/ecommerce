@@ -1,7 +1,7 @@
 {
   "table": "DOMITE",
-  "source": "db/ADD_ANALITICA/DOMITE.ADT",
-  "bytes": 112379007,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/DOMITE.ADT",
+  "bytes": 262144,
   "recordCount": 240621,
   "recordLength": 467,
   "headerLength": 9000,

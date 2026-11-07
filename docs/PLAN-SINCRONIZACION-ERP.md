@@ -1,6 +1,11 @@
 # Plan de sincronización Ecommerce ⇄ ERP (camino a producción)
 
-> **Estado**: borrador para ejecución.
+> **Estado**: implementado y corriendo contra el ERP real (`dsi-vps`).
+> **Actualización 2026-10-22**: conexión por `asqlcmd64` al servicio ADS 12
+> (`C:\ADD_FORTUNER\PUBLIDATA.add`), demonio `erp-daemon.mjs` como tarea de
+> Windows, categorías en `TIDTAB` (no `TIDCATE`). Validado: producto/precio/marca/
+> categoría PG → ERP y precio ERP → PG; pedido real en `DOMDIA`/`DOMITE`.
+> OpenADS queda sólo como banco de pruebas.
 > **Objetivo**: que el ecommerce y la base Advantage del ERP queden
 > **coherentes y operativos**, de forma que podamos (a) **inyectar una venta** en
 > el ERP, (b) **propagar cambios de producto/precio/stock** hechos en nuestro
@@ -9,7 +14,7 @@
 > **Documentos relacionados**: `PLAN-INTEGRACION-ERP.md` (diseño y mapeo),
 > `OPENADS-VALIDACION.md` (validación del piloto),
 > `INTEGRACION-ERP-ADVANTAGE.md` (descubrimiento de la copia).
-> **Última actualización**: 2026-10-09.
+> **Última actualización**: 2026-10-22.
 
 ---
 
@@ -32,7 +37,7 @@ código (módulos `catalog`, `inventory`, `orders`, `customers`, `delivery`).
 | Dato del ERP | Destino Postgres | ¿Se usa? | Decisión |
 |---|---|---|---|
 | `TIDSAL` (artículos, precio, saldo) | `products`, `product_variants`, `prices`, `inventory`, `branch_products` | **Sí** | **Sincronizar** (hecho) |
-| `TIDTAB`/`TIDCATE` (categorías) | `categories`, `product_categories` | Sí | Sincronizar (hecho) |
+| `TIDCATE` (categorías) | `categories`, `product_categories` | Sí | Sincronizar (hecho) |
 | `TIDTPRO` (tipos) | `product_types` | Sí | Sincronizar (hecho) |
 | `TIDMARCAS`/`INMARCAP` (marcas) | `brands` | Sí | Sincronizar (hecho) |
 | `POSCLI` (clientes) | `customers` | Sí (¿?) | Sincronizar (hecho) |
@@ -53,19 +58,20 @@ código (módulos `catalog`, `inventory`, `orders`, `customers`, `delivery`).
 
 | Sentido | Entidad | Script / artefacto | Estado |
 |---|---|---|---|
-| ERP → PG | Diccionario de códigos | `sync-codes.mjs` | ✅ (6 dominios + `order_status`) |
-| ERP → PG | Catálogo | `sync-catalog.mjs` | ✅ |
+| ERP → PG | Diccionario de códigos | `sync-codes.mjs` | ✅ (marcas, tipos, bodegas, pagos, impuestos, `order_status`; `city` sin fuente) |
+| ERP → PG | Catálogo | `sync-catalog.mjs` | ✅ (ERP real, 51.938 filas / 21.613 artículos) |
 | ERP → PG | Clientes | `sync-customers.mjs` | ✅ |
 | ERP → PG | Facturación (espejo completo) | `sync-invoices.mjs` | ⚠️ opcional/gated (`--full`); no lo usa el ecommerce |
 | PG → ERP | Pedidos | `push-orders.mjs` | ✅ |
-| PG → ERP | Clientes (alta + actualización) | `push-customers.mjs` | ✅ (`CODCLI` provisional) |
+| PG → ERP | Clientes (alta + actualización) | `push-customers.mjs` | ✅ (`CODCLI` generado, 13 chars) |
 | PG → ERP | Precio / stock | `push-catalog.mjs` + triggers (`db/sql/21_erp_catalog_outbox.sql`) | ✅ |
 | PG → ERP | Maestras: marcas, categorías, tipos, producto | `push-catalog.mjs` + triggers (`db/sql/22_erp_outbox_masters.sql`) | ✅ |
-| PG → ERP | Estado de pedido (`DOMDIA.FAESTADO`) | `push-catalog.mjs` + trigger (`22`) + `erp_code_map` | ✅ (códigos **provisionales**) |
+| PG → ERP | Estado de pedido (`DOMDIA.FAESTADO`) | `push-catalog.mjs` + trigger (`22`) + `erp_code_map` | ✅ (códigos cerrados con FORTUNER) |
 | ERP ⇄ PG | Conciliación factura→pedido | `reconcile.mjs` | ✅ |
-| PG → ERP | Drenado de salida (loop/cron) | `sync-out.mjs` | ✅ |
-| — | Runner / automatización | `sync-all.mjs` | ✅ (cron/Task Scheduler) |
-| — | Arranque con el launcher | `dev.js --erp-sync` | ✅ (deja la salida en bucle) |
+| PG → ERP | Drenado de salida (loop/cron) | `push-catalog` + `push-orders` en `erp-daemon.mjs` | ✅ |
+| — | Runner / automatización | `erp-daemon.mjs` + tarea Windows | ✅ |
+| — | Conexión ERP real | `asqlcmd64` contra ADS 12 (`PUBLIDATA.add`) | ✅ |
+| — | Arranque con el launcher | `dev.js --erp-sync` | ⚠️ legado: apunta a OpenADS; en el servidor se usa la tarea "Mercaldas ERP Sync" |
 | Backend | Módulo/endpoints ERP | — | ❌ no existe (todo por scripts) |
 | Tiempo real | Triggers `DSI_EVENTO` + endpoints `/erp/*` | — | ❌ pendiente |
 
@@ -77,9 +83,9 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
 
 ### 4.A Inyectar una venta (PG → ERP)
 - ✅ Pedido → `DOMDIA`/`DOMITE` (`push-orders.mjs`).
-- ✅ **Alta/actualización de cliente PG → `POSCLI`** (`push-customers.mjs`; `CODCLI` provisional).
+- ✅ **Alta/actualización de cliente PG → `POSCLI`** (`push-customers.mjs`; `CODCLI` generado de 13 chars).
 - ✅ **Drenado de `erp_outbox`** como loop (`sync-out.mjs --loop=N`).
-- ⚠️ Numeración y estados: `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM` (**códigos provisionales**).
+- ✅ Numeración y estados cerrados con FORTUNER: `FAPEDIDO`/`IFPEDIDO` 9 dígitos, `FAESTADO` 0/5/9, `IFESTADO` vacío (normal)/5, `FATIPODOM` 01 (ver `docs/ESCRITURA-FORTUNER-READINESS.md`).
 - ✅ **Retorno**: el ERP factura → actualizar estado/factura de *nuestro* pedido (`reconcile.mjs`).
 
 ### 4.B Modificar producto desde el backend → ERP
@@ -92,16 +98,19 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
   pisando `INSALDO00` (hoy provisional).
 
 ### 4.C Conexión y despliegue en el sitio del ERP
-- ✅ URL/credenciales parametrizadas (`OPENADS_URL`/`OPENADS_USER`/`OPENADS_PASS`).
-- ❌ Definir **quién ejecuta los syncs**: agente en Windows junto al ERP (OpenADS REST, ya probado) vs. el backend.
-- ❌ Agente como **servicio** (reconexión, healthcheck, logging).
-- ❌ Provisionar la copia del ERP (`db/ADD_ANALITICA` no va en git).
+- ✅ Conexión real por `asqlcmd64` contra el servicio ADS 12 y la base
+  `C:\ADD_FORTUNER\PUBLIDATA.add` (`ERP_ADS_MODE=asqlcmd`, `ADS_*`).
+- ✅ **Quién ejecuta los syncs**: tarea de Windows "Mercaldas ERP Sync" como SYSTEM,
+  con `erp-daemon.mjs` (pull 5 min, push 30 s).
+- ✅ **Servicio**: el `.cmd` reintenta cada 10 s; log en `logs/erp-sync.log`.
+- ⚠️ OpenADS queda sólo como banco de pruebas con una copia.
 
 ### 4.D Automatización
-- ✅ **Salida continua**: `node dev.js --erp-sync` deja `sync-out --apply` en bucle
-  (o cron/Task Scheduler con `sync-out --apply`).
-- ✅ **Entrada**: `sync-all.mjs` para el volcado pesado (catálogo + 146k clientes).
-- ❌ **Tiempo real**: triggers `DSI_EVENTO` en el ERP + agente + endpoints `/erp/*` en el backend.
+- ✅ **Salida continua**: `erp-daemon.mjs` deja `push-catalog`/`push-orders` en bucle
+  (tarea de Windows).
+- ✅ **Entrada**: `sync-catalog.mjs` cada 5 min desde el mismo demonio.
+- ❌ **Tiempo real**: triggers `DSI_EVENTO` en el ADS del ERP + agente + endpoints
+  `/erp/*` en el backend.
 
 ### 4.F Valores a confirmar en sitio
 - Checklist completo: `docs/CHECKLIST-ERP-SITIO.md` (enums, numeración, `CODCLI`,
@@ -111,9 +120,9 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
 - §11 de `PLAN-INTEGRACION-ERP.md`: `FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM`,
   `FACANALV`, `FADOCPAGO`, `CLAWEB`/`NEWWEB`, `FECHABAJA`.
 - Medios de pago `NEQUI`/`DAVIPLATA`/`PSE` ↔ `POSPAGO`.
-- `erp_code_map`: falta confirmar los **códigos reales** de `FAESTADO`
-  (`order_status`); hoy hay una semilla **provisional** (`db/sql/23_erp_order_status_map.sql`).
-  Faltan además dominios (tipo factura, estado línea, tipo domicilio, tipo doc).
+- `erp_code_map`: dominios poblados desde `POSPAGO`, `TIDTIPOS`, `TIDBODE`,
+  `TIDMARCAS` y `TIDTPRO` con `sync-codes.mjs`; la semilla de `order_status`
+  quedó en `db/sql/24_erp_code_map_fortuner.sql` y usa códigos reales.
 
 ---
 
@@ -145,14 +154,13 @@ Despliegue: `docs/RUNBOOK-ERP.md`.
   backend se refleja en el ERP (y el diff inverso no lo revierte por el guardia
   `app.erp_sync`).
 
-### Fase D — Automatización y despliegue  ✅ *implementada (agente/servicio pendiente)*
+### Fase D — Automatización y despliegue  ✅ *implementada*
 
-- Runner `sync-all.mjs` (modo seguro / `--apply`).
-- Arranque de la salida continua con el launcher: `dev.js --erp-sync`.
-- Runbook: `docs/RUNBOOK-ERP.md` (env, cron/Task Scheduler, troubleshooting).
+- Demonio `erp-daemon.mjs` + tarea de Windows "Mercaldas ERP Sync".
+- Runbook: `docs/RUNBOOK-ERP.md` (env, tarea, troubleshooting).
 - Checklist de sitio: `docs/CHECKLIST-ERP-SITIO.md`.
-- **Aceptación**: en la máquina del ERP, `dev.js --erp-sync` + scheduler dejan el
-  sistema sincronizado sin intervención manual, sólo cambiando la URL/credenciales.
+- **Aceptación**: en la máquina del ERP, la tarea deja el sistema sincronizado sin
+  intervención manual (pull 5 min, push 30 s); validado con ida y vuelta real.
 
 **Orden recomendado**: A → B → D(scheduler) → C.
 

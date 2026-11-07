@@ -7,22 +7,32 @@
  */
 import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
+import { createAsqlcmdClient } from './asqlcmd.mjs';
 
 const require = createRequire(import.meta.url);
 const { Client } = require(resolve('backend/node_modules/pg'));
 
-export const ERP_CONFIG = {
-  baseUrl: process.env.OPENADS_URL || 'http://localhost:18080',
-  user: process.env.OPENADS_USER || 'dsi',
-  pass: process.env.OPENADS_PASS || 'dsi',
-};
+export function createErpClient(cfg = {}) {
+  // En Windows, contra el ADS real del ERP: SQL por asqlcmd (sin abrir .adt).
+  if (
+    cfg.mode === 'asqlcmd' ||
+    cfg.asqlcmd ||
+    process.env.ERP_ADS_MODE === 'asqlcmd' ||
+    process.env.ADS_CMD
+  ) {
+    return createAsqlcmdClient(cfg);
+  }
 
-export function createErpClient(cfg = ERP_CONFIG) {
+  const resolved = {
+    baseUrl: cfg.baseUrl ?? process.env.OPENADS_URL ?? 'http://localhost:18080',
+    user: cfg.user ?? process.env.OPENADS_USER ?? 'dsi',
+    pass: cfg.pass ?? process.env.OPENADS_PASS ?? 'dsi',
+  };
   const auth =
-    'Basic ' + Buffer.from(`${cfg.user}:${cfg.pass}`).toString('base64');
+    'Basic ' + Buffer.from(`${resolved.user}:${resolved.pass}`).toString('base64');
 
   async function call(method, path, body) {
-    const res = await fetch(`${cfg.baseUrl}${path}`, {
+    const res = await fetch(`${resolved.baseUrl}${path}`, {
       method,
       headers: body
         ? { Authorization: auth, 'Content-Type': 'application/json' }
@@ -45,7 +55,7 @@ export function createErpClient(cfg = ERP_CONFIG) {
   }
 
   return {
-    config: cfg,
+    config: resolved,
     health: () => call('GET', '/api/health'),
     schema: (table) =>
       call('GET', `/api/tables/${encodeURIComponent(table)}/schema`),

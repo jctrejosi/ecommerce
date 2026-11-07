@@ -1,44 +1,29 @@
 {
-  "generated_at": "2026-10-14T19:21:41.453Z",
-  "input_file": "db/products_without_image.json",
-  "providers": [
-    "openfacts"
-  ],
-  "run": {
-    "processed": 60,
-    "candidate": 4,
-    "review": 0,
-    "none": 55,
-    "error": 1,
-    "skipped": 8,
-    "seconds": 164
+  "generated_at": "2026-10-21T14:39:31.372Z",
+  "merged_from": {
+    "main": "db/image-sourcing/candidates.ndjson",
+    "shards": 4
   },
   "totals": {
-    "products_missing": 10186,
-    "products_with_result": 114,
+    "products_tracked": 264,
+    "with_candidate": 33,
     "by_status": {
-      "error": 4,
-      "none": 100,
-      "candidate": 10
-    },
-    "none_reason": {
-      "con_barcode": 82,
-      "sin_barcode": 18
+      "none": 208,
+      "error": 23,
+      "candidate": 33
     },
     "candidates_by_provider": {
-      "openfacts": 10
+      "openfacts": 33
     },
     "candidates_by_confidence": {
-      "0.9-1.0": 10,
+      "0.9-1.0": 33,
       "0.7-0.9": 0,
       "0.45-0.7": 0,
       "0-0.45": 0
+    },
+    "none_reason": {
+      "con_barcode": 182,
+      "sin_barcode": 26
     }
-  },
-  "filters_applied": {
-    "only": null,
-    "active_only": false,
-    "retry": false,
-    "min_confidence": 0.45
   }
 }

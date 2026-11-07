@@ -1,0 +1,6 @@
+# Copia este archivo como ecommerce-signing.properties y coloca la contraseña real.
+# No subas el archivo con credenciales al repositorio.
+storeFile=../signing/ecommerce-jcti.jks
+storePassword=CAMBIAR
+keyAlias=ecommerce-jcti
+keyPassword=CAMBIAR

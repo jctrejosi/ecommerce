@@ -1,0 +1,11 @@
+[Unit]
+Description=Sondeo de origin/dev cada 2 minutos para desplegar cambios
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=2min
+AccuracySec=30s
+Persistent=false
+
+[Install]
+WantedBy=timers.target

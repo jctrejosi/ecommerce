@@ -1,0 +1,81 @@
+{
+  "tabla": "POSPRUTA",
+  "nombre_completo": "Permisos de opciones por usuario",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\POSPRUTA.adt",
+  "descripcion": "Asignacion de las opciones del menu a cada usuario (perfil de permisos). 1.214 filas.",
+  "registros": 1214,
+  "clave_primaria": null,
+  "total_columnas": 5,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "OPCION",
+      "tipo": "char",
+      "bytes": 3,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 1,
+      "columna": "NOMBRE",
+      "tipo": "char",
+      "bytes": 25,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre o descripcion",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "NIVEL",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 3,
+      "columna": "USUARIO",
+      "tipo": "char",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Usuario",
+      "confianza": "media"
+    },
+    {
+      "idx": 4,
+      "columna": "SALE",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    }
+  ]
+}

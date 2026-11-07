@@ -1,0 +1,191 @@
+{
+  "tabla": "TIDCOMPR",
+  "nombre_completo": "Historico de compras por articulo",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDCOMPR.adt",
+  "descripcion": "Compras registradas por articulo: fecha, cantidad, valor, IVA, descuentos, documento, proveedor y sucursal. 59.872 filas.",
+  "registros": 59872,
+  "clave_primaria": null,
+  "total_columnas": 15,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "INARTIC",
+      "tipo": "char",
+      "bytes": 19,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Articulo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "INFECHA",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha",
+      "confianza": "media"
+    },
+    {
+      "idx": 2,
+      "columna": "INCANT",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Cantidad",
+      "confianza": "alta"
+    },
+    {
+      "idx": 3,
+      "columna": "INVALOR",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor monetario",
+      "confianza": "alta"
+    },
+    {
+      "idx": 4,
+      "columna": "INIVA",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Impuesto/IVA",
+      "confianza": "alta"
+    },
+    {
+      "idx": 5,
+      "columna": "INDESC1",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Descripcion",
+      "confianza": "media"
+    },
+    {
+      "idx": 6,
+      "columna": "INDESC2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Descripcion",
+      "confianza": "media"
+    },
+    {
+      "idx": 7,
+      "columna": "INDESC3",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Descripcion",
+      "confianza": "media"
+    },
+    {
+      "idx": 8,
+      "columna": "INDCTOFI1",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 9,
+      "columna": "INDOCUM",
+      "tipo": "char",
+      "bytes": 12,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Unidad de medida",
+      "confianza": "media"
+    },
+    {
+      "idx": 10,
+      "columna": "INDOCUMI",
+      "tipo": "char",
+      "bytes": 12,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 11,
+      "columna": "INORDEN",
+      "tipo": "char",
+      "bytes": 12,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 12,
+      "columna": "INPROVEE",
+      "tipo": "char",
+      "bytes": 13,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Proveedor",
+      "confianza": "alta"
+    },
+    {
+      "idx": 13,
+      "columna": "INSUCUR",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sucursal",
+      "confianza": "alta"
+    },
+    {
+      "idx": 14,
+      "columna": "INUMORD",
+      "tipo": "char",
+      "bytes": 12,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    }
+  ]
+}

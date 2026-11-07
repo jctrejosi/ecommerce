@@ -1,0 +1,123 @@
+{
+  "table": "TIDTIPOS",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDTIPOS.ADT",
+  "bytes": 8744,
+  "recordCount": 56,
+  "recordLength": 99,
+  "headerLength": 3200,
+  "fieldCount": 14,
+  "fields": [
+    {
+      "name": "CLASE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "TIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 7,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 9,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "VALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 39,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VALOR2",
+      "type": 10,
+      "typeName": "double",
+      "offset": 47,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DECIMAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 55,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "SALE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 56,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "FLAG",
+      "type": 4,
+      "typeName": "char",
+      "offset": 57,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VLRIMP3",
+      "type": 4,
+      "typeName": "char",
+      "offset": 58,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "BASE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 59,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "IMPUESTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 67,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "OTROSIMP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 75,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BASERET",
+      "type": 10,
+      "typeName": "double",
+      "offset": 83,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPOCOMBO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 91,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

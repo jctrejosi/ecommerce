@@ -9,7 +9,7 @@ import {
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DrizzleService } from '../../database/drizzle.service';
-import { users, userRefreshTokens, userBranches, branches } from '../../../drizzle/schema';
+import { users, userRefreshTokens, userBranches, branches, userRoles, roles, rolePermissions, permissions } from '../../../drizzle/schema';
 import { eq, and, or, ne } from 'drizzle-orm';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
@@ -41,6 +41,10 @@ export interface LoginResponse {
     /** Sucursal asignada (define el alcance del admin de sucursal). */
     branchId?: number | null;
     branchName?: string | null;
+    /** Nombres de los roles asignados. */
+    roles?: string[];
+    /** Códigos de permiso efectivos (`*` para superusuario). */
+    permissions?: string[];
   };
 }
 
@@ -205,6 +209,11 @@ export class AuthService {
       .where(eq(userBranches.userId, Number(user.id)))
       .limit(1);
 
+    const access = await this.getUserAccess(
+      Number(user.id),
+      user.isSuperuser,
+    );
+
     return {
       accessToken,
       refreshToken: refreshTokenString,
@@ -222,7 +231,38 @@ export class AuthService {
         avatarUrl: user.avatarUrl ?? null,
         branchId: loginBranch ? Number(loginBranch.id) : null,
         branchName: loginBranch?.name ?? null,
+        roles: access.roles,
+        permissions: access.permissions,
       },
+    };
+  }
+
+  /**
+   * Roles y permisos efectivos de un usuario. El superusuario recibe `*` para
+   * que cualquier validación de UI pase sin enumerar todo el catálogo.
+   */
+  async getUserAccess(
+    userId: number,
+    isSuperuser = false,
+  ): Promise<{ roles: string[]; permissions: string[] }> {
+    const rows = await this.db
+      .select({ roleName: roles.name, code: permissions.code })
+      .from(userRoles)
+      .innerJoin(roles, eq(roles.id, userRoles.roleId))
+      .leftJoin(rolePermissions, eq(rolePermissions.roleId, userRoles.roleId))
+      .leftJoin(permissions, eq(permissions.id, rolePermissions.permissionId))
+      .where(eq(userRoles.userId, userId));
+
+    const roleNames = new Set<string>();
+    const codes = new Set<string>();
+    for (const row of rows) {
+      if (row.roleName) roleNames.add(row.roleName);
+      if (row.code) codes.add(row.code);
+    }
+
+    return {
+      roles: Array.from(roleNames),
+      permissions: isSuperuser ? ['*'] : Array.from(codes),
     };
   }
 
@@ -351,6 +391,11 @@ export class AuthService {
       .where(eq(userBranches.userId, Number(user.id)))
       .limit(1);
 
+    const access = await this.getUserAccess(
+      Number(user.id),
+      user.isSuperuser,
+    );
+
     return {
       id: Number(user.id),
       email: user.email,
@@ -364,6 +409,8 @@ export class AuthService {
       isActive: user.isActive,
       branchId: branch ? Number(branch.id) : null,
       branchName: branch?.name ?? null,
+      roles: access.roles,
+      permissions: access.permissions,
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

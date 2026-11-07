@@ -66,6 +66,13 @@ En **GoDaddy → jcti.xyz → DNS** (TTL 600):
 No crees `picking.mercaldas` (no se sirve). `ml.mercaldas` es opcional y se
 descomenta en `docker/edge/Caddyfile` cuando Astaroth esté desplegado.
 
+Astaroth, Paimon y WhatsApp Bot se publican en dominios propios bajo
+`jcti.xyz` (no bajo `mercaldas`): `astaroth`, `paimon` y `bot-platform`.
+Detalle completo en [`SERVICIOS-ADICIONALES-VPS.md`](./SERVICIOS-ADICIONALES-VPS.md).
+
+El servidor tiene además **Ollama con GPU** (Tesla P100) para modelos locales:
+ver [`OLLAMA-VPS-WINDOWS.md`](./OLLAMA-VPS-WINDOWS.md).
+
 Verificación:
 
 ```bash

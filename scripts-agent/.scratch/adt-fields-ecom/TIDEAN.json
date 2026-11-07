@@ -1,0 +1,59 @@
+{
+  "table": "TIDEAN",
+  "source": "db/ads/openads/data/tidean.adt",
+  "bytes": 2104,
+  "recordCount": 6,
+  "recordLength": 84,
+  "headerLength": 1600,
+  "fieldCount": 6,
+  "fields": [
+    {
+      "name": "INEAN",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "NUMERO",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 18,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "INARTIC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 22,
+      "length": 19,
+      "decimals": 0
+    },
+    {
+      "name": "INNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 41,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "SALE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 81,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CANT",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 82,
+      "length": 2,
+      "decimals": 0
+    }
+  ]
+}

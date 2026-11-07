@@ -1,9 +1,9 @@
 {
   "table": "TIDSAL",
-  "source": "db/ADD_ANALITICA/TIDSAL.adt",
-  "bytes": 139618606,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDSAL.adt",
+  "bytes": 262144,
   "recordCount": 51938,
-  "recordLength": 2687,
+  "recordLength": 2686,
   "headerLength": 61200,
   "fieldCount": 304,
   "fields": [
@@ -1644,14 +1644,14 @@
       "type": 4,
       "typeName": "char",
       "offset": 1897,
-      "length": 7,
+      "length": 6,
       "decimals": 0
     },
     {
       "name": "ETIDIG",
       "type": 4,
       "typeName": "char",
-      "offset": 1904,
+      "offset": 1903,
       "length": 1,
       "decimals": 0
     },
@@ -1659,7 +1659,7 @@
       "name": "ETI_IDP",
       "type": 4,
       "typeName": "char",
-      "offset": 1905,
+      "offset": 1904,
       "length": 20,
       "decimals": 0
     },
@@ -1667,7 +1667,7 @@
       "name": "ETI_PUM",
       "type": 4,
       "typeName": "char",
-      "offset": 1925,
+      "offset": 1924,
       "length": 20,
       "decimals": 0
     },
@@ -1675,7 +1675,7 @@
       "name": "ETI_TEMPL1",
       "type": 4,
       "typeName": "char",
-      "offset": 1945,
+      "offset": 1944,
       "length": 20,
       "decimals": 0
     },
@@ -1683,7 +1683,7 @@
       "name": "ETI_TEMPL2",
       "type": 4,
       "typeName": "char",
-      "offset": 1965,
+      "offset": 1964,
       "length": 20,
       "decimals": 0
     },
@@ -1691,7 +1691,7 @@
       "name": "ETI_IDT",
       "type": 4,
       "typeName": "char",
-      "offset": 1985,
+      "offset": 1984,
       "length": 20,
       "decimals": 0
     },
@@ -1699,7 +1699,7 @@
       "name": "ININACVER",
       "type": 1,
       "typeName": "logical",
-      "offset": 2005,
+      "offset": 2004,
       "length": 1,
       "decimals": 0
     },
@@ -1707,7 +1707,7 @@
       "name": "INETISEC",
       "type": 4,
       "typeName": "char",
-      "offset": 2006,
+      "offset": 2005,
       "length": 1,
       "decimals": 0
     },
@@ -1715,7 +1715,7 @@
       "name": "INACTI11",
       "type": 4,
       "typeName": "char",
-      "offset": 2007,
+      "offset": 2006,
       "length": 3,
       "decimals": 0
     },
@@ -1723,7 +1723,7 @@
       "name": "INACTI12",
       "type": 4,
       "typeName": "char",
-      "offset": 2010,
+      "offset": 2009,
       "length": 3,
       "decimals": 0
     },
@@ -1731,7 +1731,7 @@
       "name": "INACTI13",
       "type": 4,
       "typeName": "char",
-      "offset": 2013,
+      "offset": 2012,
       "length": 3,
       "decimals": 0
     },
@@ -1739,7 +1739,7 @@
       "name": "INACTI14",
       "type": 4,
       "typeName": "char",
-      "offset": 2016,
+      "offset": 2015,
       "length": 3,
       "decimals": 0
     },
@@ -1747,7 +1747,7 @@
       "name": "INACTI15",
       "type": 4,
       "typeName": "char",
-      "offset": 2019,
+      "offset": 2018,
       "length": 3,
       "decimals": 0
     },
@@ -1755,7 +1755,7 @@
       "name": "INACTI16",
       "type": 4,
       "typeName": "char",
-      "offset": 2022,
+      "offset": 2021,
       "length": 3,
       "decimals": 0
     },
@@ -1763,7 +1763,7 @@
       "name": "INACTI17",
       "type": 4,
       "typeName": "char",
-      "offset": 2025,
+      "offset": 2024,
       "length": 3,
       "decimals": 0
     },
@@ -1771,7 +1771,7 @@
       "name": "INACTI18",
       "type": 4,
       "typeName": "char",
-      "offset": 2028,
+      "offset": 2027,
       "length": 3,
       "decimals": 0
     },
@@ -1779,7 +1779,7 @@
       "name": "INACTI19",
       "type": 4,
       "typeName": "char",
-      "offset": 2031,
+      "offset": 2030,
       "length": 3,
       "decimals": 0
     },
@@ -1787,7 +1787,7 @@
       "name": "INACTI20",
       "type": 4,
       "typeName": "char",
-      "offset": 2034,
+      "offset": 2033,
       "length": 3,
       "decimals": 0
     },
@@ -1795,7 +1795,7 @@
       "name": "INULTRAP",
       "type": 1,
       "typeName": "logical",
-      "offset": 2037,
+      "offset": 2036,
       "length": 1,
       "decimals": 0
     },
@@ -1803,7 +1803,7 @@
       "name": "INIMP4",
       "type": 10,
       "typeName": "double",
-      "offset": 2038,
+      "offset": 2037,
       "length": 8,
       "decimals": 0
     },
@@ -1811,7 +1811,7 @@
       "name": "INMETCOMP",
       "type": 10,
       "typeName": "double",
-      "offset": 2046,
+      "offset": 2045,
       "length": 8,
       "decimals": 0
     },
@@ -1819,7 +1819,7 @@
       "name": "INFCHVIGMC",
       "type": 10,
       "typeName": "double",
-      "offset": 2054,
+      "offset": 2053,
       "length": 8,
       "decimals": 0
     },
@@ -1827,7 +1827,7 @@
       "name": "INCLACOMP",
       "type": 4,
       "typeName": "char",
-      "offset": 2062,
+      "offset": 2061,
       "length": 1,
       "decimals": 0
     },
@@ -1835,7 +1835,7 @@
       "name": "INUMINIDES",
       "type": 10,
       "typeName": "double",
-      "offset": 2063,
+      "offset": 2062,
       "length": 8,
       "decimals": 0
     },
@@ -1843,7 +1843,7 @@
       "name": "INABC",
       "type": 4,
       "typeName": "char",
-      "offset": 2071,
+      "offset": 2070,
       "length": 1,
       "decimals": 0
     },
@@ -1851,7 +1851,7 @@
       "name": "INRESERV",
       "type": 10,
       "typeName": "double",
-      "offset": 2072,
+      "offset": 2071,
       "length": 8,
       "decimals": 0
     },
@@ -1859,7 +1859,7 @@
       "name": "INSEMANA",
       "type": 4,
       "typeName": "char",
-      "offset": 2080,
+      "offset": 2079,
       "length": 2,
       "decimals": 0
     },
@@ -1867,7 +1867,7 @@
       "name": "INPRONOSTI",
       "type": 10,
       "typeName": "double",
-      "offset": 2082,
+      "offset": 2081,
       "length": 8,
       "decimals": 0
     },
@@ -1875,7 +1875,7 @@
       "name": "INSTOCKPR",
       "type": 10,
       "typeName": "double",
-      "offset": 2090,
+      "offset": 2089,
       "length": 8,
       "decimals": 0
     },
@@ -1883,7 +1883,7 @@
       "name": "INLARGO14",
       "type": 10,
       "typeName": "double",
-      "offset": 2098,
+      "offset": 2097,
       "length": 8,
       "decimals": 0
     },
@@ -1891,7 +1891,7 @@
       "name": "INANCHO14",
       "type": 10,
       "typeName": "double",
-      "offset": 2106,
+      "offset": 2105,
       "length": 8,
       "decimals": 0
     },
@@ -1899,7 +1899,7 @@
       "name": "INALTO14",
       "type": 10,
       "typeName": "double",
-      "offset": 2114,
+      "offset": 2113,
       "length": 8,
       "decimals": 0
     },
@@ -1907,7 +1907,7 @@
       "name": "INPESO14",
       "type": 10,
       "typeName": "double",
-      "offset": 2122,
+      "offset": 2121,
       "length": 8,
       "decimals": 0
     },
@@ -1915,7 +1915,7 @@
       "name": "INESTADO",
       "type": 4,
       "typeName": "char",
-      "offset": 2130,
+      "offset": 2129,
       "length": 50,
       "decimals": 0
     },
@@ -1923,7 +1923,7 @@
       "name": "INCATECO",
       "type": 4,
       "typeName": "char",
-      "offset": 2180,
+      "offset": 2179,
       "length": 10,
       "decimals": 0
     },
@@ -1931,7 +1931,7 @@
       "name": "INANALI",
       "type": 4,
       "typeName": "char",
-      "offset": 2190,
+      "offset": 2189,
       "length": 3,
       "decimals": 0
     },
@@ -1939,7 +1939,7 @@
       "name": "INCATCOM",
       "type": 4,
       "typeName": "char",
-      "offset": 2193,
+      "offset": 2192,
       "length": 3,
       "decimals": 0
     },
@@ -1947,7 +1947,7 @@
       "name": "INCASACOM",
       "type": 4,
       "typeName": "char",
-      "offset": 2196,
+      "offset": 2195,
       "length": 3,
       "decimals": 0
     },
@@ -1955,7 +1955,7 @@
       "name": "S01",
       "type": 10,
       "typeName": "double",
-      "offset": 2199,
+      "offset": 2198,
       "length": 8,
       "decimals": 0
     },
@@ -1963,7 +1963,7 @@
       "name": "S02",
       "type": 10,
       "typeName": "double",
-      "offset": 2207,
+      "offset": 2206,
       "length": 8,
       "decimals": 0
     },
@@ -1971,7 +1971,7 @@
       "name": "S03",
       "type": 10,
       "typeName": "double",
-      "offset": 2215,
+      "offset": 2214,
       "length": 8,
       "decimals": 0
     },
@@ -1979,7 +1979,7 @@
       "name": "S04",
       "type": 10,
       "typeName": "double",
-      "offset": 2223,
+      "offset": 2222,
       "length": 8,
       "decimals": 0
     },
@@ -1987,7 +1987,7 @@
       "name": "S05",
       "type": 10,
       "typeName": "double",
-      "offset": 2231,
+      "offset": 2230,
       "length": 8,
       "decimals": 0
     },
@@ -1995,7 +1995,7 @@
       "name": "S06",
       "type": 10,
       "typeName": "double",
-      "offset": 2239,
+      "offset": 2238,
       "length": 8,
       "decimals": 0
     },
@@ -2003,7 +2003,7 @@
       "name": "S07",
       "type": 10,
       "typeName": "double",
-      "offset": 2247,
+      "offset": 2246,
       "length": 8,
       "decimals": 0
     },
@@ -2011,7 +2011,7 @@
       "name": "S08",
       "type": 10,
       "typeName": "double",
-      "offset": 2255,
+      "offset": 2254,
       "length": 8,
       "decimals": 0
     },
@@ -2019,7 +2019,7 @@
       "name": "S09",
       "type": 10,
       "typeName": "double",
-      "offset": 2263,
+      "offset": 2262,
       "length": 8,
       "decimals": 0
     },
@@ -2027,7 +2027,7 @@
       "name": "S10",
       "type": 10,
       "typeName": "double",
-      "offset": 2271,
+      "offset": 2270,
       "length": 8,
       "decimals": 0
     },
@@ -2035,7 +2035,7 @@
       "name": "S11",
       "type": 10,
       "typeName": "double",
-      "offset": 2279,
+      "offset": 2278,
       "length": 8,
       "decimals": 0
     },
@@ -2043,7 +2043,7 @@
       "name": "S12",
       "type": 10,
       "typeName": "double",
-      "offset": 2287,
+      "offset": 2286,
       "length": 8,
       "decimals": 0
     },
@@ -2051,7 +2051,7 @@
       "name": "S13",
       "type": 10,
       "typeName": "double",
-      "offset": 2295,
+      "offset": 2294,
       "length": 8,
       "decimals": 0
     },
@@ -2059,7 +2059,7 @@
       "name": "S14",
       "type": 10,
       "typeName": "double",
-      "offset": 2303,
+      "offset": 2302,
       "length": 8,
       "decimals": 0
     },
@@ -2067,7 +2067,7 @@
       "name": "S15",
       "type": 10,
       "typeName": "double",
-      "offset": 2311,
+      "offset": 2310,
       "length": 8,
       "decimals": 0
     },
@@ -2075,7 +2075,7 @@
       "name": "S16",
       "type": 10,
       "typeName": "double",
-      "offset": 2319,
+      "offset": 2318,
       "length": 8,
       "decimals": 0
     },
@@ -2083,7 +2083,7 @@
       "name": "S17",
       "type": 10,
       "typeName": "double",
-      "offset": 2327,
+      "offset": 2326,
       "length": 8,
       "decimals": 0
     },
@@ -2091,7 +2091,7 @@
       "name": "S18",
       "type": 10,
       "typeName": "double",
-      "offset": 2335,
+      "offset": 2334,
       "length": 8,
       "decimals": 0
     },
@@ -2099,7 +2099,7 @@
       "name": "S19",
       "type": 10,
       "typeName": "double",
-      "offset": 2343,
+      "offset": 2342,
       "length": 8,
       "decimals": 0
     },
@@ -2107,7 +2107,7 @@
       "name": "S20",
       "type": 10,
       "typeName": "double",
-      "offset": 2351,
+      "offset": 2350,
       "length": 8,
       "decimals": 0
     },
@@ -2115,7 +2115,7 @@
       "name": "S21",
       "type": 10,
       "typeName": "double",
-      "offset": 2359,
+      "offset": 2358,
       "length": 8,
       "decimals": 0
     },
@@ -2123,7 +2123,7 @@
       "name": "S22",
       "type": 10,
       "typeName": "double",
-      "offset": 2367,
+      "offset": 2366,
       "length": 8,
       "decimals": 0
     },
@@ -2131,7 +2131,7 @@
       "name": "S23",
       "type": 10,
       "typeName": "double",
-      "offset": 2375,
+      "offset": 2374,
       "length": 8,
       "decimals": 0
     },
@@ -2139,7 +2139,7 @@
       "name": "S24",
       "type": 10,
       "typeName": "double",
-      "offset": 2383,
+      "offset": 2382,
       "length": 8,
       "decimals": 0
     },
@@ -2147,7 +2147,7 @@
       "name": "S25",
       "type": 10,
       "typeName": "double",
-      "offset": 2391,
+      "offset": 2390,
       "length": 8,
       "decimals": 0
     },
@@ -2155,7 +2155,7 @@
       "name": "S26",
       "type": 10,
       "typeName": "double",
-      "offset": 2399,
+      "offset": 2398,
       "length": 8,
       "decimals": 0
     },
@@ -2163,7 +2163,7 @@
       "name": "S27",
       "type": 10,
       "typeName": "double",
-      "offset": 2407,
+      "offset": 2406,
       "length": 8,
       "decimals": 0
     },
@@ -2171,7 +2171,7 @@
       "name": "S28",
       "type": 10,
       "typeName": "double",
-      "offset": 2415,
+      "offset": 2414,
       "length": 8,
       "decimals": 0
     },
@@ -2179,7 +2179,7 @@
       "name": "S29",
       "type": 10,
       "typeName": "double",
-      "offset": 2423,
+      "offset": 2422,
       "length": 8,
       "decimals": 0
     },
@@ -2187,7 +2187,7 @@
       "name": "S30",
       "type": 10,
       "typeName": "double",
-      "offset": 2431,
+      "offset": 2430,
       "length": 8,
       "decimals": 0
     },
@@ -2195,7 +2195,7 @@
       "name": "S31",
       "type": 10,
       "typeName": "double",
-      "offset": 2439,
+      "offset": 2438,
       "length": 8,
       "decimals": 0
     },
@@ -2203,7 +2203,7 @@
       "name": "S32",
       "type": 10,
       "typeName": "double",
-      "offset": 2447,
+      "offset": 2446,
       "length": 8,
       "decimals": 0
     },
@@ -2211,7 +2211,7 @@
       "name": "S33",
       "type": 10,
       "typeName": "double",
-      "offset": 2455,
+      "offset": 2454,
       "length": 8,
       "decimals": 0
     },
@@ -2219,7 +2219,7 @@
       "name": "S34",
       "type": 10,
       "typeName": "double",
-      "offset": 2463,
+      "offset": 2462,
       "length": 8,
       "decimals": 0
     },
@@ -2227,7 +2227,7 @@
       "name": "S35",
       "type": 10,
       "typeName": "double",
-      "offset": 2471,
+      "offset": 2470,
       "length": 8,
       "decimals": 0
     },
@@ -2235,7 +2235,7 @@
       "name": "S36",
       "type": 10,
       "typeName": "double",
-      "offset": 2479,
+      "offset": 2478,
       "length": 8,
       "decimals": 0
     },
@@ -2243,7 +2243,7 @@
       "name": "S37",
       "type": 10,
       "typeName": "double",
-      "offset": 2487,
+      "offset": 2486,
       "length": 8,
       "decimals": 0
     },
@@ -2251,7 +2251,7 @@
       "name": "S38",
       "type": 10,
       "typeName": "double",
-      "offset": 2495,
+      "offset": 2494,
       "length": 8,
       "decimals": 0
     },
@@ -2259,7 +2259,7 @@
       "name": "S39",
       "type": 10,
       "typeName": "double",
-      "offset": 2503,
+      "offset": 2502,
       "length": 8,
       "decimals": 0
     },
@@ -2267,7 +2267,7 @@
       "name": "S40",
       "type": 10,
       "typeName": "double",
-      "offset": 2511,
+      "offset": 2510,
       "length": 8,
       "decimals": 0
     },
@@ -2275,7 +2275,7 @@
       "name": "S41",
       "type": 10,
       "typeName": "double",
-      "offset": 2519,
+      "offset": 2518,
       "length": 8,
       "decimals": 0
     },
@@ -2283,7 +2283,7 @@
       "name": "S42",
       "type": 10,
       "typeName": "double",
-      "offset": 2527,
+      "offset": 2526,
       "length": 8,
       "decimals": 0
     },
@@ -2291,7 +2291,7 @@
       "name": "S43",
       "type": 10,
       "typeName": "double",
-      "offset": 2535,
+      "offset": 2534,
       "length": 8,
       "decimals": 0
     },
@@ -2299,7 +2299,7 @@
       "name": "S44",
       "type": 10,
       "typeName": "double",
-      "offset": 2543,
+      "offset": 2542,
       "length": 8,
       "decimals": 0
     },
@@ -2307,7 +2307,7 @@
       "name": "S45",
       "type": 10,
       "typeName": "double",
-      "offset": 2551,
+      "offset": 2550,
       "length": 8,
       "decimals": 0
     },
@@ -2315,7 +2315,7 @@
       "name": "S46",
       "type": 10,
       "typeName": "double",
-      "offset": 2559,
+      "offset": 2558,
       "length": 8,
       "decimals": 0
     },
@@ -2323,7 +2323,7 @@
       "name": "S47",
       "type": 10,
       "typeName": "double",
-      "offset": 2567,
+      "offset": 2566,
       "length": 8,
       "decimals": 0
     },
@@ -2331,7 +2331,7 @@
       "name": "S48",
       "type": 10,
       "typeName": "double",
-      "offset": 2575,
+      "offset": 2574,
       "length": 8,
       "decimals": 0
     },
@@ -2339,7 +2339,7 @@
       "name": "S49",
       "type": 10,
       "typeName": "double",
-      "offset": 2583,
+      "offset": 2582,
       "length": 8,
       "decimals": 0
     },
@@ -2347,7 +2347,7 @@
       "name": "S50",
       "type": 10,
       "typeName": "double",
-      "offset": 2591,
+      "offset": 2590,
       "length": 8,
       "decimals": 0
     },
@@ -2355,7 +2355,7 @@
       "name": "S51",
       "type": 10,
       "typeName": "double",
-      "offset": 2599,
+      "offset": 2598,
       "length": 8,
       "decimals": 0
     },
@@ -2363,7 +2363,7 @@
       "name": "S52",
       "type": 10,
       "typeName": "double",
-      "offset": 2607,
+      "offset": 2606,
       "length": 8,
       "decimals": 0
     },
@@ -2371,7 +2371,7 @@
       "name": "S53",
       "type": 10,
       "typeName": "double",
-      "offset": 2615,
+      "offset": 2614,
       "length": 8,
       "decimals": 0
     },
@@ -2379,7 +2379,7 @@
       "name": "NIFSU13",
       "type": 10,
       "typeName": "double",
-      "offset": 2623,
+      "offset": 2622,
       "length": 8,
       "decimals": 0
     },
@@ -2387,7 +2387,7 @@
       "name": "NIFSV13",
       "type": 10,
       "typeName": "double",
-      "offset": 2631,
+      "offset": 2630,
       "length": 8,
       "decimals": 0
     },
@@ -2395,7 +2395,7 @@
       "name": "NIFEU13",
       "type": 10,
       "typeName": "double",
-      "offset": 2639,
+      "offset": 2638,
       "length": 8,
       "decimals": 0
     },
@@ -2403,7 +2403,7 @@
       "name": "NIFEV13",
       "type": 10,
       "typeName": "double",
-      "offset": 2647,
+      "offset": 2646,
       "length": 8,
       "decimals": 0
     },
@@ -2411,7 +2411,7 @@
       "name": "NIFSU12",
       "type": 10,
       "typeName": "double",
-      "offset": 2655,
+      "offset": 2654,
       "length": 8,
       "decimals": 0
     },
@@ -2419,7 +2419,7 @@
       "name": "NIFSV12",
       "type": 10,
       "typeName": "double",
-      "offset": 2663,
+      "offset": 2662,
       "length": 8,
       "decimals": 0
     },
@@ -2427,7 +2427,7 @@
       "name": "NIFEU12",
       "type": 10,
       "typeName": "double",
-      "offset": 2671,
+      "offset": 2670,
       "length": 8,
       "decimals": 0
     },
@@ -2435,7 +2435,7 @@
       "name": "NIFEV12",
       "type": 10,
       "typeName": "double",
-      "offset": 2679,
+      "offset": 2678,
       "length": 8,
       "decimals": 0
     }

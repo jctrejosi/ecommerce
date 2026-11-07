@@ -129,6 +129,7 @@ export default function General() {
       // El guardado deja los valores por defecto: se recargan para verlos.
       await load();
       setSaved(true);
+      window.dispatchEvent(new Event("store-branding:updated"));
     } catch (e: any) {
       setError(e.message || "Error al restablecer");
     } finally {
@@ -151,6 +152,7 @@ export default function General() {
       if (!res.ok) throw new Error("Error al guardar");
       savedRef.current = JSON.stringify(body);
       setSaved(true);
+      window.dispatchEvent(new Event("store-branding:updated"));
     } catch (e: any) {
       setError(e.message || "Error al guardar");
     } finally {

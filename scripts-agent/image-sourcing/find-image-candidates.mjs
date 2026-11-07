@@ -65,6 +65,16 @@ const PROVIDERS = String(arg('providers', 'auto'))
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean);
+const SHARD = (() => {
+  const raw = arg('shard', null);
+  if (!raw || raw === true) return null;
+  const m = String(raw).match(/^(\d+)\/(\d+)$/);
+  if (!m) throw new Error(`--shard inválido: ${raw} (usa i/n, p. ej. --shard=0/4)`);
+  const i = Number(m[1]);
+  const n = Number(m[2]);
+  if (n < 1 || i < 0 || i >= n) throw new Error(`--shard fuera de rango: ${raw}`);
+  return { i, n };
+})();
 
 const USER_AGENT = 'Mercaldas-ImageSourcing/0.1 (Node; catalog image audit)';
 
@@ -472,16 +482,18 @@ const pending = products.filter((p) => {
   return false;
 });
 const work = (() => {
+  let base = pending;
+  if (SHARD) base = base.filter((p) => Number(p.id) % SHARD.n === SHARD.i);
   if (SAMPLE > 0) {
     // Muestra uniforme sobre los pendientes (no sesgada por el orden alfabético).
-    const step = Math.max(1, Math.floor(pending.length / SAMPLE));
-    return pending.filter((_, i) => i % step === 0).slice(0, SAMPLE);
+    const step = Math.max(1, Math.floor(base.length / SAMPLE));
+    return base.filter((_, i) => i % step === 0).slice(0, SAMPLE);
   }
-  return LIMIT > 0 ? pending.slice(0, LIMIT) : pending;
+  return LIMIT > 0 ? base.slice(0, LIMIT) : base;
 })();
 
 console.log(`Faltantes en ${path.relative(ROOT, INPUT_FILE)}: ${products.length}`);
-console.log(`Proveedores: ${providerNames.join(', ')}${ONLY ? `  ·  solo ${ONLY}` : ''}${ACTIVE_ONLY ? '  ·  solo activos' : ''}`);
+console.log(`Proveedores: ${providerNames.join(', ')}${ONLY ? `  ·  solo ${ONLY}` : ''}${ACTIVE_ONLY ? '  ·  solo activos' : ''}${SHARD ? `  ·  shard ${SHARD.i}/${SHARD.n}` : ''}`);
 console.log(`Ya en manifest: ${manifest.size}  ·  por procesar ahora: ${work.length}${LIMIT ? ` (--limit=${LIMIT})` : ''}${SAMPLE ? ` (--sample=${SAMPLE})` : ''}`);
 
 if (DRY) {

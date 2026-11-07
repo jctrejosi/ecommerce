@@ -1,0 +1,531 @@
+{
+  "table": "TIDTAB",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDTAB.ADT",
+  "bytes": 125435,
+  "recordCount": 231,
+  "recordLength": 485,
+  "headerLength": 13400,
+  "fieldCount": 65,
+  "fields": [
+    {
+      "name": "CTABCOD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 7,
+      "decimals": 0
+    },
+    {
+      "name": "CTABDES",
+      "type": 4,
+      "typeName": "char",
+      "offset": 12,
+      "length": 45,
+      "decimals": 0
+    },
+    {
+      "name": "LINEA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 57,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "CTABCOD1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 60,
+      "length": 7,
+      "decimals": 0
+    },
+    {
+      "name": "NUMERO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 67,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "MAXDCTO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 75,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "RETENCION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 83,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS01",
+      "type": 10,
+      "typeName": "double",
+      "offset": 85,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS02",
+      "type": 10,
+      "typeName": "double",
+      "offset": 93,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS03",
+      "type": 10,
+      "typeName": "double",
+      "offset": 101,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS04",
+      "type": 10,
+      "typeName": "double",
+      "offset": 109,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS05",
+      "type": 10,
+      "typeName": "double",
+      "offset": 117,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS06",
+      "type": 10,
+      "typeName": "double",
+      "offset": 125,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS07",
+      "type": 10,
+      "typeName": "double",
+      "offset": 133,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS08",
+      "type": 10,
+      "typeName": "double",
+      "offset": 141,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS09",
+      "type": 10,
+      "typeName": "double",
+      "offset": 149,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS10",
+      "type": 10,
+      "typeName": "double",
+      "offset": 157,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS11",
+      "type": 10,
+      "typeName": "double",
+      "offset": 165,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS12",
+      "type": 10,
+      "typeName": "double",
+      "offset": 173,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "VENTAS13",
+      "type": 10,
+      "typeName": "double",
+      "offset": 181,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "ESCALAS",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 189,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 191,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "DIAS",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 203,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "DIAS2",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 205,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "DIAS3",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 207,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "DIAS4",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 209,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "PRE01C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 211,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE01V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 219,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE02C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 227,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE02V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 235,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE03C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 243,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE03V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 251,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE04C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 259,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE04V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 267,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE05C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 275,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE05V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 283,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE06C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 291,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE06V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 299,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE07C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 307,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE07V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 315,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE08C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 323,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE08V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 331,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE09C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 339,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE09V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 347,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE10C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 355,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE10V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 363,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE11C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 371,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE11V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 379,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE12C",
+      "type": 10,
+      "typeName": "double",
+      "offset": 387,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PRE12V",
+      "type": 10,
+      "typeName": "double",
+      "offset": 395,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INVE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 403,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CCOSTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 404,
+      "length": 7,
+      "decimals": 0
+    },
+    {
+      "name": "CTIPDOC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 411,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTSERIAL",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 413,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CTAGRUP",
+      "type": 4,
+      "typeName": "char",
+      "offset": 414,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CTWEB",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 416,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "BORRAR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 417,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CPARTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 418,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "CTSUBSI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 431,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CESTAETI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 432,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CCODNPUM",
+      "type": 4,
+      "typeName": "char",
+      "offset": 433,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "CACUVLR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 453,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CACUIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 461,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CACUCANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 469,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DIASINVEM",
+      "type": 10,
+      "typeName": "double",
+      "offset": 477,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

@@ -1,0 +1,171 @@
+{
+  "table": "FAPAGO",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/FAPAGO.ADT",
+  "bytes": 262144,
+  "recordCount": 2141129,
+  "recordLength": 170,
+  "headerLength": 4400,
+  "fieldCount": 20,
+  "fields": [
+    {
+      "name": "FPSUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPANO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 13,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPMES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 21,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPCAJA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 29,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FPCAJERO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 31,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPFEC",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 35,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPFACT",
+      "type": 4,
+      "typeName": "char",
+      "offset": 39,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "FPCODI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 51,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 55,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 63,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPNUMERO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 71,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FPCTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 91,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FPNUMDOC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 111,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "FPAUTO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 131,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPSALE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 135,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "NUEVO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 136,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPTIPO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 144,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FPCLIENTE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 146,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "FPTIPCAR",
+      "type": 4,
+      "typeName": "char",
+      "offset": 156,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FPFACT2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 158,
+      "length": 12,
+      "decimals": 0
+    }
+  ]
+}

@@ -8,6 +8,7 @@ import {
   Post,
   Put,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -19,6 +20,9 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { Public } from '../../common/decorators/public.decorator';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { QrService } from './qr.service';
 import { GenerateQrDto, SaveQrConfigDto } from './qr.dto';
 
@@ -32,6 +36,8 @@ const MAX_QR_FILE_BYTES = 10 * 1024 * 1024; // 10 MB
 
 @ApiTags('QR Service')
 @Controller('admin/qr')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:content:manage')
 export class AdminQrController {
   constructor(private readonly qrService: QrService) {}
 

@@ -16,6 +16,7 @@ import {
   MapPin,
 } from "lucide-react";
 import { catalogService, CatalogProduct } from "../services/catalog.service";
+import { useCan } from "../lib/auth-context";
 
 type AdminSupplier = {
   id: number;
@@ -97,6 +98,11 @@ export default function Suppliers() {
   const [unsuppliedHasMore, setUnsuppliedHasMore] = useState(true);
   const [unsuppliedTotal, setUnsuppliedTotal] = useState(0);
   const unsuppliedSentinelRef = useRef<HTMLDivElement>(null);
+
+  const canCreate = useCan("admin:catalog:suppliers:create");
+  const canEdit = useCan("admin:catalog:suppliers:edit");
+  const canDelete = useCan("admin:catalog:suppliers:delete");
+  const canSave = creating ? canCreate : canEdit;
 
   const loadUnsupplied = async (reset = false) => {
     setUnsuppliedLoading(true);
@@ -462,13 +468,15 @@ export default function Suppliers() {
                 }`}
               />
             </button>
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all hover:brightness-95"
-              style={{ background: "#FFF200", color: "#1A1A2E" }}
-            >
-              <Plus size={15} /> Nuevo proveedor
-            </button>
+            {canCreate && (
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-2 px-4 py-2 text-sm font-bold rounded-xl transition-all hover:brightness-95"
+                style={{ background: "#FFF200", color: "#1A1A2E" }}
+              >
+                <Plus size={15} /> Nuevo proveedor
+              </button>
+            )}
           </div>
         </div>
 
@@ -522,7 +530,7 @@ export default function Suppliers() {
                   <tr
                     key={s.id}
                     className="hover:bg-gray-50 transition-colors cursor-pointer group"
-                    onClick={() => openEdit(s)}
+                    onClick={() => canEdit && openEdit(s)}
                   >
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -558,24 +566,28 @@ export default function Suppliers() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEdit(s);
-                          }}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-200 text-gray-400"
-                        >
-                          <Edit size={13} />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setDeleteConfirm(s);
-                          }}
-                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openEdit(s);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-200 text-gray-400"
+                          >
+                            <Edit size={13} />
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirm(s);
+                            }}
+                            className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
                         <ChevronRight
                           size={14}
                           className="text-gray-300 group-hover:text-gray-500"
@@ -953,17 +965,19 @@ export default function Suppliers() {
                 </label>
               )}
 
-              <button
-                onClick={save}
-                disabled={saving}
-                className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
-              >
-                {saving
-                  ? "Guardando..."
-                  : creating
-                    ? "Crear proveedor"
-                    : "Guardar cambios"}
-              </button>
+              {canSave && (
+                <button
+                  onClick={save}
+                  disabled={saving}
+                  className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                >
+                  {saving
+                    ? "Guardando..."
+                    : creating
+                      ? "Crear proveedor"
+                      : "Guardar cambios"}
+                </button>
+              )}
 
               {editing && (
                 <button
@@ -982,12 +996,14 @@ export default function Suppliers() {
 
           {editTab === "products" && (
             <div className="p-5 space-y-4">
-              <button
-                onClick={() => setShowAddProduct(true)}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
-              >
-                <Plus size={14} /> Añadir producto
-              </button>
+              {canEdit && (
+                <button
+                  onClick={() => setShowAddProduct(true)}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                >
+                  <Plus size={14} /> Añadir producto
+                </button>
+              )}
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                 Productos ({supplierProducts.length})
               </p>
@@ -1027,22 +1043,24 @@ export default function Suppliers() {
                           }).format(p.price)}
                         </p>
                       </div>
-                      <button
-                        onClick={() => {
-                          if (!editing) return;
-                          fetch(
-                            `${resolveApiBaseUrl()}/admin/catalog/products/${p.id}/suppliers/${editing.id}`,
-                            { method: "DELETE" },
-                          ).then(() => {
-                            setSupplierProducts((prev) =>
-                              prev.filter((s) => s.id !== p.id),
-                            );
-                          });
-                        }}
-                        className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                      >
-                        <X size={12} />
-                      </button>
+                      {canEdit && (
+                        <button
+                          onClick={() => {
+                            if (!editing) return;
+                            fetch(
+                              `${resolveApiBaseUrl()}/admin/catalog/products/${p.id}/suppliers/${editing.id}`,
+                              { method: "DELETE" },
+                            ).then(() => {
+                              setSupplierProducts((prev) =>
+                                prev.filter((s) => s.id !== p.id),
+                              );
+                            });
+                          }}
+                          className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -1099,7 +1117,7 @@ export default function Suppliers() {
                         <div
                           key={p.id}
                           className="flex items-center gap-2 p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer border border-transparent hover:border-gray-200"
-                          onClick={() => addProduct(p.id)}
+                          onClick={() => canEdit && addProduct(p.id)}
                         >
                           <div className="w-9 h-9 rounded bg-gray-100 overflow-hidden shrink-0">
                             {p.image && (
@@ -1319,13 +1337,15 @@ export default function Suppliers() {
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={assignSupplierToProduct}
-                  disabled={!assignSupplierId}
-                  className="flex-1 py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
-                >
-                  Asignar proveedor
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={assignSupplierToProduct}
+                    disabled={!assignSupplierId}
+                    className="flex-1 py-2 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                  >
+                    Asignar proveedor
+                  </button>
+                )}
               </div>
             </div>
           </div>

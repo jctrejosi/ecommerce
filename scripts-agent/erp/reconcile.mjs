@@ -13,14 +13,14 @@
  * Vínculos que se prueban (configurables):
  *   - orders.reference_code            (lo escribimos en DOMDIA.FACONTROL)
  *   - orders.erp_document_ref
- *   - FAPEDIDO con padding (9/12 dígitos) de orders.id
+ *   - FAPEDIDO web (9 dígitos: prefijo 9 + id) y paddings legados (9/12)
  *
  * Uso:
  *   node scripts-agent/erp/reconcile.mjs --dry-run
  *   node scripts-agent/erp/reconcile.mjs --apply
  */
 import { createErpClient, createPg } from './openads.mjs';
-import { s, args, log } from './lib.mjs';
+import { s, args, log, orderNumber } from './lib.mjs';
 
 const a = args();
 const DRY = !a.apply; // por seguridad: por defecto dry-run
@@ -44,6 +44,7 @@ for (const o of orders) {
   if (o.erp_document_ref) keys.add(String(o.erp_document_ref));
   keys.add(String(o.id).padStart(9, '0'));
   keys.add(String(o.id).padStart(12, '0'));
+  keys.add(orderNumber(o.id));
   for (const k of keys) byKey.set(k, o);
 }
 log(`Pedidos: ${orders.length} | claves de vínculo: ${byKey.size}`);

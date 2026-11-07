@@ -12,3 +12,33 @@
     cursor: pointer;
   }
 }
+
+/* Header con el color principal del tema (configurable desde el admin). */
+.header-main {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+/* Fila seleccionada en los filtros (p. ej. categorías del catálogo): fondo
+   claramente marcado y texto con contraste en ambos temas. En oscuro se usa
+   una mezcla opaca con el popover para no depender del fondo del contenedor. */
+.filter-selected {
+  background-color: var(--primary);
+  color: var(--primary-foreground);
+}
+
+.dark .filter-selected {
+  /* Fallback sin color-mix: gris oscuro opaco con texto claro. */
+  background-color: var(--secondary);
+  color: var(--foreground);
+}
+
+@supports (color: color-mix(in oklab, red, blue)) {
+  .dark .filter-selected {
+    background-color: color-mix(
+      in oklab,
+      var(--primary) 32%,
+      var(--popover)
+    );
+  }
+}

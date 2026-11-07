@@ -22,6 +22,10 @@ import {
 } from 'drizzle-orm';
 import { DrizzleService } from '../../database/drizzle.service';
 import {
+  branchComparePriceSql,
+  branchPriceSql,
+} from '../../common/pricing/branch-price';
+import {
   attributes,
   branches,
   brands,
@@ -29,6 +33,7 @@ import {
   favorites,
   inventory,
   media,
+  prices,
   productAttributes,
   productCategories,
   productImages,
@@ -1403,6 +1408,7 @@ export class CatalogService {
   async getProductsCount(
     unbranded?: boolean,
     unsupplied?: boolean,
+    branchId?: number,
   ): Promise<{ total: number }> {
     const conditions: any[] = [
       eq(products.isActive, true),
@@ -1418,6 +1424,12 @@ export class CatalogService {
     if (unsupplied) {
       conditions.push(
         sql`NOT EXISTS (SELECT 1 FROM supplier_products sp INNER JOIN product_variants pv ON pv.id = sp.product_variant_id WHERE pv.product_id = ${products.id})`,
+      );
+    }
+
+    if (branchId) {
+      conditions.push(
+        sql`EXISTS (SELECT 1 FROM branch_products bp WHERE bp.product_id = ${products.id} AND bp.branch_id = ${branchId} AND bp.is_available = true)`,
       );
     }
 
@@ -1608,6 +1620,144 @@ export class CatalogService {
     return { id };
   }
 
+  /**
+   * Fija el precio de una variante en una sucursal concreta (`prices`), tal
+   * como lo modela el ERP (TIDSAL.INVRVENTA1 por INSUC). Cierra la fila
+   * vigente anterior y crea la nueva; el trigger de outbox la empuja al ERP.
+   */
+  async setBranchPrice(
+    productId: number,
+    branchId: number,
+    price: number,
+    comparePrice?: number | null,
+    userId = 1,
+  ) {
+    if (!Number.isFinite(price) || price < 0) {
+      throw new BadRequestException('Precio inválido');
+    }
+
+    const db = this.drizzleService.db;
+    const [variant] = await db
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.productId, productId),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .orderBy(asc(productVariants.id))
+      .limit(1);
+    if (!variant) throw new NotFoundException('Producto sin variante activa');
+
+    const [branch] = await db
+      .select({ id: branches.id })
+      .from(branches)
+      .where(eq(branches.id, BigInt(branchId)))
+      .limit(1);
+    if (!branch) throw new NotFoundException('Sucursal no encontrada');
+
+    const nowIso = new Date().toISOString();
+    const cmp = comparePrice != null ? String(comparePrice) : null;
+
+    await db.transaction(async (tx) => {
+      await tx
+        .update(prices)
+        .set({ endDate: nowIso })
+        .where(
+          and(
+            eq(prices.productVariantId, Number(variant.id)),
+            eq(prices.branchId, branchId),
+            isNull(prices.endDate),
+          ),
+        );
+
+      await tx.insert(prices).values({
+        productVariantId: Number(variant.id),
+        branchId,
+        price: String(price),
+        comparePrice: cmp,
+        changedBy: userId,
+        changeReason: 'Admin',
+        startDate: nowIso,
+      });
+    });
+
+    // Si es la sucursal primaria (código más bajo), mantener coherente el
+    // precio de respaldo de la variante que usan las vistas sin sucursal.
+    const activeBranches = await db
+      .select({ id: branches.id, code: branches.code })
+      .from(branches)
+      .where(and(eq(branches.isActive, true), isNull(branches.deletedAt)));
+    const primary = activeBranches
+      .map((b) => ({ id: Number(b.id), code: Number(b.code) }))
+      .filter((b) => Number.isFinite(b.code))
+      .sort((a, b) => a.code - b.code)[0];
+
+    if (primary && primary.id === branchId) {
+      await db.transaction(async (tx) => {
+        // El cambio es derivado: no debe generar un segundo evento de outbox.
+        await tx.execute(sql`SET LOCAL app.erp_sync = 'on'`);
+        await tx
+          .update(productVariants)
+          .set({
+            currentPrice: String(price),
+            currentComparePrice: cmp,
+            updatedAt: nowIso,
+          })
+          .where(eq(productVariants.id, variant.id));
+      });
+    }
+
+    return {
+      ok: true,
+      productId,
+      branchId,
+      price,
+      comparePrice: comparePrice ?? null,
+    };
+  }
+
+  /**
+   * Precios vigentes por sucursal de un producto (para el editor del admin).
+   */
+  async getBranchPrices(productId: number) {
+    const db = this.drizzleService.db;
+    const [variant] = await db
+      .select({ id: productVariants.id })
+      .from(productVariants)
+      .where(
+        and(
+          eq(productVariants.productId, productId),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .orderBy(asc(productVariants.id))
+      .limit(1);
+    if (!variant) return [];
+
+    const rows = await db
+      .select({
+        branchId: prices.branchId,
+        price: prices.price,
+        comparePrice: prices.comparePrice,
+      })
+      .from(prices)
+      .where(
+        and(
+          eq(prices.productVariantId, Number(variant.id)),
+          isNull(prices.endDate),
+        ),
+      );
+
+    return rows.map((row) => ({
+      branchId: Number(row.branchId),
+      price: Number(row.price),
+      comparePrice:
+        row.comparePrice != null ? Number(row.comparePrice) : null,
+    }));
+  }
+
   async getProducts(
     query: CatalogProductsQueryDto,
   ): Promise<CatalogProductResponse[]> {
@@ -1620,6 +1770,10 @@ export class CatalogService {
     const sort = query.sort ?? 'relevancia';
     const limit = Math.min(Math.max(query.limit ?? 20, 1), 100);
     const offset = Math.max(query.offset ?? 0, 0);
+    // Sucursal con la que se resuelve el precio: `priceBranchId` (admin, solo
+    // precio) o `branchId` (tienda, precio + disponibilidad).
+    const priceBranchId =
+      query.priceBranchId ?? query.branchId ?? null;
 
     let allowedCategoryIds: number[] = [];
 
@@ -1795,7 +1949,7 @@ export class CatalogService {
       ? [productIdsOrder]
       : searchOrder
         ? [searchOrder]
-        : this.buildSort(sort);
+        : this.buildSort(sort, priceBranchId);
 
     const rows = await this.drizzleService.db
       .select({
@@ -1811,8 +1965,8 @@ export class CatalogService {
         categoryName: categories.name,
         brandId: products.brandId,
         brandName: brands.name,
-        price: productVariants.currentPrice,
-        originalPrice: productVariants.currentComparePrice,
+        price: branchPriceSql(priceBranchId),
+        originalPrice: branchComparePriceSql(priceBranchId),
         image: media.path,
         productTypeCode: productTypes.code,
         productTypeName: productTypes.name,
@@ -1856,10 +2010,10 @@ export class CatalogService {
             ? eq(products.isActive, query.isActive)
             : undefined,
           query.priceMin !== undefined
-            ? gte(productVariants.currentPrice, String(query.priceMin))
+            ? gte(branchPriceSql(priceBranchId), String(query.priceMin))
             : undefined,
           query.priceMax !== undefined
-            ? lte(productVariants.currentPrice, String(query.priceMax))
+            ? lte(branchPriceSql(priceBranchId), String(query.priceMax))
             : undefined,
           query.onSale
             ? sql`${productVariants.currentComparePrice} IS NOT NULL`
@@ -1878,7 +2032,7 @@ export class CatalogService {
             ? eq(productTypes.code, query.productTypeCode)
             : undefined,
           searchCondition,
-          this.buildPriceRangeCondition(query.priceRange),
+          this.buildPriceRangeCondition(query.priceRange, priceBranchId),
           query.uncategorized
             ? sql`NOT EXISTS (SELECT 1 FROM product_categories pc WHERE pc.product_id = ${products.id})`
             : undefined,
@@ -1979,7 +2133,16 @@ export class CatalogService {
         productVariants,
         eq(productVariants.id, inventory.productVariantId),
       )
-      .where(inArray(productVariants.productId, productIds))
+      .where(
+        and(
+          inArray(productVariants.productId, productIds),
+          // Si la tienda pidió una sucursal, el stock mostrado es el de esa
+          // sucursal; si no, se suma el de todas.
+          query.branchId
+            ? eq(inventory.branchId, query.branchId)
+            : undefined,
+        ),
+      )
       .groupBy(productVariants.productId);
 
     const stockByProduct = new Map<number, number>();
@@ -2001,7 +2164,7 @@ export class CatalogService {
    */
   // ── Product detail (vista cliente) ──
 
-  async getProductDetail(productId: number) {
+  async getProductDetail(productId: number, branchId?: number | null) {
     const db = this.drizzleService.db;
 
     const [p] = await db
@@ -2029,8 +2192,8 @@ export class CatalogService {
     const [v] = await db
       .select({
         barcode: productVariants.barcode,
-        price: productVariants.currentPrice,
-        comparePrice: productVariants.currentComparePrice,
+        price: branchPriceSql(branchId),
+        comparePrice: branchComparePriceSql(branchId),
         lengthMm: productVariants.lengthMm,
         widthMm: productVariants.widthMm,
         heightMm: productVariants.heightMm,
@@ -2074,7 +2237,12 @@ export class CatalogService {
         productVariants,
         eq(productVariants.id, inventory.productVariantId),
       )
-      .where(eq(productVariants.productId, productId));
+      .where(
+        and(
+          eq(productVariants.productId, productId),
+          branchId ? eq(inventory.branchId, branchId) : undefined,
+        ),
+      );
 
     const dimensions =
       v && (v.lengthMm || v.widthMm || v.heightMm)
@@ -2125,6 +2293,7 @@ export class CatalogService {
   async getRelatedProducts(
     productId: number,
     limit = 8,
+    branchId?: number | null,
   ): Promise<CatalogProductResponse[]> {
     const catRows = await this.drizzleService.db
       .select({ categoryId: productCategories.categoryId })
@@ -2158,8 +2327,8 @@ export class CatalogService {
         description: products.description,
         brandId: products.brandId,
         brandName: brands.name,
-        price: productVariants.currentPrice,
-        originalPrice: productVariants.currentComparePrice,
+        price: branchPriceSql(branchId),
+        originalPrice: branchComparePriceSql(branchId),
         image: media.path,
         categoryId: categories.id,
         categoryName: categories.name,
@@ -2502,6 +2671,7 @@ export class CatalogService {
     const rows = await this.drizzleService.db
       .select({
         id: branches.id,
+        code: branches.code,
         name: branches.name,
         address: branches.address,
         city: branches.city,
@@ -2526,6 +2696,7 @@ export class CatalogService {
 
     return rows.map((row) => ({
       id: Number(row.id),
+      code: row.code ?? null,
       name: row.name,
       address: row.address,
       city: row.city,
@@ -2830,32 +3001,44 @@ export class CatalogService {
     return rows;
   }
 
-  private buildPriceRangeCondition(priceRange?: string) {
+  private buildPriceRangeCondition(
+    priceRange?: string,
+    priceBranchId: number | null = null,
+  ) {
+    const price = branchPriceSql(priceBranchId);
     switch (priceRange) {
       case '0-10000':
-        return sql`${productVariants.currentPrice} <= 10000`;
+        return sql`${price} <= 10000`;
       case '10000-30000':
-        return sql`${productVariants.currentPrice} > 10000 AND ${productVariants.currentPrice} <= 30000`;
+        return sql`${price} > 10000 AND ${price} <= 30000`;
       case '30000-70000':
-        return sql`${productVariants.currentPrice} > 30000 AND ${productVariants.currentPrice} <= 70000`;
+        return sql`${price} > 30000 AND ${price} <= 70000`;
       case '70000+':
-        return sql`${productVariants.currentPrice} > 70000`;
+        return sql`${price} > 70000`;
       default:
         return undefined;
     }
   }
 
-  private buildSort(sort: string | undefined): ReturnType<typeof asc>[] {
+  private buildSort(
+    sort: string | undefined,
+    priceBranchId: number | null = null,
+  ): ReturnType<typeof asc>[] {
     // El desempate por id mantiene la paginación estable cuando hay nombres o
     // precios repetidos (sin él, un mismo producto puede aparecer en dos páginas).
     const tieBreak = asc(products.id);
+    const price = branchPriceSql(priceBranchId);
     switch (sort) {
       case 'precio-asc':
-        return [asc(productVariants.currentPrice), asc(products.name), tieBreak];
+        return [asc(price), asc(products.name), tieBreak];
       case 'precio-desc':
-        return [desc(productVariants.currentPrice), asc(products.name), tieBreak];
+        return [desc(price), asc(products.name), tieBreak];
       case 'descuento':
-        return [desc(productVariants.currentComparePrice), asc(products.name), tieBreak];
+        return [
+          desc(branchComparePriceSql(priceBranchId)),
+          asc(products.name),
+          tieBreak,
+        ];
       case 'nombre':
         return [asc(products.name), tieBreak];
       case 'nombre-desc':

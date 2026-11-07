@@ -2,7 +2,9 @@
  * Aplica las migraciones de integración ERP (idempotente):
  *   19_erp_integration.sql, 20_erp_invoice_mirror.sql,
  *   21_erp_catalog_outbox.sql, 22_erp_outbox_masters.sql,
- *   23_erp_order_status_map.sql
+ *   23_erp_order_status_map.sql, 24_erp_code_map_fortuner.sql,
+ *   25_erp_product_outbox.sql, 26_erp_branch_price_outbox.sql,
+ *   27_erp_master_keys.sql
  * Uso: node scripts-agent/erp/init-db.mjs
  */
 import fs from 'node:fs';
@@ -16,6 +18,10 @@ const files = [
   '21_erp_catalog_outbox.sql',
   '22_erp_outbox_masters.sql',
   '23_erp_order_status_map.sql',
+  '24_erp_code_map_fortuner.sql',
+  '25_erp_product_outbox.sql',
+  '26_erp_branch_price_outbox.sql',
+  '27_erp_master_keys.sql',
 ];
 const sqls = files.map((f) =>
   fs.readFileSync(path.join(ROOT, 'db/sql', f), 'utf8'),

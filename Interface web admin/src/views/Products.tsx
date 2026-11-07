@@ -22,6 +22,7 @@ import {
   type Brand,
   type ProductType,
 } from "../services/catalog.service";
+import { useCan } from "../lib/auth-context";
 
 /* ─── Helpers ─────────────────────────── */
 const PAGE_SIZE = 20;
@@ -140,8 +141,10 @@ export default function Products() {
   const [brandFilter, setBrandFilter] = useState<number | null>(null);
   const [productTypes, setProductTypes] = useState<ProductType[]>([]);
   const [branches, setBranches] = useState<
-    { id: number; name: string; address: string }[]
+    { id: number; name: string; address: string; code?: string | null }[]
   >([]);
+  /** Sucursal con la que se muestra el precio (modelo ERP: precio por sucursal). */
+  const [priceBranch, setPriceBranch] = useState<number | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>("");
   const [sortCol, setSortCol] = useState<SortCol>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -155,7 +158,13 @@ export default function Products() {
   const [globalError, setGlobalError] = useState<string | null>(null);
   const fetchIdRef = useRef(0);
 
+  const selectedBranchName =
+    branches.find((b) => b.id === priceBranch)?.name ?? null;
+
   const sentinelRef = useRef<HTMLDivElement>(null);
+
+  const canCreate = useCan("admin:catalog:products:create");
+  const canEdit = useCan("admin:catalog:products:edit");
 
   // Load categories, brands, product-types, and total count on mount
   useEffect(() => {
@@ -173,13 +182,27 @@ export default function Products() {
       .catch(() => {});
     catalogService
       .getBranches()
-      .then(setBranches)
-      .catch(() => {});
-    catalogService
-      .getProductsCount()
-      .then((r) => setTotalCount(r.total))
+      .then((list) => {
+        setBranches(list);
+        // Por defecto, la sucursal 1 (código "1" del ERP); si no existe, la primera.
+        setPriceBranch((prev) => {
+          if (prev != null) return prev;
+          const primary = list.find(
+            (b) => String(b.code ?? "").replace(/^0+/, "") === "1",
+          );
+          return primary?.id ?? list[0]?.id ?? null;
+        });
+      })
       .catch(() => {});
   }, []);
+
+  // El total debe reflejar la sucursal seleccionada.
+  useEffect(() => {
+    catalogService
+      .getProductsCount(priceBranch ?? undefined)
+      .then((r) => setTotalCount(r.total))
+      .catch(() => {});
+  }, [priceBranch]);
 
   // Debounce search
   useEffect(() => {
@@ -224,6 +247,8 @@ export default function Products() {
           sort: buildSortParam(),
           limit: PAGE_SIZE,
           offset,
+          priceBranchId: priceBranch ?? undefined,
+          branchId: priceBranch ?? undefined,
         });
 
         // Ignore stale responses
@@ -255,6 +280,7 @@ export default function Products() {
       statusFilter,
       priceMin,
       priceMax,
+      priceBranch,
       buildSortParam,
       products.length,
     ],
@@ -270,6 +296,7 @@ export default function Products() {
     statusFilter,
     priceMin,
     priceMax,
+    priceBranch,
     sortCol,
     sortDir,
   ]);
@@ -335,7 +362,7 @@ export default function Products() {
               setGlobalError(null);
               loadProducts(true);
               catalogService
-                .getProductsCount()
+                .getProductsCount(priceBranch ?? undefined)
                 .then((r) => setTotalCount(r.total))
                 .catch(() => {});
               catalogService
@@ -376,7 +403,7 @@ export default function Products() {
               <p className="text-sm text-gray-500 mt-0.5">
                 {loading
                   ? "Cargando..."
-                  : `${totalCount} productos en el catálogo`}
+                  : `${totalCount} productos ${selectedBranchName ? `en ${selectedBranchName}` : "en el catálogo"}`}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -422,7 +449,7 @@ export default function Products() {
                       );
                       loadProducts(true);
                       catalogService
-                        .getProductsCount()
+                        .getProductsCount(priceBranch ?? undefined)
                         .then((r) => setTotalCount(r.total))
                         .catch(() => {});
                     } else {
@@ -433,12 +460,14 @@ export default function Products() {
                   }
                 }}
               />
-              <button
-                onClick={() => setDrawer({ mode: "create" })}
-                className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
-              >
-                <Plus size={14} /> Nuevo producto
-              </button>
+              {canCreate && (
+                <button
+                  onClick={() => setDrawer({ mode: "create" })}
+                  className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+                >
+                  <Plus size={14} /> Nuevo producto
+                </button>
+              )}
             </div>
           </div>
 
@@ -455,6 +484,25 @@ export default function Products() {
                 placeholder="Buscar por nombre o SKU..."
                 className="w-full pl-9 pr-3 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-300 bg-white"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">
+                Sucursal
+              </span>
+              <select
+                value={priceBranch ?? ""}
+                onChange={(e) =>
+                  setPriceBranch(e.target.value ? Number(e.target.value) : null)
+                }
+                className="text-xs border border-gray-200 rounded-xl px-2.5 py-2.5 bg-white min-w-[150px]"
+              >
+                <option value="">Todas</option>
+                {branches.map((b) => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}
+                  </option>
+                ))}
+              </select>
             </div>
             <button
               onClick={() => setFiltersOpen(!filtersOpen)}
@@ -702,7 +750,7 @@ export default function Products() {
                       <tr
                         key={p.id}
                         className="hover:bg-gray-50 transition-colors group cursor-pointer"
-                        onClick={() => setDrawer({ mode: "edit", product: p })}
+                        onClick={() => canEdit && setDrawer({ mode: "edit", product: p })}
                       >
                         <td className="px-4 py-3">
                           <input
@@ -787,7 +835,7 @@ export default function Products() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                setDrawer({ mode: "edit", product: p });
+                                canEdit && setDrawer({ mode: "edit", product: p });
                               }}
                               className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
                             >
@@ -871,10 +919,14 @@ function ProductDrawer({
   product?: any;
   brands: Brand[];
   categories?: CatalogCategory[];
-  branches: { id: number; name: string; address: string }[];
+  branches: { id: number; name: string; address: string; code?: string | null }[];
   onClose: () => void;
   onCreated: () => void;
 }) {
+  const canCreate = useCan("admin:catalog:products:create");
+  const canEdit = useCan("admin:catalog:products:edit");
+  const canSave = mode === "create" ? canCreate : canEdit;
+
   const [tab, setTab] = useState<"general" | "stock">("general");
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -900,6 +952,11 @@ function ProductDrawer({
     isActive: product?.isActive !== false,
     categoryId: product?.categoryId || "",
   });
+  // Precios por sucursal (modelo del ERP: INVRVENTA1 por INSUC).
+  const [branchPrices, setBranchPrices] = useState<
+    Record<number, { price: string; comparePrice: string }>
+  >({});
+  const [savingBranchPrices, setSavingBranchPrices] = useState(false);
   const [catSearch, setCatSearch] = useState("");
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [showNewBrand, setShowNewBrand] = useState(false);
@@ -957,6 +1014,59 @@ function ProductDrawer({
       loadProductSuppliers();
     }
   }, [mode, product?.id]);
+
+  useEffect(() => {
+    if (mode !== "edit" || !product?.id || branches.length === 0) return;
+    catalogService
+      .getBranchPrices(Number(product.id))
+      .then((rows) => {
+        const next: Record<number, { price: string; comparePrice: string }> = {};
+        for (const b of branches) {
+          next[b.id] = { price: "", comparePrice: "" };
+        }
+        for (const row of rows) {
+          next[row.branchId] = {
+            price: String(row.price ?? ""),
+            comparePrice:
+              row.comparePrice != null ? String(row.comparePrice) : "",
+          };
+        }
+        setBranchPrices(next);
+      })
+      .catch(() => {});
+  }, [mode, product?.id, branches]);
+
+  const saveBranchPrices = async () => {
+    if (!product?.id) return;
+    setSavingBranchPrices(true);
+    try {
+      for (const b of branches) {
+        const row = branchPrices[b.id];
+        const price = Number(row?.price);
+        if (!row?.price || !Number.isFinite(price) || price <= 0) continue;
+        const cmp =
+          row.comparePrice !== "" && Number.isFinite(Number(row.comparePrice))
+            ? Number(row.comparePrice)
+            : null;
+        await catalogService.setBranchPrice(Number(product.id), {
+          branchId: b.id,
+          price,
+          comparePrice: cmp,
+        });
+      }
+      setToast({
+        type: "success",
+        message: "Precios por sucursal guardados",
+      });
+    } catch {
+      setToast({
+        type: "error",
+        message: "No se pudieron guardar los precios por sucursal",
+      });
+    } finally {
+      setSavingBranchPrices(false);
+    }
+  };
 
   const update = (field: string, value: string | boolean) =>
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -1210,6 +1320,69 @@ function ProductDrawer({
                     placeholder="0"
                   />
                 </div>
+
+                {mode === "edit" && branches.length > 0 && (
+                  <div className="col-span-2 rounded-xl border border-gray-200 p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="block text-xs font-semibold text-gray-600">
+                        Precios por sucursal
+                      </label>
+                      <span className="text-[10px] text-gray-400">
+                        Se guardan en `prices` y se envían al ERP (INVRVENTA1)
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {branches.map((b) => (
+                        <div key={b.id} className="flex items-center gap-2">
+                          <span className="w-36 text-xs text-gray-600 truncate">
+                            {b.name}
+                          </span>
+                          <input
+                            type="number"
+                            value={branchPrices[b.id]?.price ?? ""}
+                            onChange={(e) =>
+                              setBranchPrices((prev) => ({
+                                ...prev,
+                                [b.id]: {
+                                  price: e.target.value,
+                                  comparePrice: prev[b.id]?.comparePrice ?? "",
+                                },
+                              }))
+                            }
+                            placeholder="Precio"
+                            className="flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg"
+                          />
+                          <input
+                            type="number"
+                            value={branchPrices[b.id]?.comparePrice ?? ""}
+                            onChange={(e) =>
+                              setBranchPrices((prev) => ({
+                                ...prev,
+                                [b.id]: {
+                                  price: prev[b.id]?.price ?? "",
+                                  comparePrice: e.target.value,
+                                },
+                              }))
+                            }
+                            placeholder="Antes"
+                            className="flex-1 px-2 py-1.5 text-xs border border-gray-200 rounded-lg"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    {canEdit && (
+                      <button
+                        onClick={saveBranchPrices}
+                        disabled={savingBranchPrices}
+                        className="mt-3 px-3 py-1.5 text-xs font-semibold rounded-lg bg-gray-900 text-white disabled:opacity-50"
+                      >
+                        {savingBranchPrices
+                          ? "Guardando..."
+                          : "Guardar precios por sucursal"}
+                      </button>
+                    )}
+                  </div>
+                )}
                 <div>
                   <label className="block text-xs font-semibold text-gray-600 mb-1.5">
                     Marca
@@ -1575,7 +1748,7 @@ function ProductDrawer({
                   <label className="text-xs font-semibold text-gray-600">
                     Proveedores
                   </label>
-                  {mode === "edit" && product?.id && (
+                  {mode === "edit" && product?.id && canEdit && (
                     <button
                       onClick={() => setShowAddSupplier(true)}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
@@ -1609,12 +1782,14 @@ function ProductDrawer({
                             {s.leadTimeDays && ` · ${s.leadTimeDays} días`}
                           </p>
                         </div>
-                        <button
-                          onClick={() => removeSupplier(s.supplierId)}
-                          className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                        >
-                          <X size={11} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => removeSupplier(s.supplierId)}
+                            className="w-6 h-6 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                          >
+                            <X size={11} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1631,17 +1806,19 @@ function ProductDrawer({
           >
             Cancelar
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors disabled:opacity-50"
-          >
-            {saving
-              ? "Guardando..."
-              : mode === "create"
-                ? "Publicar Producto"
-                : "Guardar Cambios"}
-          </button>
+          {canSave && (
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 rounded-xl transition-colors disabled:opacity-50"
+            >
+              {saving
+                ? "Guardando..."
+                : mode === "create"
+                  ? "Publicar Producto"
+                  : "Guardar Cambios"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -1683,7 +1860,7 @@ function ProductDrawer({
                   supplierSearchResults.map((s) => (
                     <button
                       key={s.id}
-                      onClick={() => addSupplier(s.id)}
+                      onClick={() => canEdit && addSupplier(s.id)}
                       className="w-full text-left px-3 py-2.5 text-sm hover:bg-amber-50 rounded-lg transition-colors flex items-center gap-2"
                     >
                       <Building2 size={14} className="text-gray-400 shrink-0" />

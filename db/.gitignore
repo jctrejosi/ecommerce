@@ -21,6 +21,12 @@
 # dumps de la réplica de analytics (grandes, no se versionan en git)
 /backups/analytics/
 
+# imágenes descargadas de internet: staging intermedio (grande, no se versiona)
+/image-staging/
+
+# manifests parciales de los shards de rastreo (se fusionan en image-sourcing/)
+/image-sourcing/shards/
+
 # imágenes estáticas locales: un único directorio (grandes; los productos se
 # regeneran desde JPG2.zip). Contiene `products/` (fotos TID) y `media/`
 # (subidas del ecommerce, marcas, avatares, banners...).

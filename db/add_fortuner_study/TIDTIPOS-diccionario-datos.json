@@ -1,0 +1,189 @@
+{
+  "tabla": "TIDTIPOS",
+  "nombre_completo": "Tipos por clase (impuestos y tarifas)",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDTIPOS.adt",
+  "descripcion": "Tipos identificados por la pareja CLASE + TIPO: tarifas de impuestos, bases y valores asociados.",
+  "registros": 56,
+  "clave_primaria": null,
+  "total_columnas": 14,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {
+    "llave": "CLASE + TIPO identifican el registro."
+  },
+  "relaciones": [
+    {
+      "campo": "CLASE",
+      "referencia": "TIDSAL.INTIMP",
+      "nota": "TIDSAL.INTIMP apunta a la clase de impuesto (J=IVA19, C=IVA5, E=EXENTO).",
+      "confianza": "media"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "CLASE",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Clase del tipo (agrupacion)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "TIPO",
+      "tipo": "char",
+      "bytes": 2,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo del tipo dentro de la clase",
+      "confianza": "alta"
+    },
+    {
+      "idx": 2,
+      "columna": "NOMBRE",
+      "tipo": "char",
+      "bytes": 30,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre/descripcion del tipo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 3,
+      "columna": "VALOR",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 6,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor o tarifa",
+      "confianza": "media"
+    },
+    {
+      "idx": 4,
+      "columna": "VALOR2",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 6,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor alterno",
+      "confianza": "baja"
+    },
+    {
+      "idx": 5,
+      "columna": "DECIMAL",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Numero de decimales",
+      "confianza": "media"
+    },
+    {
+      "idx": 6,
+      "columna": "SALE",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Aplica a ventas",
+      "confianza": "media"
+    },
+    {
+      "idx": 7,
+      "columna": "FLAG",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Bandera/indicador",
+      "confianza": "baja"
+    },
+    {
+      "idx": 8,
+      "columna": "VLRIMP3",
+      "tipo": "char",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Aplica/valor del tercer impuesto",
+      "confianza": "media"
+    },
+    {
+      "idx": 9,
+      "columna": "BASE",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Base para el calculo",
+      "confianza": "media"
+    },
+    {
+      "idx": 10,
+      "columna": "IMPUESTO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Impuesto asociado",
+      "confianza": "media"
+    },
+    {
+      "idx": 11,
+      "columna": "OTROSIMP",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Otros impuestos",
+      "confianza": "media"
+    },
+    {
+      "idx": 12,
+      "columna": "BASERET",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Base de retencion",
+      "confianza": "media"
+    },
+    {
+      "idx": 13,
+      "columna": "TIPOCOMBO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Tipo de combo",
+      "confianza": "baja"
+    }
+  ]
+}

@@ -6,13 +6,21 @@ poder subirlo a GitHub.
 
 ```
 db/backups/ecommerce/
-├── backup_2026-10-05/   ← snapshot anterior
+├── backup_2026-10-05/   ← snapshot antiguo
 │   ├── ecommerce.dump.part-000 … -00N
 │   ├── ecommerce.dump.sha256
 │   └── restore.sh / restore.ps1 / README.md
-└── backup_2026-10-08/   ← snapshot más reciente
+├── backup_2026-10-08/   ← snapshot intermedio (antes de clientes/ERP)
+│   └── (misma estructura)
+├── backup_2026-10-22-pre-categorias/  ← previo al import de TIDCATE/TIDMARCAS
+│   └── (misma estructura; dev.js lo ignora por el sufijo)
+└── backup_2026-10-22/   ← snapshot más reciente (catálogo y estanterías TIDCATE)
     └── (misma estructura)
 ```
+
+> `dev.js --migrate` sólo considera directorios con el nombre exacto
+> `backup_<AAAA-MM-DD>`; los que llevan sufijo (p. ej. `-pre-categorias`) quedan
+> como histórico y no se restauran automáticamente.
 
 ## Restaurar
 
@@ -20,8 +28,11 @@ db/backups/ecommerce/
   `backup_<fecha>` con la fecha mayor). Si la BD ya tiene datos no la toca;
   `--force` la sobrescribe.
 - Manual (un snapshot concreto):
-  - Linux/macOS: `bash db/backups/ecommerce/backup_2026-10-08/restore.sh`
-  - Windows: `powershell -ExecutionPolicy Bypass -File .\db\backups\ecommerce\backup_2026-10-08\restore.ps1`
+  - Linux/macOS: `bash db/backups/ecommerce/backup_2026-10-22/restore.sh`
+  - Windows: `powershell -ExecutionPolicy Bypass -File .\db\backups\ecommerce\backup_2026-10-22\restore.ps1`
+
+Snapshot actual: `4e65a43e10baad648c6139fee315bc0150afea18f8a0c64bd7f6b7eeebf261ba`
+(93 partes de 2 MiB, verificado reensamblando las partes).
 
 Cada `restore.*` reensambla las partes **de su propio directorio**, verifica el
 `sha256` y ejecuta `pg_restore --clean --if-exists`.
@@ -49,8 +60,8 @@ split -b 2097152 -d -a 3 "$DIR/ecommerce.dump" "$DIR/ecommerce.dump.part-"
 rm "$DIR/ecommerce.dump"
 
 # 4. scripts de restauración
-cp db/backups/ecommerce/backup_2026-10-08/restore.sh \
-   db/backups/ecommerce/backup_2026-10-08/restore.ps1 "$DIR/"
+cp db/backups/ecommerce/backup_2026-10-22/restore.sh \
+   db/backups/ecommerce/backup_2026-10-22/restore.ps1 "$DIR/"
 ```
 
 `dev.js` también acepta un volcado completo sin trocear si existe

@@ -11,3 +11,8 @@ expo-env.d.ts
 # Firebase (no subir)
 google-services.json
 *firebase-adminsdk*.json
+
+# Firma de release (no subir)
+signing/*.jks
+signing/*.keystore
+signing/ecommerce-signing.properties

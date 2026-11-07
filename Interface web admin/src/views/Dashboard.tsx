@@ -2,8 +2,8 @@ import { resolveApiBaseUrl } from "../lib/api";
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
   TrendingUp, TrendingDown, ShoppingCart, Users, Package, Truck,
-  AlertTriangle, Zap, Eye, X, Loader2, ArrowUpRight, RefreshCw,
-  Megaphone, Mail,
+  AlertTriangle, X, Loader2, ArrowUpRight, RefreshCw,
+  Receipt, UserPlus,
 } from 'lucide-react';
 import {
   AreaChart, Area, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid,
@@ -21,6 +21,12 @@ function fmt(n: number) {
 
 function fmtNum(n: number) {
   return n.toLocaleString('es-CO');
+}
+
+/** Variación porcentual vs. el período anterior. `null` si no hay base. */
+function pctChange(current: number, previous: number): number | null {
+  if (!previous) return current > 0 ? 100 : null;
+  return ((current - previous) / previous) * 100;
 }
 
 function getGreeting() {
@@ -50,6 +56,20 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 const COLORS = ['#F59E0B','#10B981','#3B82F6','#8B5CF6','#EC4899','#6B7280','#EF4444','#14B8A6','#F97316','#6366F1'];
+
+/** Agrupación de estados de pedido para el resumen operativo del día. */
+const ORDER_STATUS_GROUPS: {
+  label: string;
+  statuses: string[];
+  color: string;
+}[] = [
+  { label: 'Pendientes', statuses: ['created', 'payment_pending'], color: 'bg-amber-400' },
+  { label: 'Preparando', statuses: ['paid', 'preparing'], color: 'bg-blue-500' },
+  { label: 'Listos', statuses: ['ready'], color: 'bg-indigo-500' },
+  { label: 'En camino', statuses: ['shipped'], color: 'bg-purple-500' },
+  { label: 'Entregados', statuses: ['delivered'], color: 'bg-green-500' },
+  { label: 'Cancelados', statuses: ['cancelled'], color: 'bg-red-400' },
+];
 
 const BREAKDOWN_TABS = [
   { key: 'category', label: 'Categoría' },
@@ -84,6 +104,11 @@ interface DashboardStats {
   activeBanners: number;
   activePopups: number;
   newCustomersToday: number;
+  yesterdayRevenue: number;
+  yesterdayOrders: number;
+  todayPaidOrders: number;
+  avgTicketToday: number;
+  ordersByStatus: Record<string, number>;
 }
 
 interface RevenueDay {
@@ -127,25 +152,6 @@ interface ActiveCustomer {
   lastActivityAt: string;
 }
 
-interface BannerPopupItem {
-  id: string;
-  type: 'banner' | 'popup';
-  title: string;
-  subType: string;
-  isActive: boolean;
-  status: string;
-}
-
-interface PromotionItem {
-  id: string;
-  name: string;
-  description: string;
-  isActive: boolean;
-  startDate: string;
-  endDate: string;
-  timesUsed: number;
-}
-
 interface DeliveryItem {
   id: string;
   orderId: string;
@@ -161,7 +167,7 @@ interface DashboardProps {
   onNavigate?: (view: string) => void;
 }
 
-type ModalType = 'todayOrders' | 'paidToday' | 'customers' | 'lowStock' | 'promotions' | 'banners' | 'orderDetail' | null;
+type ModalType = 'todayOrders' | 'paidToday' | 'customers' | 'lowStock' | 'orderDetail' | null;
 
 type BreakdownKey = typeof BREAKDOWN_TABS[number]['key'];
 
@@ -245,19 +251,13 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
   const [activeCustomers, setActiveCustomers] = useState<ActiveCustomer[]>([]);
   const [customersLoading, setCustomersLoading] = useState(true);
 
-  const [bannersPopups, setBannersPopups] = useState<BannerPopupItem[]>([]);
-  const [bannersLoading, setBannersLoading] = useState(true);
-
-  const [promotions, setPromotions] = useState<PromotionItem[]>([]);
-  const [promotionsLoading, setPromotionsLoading] = useState(true);
-
   const [deliveries, setDeliveries] = useState<DeliveryItem[]>([]);
   const [deliveriesLoading, setDeliveriesLoading] = useState(true);
 
   // Chart controls
   const [revenuePeriod, setRevenuePeriod] = useState<'7' | '30' | '90'>('7');
   const [chartMetric, setChartMetric] = useState<'revenue' | 'orders'>('revenue');
-  const [breakdownKey, setBreakdownKey] = useState<BreakdownKey>('category');
+  const [breakdownKey, setBreakdownKey] = useState<BreakdownKey>('branch');
   const [breakdownPeriod, setBreakdownPeriod] = useState<'today' | 'week' | 'month'>('week');
 
   // Modal state
@@ -304,7 +304,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       branch: 'sales-by-branch',
       productType: 'sales-by-product-type',
     };
-    const p = breakdownKey === 'category' ? breakdownPeriod : 'week';
+    const p = breakdownKey === 'category' || breakdownKey === 'branch' ? breakdownPeriod : 'week';
     fetchJSON(`/admin/dashboard/${endpointMap[breakdownKey]}?period=${p}`)
       .then(setBreakdownData)
       .catch(() => setBreakdownData([]))
@@ -317,8 +317,6 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
       { key: 'lowStock', path: '/admin/dashboard/low-stock', setter: setLowStock, loadingSetter: setLowStockLoading },
       { key: 'recentOrders', path: '/admin/dashboard/recent-orders?limit=10', setter: setRecentOrders, loadingSetter: setRecentOrdersLoading },
       { key: 'customers', path: '/admin/dashboard/active-customers', setter: setActiveCustomers, loadingSetter: setCustomersLoading },
-      { key: 'banners', path: '/admin/dashboard/active-banners-popups', setter: setBannersPopups, loadingSetter: setBannersLoading },
-      { key: 'promotions', path: '/admin/dashboard/active-promotions', setter: setPromotions, loadingSetter: setPromotionsLoading },
       { key: 'deliveries', path: '/admin/dashboard/pending-deliveries', setter: setDeliveries, loadingSetter: setDeliveriesLoading },
     ];
     endpoints.forEach(({ path, setter, loadingSetter }) => {
@@ -424,23 +422,31 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
   }));
 
   const chartTitle = chartMetric === 'revenue' ? 'Ingresos' : 'Pedidos';
-  const showBreakdownPeriod = breakdownKey === 'category';
+  const showBreakdownPeriod = breakdownKey === 'category' || breakdownKey === 'branch';
 
   // ─── stat card configs ──────────────────────────────────────────────────
 
   const primaryCards = stats
     ? [
-        { label: 'Ingresos hoy', value: fmt(stats.todayRevenue), icon: TrendingUp, accent: 'bg-amber-100 text-amber-600', modal: 'paidToday' as ModalType },
-        { label: 'Pedidos hoy', value: fmtNum(stats.todayOrders), icon: ShoppingCart, accent: 'bg-blue-100 text-blue-600', modal: 'todayOrders' as ModalType },
-        { label: 'Clientes activos', value: fmtNum(stats.activeCustomers), icon: Users, accent: 'bg-green-100 text-green-600', modal: 'customers' as ModalType },
-        { label: 'Productos activos', value: fmtNum(stats.activeProducts), icon: Package, accent: 'bg-purple-100 text-purple-600', modal: 'lowStock' as ModalType },
+        { label: 'Ingresos hoy', value: fmt(stats.todayRevenue), icon: TrendingUp, accent: 'bg-amber-100 text-amber-600', modal: 'paidToday' as ModalType, delta: pctChange(stats.todayRevenue, stats.yesterdayRevenue ?? 0) },
+        { label: 'Pedidos hoy', value: fmtNum(stats.todayOrders), icon: ShoppingCart, accent: 'bg-blue-100 text-blue-600', modal: 'todayOrders' as ModalType, delta: pctChange(stats.todayOrders, stats.yesterdayOrders ?? 0) },
+        { label: 'Ticket promedio', value: fmt(stats.avgTicketToday ?? 0), icon: Receipt, accent: 'bg-green-100 text-green-600', modal: 'todayOrders' as ModalType, delta: null },
+        { label: 'Nuevos clientes', value: fmtNum(stats.newCustomersToday), icon: UserPlus, accent: 'bg-purple-100 text-purple-600', modal: 'customers' as ModalType, delta: null },
       ]
     : [];
 
+  // Pedidos que aún no terminan (ni cancelados) para el resumen operativo.
+  const inProgressOrders = stats
+    ? ['created', 'payment_pending', 'paid', 'preparing', 'ready', 'shipped'].reduce(
+        (acc, key) => acc + (stats.ordersByStatus?.[key] ?? 0),
+        0,
+      )
+    : 0;
+
   const secondaryCards = stats
     ? [
-        { label: 'Promociones activas', value: fmtNum(stats.activePromotions), icon: Megaphone, color: 'text-green-500', modal: 'promotions' as ModalType },
-        { label: 'Banners & Popups', value: fmtNum(stats.activeBanners + stats.activePopups), icon: Eye, color: 'text-purple-500', modal: 'banners' as ModalType },
+        { label: 'Pedidos en curso', value: fmtNum(inProgressOrders), icon: Truck, color: 'text-blue-500', modal: 'todayOrders' as ModalType },
+        { label: 'Clientes activos', value: fmtNum(stats.activeCustomers), icon: Users, color: 'text-green-500', modal: 'customers' as ModalType },
       ]
     : [];
 
@@ -506,6 +512,17 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
               </div>
               <p className="text-2xl font-bold text-gray-900 mb-1">{c.value}</p>
               <p className="text-sm text-gray-500">{c.label}</p>
+              {c.delta != null && (
+                <span
+                  className={`inline-flex items-center gap-0.5 mt-1 text-[11px] font-semibold ${
+                    c.delta >= 0 ? 'text-green-600' : 'text-red-500'
+                  }`}
+                >
+                  {c.delta >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                  {c.delta >= 0 ? '+' : ''}{c.delta.toFixed(1)}%
+                  <span className="text-gray-400 font-normal">vs ayer</span>
+                </span>
+              )}
             </button>
           ))
         )}
@@ -625,7 +642,7 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
                 key={t.key}
                 onClick={() => {
                   setBreakdownKey(t.key);
-                  if (t.key !== 'category') setBreakdownPeriod('week');
+                  if (t.key !== 'category' && t.key !== 'branch') setBreakdownPeriod('week');
                 }}
                 className={`px-2 py-1 text-[10px] font-semibold rounded-md whitespace-nowrap transition-all ${
                   breakdownKey === t.key
@@ -749,49 +766,53 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
           </div>
         </div>
 
-        {/* Banners & Popups summary */}
+        {/* Pedidos de hoy por estado */}
         <div className="bg-white rounded-2xl border border-gray-100">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-            <h3 className="font-semibold text-gray-900">Banners & Popups</h3>
+            <h3 className="font-semibold text-gray-900">Pedidos de hoy por estado</h3>
             <button
-              onClick={() => setModal('banners')}
-              className="text-xs text-amber-600 font-semibold hover:text-amber-700 transition-colors"
+              onClick={() => openModal('todayOrders')}
+              className="flex items-center gap-1 text-xs text-amber-600 font-semibold hover:text-amber-700 transition-colors"
             >
-              Ver todos
+              Ver todos <ArrowUpRight size={12} />
             </button>
           </div>
-          <div className="p-4 space-y-1.5 max-h-[320px] overflow-y-auto">
-            {bannersLoading ? (
+          <div className="p-4 space-y-2.5">
+            {statsLoading || !stats ? (
               <LoadingSpinner />
-            ) : bannersPopups.length === 0 ? (
-              <EmptyState icon={Eye} message="Sin banners ni popups activos" />
             ) : (
-              bannersPopups.slice(0, 8).map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onNavigate?.(item.type === 'banner' ? 'banners' : 'popups')}
-                  className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-colors cursor-pointer text-left"
-                >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${
-                    item.type === 'banner'
-                      ? 'bg-purple-100 text-purple-600'
-                      : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    {item.type === 'banner' ? <Eye size={14} /> : <Mail size={14} />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-gray-800 truncate">{item.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-gray-400 capitalize">{item.type}</span>
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                        item.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {item.status || (item.isActive ? 'Activo' : 'Inactivo')}
+              <>
+                {ORDER_STATUS_GROUPS.map((g) => {
+                  const n = g.statuses.reduce(
+                    (acc, key) => acc + (stats.ordersByStatus?.[key] ?? 0),
+                    0,
+                  );
+                  const pct =
+                    stats.todayOrders > 0
+                      ? Math.round((n / stats.todayOrders) * 100)
+                      : 0;
+                  return (
+                    <div key={g.label} className="flex items-center gap-3">
+                      <span className={`w-2 h-2 rounded-full ${g.color} shrink-0`} />
+                      <span className="text-xs text-gray-600 w-24 shrink-0">{g.label}</span>
+                      <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full ${g.color} rounded-full`}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold text-gray-900 w-6 text-right tabular-nums">
+                        {n}
                       </span>
                     </div>
-                  </div>
-                </button>
-              ))
+                  );
+                })}
+                <p className="text-[11px] text-gray-400 pt-2 border-t border-gray-50">
+                  Total hoy:{' '}
+                  <span className="font-semibold text-gray-600">{fmtNum(stats.todayOrders)}</span>{' '}
+                  pedidos
+                </p>
+              </>
             )}
           </div>
         </div>
@@ -983,98 +1004,6 @@ export default function Dashboard({ userName = 'Usuario', onNavigate }: Dashboar
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </Modal>
-      )}
-
-      {/* Active promotions modal */}
-      {modal === 'promotions' && (
-        <Modal title="Promociones activas" onClose={closeModal}>
-          {promotionsLoading ? (
-            <LoadingSpinner />
-          ) : promotions.length === 0 ? (
-            <EmptyState icon={Megaphone} message="No hay promociones activas" />
-          ) : (
-            <div className="space-y-2">
-              {promotions.map((p) => (
-                <button
-                  key={p.id}
-                  onClick={() => onNavigate?.('promotions')}
-                  className="w-full text-left p-3 rounded-xl border border-gray-100 hover:bg-amber-50 hover:border-amber-200 transition-colors cursor-pointer"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-semibold text-gray-800">{p.name}</span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                      p.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
-                    }`}>
-                      {p.isActive ? 'Activa' : 'Inactiva'}
-                    </span>
-                  </div>
-                  {p.description && (
-                    <p className="text-xs text-gray-500 line-clamp-2">{p.description}</p>
-                  )}
-                  <div className="flex items-center gap-3 mt-1.5">
-                    {p.startDate && (
-                      <span className="text-[10px] text-gray-400">
-                        {new Date(p.startDate).toLocaleDateString('es-CO')}
-                        {p.endDate ? ` — ${new Date(p.endDate).toLocaleDateString('es-CO')}` : ''}
-                      </span>
-                    )}
-                    <span className="text-[10px] text-gray-400">Usada {p.timesUsed} veces</span>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-          <div className="mt-4 pt-3 border-t border-gray-100">
-            <button
-              onClick={() => onNavigate?.('promotions')}
-              className="flex items-center gap-1 text-xs text-amber-600 font-semibold hover:text-amber-700 transition-colors"
-            >
-              Gestionar promociones <ArrowUpRight size={12} />
-            </button>
-          </div>
-        </Modal>
-      )}
-
-      {/* Banners & Popups modal */}
-      {modal === 'banners' && (
-        <Modal title="Banners & Popups" onClose={closeModal}>
-          {bannersLoading ? (
-            <LoadingSpinner />
-          ) : bannersPopups.length === 0 ? (
-            <EmptyState icon={Eye} message="No hay banners ni popups activos" />
-          ) : (
-            <div className="space-y-2">
-              {bannersPopups.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => onNavigate?.(item.type === 'banner' ? 'banners' : 'popups')}
-                  className="w-full text-left flex items-center gap-3 p-3 rounded-xl border border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer"
-                >
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                    item.type === 'banner'
-                      ? 'bg-purple-100 text-purple-600'
-                      : 'bg-blue-100 text-blue-600'
-                  }`}>
-                    {item.type === 'banner' ? <Eye size={16} /> : <Mail size={16} />}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-gray-800 truncate">{item.title}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-gray-400 capitalize">{item.type}</span>
-                      {item.subType && <span className="text-[10px] text-gray-400">{item.subType}</span>}
-                      <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
-                        item.isActive ? 'bg-green-50 text-green-600' : 'bg-gray-100 text-gray-500'
-                      }`}>
-                        {item.status || (item.isActive ? 'Activo' : 'Inactivo')}
-                      </span>
-                    </div>
-                  </div>
-                  <ArrowUpRight size={14} className="text-gray-300 shrink-0" />
-                </button>
               ))}
             </div>
           )}

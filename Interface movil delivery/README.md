@@ -98,3 +98,16 @@ El backend del delivery vive en `ecommerce/backend/src/modules/delivery/`
 - Background tracking (`expo-task-manager`) y panel de monitoreo.
 - Prueba de entrega (foto/firma/OTP). Multi-pedido, navegación integrada,
   liquidación.
+
+## Firma de release
+
+Los builds de release se firman con la identidad `ecommerce-jcti` (keystore
+`signing/ecommerce-jcti.jks`, alias `ecommerce-jcti`). Las credenciales viven en
+`signing/ecommerce-signing.properties`, ignorado por git. Huellas, respaldo y
+registro en Play: [`signing/README.md`](signing/README.md).
+
+```bash
+./build-apk.sh
+```
+
+Genera `dist/EcommerceDelivery-<version>.apk` firmado y verificado.

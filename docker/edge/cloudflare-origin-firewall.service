@@ -1,0 +1,14 @@
+[Unit]
+Description=Restringe 80/443 del origen a rangos de Cloudflare (cadena DOCKER-USER)
+Documentation=https://www.cloudflare.com/ips/
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/cloudflare-origin-firewall.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

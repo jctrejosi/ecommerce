@@ -45,7 +45,7 @@ export const THEME_TOKENS = [
 export type ThemePalette = Record<string, string>;
 export type ThemeConfig = Partial<Record<Theme, ThemePalette>>;
 
-const STORAGE_KEY = "mercaldas-theme";
+const STORAGE_KEY = "mercaldas-theme-v2";
 const THEME_IDS: string[] = THEMES.map((t) => t.id);
 
 /** Temas retirados: se migran a claro para no dejar una preferencia inválida. */
@@ -96,24 +96,55 @@ export function applyTheme(theme: Theme, palette?: ThemeConfig | null) {
 }
 
 export function useTheme(palette?: ThemeConfig | null) {
-  const [theme, setThemeState] = useState<Theme>(
-    () => readStoredTheme() ?? (systemPrefersDark() ? "oscuro" : DEFAULT_THEME),
+  // Si nunca hubo una elección explícita, el tema sigue al sistema (incluso si
+  // el cliente cambia claro/oscuro con la app abierta).
+  const [explicit, setExplicit] = useState<boolean>(
+    () => readStoredTheme() !== null,
   );
+  const [theme, setThemeState] = useState<Theme>(() => {
+    const stored = readStoredTheme();
+    if (stored) return stored;
+    return systemPrefersDark() ? "oscuro" : DEFAULT_THEME;
+  });
 
   useEffect(() => {
     applyTheme(theme, palette);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, theme);
-    } catch {
-      /* almacenamiento no disponible: se ignora */
-    }
-  }, [theme, palette]);
+    if (explicit) persistTheme(theme);
+  }, [theme, palette, explicit]);
 
-  const setTheme = useCallback((next: Theme) => setThemeState(next), []);
-  const toggleTheme = useCallback(
-    () => setThemeState((prev) => (prev === "oscuro" ? "claro" : "oscuro")),
-    [],
-  );
+  useEffect(() => {
+    if (explicit) return;
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") {
+      return;
+    }
+
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = (event: MediaQueryListEvent) => {
+      setThemeState(event.matches ? "oscuro" : "claro");
+    };
+
+    media.addEventListener("change", handleChange);
+    return () => media.removeEventListener("change", handleChange);
+  }, [explicit]);
+
+  const setTheme = useCallback((next: Theme) => {
+    setExplicit(true);
+    setThemeState(next);
+  }, []);
+
+  const toggleTheme = useCallback(() => {
+    setExplicit(true);
+    setThemeState((prev) => (prev === "oscuro" ? "claro" : "oscuro"));
+  }, []);
 
   return { theme, setTheme, toggleTheme };
+}
+
+/** Guarda la preferencia solo cuando el cliente elige el tema manualmente. */
+function persistTheme(theme: Theme) {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    /* almacenamiento no disponible: se ignora */
+  }
 }

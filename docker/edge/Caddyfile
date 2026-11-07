@@ -1,20 +1,32 @@
-# Edge compartido — Caddyfile (se edita a mano, NO lo genera gen-caddyfile.mjs).
+# Edge compartido — configuración GLOBAL.
 #
-# Un bloque por proyecto. Todos los dominios listados deben:
-#   1. existir en el DNS (registro A → IP pública del servidor), y
-#   2. estar configurados en el proyecto correspondiente (HOST_* en su .env).
-# El Host se conserva al reenviar, así que el Caddy interno de cada contenedor
-# enruta al vhost correcto.
-
+# El edge es INFRAESTRUCTURA: no vive dentro del repo de ninguna aplicación.
+# En este repo se versiona como referencia/plantilla; la fuente de verdad del
+# servidor es /home/deploy/edge (manager/edge/ en el workspace).
+#
+# Los hosts NO se declaran aquí. Cada host (o grupo de hosts de un mismo
+# proyecto) tiene su propio archivo en sites/*.caddy. Así dos proyectos nunca
+# escriben el mismo archivo y un despliegue de app no puede borrar los demás.
+#
+# TLS: certificado de ORIGEN de Cloudflare (CA propia, 15 años). No se usa
+# ACME: Cloudflare es el único que habla con el origen (proxy naranja) y él
+# confía en esta CA (modo "Full (strict)"). Si un registro se pone en gris
+# (DNS only), el navegador fallará el handshake.
 {
 	email admin@jcti.xyz
-	# Producción explícita: evita el emisor ZeroSSL por defecto y cualquier
-	# intento contra el endpoint de staging (certs no confiables).
-	acme_ca https://acme-v02.api.letsencrypt.org/directory
+
+	# Cloudflare en modo proxy delante del origen: recuperar la IP real del
+	# cliente desde CF-Connecting-IP para que el rate-limit y los logs no vean
+	# IPs de Cloudflare. Rangos de https://api.cloudflare.com/client/v4/ips
+	# (fijados el 2026-11-02); se actualizan a mano si Cloudflare publica otros.
+	servers {
+		trusted_proxies static private_ranges 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		client_ip_headers CF-Connecting-IP X-Forwarded-For
+	}
 }
 
 # Cabeceras que aporta el edge (TLS/HSTS). El resto (CSP, X-Frame-Options,
-# Permissions-Policy…) ya las añade el Caddy interno de cada contenedor.
+# Permissions-Policy…) ya las añade el proxy interno de cada contenedor.
 (edge_headers) {
 	header {
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -23,57 +35,6 @@
 	}
 }
 
-# ── Ecommerce (contenedor `mercaldas_app`, Caddy interno en :8080 sin TLS) ──
-mercaldas.jcti.xyz, api.mercaldas.jcti.xyz, admin.mercaldas.jcti.xyz,
-picking-admin.mercaldas.jcti.xyz, delivery-admin.mercaldas.jcti.xyz {
-	import edge_headers
-
-	# Log de acceso a stdout (visible con `docker logs edge_caddy`). Permite
-	# diagnosticar 4xx/5xx y auditar tráfico. No loguea cuerpos ni credenciales.
-	log {
-		output stdout
-		format json
-	}
-
-	# Emisor explícito. Caddy, por defecto, reintenta contra el CA de
-	# *staging* (`test_ca`) si el primario falla; eso puede dejar un
-	# certificado no confiable. Fijamos ambos al CA de producción.
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	reverse_proxy mercaldas_app:8080
-}
-
-# ── CRM (contenedor `mercaldas_crm_app`, Caddy interno en :8080 sin TLS) ──
-# Descomenta cuando el CRM esté desplegado. Si se deja activo sin el contenedor
-# ni DNS, Caddy acumula reintentos de ACME y errores de upstream.
-crm.mercaldas.jcti.xyz, crm-api.mercaldas.jcti.xyz {
-	import edge_headers
-
-	log {
-		output stdout
-		format json
-	}
-
-	tls {
-		issuer acme {
-			dir https://acme-v02.api.letsencrypt.org/directory
-			test_dir https://acme-v02.api.letsencrypt.org/directory
-		}
-	}
-
-	reverse_proxy mercaldas_crm_app:8080
-}
-
-# ── Opcional: Astaroth (APIs de ML) — contenedor `mercaldas_astaroth_app` ──
-# El CRM ya lo consume por la red interna `shared_edge` (sin pasar por aquí).
-# Descomenta SOLO si quieres exponer las APIs ML a internet: crea el registro
-# DNS y revisa antes Astaroth/docs/SECURITY.md (superficie sensible).
-# ml.mercaldas.jcti.xyz {
-# 	import edge_headers
-# 	reverse_proxy mercaldas_astaroth_app:8080
-# }
+# Un archivo por proyecto/host. El orden no importa: cada bloque es un site
+# independiente y Caddy enruta por nombre de host.
+import /etc/caddy/sites/*.caddy

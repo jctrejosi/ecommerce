@@ -1,6 +1,6 @@
 {
   "table": "TIDBODE",
-  "source": "db/ADD_ANALITICA/TIDBODE.adt",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDBODE.adt",
   "bytes": 48115,
   "recordCount": 29,
   "recordLength": 935,

@@ -1,6 +1,6 @@
 {
   "table": "TIDTIPOS",
-  "source": "db/ADD_ANALITICA/TIDTIPOS.ADT",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDTIPOS.ADT",
   "bytes": 8744,
   "recordCount": 56,
   "recordLength": 99,

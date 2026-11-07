@@ -44,6 +44,8 @@ export type CheckoutPayload = {
   address: CheckoutAddress;
   shippingType: "standard" | "express";
   paymentMethod: "efectivo" | "tarjeta" | "nequi" | "pse" | "breb";
+  /** Código de cupón (descuento y/o saldo) a canjear en este pedido. */
+  couponCode?: string;
   paymentDetails?: {
     card?: CardPaymentDetails;
     pse?: PsePaymentDetails;
@@ -55,6 +57,13 @@ export type CheckoutResponse = {
   orderId: number;
   referenceCode: string;
   subtotal: number;
+  discountTotal: number;
+  /** Descuento aportado por el cupón (incluido en discountTotal). */
+  couponDiscount: number;
+  /** Saldo del cupón usado para pagar. */
+  couponBalanceApplied: number;
+  /** Monto que efectivamente se cobra por la pasarela/efectivo. */
+  amountToCharge: number;
   shippingCost: number;
   grandTotal: number;
   paymentMethod: CheckoutPayload["paymentMethod"];

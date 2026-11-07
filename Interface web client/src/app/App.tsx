@@ -16,7 +16,7 @@ import type { ThemeConfig } from "../hooks/useTheme";
 import { ChatbotWidget } from "../components/ChatbotWidget";
 import { OrderChatWidget } from "./components/OrderChatWidget";
 import type { BotCart } from "../services/chatbot.service";
-import { cartService } from "../services/cart.service";
+import { cartService, type CartQuote } from "../services/cart.service";
 import { apiStatusService } from "../services/api-status.service";
 import type {
   Brand,
@@ -92,6 +92,8 @@ export default function App() {
 
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
+  /** Descuentos vigentes del carrito (los calcula el backend). */
+  const [cartQuote, setCartQuote] = useState<CartQuote | null>(null);
   const [cartOpen, setCartOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("");
   const [catalogCategory, setCatalogCategory] = useState<number[]>([]);
@@ -162,6 +164,7 @@ export default function App() {
     const p = localStorage.getItem("checkout_payment");
     return p === "tarjeta" || p === "nequi" || p === "pse" ? p : "efectivo";
   });
+  const [checkoutCouponCode, setCheckoutCouponCode] = useState("");
   const [cardPayment, setCardPayment] = useState({
     cardholderName: "",
     cardNumber: "",
@@ -216,8 +219,7 @@ export default function App() {
   const [brebEnabled, setBrebEnabled] = useState(true);
   const [brebKey, setBrebKey] = useState("@davi3148853458");
   const [brebBank, setBrebBank] = useState("Davivienda");
-  const [brebQrImageUrl, setBrebQrImageUrl] = useState("");
-  const [brebQrMime, setBrebQrMime] = useState("");
+
   const [efectivoEnabled, setEfectivoEnabled] = useState(true);
   const [wompiMethods, setWompiMethods] = useState({ card: true, pse: true, nequi: true });
   const [wompiAcceptance, setWompiAcceptance] = useState({
@@ -264,8 +266,8 @@ export default function App() {
   } | null>(null);
   const [featuredBrands, setFeaturedBrands] = useState<Brand[]>([]);
   const [landingBranches, setLandingBranches] = useState<Branch[]>([]);
-  const [landingProductTypes, setLandingProductTypes] = useState<
-    { id: number; code: string; name: string; imagePath: string | null; count: number }[]
+  const [landingFeaturedCategories, setLandingFeaturedCategories] = useState<
+    { id: number; code: string; name: string; slug: string; imagePath: string | null; count: number }[]
   >([]);
   const [featuredTabs, setFeaturedTabs] = useState<
     { id: number; name: string; slug: string; position: number }[]
@@ -422,11 +424,21 @@ export default function App() {
           );
         void catalogService
           .getBranches()
-          .then(setLandingBranches)
+          .then((list) => {
+            setLandingBranches(list);
+            // Por defecto se muestra el precio de la sucursal 1 del ERP.
+            setCatalogBranch((prev) => {
+              if (prev != null) return prev;
+              const primary = list.find(
+                (b) => String(b.code ?? "").replace(/^0+/, "") === "1",
+              );
+              return primary?.id ?? list[0]?.id ?? null;
+            });
+          })
           .catch(() => {});
         void catalogService
-          .getFeaturedProductTypes()
-          .then(setLandingProductTypes)
+          .getFeaturedCategories()
+          .then(setLandingFeaturedCategories)
           .catch(() => {});
         void catalogService
           .getFeaturedTabs()
@@ -446,7 +458,12 @@ export default function App() {
     setLandingLoading(true);
     try {
       if (tab) {
-        setLandingProducts(await catalogService.getFeaturedTabProducts(tab));
+        setLandingProducts(
+          await catalogService.getFeaturedTabProducts(
+            tab,
+            catalogBranch ?? undefined,
+          ),
+        );
       } else {
         setLandingProducts([]);
       }
@@ -455,7 +472,7 @@ export default function App() {
     } finally {
       setLandingLoading(false);
     }
-  }, []);
+  }, [catalogBranch]);
 
   useEffect(() => {
     void fetchLandingProducts(activeTab);
@@ -580,6 +597,38 @@ export default function App() {
         );
     }
   }, [cartHydrated, cartItems, customer]);
+
+  // Cotización del carrito (promociones vigentes) para mostrar el descuento sin
+  // esperar al checkout. Se debounce para no consultar en cada clic.
+  useEffect(() => {
+    const valid = cartItems.filter(
+      (i) => i.id && Number(i.id) > 0 && i.quantity > 0,
+    );
+    if (valid.length === 0) {
+      setCartQuote(null);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      cartService
+        .quote(
+          valid.map((i) => ({
+            productId: Number(i.id),
+            quantity: i.quantity,
+          })),
+        )
+        .then((quote) => {
+          if (!cancelled) setCartQuote(quote);
+        })
+        .catch(() => {
+          if (!cancelled) setCartQuote(null);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [cartItems]);
 
   // Load orders
   const refreshOrders = useCallback(
@@ -730,16 +779,6 @@ export default function App() {
     navigate("/catalog");
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
-  const handleProductTypeClick = (code: string) => {
-    setCatalogProductType(code);
-    setCatalogCategory([]);
-    setCatalogProductIds([]);
-    setCatalogSearch("");
-    setCurrentView("catalog");
-    navigate("/catalog");
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  };
-
   const handleApplyFilter = (f: {
     categoryIds?: number[];
     productIds?: number[];
@@ -751,7 +790,7 @@ export default function App() {
     priceMin?: number;
     priceMax?: number;
   }) => {
-    if (f.categoryIds?.length) setCatalogCategory(f.categoryIds);
+    if (f.categoryIds?.length) setCatalogCategory(f.categoryIds.slice(0, 1));
     else setCatalogCategory([]);
     setCatalogProductIds(f.productIds?.length ? f.productIds : []);
     setCatalogBrand(f.brandId ?? null);
@@ -769,6 +808,10 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
+  const handleFeaturedCategoryClick = (categoryId: number) => {
+    handleApplyFilter({ categoryIds: [categoryId] });
+  };
+
   const handleAddressClick = () => {
     if (customer) {
       setCurrentView("account");
@@ -779,7 +822,7 @@ export default function App() {
     openModal("login");
   };
 
-  const placeOrder = async () => {
+  const placeOrder = async (options?: { skipPayment?: boolean }) => {
     try {
       setCheckoutLoading(true);
       setCheckoutError(null);
@@ -788,7 +831,7 @@ export default function App() {
       let cardToken = "";
       let last4 = "";
       let brand = "";
-      if (checkoutPayment === "tarjeta") {
+      if (checkoutPayment === "tarjeta" && !options?.skipPayment) {
         if (!wompiConfig || !wompiConfig.publicKey) {
           setCheckoutError(
             "El pago con tarjeta no está disponible en este momento. Intenta con otro medio de pago o recarga la página.",
@@ -826,9 +869,12 @@ export default function App() {
           lng: checkoutAddress.lng ?? undefined,
         },
         shippingType: checkoutShipping,
-        paymentMethod: checkoutPayment,
+        // Si el cupón cubre el total no hay pasarela: se registra como efectivo
+        // para que el backend no exija datos de tarjeta/PSE/Nequi.
+        paymentMethod: options?.skipPayment ? "efectivo" : checkoutPayment,
+        couponCode: checkoutCouponCode.trim() || undefined,
       };
-      if (checkoutPayment === "tarjeta") {
+      if (checkoutPayment === "tarjeta" && !options?.skipPayment) {
         payload.paymentDetails = {
           card: {
             provider: "wompi",
@@ -881,6 +927,7 @@ export default function App() {
       setOrders((prev) => [o, ...prev]);
       setLastOrderId(response.referenceCode);
       setCartItems([]);
+      setCheckoutCouponCode("");
       setOrderPending(response.status === "payment_pending");
       setCheckoutStep(4);
 
@@ -903,8 +950,6 @@ export default function App() {
         setBrebEnabled(d?.breb?.enabled ?? true);
         setBrebKey(d?.breb?.key ?? "@davi3148853458");
         setBrebBank(d?.breb?.bank ?? "Davivienda");
-        setBrebQrImageUrl(d?.breb?.qrImageUrl ?? "");
-        setBrebQrMime(d?.breb?.qrImageMime ?? "");
         setEfectivoEnabled(d?.efectivo?.enabled ?? true);
         setWompiMethods({
           card: d?.wompi?.methods?.card ?? true,
@@ -1109,8 +1154,8 @@ export default function App() {
           featuredBrands={featuredBrands}
           branches={landingBranches}
           onBrandClick={handleBrandClick}
-          productTypes={landingProductTypes}
-          onProductTypeClick={handleProductTypeClick}
+          featuredCategories={landingFeaturedCategories}
+          onFeaturedCategoryClick={handleFeaturedCategoryClick}
           featuredTabs={featuredTabs}
           onApplyFilter={handleApplyFilter}
         />
@@ -1130,6 +1175,8 @@ export default function App() {
         cartItems={cartItems}
         cartCount={cartCount}
         cartTotal={cartTotal}
+        discountTotal={cartQuote?.discountTotal ?? 0}
+        promotions={cartQuote?.appliedPromotions ?? []}
         onClose={() => setCartOpen(false)}
         onAdd={addToCart}
         onRemove={removeFromCart}
@@ -1143,6 +1190,7 @@ export default function App() {
       />
       <ProductDetailModal
         product={selectedProduct}
+        branchId={catalogBranch}
         cartItems={cartItems}
         onAdd={addToCart}
         onRemove={removeFromCart}
@@ -1167,6 +1215,7 @@ export default function App() {
         checkoutStep={checkoutStep}
         cartItems={cartItems}
         cartTotal={cartTotal}
+        promotionDiscount={cartQuote?.discountTotal ?? 0}
         checkoutAddress={checkoutAddress}
         addressConfirmed={addressConfirmed}
         onSetAddressConfirmed={setAddressConfirmed}
@@ -1175,6 +1224,8 @@ export default function App() {
         customerPhone={customer?.phone ?? ""}
         checkoutShipping={checkoutShipping}
         checkoutPayment={checkoutPayment}
+        checkoutCouponCode={checkoutCouponCode}
+        onSetCheckoutCouponCode={setCheckoutCouponCode}
         checkoutLoading={checkoutLoading}
         checkoutError={checkoutError}
         cardPayment={cardPayment}
@@ -1185,8 +1236,6 @@ export default function App() {
         brebEnabled={brebEnabled}
         brebKey={brebKey}
         brebBank={brebBank}
-        brebQrImageUrl={brebQrImageUrl}
-        brebQrMime={brebQrMime}
         efectivoEnabled={efectivoEnabled}
         psePayment={psePayment}
         nequiPayment={nequiPayment}

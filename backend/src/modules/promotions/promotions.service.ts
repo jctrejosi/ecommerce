@@ -15,20 +15,35 @@ import {
   count,
   or,
   isNull,
+  inArray,
 } from 'drizzle-orm';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { DrizzleService } from '../../database/drizzle.service';
+import * as schema from '../../../drizzle/schema';
 import {
   promotions,
   coupons,
   couponRedemptions,
   orders,
   customers,
+  promotionCategories,
+  promotionBranches,
+  promotionProducts,
+  promotionCombos,
+  promotionComboItems,
+  productVariants,
+  products,
 } from '../../../drizzle/schema';
 import {
   CreatePromotionDto,
   UpdatePromotionDto,
   QueryPromotionsDto,
+  DiscountType,
+  PromotionComboMode,
 } from './dto/promotion.dto';
+import { generateCouponCodeString } from '../coupons/coupon-code.util';
+
+type Tx = NodePgDatabase<typeof schema>;
 
 @Injectable()
 export class PromotionsService {
@@ -81,6 +96,10 @@ export class PromotionsService {
         description: promotions.description,
         isAutoApply: promotions.isAutoApply,
         requiresCode: promotions.requiresCode,
+        discountType: promotions.discountType,
+        discountValue: promotions.discountValue,
+        maximumDiscount: promotions.maximumDiscount,
+        weekdays: promotions.weekdays,
         priority: promotions.priority,
         stackable: promotions.stackable,
         exclusive: promotions.exclusive,
@@ -106,6 +125,9 @@ export class PromotionsService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const promotionIds = rows.map((row) => Number(row.id));
+    const targets = await this.loadTargetSummaries(promotionIds);
+
     const result = await Promise.all(
       rows.map(async (row) => {
         const usagesToday = await this.getPromotionUsagesToday(Number(row.id));
@@ -116,12 +138,34 @@ export class PromotionsService {
           endDate: row.endDate,
         });
 
+        const targetsForPromo = targets.get(Number(row.id)) ?? {
+          categoryIds: [] as number[],
+          branchIds: [] as number[],
+          productIds: [] as number[],
+          comboCount: 0,
+        };
+
         return {
           id: Number(row.id),
           name: row.name,
           description: row.description,
-          discountType: row.couponCode ? 'cupon' : 'porcentaje',
-          discountValue: '',
+          discountType: this.apiDiscountType(
+            row.discountType,
+            !!row.couponCode,
+          ),
+          discountValue: row.discountValue,
+          maximumDiscount: row.maximumDiscount,
+          weekdays: row.weekdays ?? [],
+          categoryIds: targetsForPromo.categoryIds,
+          branchIds: targetsForPromo.branchIds,
+          productIds: targetsForPromo.productIds,
+          comboCount: targetsForPromo.comboCount,
+          appliesTo:
+            targetsForPromo.categoryIds.length ||
+            targetsForPromo.productIds.length ||
+            targetsForPromo.comboCount
+              ? 'targeted'
+              : 'all',
           couponCode: row.couponCode,
           couponMaxUsesTotal: row.couponMaxUsesTotal,
           couponTimesUsed: row.couponTimesUsed,
@@ -188,20 +232,22 @@ export class PromotionsService {
       usosHoy += todayCount;
     }
 
+    // Descuento otorgado hoy (promociones automáticas y cupones quedan
+    // reflejados en orders.discount_total al crear el pedido).
     const discountResult = await this.db
       .select({
-        total: sql<string>`COALESCE(SUM(${couponRedemptions.discountAmount}), 0)`,
+        total: sql<string>`COALESCE(SUM(${orders.discountTotal}), 0)`,
       })
-      .from(couponRedemptions)
+      .from(orders)
       .where(
         and(
-          gte(couponRedemptions.usedAt, today.toISOString()),
-          lt(couponRedemptions.usedAt, tomorrow.toISOString()),
+          gte(orders.createdAt, today.toISOString()),
+          lt(orders.createdAt, tomorrow.toISOString()),
         ),
       );
 
     const descuentoAplicado = discountResult[0]?.total
-      ? parseInt(discountResult[0].total, 10)
+      ? Number(discountResult[0].total)
       : 0;
 
     return { activas, programadas, usosHoy, descuentoAplicado };
@@ -215,6 +261,10 @@ export class PromotionsService {
         description: promotions.description,
         isAutoApply: promotions.isAutoApply,
         requiresCode: promotions.requiresCode,
+        discountType: promotions.discountType,
+        discountValue: promotions.discountValue,
+        maximumDiscount: promotions.maximumDiscount,
+        weekdays: promotions.weekdays,
         priority: promotions.priority,
         stackable: promotions.stackable,
         exclusive: promotions.exclusive,
@@ -251,13 +301,24 @@ export class PromotionsService {
     });
 
     const usagesToday = await this.getPromotionUsagesToday(id);
+    const targets = await this.loadTargetDetails(id);
 
     return {
       id: Number(promo.id),
       name: promo.name,
       description: promo.description,
-      discountType: promo.couponCode ? 'cupon' : 'porcentaje',
-      discountValue: '',
+      discountType: this.apiDiscountType(
+        promo.discountType,
+        !!promo.couponCode,
+      ),
+      discountValue: promo.discountValue,
+      maximumDiscount: promo.maximumDiscount,
+      weekdays: promo.weekdays ?? [],
+      categoryIds: targets.categoryIds,
+      branchIds: targets.branchIds,
+      products: targets.products,
+      combos: targets.combos,
+      appliesTo: targets.appliesTo,
       couponId: promo.couponId ? Number(promo.couponId) : null,
       couponCode: promo.couponCode,
       couponMaxUsesTotal: promo.couponMaxUsesTotal,
@@ -405,6 +466,355 @@ export class PromotionsService {
     return result[0]?.cnt ?? 0;
   }
 
+  // ── Helpers de metas (categorías / productos / combos) ──
+
+  private apiDiscountType(dbType: string, isCoupon: boolean): DiscountType {
+    if (isCoupon) return DiscountType.CUPON;
+    return dbType === 'fixed' ? DiscountType.FIJO : DiscountType.PORCENTAJE;
+  }
+
+  private dbDiscountType(type: DiscountType): 'percentage' | 'fixed' {
+    return type === DiscountType.FIJO ? 'fixed' : 'percentage';
+  }
+
+  private async resolveVariantIds(
+    productIds: number[],
+  ): Promise<Map<number, number>> {
+    const unique = [...new Set(productIds.filter((id) => Number.isFinite(id)))];
+    const map = new Map<number, number>();
+    if (!unique.length) return map;
+
+    const rows = await this.db
+      .select({ id: productVariants.id, productId: productVariants.productId })
+      .from(productVariants)
+      .where(
+        and(
+          inArray(productVariants.productId, unique),
+          isNull(productVariants.deletedAt),
+        ),
+      )
+      .orderBy(productVariants.id);
+
+    for (const row of rows) {
+      const productId = Number(row.productId);
+      if (!map.has(productId)) map.set(productId, Number(row.id));
+    }
+    return map;
+  }
+
+  private async loadTargetSummaries(promotionIds: number[]) {
+    const map = new Map<
+      number,
+      {
+        categoryIds: number[];
+        branchIds: number[];
+        productIds: number[];
+        comboCount: number;
+      }
+    >();
+    if (!promotionIds.length) return map;
+
+    const [catRows, branchRows, prodRows, comboRows] = await Promise.all([
+      this.db
+        .select({
+          promotionId: promotionCategories.promotionId,
+          categoryId: promotionCategories.categoryId,
+        })
+        .from(promotionCategories)
+        .where(inArray(promotionCategories.promotionId, promotionIds)),
+      this.db
+        .select({
+          promotionId: promotionBranches.promotionId,
+          branchId: promotionBranches.branchId,
+        })
+        .from(promotionBranches)
+        .where(inArray(promotionBranches.promotionId, promotionIds)),
+      this.db
+        .select({
+          promotionId: promotionProducts.promotionId,
+          productId: productVariants.productId,
+        })
+        .from(promotionProducts)
+        .innerJoin(
+          productVariants,
+          eq(productVariants.id, promotionProducts.productVariantId),
+        )
+        .where(inArray(promotionProducts.promotionId, promotionIds)),
+      this.db
+        .select({
+          promotionId: promotionCombos.promotionId,
+          id: promotionCombos.id,
+        })
+        .from(promotionCombos)
+        .where(inArray(promotionCombos.promotionId, promotionIds)),
+    ]);
+
+    const ensure = (id: number) => {
+      let entry = map.get(id);
+      if (!entry) {
+        entry = {
+          categoryIds: [],
+          branchIds: [],
+          productIds: [],
+          comboCount: 0,
+        };
+        map.set(id, entry);
+      }
+      return entry;
+    };
+
+    for (const row of catRows) {
+      ensure(Number(row.promotionId)).categoryIds.push(Number(row.categoryId));
+    }
+    for (const row of branchRows) {
+      ensure(Number(row.promotionId)).branchIds.push(Number(row.branchId));
+    }
+    for (const row of prodRows) {
+      ensure(Number(row.promotionId)).productIds.push(Number(row.productId));
+    }
+    for (const row of comboRows) {
+      ensure(Number(row.promotionId)).comboCount += 1;
+    }
+
+    return map;
+  }
+
+  private async loadTargetDetails(promotionId: number) {
+    const [catRows, branchRows, prodRows, comboRows] = await Promise.all([
+      this.db
+        .select({ categoryId: promotionCategories.categoryId })
+        .from(promotionCategories)
+        .where(eq(promotionCategories.promotionId, promotionId)),
+      this.db
+        .select({ branchId: promotionBranches.branchId })
+        .from(promotionBranches)
+        .where(eq(promotionBranches.promotionId, promotionId)),
+      this.db
+        .select({
+          productId: productVariants.productId,
+          name: products.name,
+          discountValue: promotionProducts.discountValue,
+          isPercentage: promotionProducts.isPercentage,
+          maximumDiscount: promotionProducts.maximumDiscount,
+        })
+        .from(promotionProducts)
+        .innerJoin(
+          productVariants,
+          eq(productVariants.id, promotionProducts.productVariantId),
+        )
+        .innerJoin(products, eq(products.id, productVariants.productId))
+        .where(eq(promotionProducts.promotionId, promotionId)),
+      this.db
+        .select({
+          id: promotionCombos.id,
+          name: promotionCombos.name,
+          mode: promotionCombos.mode,
+          quantityRequired: promotionCombos.quantityRequired,
+          discountValue: promotionCombos.discountValue,
+          isPercentage: promotionCombos.isPercentage,
+        })
+        .from(promotionCombos)
+        .where(eq(promotionCombos.promotionId, promotionId))
+        .orderBy(promotionCombos.id),
+    ]);
+
+    const comboIds = comboRows.map((c) => Number(c.id));
+    const itemRows = comboIds.length
+      ? await this.db
+          .select({
+            comboId: promotionComboItems.comboId,
+            productId: productVariants.productId,
+            name: products.name,
+            discountValue: promotionComboItems.discountValue,
+            isPercentage: promotionComboItems.isPercentage,
+          })
+          .from(promotionComboItems)
+          .innerJoin(
+            productVariants,
+            eq(productVariants.id, promotionComboItems.productVariantId),
+          )
+          .innerJoin(products, eq(products.id, productVariants.productId))
+          .where(inArray(promotionComboItems.comboId, comboIds))
+      : [];
+
+    const categoryIds = catRows.map((r) => Number(r.categoryId));
+    const branchIds = branchRows.map((r) => Number(r.branchId));
+
+    const combos = comboRows.map((combo) => ({
+      id: Number(combo.id),
+      name: combo.name,
+      mode: combo.mode as PromotionComboMode,
+      quantityRequired: combo.quantityRequired,
+      discountValue: combo.discountValue,
+      isPercentage: combo.isPercentage,
+      items: itemRows
+        .filter((item) => Number(item.comboId) === Number(combo.id))
+        .map((item) => ({
+          productId: Number(item.productId),
+          name: item.name,
+          discountValue: item.discountValue,
+          isPercentage: item.isPercentage,
+        })),
+    }));
+
+    const appliesTo =
+      categoryIds.length || prodRows.length || combos.length
+        ? 'targeted'
+        : 'all';
+
+    return {
+      categoryIds,
+      branchIds,
+      products: prodRows.map((row) => ({
+        productId: Number(row.productId),
+        name: row.name,
+        discountValue: row.discountValue,
+        isPercentage: row.isPercentage,
+        maximumDiscount: row.maximumDiscount,
+      })),
+      combos,
+      appliesTo,
+    };
+  }
+
+  private async replaceTargets(
+    tx: Tx,
+    promotionId: number,
+    dto: Pick<
+      UpdatePromotionDto,
+      'categoryIds' | 'branchIds' | 'products' | 'combos'
+    >,
+  ) {
+    if (dto.categoryIds !== undefined) {
+      await tx
+        .delete(promotionCategories)
+        .where(eq(promotionCategories.promotionId, promotionId));
+      const unique = [
+        ...new Set(dto.categoryIds.filter((id) => Number.isFinite(id))),
+      ];
+      if (unique.length) {
+        await tx
+          .insert(promotionCategories)
+          .values(unique.map((categoryId) => ({ promotionId, categoryId })));
+      }
+    }
+
+    if (dto.branchIds !== undefined) {
+      await tx
+        .delete(promotionBranches)
+        .where(eq(promotionBranches.promotionId, promotionId));
+      const unique = [
+        ...new Set(dto.branchIds.filter((id) => Number.isFinite(id))),
+      ];
+      if (unique.length) {
+        await tx
+          .insert(promotionBranches)
+          .values(unique.map((branchId) => ({ promotionId, branchId })));
+      }
+    }
+
+    if (dto.products !== undefined) {
+      await tx
+        .delete(promotionProducts)
+        .where(eq(promotionProducts.promotionId, promotionId));
+      const variantMap = await this.resolveVariantIds(
+        dto.products.map((p) => p.productId),
+      );
+      const seen = new Set<number>();
+      const values = dto.products
+        .map((item) => {
+          const variantId = variantMap.get(item.productId);
+          if (!variantId || seen.has(variantId)) return null;
+          seen.add(variantId);
+          return {
+            promotionId,
+            productVariantId: variantId,
+            discountValue:
+              item.discountValue !== undefined
+                ? String(item.discountValue)
+                : null,
+            isPercentage: item.isPercentage ?? true,
+            maximumDiscount:
+              item.maximumDiscount !== undefined
+                ? String(item.maximumDiscount)
+                : null,
+          };
+        })
+        .filter((v): v is NonNullable<typeof v> => v !== null);
+      if (values.length) {
+        await tx.insert(promotionProducts).values(values);
+      }
+    }
+
+    if (dto.combos !== undefined) {
+      await tx
+        .delete(promotionCombos)
+        .where(eq(promotionCombos.promotionId, promotionId));
+
+      for (const combo of dto.combos) {
+        const variantMap = await this.resolveVariantIds(
+          combo.items.map((item) => item.productId),
+        );
+        const seen = new Set<number>();
+        const itemValues = combo.items
+          .map((item) => {
+            const variantId = variantMap.get(item.productId);
+            if (!variantId || seen.has(variantId)) return null;
+            seen.add(variantId);
+            return {
+              productVariantId: variantId,
+              discountValue:
+                combo.mode === PromotionComboMode.PER_PRODUCT
+                  ? String(item.discountValue ?? 0)
+                  : String(combo.discountValue ?? 0),
+              isPercentage:
+                combo.mode === PromotionComboMode.PER_PRODUCT
+                  ? (item.isPercentage ?? true)
+                  : (combo.isPercentage ?? true),
+            };
+          })
+          .filter((v): v is NonNullable<typeof v> => v !== null);
+
+        if (!itemValues.length) continue;
+
+        const [created] = await tx
+          .insert(promotionCombos)
+          .values({
+            promotionId,
+            name: combo.name ?? null,
+            mode: combo.mode,
+            quantityRequired:
+              combo.quantityRequired ?? Math.max(2, itemValues.length),
+            discountValue: String(combo.discountValue ?? 0),
+            isPercentage: combo.isPercentage ?? true,
+          })
+          .returning({ id: promotionCombos.id });
+
+        await tx.insert(promotionComboItems).values(
+          itemValues.map((item) => ({
+            comboId: Number(created.id),
+            ...item,
+          })),
+        );
+      }
+    }
+  }
+
+  private async generateUniqueCouponCode(): Promise<string> {
+    for (let attempt = 0; attempt < 12; attempt++) {
+      const code = generateCouponCodeString();
+      const [existing] = await this.db
+        .select({ id: coupons.id })
+        .from(coupons)
+        .where(eq(coupons.code, code))
+        .limit(1);
+      if (!existing) return code;
+    }
+    throw new BadRequestException(
+      'No se pudo generar un código de cupón único, intenta de nuevo',
+    );
+  }
+
   async create(dto: CreatePromotionDto) {
     if (new Date(dto.endDate) <= new Date(dto.startDate)) {
       throw new BadRequestException(
@@ -412,10 +822,8 @@ export class PromotionsService {
       );
     }
 
-    if ((dto.discountType as string) === 'cupon' && !dto.couponCode) {
-      throw new BadRequestException(
-        'El código de cupón es requerido para promociones tipo cupón',
-      );
+    if (dto.discountType === DiscountType.CUPON && !dto.couponCode) {
+      dto.couponCode = await this.generateUniqueCouponCode();
     }
 
     if (dto.couponCode) {
@@ -434,36 +842,57 @@ export class PromotionsService {
     const requiresCode =
       (dto.discountType as string) === 'cupon' || !!dto.couponCode;
 
-    const [newPromo] = await this.db
-      .insert(promotions)
-      .values({
-        name: dto.name,
-        description: dto.description ?? null,
-        isAutoApply: dto.isAutoApply ?? false,
-        requiresCode,
-        priority: dto.priority ?? 0,
-        stackable: dto.stackable ?? false,
-        exclusive: dto.exclusive ?? false,
-        usageLimit: dto.usageLimit ?? null,
-        startDate: dto.startDate,
-        endDate: dto.endDate,
-        isActive: dto.isActive ?? true,
-      })
-      .returning({ id: promotions.id });
+    const promoId = await this.drizzle.transaction(async (tx) => {
+      const [newPromo] = await tx
+        .insert(promotions)
+        .values({
+          name: dto.name,
+          description: dto.description ?? null,
+          isAutoApply: dto.isAutoApply ?? false,
+          requiresCode,
+          discountType: this.dbDiscountType(dto.discountType),
+          discountValue: String(dto.discountValue),
+          maximumDiscount:
+            dto.maximumDiscount !== undefined
+              ? String(dto.maximumDiscount)
+              : null,
+          weekdays: dto.weekdays?.length ? dto.weekdays : null,
+          priority: dto.priority ?? 0,
+          stackable: dto.stackable ?? false,
+          exclusive: dto.exclusive ?? false,
+          usageLimit: dto.usageLimit ?? null,
+          startDate: dto.startDate,
+          endDate: dto.endDate,
+          isActive: dto.isActive ?? true,
+        })
+        .returning({ id: promotions.id });
 
-    const promoId = Number(newPromo.id);
+      const id = Number(newPromo.id);
 
-    if (dto.couponCode) {
-      await this.db.insert(coupons).values({
-        promotionId: promoId,
-        code: dto.couponCode.toUpperCase(),
-        maxUsesTotal: dto.maxUsesTotal ?? null,
-        maxUsesPerCustomer: dto.maxUsesPerCustomer ?? 1,
-        startsAt: dto.startDate,
-        expiresAt: dto.endDate,
-        isActive: true,
-      });
-    }
+      if (dto.couponCode) {
+        await tx.insert(coupons).values({
+          promotionId: id,
+          code: dto.couponCode.toUpperCase(),
+          kind: 'discount',
+          discountType:
+            dto.discountType === DiscountType.FIJO ? 'fixed' : 'percentage',
+          discountValue: String(dto.discountValue),
+          maximumDiscount:
+            dto.maximumDiscount !== undefined
+              ? String(dto.maximumDiscount)
+              : null,
+          maxUsesTotal: dto.maxUsesTotal ?? null,
+          maxUsesPerCustomer: dto.maxUsesPerCustomer ?? 1,
+          startsAt: dto.startDate,
+          expiresAt: dto.endDate,
+          isActive: true,
+        });
+      }
+
+      await this.replaceTargets(tx, id, dto);
+
+      return id;
+    });
 
     this.logger.log(`Promoción creada: ID=${promoId}, nombre="${dto.name}"`);
     return this.findOne(promoId);
@@ -503,6 +932,14 @@ export class PromotionsService {
     if (dto.startDate !== undefined) updateData.startDate = dto.startDate;
     if (dto.endDate !== undefined) updateData.endDate = dto.endDate;
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+    if (dto.discountValue !== undefined)
+      updateData.discountValue = String(dto.discountValue);
+    if (dto.discountType !== undefined)
+      updateData.discountType = this.dbDiscountType(dto.discountType);
+    if (dto.maximumDiscount !== undefined)
+      updateData.maximumDiscount = String(dto.maximumDiscount);
+    if (dto.weekdays !== undefined)
+      updateData.weekdays = dto.weekdays.length ? dto.weekdays : null;
 
     const dt = dto.discountType as string | undefined;
     if (dt === 'cupon' || dto.couponCode) {
@@ -516,6 +953,15 @@ export class PromotionsService {
         .update(promotions)
         .set(updateData)
         .where(eq(promotions.id, BigInt(id)));
+    }
+
+    if (
+      dto.categoryIds !== undefined ||
+      dto.branchIds !== undefined ||
+      dto.products !== undefined ||
+      dto.combos !== undefined
+    ) {
+      await this.replaceTargets(this.db, id, dto);
     }
 
     // Update coupon

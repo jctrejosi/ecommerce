@@ -1,0 +1,116 @@
+{
+  "tabla": "TIDPRECI",
+  "nombre_completo": "Valores por articulo del proveedor \"Uno a Uno\" (historico)",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\TIDPRECI.adt",
+  "descripcion": "225 filas, todas con INTIPO = \"Uno a Uno\", con dos valores por articulo (INVALOR e INVALORN), fecha, hora y usuario. Parece un historico/ajuste de valores de compra de ese proveedor (189 de 225 filas tienen INVALOR > INVALORN). NO contiene los precios de venta del catalogo: esos estan en TIDSAL.INVRVENTA1..INVRVENTA0. Proposito exacto pendiente de confirmar.",
+  "registros": 225,
+  "clave_primaria": null,
+  "total_columnas": 7,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [
+    {
+      "campo": "ARTIC",
+      "referencia": "TIDSAL.INARTIC",
+      "nota": "Articulo.",
+      "confianza": "media"
+    },
+    {
+      "campo": "LISTA",
+      "referencia": "TIDLISTA.CODIGO",
+      "nota": "Lista de precios.",
+      "confianza": "media"
+    }
+  ],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "INARTIC",
+      "tipo": "char",
+      "bytes": 19,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Codigo del articulo",
+      "confianza": "alta"
+    },
+    {
+      "idx": 1,
+      "columna": "INVALOR",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Primer valor registrado (habitualmente el mayor)",
+      "confianza": "media"
+    },
+    {
+      "idx": 2,
+      "columna": "INVALORN",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Segundo valor registrado (nuevo/ajustado)",
+      "confianza": "media"
+    },
+    {
+      "idx": 3,
+      "columna": "INFECHA",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha del registro (YYYYMMDD)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 4,
+      "columna": "INHORA",
+      "tipo": "char",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Hora del registro (HH:MM:SS)",
+      "confianza": "alta"
+    },
+    {
+      "idx": 5,
+      "columna": "INUSUAR",
+      "tipo": "char",
+      "bytes": 6,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Usuario que registro el cambio",
+      "confianza": "media"
+    },
+    {
+      "idx": 6,
+      "columna": "INTIPO",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Tipo/lista del registro (unico valor: \"Uno a Uno\")",
+      "confianza": "media"
+    }
+  ]
+}

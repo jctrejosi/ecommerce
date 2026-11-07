@@ -1,0 +1,51 @@
+{
+  "table": "TIDGON",
+  "source": "db/ads/openads/data/tidgon.adt",
+  "bytes": 3155,
+  "recordCount": 15,
+  "recordLength": 117,
+  "headerLength": 1400,
+  "fieldCount": 5,
+  "fields": [
+    {
+      "name": "CODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "DESCRIP1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 15,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "DESCRIP2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 65,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "SALE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 115,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "FLAG",
+      "type": 4,
+      "typeName": "char",
+      "offset": 116,
+      "length": 1,
+      "decimals": 0
+    }
+  ]
+}

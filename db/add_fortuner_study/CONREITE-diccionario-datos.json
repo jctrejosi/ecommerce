@@ -1,0 +1,114 @@
+{
+  "tabla": "CONREITE",
+  "nombre_completo": "Detalle de relacion de costos",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\CONREITE.adt",
+  "descripcion": "Detalle por tercero y centro de costo de un lote de relacion (RILOTE): fecha, concepto y valor. Uso contable interno.",
+  "registros": 18,
+  "clave_primaria": null,
+  "total_columnas": 8,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "RILOTE",
+      "tipo": "char",
+      "bytes": 12,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Lote",
+      "confianza": "media"
+    },
+    {
+      "idx": 1,
+      "columna": "RIFECHA",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Fecha",
+      "confianza": "media"
+    },
+    {
+      "idx": 2,
+      "columna": "RIDETALLE",
+      "tipo": "char",
+      "bytes": 100,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 3,
+      "columna": "RICCOSTO",
+      "tipo": "char",
+      "bytes": 7,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Centro de costo",
+      "confianza": "media"
+    },
+    {
+      "idx": 4,
+      "columna": "RITERCE",
+      "tipo": "char",
+      "bytes": 15,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 5,
+      "columna": "RIVALOR",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor monetario",
+      "confianza": "alta"
+    },
+    {
+      "idx": 6,
+      "columna": "RICCOSCRU",
+      "tipo": "char",
+      "bytes": 7,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 7,
+      "columna": "CIA",
+      "tipo": "int32",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    }
+  ]
+}

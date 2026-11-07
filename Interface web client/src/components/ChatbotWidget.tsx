@@ -384,15 +384,18 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
         </div>
       )}
 
-      {/* Botón flotante — logo y nombre dentro del mismo contenedor circular */}
+      {/* Botón flotante — nombre y logo dentro de un mismo círculo */}
       <button
         onClick={() => (open ? setOpen(false) : openWidget())}
         aria-label="Daisy"
         style={{ animation: "botPop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) backwards" }}
-        className="relative z-[90] w-[84px] h-[84px] rounded-full flex flex-col items-center justify-center gap-0 cursor-pointer hover:scale-105 active:scale-95 transition-transform"
+        className="relative z-[90] w-[88px] h-[88px] rounded-full flex flex-col items-center justify-center gap-0 bg-card text-card-foreground border border-border shadow-[0_8px_24px_rgba(26,26,46,0.25)] cursor-pointer hover:scale-105 active:scale-95 transition-transform"
       >
+        {showHint && !open && (
+          <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping pointer-events-none" />
+        )}
         <span
-          className="text-lg font-black leading-none -mb-2"
+          className="relative text-lg font-black leading-none -mb-1"
           style={{
             fontFamily: "var(--font-script)",
             color: "var(--foreground)",
@@ -401,24 +404,19 @@ export function ChatbotWidget({ onAddProduct, onApplyCart, pageCartItems }: Prop
         >
           Daisy
         </span>
-        <span className="relative block w-14 h-14">
-          {showHint && !open && (
-            <span className="absolute inset-0 rounded-full bg-primary/40 animate-ping pointer-events-none" />
-          )}
+        <span className="relative flex w-12 h-12 items-center justify-center">
           {open ? (
-            <span className="flex w-full h-full items-center justify-center rounded-full bg-white text-foreground shadow-[0_6px_20px_rgba(26,26,46,0.35)]">
-              <svg
-                width="26"
-                height="26"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </span>
+            <svg
+              width="26"
+              height="26"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+            >
+              <path d="M18 6 6 18M6 6l12 12" />
+            </svg>
           ) : (
             <img
               src={logoBot}

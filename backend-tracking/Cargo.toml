@@ -1,0 +1,48 @@
+[package]
+name = "backend-tracking"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.80"
+description = "Ingesta y worker de analítica propia de Mercaldas (Rust)"
+license = "UNLICENSED"
+publish = false
+
+[lib]
+name = "tracking"
+path = "src/lib.rs"
+
+[[bin]]
+name = "ingest"
+path = "src/bin/ingest.rs"
+
+[[bin]]
+name = "worker"
+path = "src/bin/worker.rs"
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+dotenvy = "0.15"
+hex = "0.4"
+redis = { version = "0.27", features = ["tokio-comp", "streams"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlx = { version = "0.8", default-features = false, features = [
+  "runtime-tokio",
+  "postgres",
+  "uuid",
+  "chrono",
+  "json",
+] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal", "net", "time"] }
+tower-http = { version = "0.7", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

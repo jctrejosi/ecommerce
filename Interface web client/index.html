@@ -14,10 +14,11 @@
         :root { --safe-bottom: env(safe-area-inset-bottom, 0px); }
       </style>
       <script>
-        // Aplica el tema guardado antes de pintar (evita el parpadeo).
+        // Aplica el tema antes de pintar para evitar el parpadeo. Si el cliente
+        // nunca eligió un tema, se usa la preferencia del sistema.
         (function () {
           try {
-            var t = localStorage.getItem("mercaldas-theme");
+            var t = localStorage.getItem("mercaldas-theme-v2");
             if (t === "light") t = "claro";
             if (t === "dark") t = "oscuro";
             // Sólo hay tema claro y oscuro; los valores antiguos caen a claro y,

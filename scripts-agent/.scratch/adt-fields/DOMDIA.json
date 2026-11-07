@@ -1,7 +1,7 @@
 {
   "table": "DOMDIA",
-  "source": "db/ADD_ANALITICA/DOMDIA.ADT",
-  "bytes": 49305344,
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/DOMDIA.ADT",
+  "bytes": 262144,
   "recordCount": 52496,
   "recordLength": 939,
   "headerLength": 11600,

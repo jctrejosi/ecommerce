@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Plus, Edit, Trash2, X, Loader2, MapPin, Package, FolderTree, Tag, Truck, Store, Phone, Mail, User } from "lucide-react";
 import { branchesService, type Branch, type BranchProduct, type BranchCategory, type BranchBrand, type DeliveryZone } from "../services/branches.service";
+import { useCan } from "../lib/auth-context";
 
 const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3000";
 
@@ -352,6 +353,10 @@ export default function Branches() {
   const [deleteConfirm, setDeleteConfirm] = useState<Branch | null>(null);
   const [activeConfirm, setActiveConfirm] = useState<Branch | null>(null);
 
+  const canCreate = useCan("admin:catalog:branches:create");
+  const canEdit = useCan("admin:catalog:branches:edit");
+  const canDelete = useCan("admin:catalog:branches:delete");
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try { setBranches(await branchesService.getAll()); } catch {}
@@ -394,7 +399,9 @@ export default function Branches() {
             <h1 className="text-2xl font-bold text-gray-900">Sucursales</h1>
             <p className="text-sm text-gray-500 mt-0.5">{branches.length} sucursales · datos, visibilidad, imagen, horario y zonas de entrega</p>
           </div>
-          <button onClick={() => setModal("new")} className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl"><Plus size={14} /> Nueva sucursal</button>
+          {canCreate && (
+            <button onClick={() => setModal("new")} className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl"><Plus size={14} /> Nueva sucursal</button>
+          )}
         </div>
 
         {loading ? <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-gray-400" /></div> : (
@@ -420,8 +427,12 @@ export default function Branches() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1">
-                      <button onClick={() => setModal(b)} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"><Edit size={13} /></button>
-                      <button onClick={() => setDeleteConfirm(b)} title="Eliminar" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                      {canEdit && (
+                        <button onClick={() => setModal(b)} title="Editar" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-gray-100 text-gray-400"><Edit size={13} /></button>
+                      )}
+                      {canDelete && (
+                        <button onClick={() => setDeleteConfirm(b)} title="Eliminar" className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-500"><Trash2 size={13} /></button>
+                      )}
                     </div>
                   </div>
                   <div className="space-y-1.5 text-xs text-gray-500 mb-3">
@@ -444,28 +455,30 @@ export default function Branches() {
                     <button onClick={() => openBranchMap(b)} className="flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-gray-600 border border-gray-200 hover:border-amber-300 hover:text-amber-600 rounded-lg transition-colors"><MapPin size={13} /> Ver mapa</button>
                     <button onClick={() => setDetailId(b.id)} className="flex-1 py-2 text-xs font-semibold text-amber-600 hover:bg-amber-50 rounded-lg transition-colors">Ver detalle →</button>
                   </div>
-                  <div className="flex items-center gap-4">
-                    <button
-                      onClick={() => setActiveConfirm(b)}
-                      title={b.isActive ? "Marcar como inactiva" : "Marcar como activa"}
-                      className="flex items-center gap-1.5"
-                    >
-                      <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}>
-                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`} />
-                      </span>
-                      <span className={`text-xs font-semibold ${b.isActive ? "text-green-600" : "text-gray-400"}`}>{b.isActive ? "Activa" : "Inactiva"}</span>
-                    </button>
-                    <button
-                      onClick={() => toggleVisible(b)}
-                      title={b.isVisible ? "Ocultar en la landing" : "Mostrar en la landing"}
-                      className="flex items-center gap-1.5"
-                    >
-                      <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isVisible ? "bg-blue-500" : "bg-gray-300"}`}>
-                        <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isVisible ? "translate-x-4" : "translate-x-0"}`} />
-                      </span>
-                      <span className={`text-xs font-semibold ${b.isVisible ? "text-blue-600" : "text-gray-400"}`}>{b.isVisible ? "Visible" : "Oculta"}</span>
-                    </button>
-                  </div>
+                  {canEdit && (
+                    <div className="flex items-center gap-4">
+                      <button
+                        onClick={() => setActiveConfirm(b)}
+                        title={b.isActive ? "Marcar como inactiva" : "Marcar como activa"}
+                        className="flex items-center gap-1.5"
+                      >
+                        <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isActive ? "bg-green-500" : "bg-gray-300"}`}>
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isActive ? "translate-x-4" : "translate-x-0"}`} />
+                        </span>
+                        <span className={`text-xs font-semibold ${b.isActive ? "text-green-600" : "text-gray-400"}`}>{b.isActive ? "Activa" : "Inactiva"}</span>
+                      </button>
+                      <button
+                        onClick={() => toggleVisible(b)}
+                        title={b.isVisible ? "Ocultar en la landing" : "Mostrar en la landing"}
+                        className="flex items-center gap-1.5"
+                      >
+                        <span className={`relative w-9 h-5 rounded-full transition-colors ${b.isVisible ? "bg-blue-500" : "bg-gray-300"}`}>
+                          <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${b.isVisible ? "translate-x-4" : "translate-x-0"}`} />
+                        </span>
+                        <span className={`text-xs font-semibold ${b.isVisible ? "text-blue-600" : "text-gray-400"}`}>{b.isVisible ? "Visible" : "Oculta"}</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

@@ -182,14 +182,26 @@ async def suggest_cart(
 
 
 async def cleanup_expired() -> tuple[int, int]:
-    """Borra carritos y sesiones invitado expirados. Devuelve (carts, sesiones)."""
+    """Borra carritos y sesiones invitado expiradas. Devuelve (carts, sesiones).
+
+    Las sesiones con pedidos asociados se conservan: `orders.guest_session_id`
+    las referencia y borrarlas rompería el histórico de compras (de ahí el
+    `NOT EXISTS`, que evita el `ForeignKeyViolationError` al arrancar).
+    """
     pool = await database.get_pool()
     async with pool.acquire() as conn:
         carts = await conn.fetchval(
             "WITH del AS (DELETE FROM carts WHERE expires_at < now() RETURNING id) SELECT count(*) FROM del"
         )
         sessions = await conn.fetchval(
-            "WITH del AS (DELETE FROM guest_sessions WHERE expires_at < now() RETURNING id) SELECT count(*) FROM del"
+            "WITH del AS ("
+            "  DELETE FROM guest_sessions gs"
+            "  WHERE gs.expires_at < now()"
+            "    AND NOT EXISTS ("
+            "      SELECT 1 FROM orders o WHERE o.guest_session_id = gs.id"
+            "    )"
+            "  RETURNING gs.id"
+            ") SELECT count(*) FROM del"
         )
     return int(carts or 0), int(sessions or 0)
 

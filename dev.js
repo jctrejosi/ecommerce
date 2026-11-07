@@ -61,16 +61,69 @@ const DB_CONTAINER = "ecommerce_postgres";
 const DB_NAME = "ecommerce";
 const DB_BACKUP_DIR = path.join(ROOT, "db", "backups", "ecommerce");
 
+// ── .env (sin dependencias) ─────────────────────────────────
+// `dev.js` debe poder correr antes de `--init` (cuando aún no hay node_modules),
+// así que no usa dotenv. Carga el mismo archivo que el backend/conector para que
+// ERP_ADV_DATA, ERP_ADV_EXTERNAL, OPENADS_URL, etc. se configuren en un solo
+// sitio. No pisa variables ya definidas en el entorno del proceso.
+function loadEnvFile(file) {
+  let text;
+  try {
+    text = fs.readFileSync(file, "utf8");
+  } catch {
+    return;
+  }
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const m = line.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!m) continue;
+    let value = m[2].trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (process.env[m[1]] === undefined) process.env[m[1]] = value;
+  }
+}
+const ENV_FILES = process.env.DOTENV_CONFIG_PATH
+  ? [process.env.DOTENV_CONFIG_PATH]
+  : process.env.NODE_ENV === "production"
+    ? ["backend/.env.production", "backend/.env", ".env"]
+    : ["backend/.env.development.local", "backend/.env", ".env"];
+for (const rel of ENV_FILES) loadEnvFile(path.resolve(ROOT, rel));
+
 // Advantage (OpenADS): la BD del ERP, montada en Docker (db/ads/openads).
 // La consume el conector ERP ⇄ Postgres (scripts-agent/erp). No es dependencia
 // del ecommerce, así que si falta imagen/datos se avisa pero NO se aborta.
 const ADV_DIR = path.join(ROOT, "db", "ads", "openads");
 const ADV_IMAGE = "mercaldas/openads:1.09.73";
 const ADV_CONTAINER = "openads-img";
-const ADV_DATA = path.join(ADV_DIR, "data"); // copia ESCRIBIBLE que se monta
+// Producción: ERP_ADV_DATA=C:/ADD_FORTUNER (ruta real del ERP). Sin variable,
+// usa la copia escribible del repo. Se puede definir en backend/.env.
+const ADV_DATA = process.env.ERP_ADV_DATA
+  ? path.resolve(process.env.ERP_ADV_DATA)
+  : path.join(ADV_DIR, "data");
 const ADV_DATA_SEED = path.join(ADV_DIR, "data-test"); // copia ya validada
-const ADV_WIRE_PORT = 16262; // protocolo wire ADS (ace*.dll)
-const ADV_HTTP_PORT = 18080; // consola Studio / REST / SQL
+// ERP_ADV_EXTERNAL=1: no levantar Docker; usar un OpenADS ya existente en
+// OPENADS_URL (p. ej. el que sirve el ERP en la misma máquina).
+const ADV_EXTERNAL = ["1", "true", "yes"].includes(
+  String(process.env.ERP_ADV_EXTERNAL || "").toLowerCase(),
+);
+const ADV_WIRE_PORT = Number(process.env.ERP_ADV_WIRE_PORT || 16262); // wire ADS (ace*.dll)
+const ADV_HTTP_PORT = Number(process.env.ERP_ADV_HTTP_PORT || 18080); // Studio / REST / SQL
+const ADV_WIRE_USER = process.env.ERP_ADV_USER || "dsi";
+const ADV_WIRE_PASS = process.env.ERP_ADV_PASS || "dsi";
+// La API HTTP de OpenADS usa OPENADS_USER/PASS (lo mismo que los scripts);
+// ERP_ADV_HTTP_* permite credenciales distintas para el contenedor.
+const ADV_HTTP_USER =
+  process.env.ERP_ADV_HTTP_USER || process.env.OPENADS_USER || ADV_WIRE_USER;
+const ADV_HTTP_PASS =
+  process.env.ERP_ADV_HTTP_PASS || process.env.OPENADS_PASS || ADV_WIRE_PASS;
+const ADV_URL =
+  process.env.OPENADS_URL || `http://localhost:${ADV_HTTP_PORT}`;
 
 const ARGS = process.argv.slice(2);
 const MODE = ARGS.includes("--prod") || ARGS.includes("--live") ? "prod" : "dev";
@@ -85,6 +138,9 @@ const FORCE = ARGS.includes("--force");
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
 // `--no-advantage`: no levantar el contenedor de la BD del ERP (OpenADS).
 const NO_ADVANTAGE = ARGS.includes("--no-advantage");
+// `--advantage`: fuerza la BD del ERP y el agente de salida. Usado solo, monta
+// únicamente PostgreSQL + Advantage/OpenADS + sync-out (sin webs ni apps).
+const ADVANTAGE = ARGS.includes("--advantage");
 // `--init`: primer arranque — instala dependencias, compila todo y migra la BD
 // (PostgreSQL) desde el respaldo; luego monta los servicios.
 const INIT = ARGS.includes("--init");
@@ -319,6 +375,7 @@ const NO_SELECTOR_FLAGS = new Set([
   "--fg",
   "--foreground",
   "--no-advantage",
+  "--advantage",
   "--init",
   "--erp-sync",
   "--erp-interval",
@@ -405,6 +462,26 @@ function waitForPort(port, timeoutMs = 90000) {
   });
 }
 
+/** Espera a que un OpenADS externo responda /api/health. */
+async function waitForOpenAds(url, timeoutMs = 90000) {
+  const deadline = Date.now() + timeoutMs;
+  const auth =
+    "Basic " + Buffer.from(`${ADV_HTTP_USER}:${ADV_HTTP_PASS}`).toString("base64");
+  while (Date.now() < deadline) {
+    try {
+      const res = await fetch(`${url}/api/health`, {
+        headers: { Authorization: auth },
+        signal: AbortSignal.timeout(3000),
+      });
+      if (res.ok) return true;
+    } catch {
+      /* reintenta */
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return false;
+}
+
 function sleepSync(ms) {
   const sab = new SharedArrayBuffer(4);
   Atomics.wait(new Int32Array(sab), 0, 0, ms);
@@ -457,9 +534,23 @@ function openLog(name) {
 
 // ── Base de datos (Docker) ──────────────────────────────────
 
+/** Crea la red compartida si no existe (el compose la declara `external`). */
+function ensureDockerNetwork(name) {
+  const exists = spawnSync("docker", ["network", "inspect", name], {
+    stdio: "ignore",
+  });
+  if (exists.status === 0) return true;
+  const created = spawnSync("docker", ["network", "create", "--internal", name], {
+    stdio: "ignore",
+    timeout: 30000,
+  });
+  return created.status === 0;
+}
+
 function startDatabase() {
   const dbDir = path.join(ROOT, "db", "docker");
   console.log(`${C.db}[db]${C.reset} 🐘 PostgreSQL (docker compose up -d) → logs/db.log`);
+  ensureDockerNetwork("mercaldas_internal");
 
   const { fd } = openLog("db");
   const run = (args) =>
@@ -731,6 +822,12 @@ function dockerContainerRunning(name) {
  */
 function ensureAdvantageData() {
   if (dirHasContent(ADV_DATA)) return true;
+  if (process.env.ERP_ADV_DATA) {
+    console.warn(
+      `${C.advantage}[adv]${C.reset} ⚠️  ERP_ADV_DATA no existe o está vacío: ${ADV_DATA}`,
+    );
+    return false;
+  }
   const seeds = [ADV_DATA_SEED, path.join(ROOT, "db", "ADD_ANALITICA")];
   for (const seed of seeds) {
     if (!dirHasContent(seed)) continue;
@@ -747,6 +844,13 @@ function ensureAdvantageData() {
 
 /** Levanta el contenedor de Advantage (OpenADS) en segundo plano. */
 function startAdvantage() {
+  if (ADV_EXTERNAL) {
+    console.log(
+      `${C.advantage}[adv]${C.reset} 🛒 Advantage externo → ${ADV_URL} (no se levanta Docker)`,
+    );
+    return true;
+  }
+
   const { fd } = openLog("advantage");
   const run = (args) =>
     spawnSync("docker", args, { stdio: ["ignore", fd, fd], timeout: 120000 });
@@ -777,11 +881,15 @@ function startAdvantage() {
     run([
       "run", "-d", "--name", ADV_CONTAINER,
       "-p", `${ADV_WIRE_PORT}:6262`, "-p", `${ADV_HTTP_PORT}:8080`,
-      "-v", `${ADV_DATA}:/data`,
+      ...(process.platform === "win32"
+        ? ["--mount", `type=bind,source=${ADV_DATA.replace(/\\/g, "/")},target=/data`]
+        : ["-v", `${ADV_DATA}:/data`]),
       "-e", "OPENADS_ERROR_LOG_PATH=/var/log/openads",
       ADV_IMAGE,
       "--data", "/data", "--host", "0.0.0.0", "--port", "6262",
-      "--http_port", "8080", "--auth_user", "dsi:dsi", "--http_user", "dsi:dsi",
+      "--http_port", "8080",
+      "--auth_user", `${ADV_WIRE_USER}:${ADV_WIRE_PASS}`,
+      "--http_user", `${ADV_HTTP_USER}:${ADV_HTTP_PASS}`,
     ]);
   } else if (!dockerContainerRunning(ADV_CONTAINER)) {
     run(["start", ADV_CONTAINER]); // sobre uno ya corriendo devuelve !=0: no es error
@@ -795,7 +903,7 @@ function startAdvantage() {
     return false;
   }
   console.log(
-    `${C.advantage}[adv]${C.reset} 🛒 Advantage (ERP) → Studio http://localhost:${ADV_HTTP_PORT} (dsi/dsi)`,
+    `${C.advantage}[adv]${C.reset} 🛒 Advantage (ERP) → Studio ${ADV_URL} (${ADV_HTTP_USER})`,
   );
   return true;
 }
@@ -897,7 +1005,10 @@ function buildService(svc) {
 // Si falta el archivo destino, se copia la plantilla (NUNCA sobrescribe). Los
 // valores de las plantillas son de ejemplo/local; revisa los secretos.
 const ENV_BOOTSTRAP = [
-  { dest: ["backend", ".env.development.local"], tpl: [".env.example"] },
+  {
+    dest: ["backend", MODE === "prod" ? ".env" : ".env.development.local"],
+    tpl: [".env.example"],
+  },
   { dest: ["bot", ".env"], tpl: ["bot", ".env.example"] },
   { dest: ["Interface web admin", ".env"], tpl: ["Interface web admin", ".env.example"] },
   {
@@ -964,6 +1075,10 @@ function startService(svc) {
     stdio: ["ignore", fd, fd],
     detached: DETACHED, // POSIX: grupo propio · Windows: sin consola (sin ventana)
     shell: process.platform === "win32",
+    // Cada servicio escucha en SU puerto (`svc.url`), no en el `PORT` del
+    // backend que `loadEnvFile` dejó en `process.env` y se heredaría a todos
+    // (p. ej. el admin vite terminaba en :3000 y chocaba con el backend).
+    env: port ? { ...process.env, PORT: port } : process.env,
   });
 
   child.on("error", (err) => {
@@ -1070,7 +1185,10 @@ function printUrls(services, showDb, showOsrm, showAdvantage) {
   }
   if (showDb) console.log("  DB             → PostgreSQL localhost:5432 (docker)");
   if (showOsrm) console.log("  OSRM           → Rutas http://localhost:5000 (docker, Manizales)");
-  if (showAdvantage) console.log("  ADVANTAGE      → ERP http://localhost:18080 (docker, OpenADS/Studio · dsi/dsi)");
+  if (showAdvantage)
+    console.log(
+      `  ADVANTAGE      → ERP ${ADV_URL} (${ADV_EXTERNAL ? "externo" : "docker"}, OpenADS/Studio · ${ADV_HTTP_USER})`,
+    );
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   const started = services.map((s) => s.name).join(", ");
   console.log(`Logs: logs/*.log  (${started || "sin servicios"}).`);
@@ -1354,6 +1472,7 @@ function printHelp() {
   out.push("  node dev.js --prod [flags]      → modo producción (requiere builds previos: backend + webs)");
   out.push("  node dev.js --fg                → las apps Expo (delivery/picking) en primer plano con el QR");
   out.push("  node dev.js --no-advantage      → no levantar la BD del ERP (OpenADS/Advantage)");
+  out.push("  node dev.js --advantage         → solo PostgreSQL + Advantage/OpenADS + sync ERP (sin webs)");
   out.push("  node dev.js --erp-sync          → deja la salida PG→ERP en bucle (requiere Advantage)");
   out.push("  node dev.js --erp-sync --erp-interval=15  → igual, cada 15 s (def. 30)");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
@@ -1397,7 +1516,9 @@ function printHelp() {
   out.push("  PostgreSQL principal (:5432) se levanta con cualquier app (dependencia del backend).");
   out.push("  Advantage/OpenADS (:18080 Studio · :16262 wire) — BD del ERP de Mercaldas, en Docker.");
   out.push("    Se levanta junto a PostgreSQL (omítela con --no-advantage). Imagen: mercaldas/openads:1.09.73.");
-  out.push("    Datos: db/ads/openads/data (copia escribible). Detalle: db/ads/openads/README.md");
+  out.push("    Datos: db/ads/openads/data (copia escribible) o ERP_ADV_DATA=C:/ADD_FORTUNER.");
+  out.push("    Con ERP_ADV_EXTERNAL=1 no levanta Docker: usa OPENADS_URL ya existente.");
+  out.push("    Detalle: db/ads/openads/README.md y docs/DESPLIEGUE-ERP-FORTUNER.md");
   out.push("  Respaldo versionado: db/backups/ecommerce (troceado) — restaurar: node dev.js --migrate");
   out.push("  Sync ERP (conector scripts-agent/erp): `node dev.js --erp-sync` deja corriendo la salida");
   out.push("    PG→ERP en bucle (push-customers/push-catalog/push-orders/reconcile cada 30 s). Ver docs/RUNBOOK-ERP.md");
@@ -1439,6 +1560,7 @@ function printCommands() {
   rows.push(["node dev.js --init", "primer arranque: instala + compila + migra la BD (PostgreSQL)"]);
   rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
   rows.push(["node dev.js --no-advantage", "no levantar la BD del ERP (OpenADS)"]);
+  rows.push(["node dev.js --advantage", "solo PostgreSQL + Advantage/OpenADS + sync ERP"]);
   rows.push(["node dev.js --erp-sync", "deja la salida PG→ERP en bucle (requiere Advantage)"]);
   rows.push(["node dev.js --help", "esta ayuda"]);
 
@@ -1473,23 +1595,32 @@ async function main() {
   fs.mkdirSync(LOGS_DIR, { recursive: true });
 
   const plan = resolveSelection(); // null ⇒ todo
-  const wantDb = plan === null || plan.includes("db");
-  const wantOsrm = plan === null || plan.includes("osrm");
+  // `--advantage` solo (sin otros aplicativos) ⇒ únicamente BDs + sync ERP.
+  const onlyAdvantage =
+    ADVANTAGE &&
+    !ARGS.some((a) => {
+      if (!a.startsWith("--")) return false;
+      const k = a.toLowerCase().split("=")[0].slice(2);
+      return APP_ALIASES[k] !== undefined;
+    });
+  const effectivePlan = onlyAdvantage ? ["db"] : plan;
+  const wantDb = effectivePlan === null || effectivePlan.includes("db");
+  const wantOsrm = effectivePlan === null || effectivePlan.includes("osrm");
   // Advantage (BD del ERP, OpenADS) acompaña a PostgreSQL; `--no-advantage` lo omite.
   const wantAdvantage = wantDb && !NO_ADVANTAGE;
   const svcNames =
-    plan === null
+    effectivePlan === null
       ? SERVICES.map((s) => s.name)
-      : plan.filter((n) => n !== "db" && n !== "osrm");
+      : effectivePlan.filter((n) => n !== "db" && n !== "osrm");
   const services = SERVICES.filter((s) => svcNames.includes(s.name));
-  const wantDelivery = plan === null || plan.includes("delivery");
+  const wantDelivery = effectivePlan === null || effectivePlan.includes("delivery");
   // La picking app (Expo) solo se lanza cuando se pide explícitamente: en
   // `node dev.js` (todo) ya hay un Expo interactivo (delivery) y ambos compiten
   // por la terminal.
-  const wantPickingMobile = plan !== null && plan.includes("picking-mobile");
+  const wantPickingMobile = effectivePlan !== null && effectivePlan.includes("picking-mobile");
 
   console.log(
-    `🧪 Mercaldas — modo ${MODE.toUpperCase()} · selección: ${selectionLabel(plan)}  (logs → logs/*.log)`,
+    `🧪 Mercaldas — modo ${MODE.toUpperCase()} · selección: ${onlyAdvantage ? "Advantage/ERP" : selectionLabel(plan)}  (logs → logs/*.log)`,
   );
   if (PM === "npm")
     console.warn(
@@ -1536,9 +1667,12 @@ async function main() {
     console.log(`${C.db}[db]${C.reset} 🚫 PostgreSQL no iniciado (esta selección no lo necesita).`);
 
   if (wantAdvantage) {
-    if (startAdvantage() && !(await waitForPort(ADV_HTTP_PORT, 90000))) {
+    const up = ADV_EXTERNAL
+      ? startAdvantage() && (await waitForOpenAds(ADV_URL, 90000))
+      : startAdvantage() && (await waitForPort(ADV_HTTP_PORT, 90000));
+    if (!up) {
       console.warn(
-        `${C.advantage}[adv]${C.reset} ⚠️  Advantage no responde en :${ADV_HTTP_PORT} (revisa logs/advantage.log).`,
+        `${C.advantage}[adv]${C.reset} ⚠️  Advantage no responde en ${ADV_EXTERNAL ? ADV_URL : `:${ADV_HTTP_PORT}`}.`,
       );
     }
   }
@@ -1568,9 +1702,9 @@ async function main() {
     }
   }
 
-  // Salida Postgres → ERP en bucle, opcional con --erp-sync (necesita Advantage).
-  if (ERP_SYNC) {
-    if (!wantAdvantage) {
+  // Salida Postgres → ERP en bucle: con --erp-sync o --advantage (necesita Advantage).
+  if (ERP_SYNC || ADVANTAGE) {
+    if (!wantAdvantage && !ADV_EXTERNAL) {
       console.warn(
         `${C.advantage}[erp-sync]${C.reset} ⚠️  --erp-sync necesita Advantage; se omite (--no-advantage).`,
       );

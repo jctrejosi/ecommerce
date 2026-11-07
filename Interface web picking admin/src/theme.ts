@@ -41,7 +41,8 @@ export interface ThemeState {
 }
 
 const STORAGE_KEY = 'picking-admin-theme'
-const DEFAULT_THEME: ThemeState = { color: 'amber', mode: 'dark' }
+// Por defecto se sigue el tema del sistema operativo (claro u oscuro).
+const DEFAULT_THEME: ThemeState = { color: 'amber', mode: 'system' }
 
 const isColor = (v: unknown): v is ThemeColor => THEME_COLORS.some((c) => c.id === v)
 const isMode = (v: unknown): v is ThemeMode => THEME_MODES.some((m) => m.id === v)

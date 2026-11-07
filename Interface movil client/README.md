@@ -112,3 +112,16 @@ adb install -r android/app/build/outputs/apk/release/app-release.apk
 
 > Si falla con `INSTALL_FAILED_INSUFFICIENT_STORAGE`, desinstala primero
 > (`adb uninstall com.dsi.mercaldasclient`) y vuelve a instalar.
+
+## Firma de release
+
+Los builds de release se firman con la identidad `ecommerce-jcti` (keystore
+`signing/ecommerce-jcti.jks`, alias `ecommerce-jcti`). Las credenciales viven en
+`signing/ecommerce-signing.properties`, ignorado por git. Huellas, respaldo y
+registro en Play: [`signing/README.md`](signing/README.md).
+
+```bash
+./build-apk.sh
+```
+
+Genera `dist/EcommerceClient-<version>.apk` firmado y verificado.

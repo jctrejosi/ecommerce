@@ -1,0 +1,67 @@
+{
+  "table": "VTAPAGO",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/VTAPAGO.ADT",
+  "bytes": 262144,
+  "recordCount": 8555,
+  "recordLength": 53,
+  "headerLength": 1800,
+  "fieldCount": 7,
+  "fields": [
+    {
+      "name": "FPSUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPANO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 13,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPMES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 21,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPFEC",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 29,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPCODI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 33,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FPVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 37,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FPIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 45,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

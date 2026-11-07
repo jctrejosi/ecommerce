@@ -1,5 +1,6 @@
 import {
   ConflictException,
+  ForbiddenException,
   Injectable,
   Logger,
   NotFoundException,
@@ -11,6 +12,13 @@ import { OrdersGateway } from '../orders/orders.gateway';
 import { DeliveryOrdersService } from '../delivery/delivery-orders.service';
 import { DeliveryLoadService } from '../delivery/delivery-load.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { PickerBreakService } from './picker-break.service';
+import {
+  estimatePickSeconds,
+  nearestNeighborShelfOrder,
+  routeDistance,
+  type ShelfPoint,
+} from './picker-routing';
 import {
   branches,
   customerAddresses,
@@ -78,6 +86,7 @@ export class PickingService {
     private readonly deliveryOrders: DeliveryOrdersService,
     private readonly deliveryLoad: DeliveryLoadService,
     private readonly notifications: NotificationsService,
+    private readonly breaks: PickerBreakService,
   ) {}
 
   private get db() {
@@ -177,6 +186,12 @@ export class PickingService {
       where = and(where, eq(orders.branchId, branchId));
     }
 
+    // Un picker autenticado solo ve SUS pedidos (los que la cola le asignó).
+    // El panel usa `/picking-admin/orders`, que no lleva este filtro.
+    if (userId != null) {
+      where = and(where, eq(orders.pickerId, userId));
+    }
+
     const rows = await this.db
       .select({
         id: orders.id,
@@ -244,12 +259,15 @@ export class PickingService {
     );
     // El conteo sigue la misma sucursal que la cola del picker.
     const branchId = userId != null ? await this.branchOfUser(userId) : null;
+    let where = branchId != null ? and(base, eq(orders.branchId, branchId)) : base;
+    // Un picker solo cuenta SUS pedidos pendientes (asignados por la cola).
+    if (userId != null) {
+      where = and(where, eq(orders.pickerId, userId));
+    }
     const [row] = await this.db
       .select({ count: sql<number>`COUNT(*)::int` })
       .from(orders)
-      .where(
-        branchId != null ? and(base, eq(orders.branchId, branchId)) : base,
-      );
+      .where(where);
     return { count: row?.count ?? 0 };
   }
 
@@ -382,6 +400,9 @@ export class PickingService {
         image: media.path,
         shelfCode: shelves.code,
         shelfName: shelves.name,
+        shelfId: shelves.id,
+        shelfX: shelves.posX,
+        shelfY: shelves.posY,
       })
       .from(orderItems)
       .leftJoin(productVariants, eq(productVariants.id, orderItems.productVariantId))
@@ -404,6 +425,36 @@ export class PickingService {
 
     const scanned = items.reduce((s, i) => s + i.pickedQty, 0);
     const pieces = items.reduce((s, i) => s + i.quantity, 0);
+
+    // Ruta óptima: estanterías distintas en orden de vecino más cercano.
+    const distinctShelves = new Map<number, ShelfPoint>();
+    for (const it of items) {
+      if (it.shelfId != null && it.shelfX != null && it.shelfY != null) {
+        const sid = Number(it.shelfId);
+        if (!distinctShelves.has(sid)) {
+          distinctShelves.set(sid, { shelfId: sid, x: it.shelfX, y: it.shelfY });
+        }
+      }
+    }
+    const shelfOrder = nearestNeighborShelfOrder([...distinctShelves.values()]);
+    const stepByShelf = new Map(shelfOrder.map((s, idx) => [s.shelfId, idx + 1]));
+    const totalCells = routeDistance(shelfOrder);
+    const estimatedSeconds = estimatePickSeconds(pieces, totalCells);
+
+    // Items en orden de ruta; los que no tienen ubicación quedan al final.
+    const orderedItems = [...items]
+      .map((it) => ({
+        ...it,
+        routeStep:
+          it.shelfId != null && stepByShelf.has(Number(it.shelfId))
+            ? stepByShelf.get(Number(it.shelfId))
+            : null,
+      }))
+      .sort((a, b) => {
+        const sa = a.routeStep ?? Number.MAX_SAFE_INTEGER;
+        const sb = b.routeStep ?? Number.MAX_SAFE_INTEGER;
+        return sa === sb ? Number(a.id) - Number(b.id) : sa - sb;
+      });
 
     // Bitácora de estados (quién y cuándo movió el pedido).
     const timeline = await this.db
@@ -456,10 +507,14 @@ export class PickingService {
         reference: order.addressReference ?? null,
         instructions: order.addressInstructions ?? null,
       },
-      itemsCount: items.length,
+      itemsCount: orderedItems.length,
       totalPieces: pieces,
       scannedPieces: scanned,
-      items: items.map((i) => ({
+      route: {
+        totalCells,
+        estimatedMinutes: Math.max(1, Math.round(estimatedSeconds / 60)),
+      },
+      items: orderedItems.map((i) => ({
         id: Number(i.id),
         productVariantId: i.productVariantId != null ? Number(i.productVariantId) : null,
         name: i.name,
@@ -473,6 +528,7 @@ export class PickingService {
         shelfName: i.shelfName ?? null,
         // Ya no hay filas; se mantiene el campo por la app móvil.
         rowNumber: null,
+        routeStep: i.routeStep ?? null,
         unitPriceGross: Number(i.unitPriceGross),
         total: Number(i.total),
       })),
@@ -521,8 +577,17 @@ export class PickingService {
       .limit(1);
     if (!user) throw new NotFoundException(`El usuario ${pickerId} no existe`);
 
+    // La cola asigna cada pedido a un solo picker. Si ya lo tiene otro, no se
+    // puede reclamar (evita que alguien se robe un pedido ajeno).
+    if (order.pickerId != null && Number(order.pickerId) !== pickerId) {
+      throw new ForbiddenException('Este pedido ya está asignado a otro picker');
+    }
+
     // Al reclamar, el pedido pasa a "preparing" (alistamiento en curso).
     const nextStatus = isPickingTrigger(order.status) ? 'preparing' : order.status;
+    // Se marca el inicio del alistamiento solo cuando realmente arranca (pasa de
+    // un estado de cola a "preparing"), no al reabrir un pedido ya en curso.
+    const starting = nextStatus === 'preparing' && order.status !== 'preparing';
 
     await this.db.transaction(async (tx) => {
       await tx
@@ -530,7 +595,7 @@ export class PickingService {
         .set({
           pickerId,
           status: nextStatus,
-          pickedAt: order.pickerId == null ? new Date().toISOString() : undefined,
+          pickedAt: starting ? new Date().toISOString() : undefined,
         })
         .where(eq(orders.id, BigInt(id)));
 
@@ -567,6 +632,7 @@ export class PickingService {
         referenceCode: orders.referenceCode,
         pickerId: orders.pickerId,
         customerId: orders.customerId,
+        branchId: orders.branchId,
       })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
@@ -629,6 +695,7 @@ export class PickingService {
         referenceCode: orders.referenceCode,
         pickerId: orders.pickerId,
         customerId: orders.customerId,
+        branchId: orders.branchId,
       })
       .from(orders)
       .where(eq(orders.id, BigInt(id)))
@@ -673,6 +740,7 @@ export class PickingService {
       referenceCode: string | null;
       pickerId: number | null;
       customerId: number | null;
+      branchId: number | null;
     },
     items: {
       id: bigint;
@@ -686,6 +754,7 @@ export class PickingService {
       id: bigint;
       name: string;
       quantity: number;
+      pickedQty: number;
       barcode: string | null;
       plu: string | null;
     },
@@ -709,7 +778,7 @@ export class PickingService {
       if (nextStatus !== order.status) {
         await tx
           .update(orders)
-          .set({ status: nextStatus })
+          .set({ status: nextStatus, pickedAt: new Date().toISOString() })
           .where(eq(orders.id, BigInt(id)));
         await tx.insert(orderStatusHistory).values({
           orderId: id,
@@ -743,6 +812,27 @@ export class PickingService {
       timestamp: new Date().toISOString(),
     });
 
+    // Descansos y metas: suma las unidades realmente alistadas en este pick.
+    const unitsAdded = Math.max(0, newPicked - matched.pickedQty);
+    let breakInfo: Awaited<ReturnType<PickerBreakService['recordPick']>> | null = null;
+    if (unitsAdded > 0 && order.pickerId != null) {
+      try {
+        breakInfo = await this.breaks.recordPick({
+          userId: order.pickerId,
+          branchId: order.branchId ?? null,
+          orderId: id,
+          units: unitsAdded,
+        });
+      } catch (e) {
+        // Un fallo del contador de descansos no debe tumbar el alistamiento.
+        this.logger.error(
+          `No se pudo registrar el descanso del picker ${order.pickerId}: ${
+            e instanceof Error ? e.message : String(e)
+          }`,
+        );
+      }
+    }
+
     return {
       ok: true,
       itemId: Number(matched.id),
@@ -753,6 +843,7 @@ export class PickingService {
       allDone,
       orderStatus: nextStatus,
       expected: [matched.barcode, matched.plu].filter(Boolean),
+      breakInfo,
     };
   }
 

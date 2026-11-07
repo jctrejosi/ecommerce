@@ -1,0 +1,107 @@
+{
+  "table": "VTADIA",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/VTADIA.ADT",
+  "bytes": 82825,
+  "recordCount": 825,
+  "recordLength": 97,
+  "headerLength": 2800,
+  "fieldCount": 12,
+  "fields": [
+    {
+      "name": "FASUCUR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAANO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 13,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAMES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 21,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAFCHFAC",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 29,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRBRU",
+      "type": 10,
+      "typeName": "double",
+      "offset": 33,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAPORDES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 41,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRDES",
+      "type": 10,
+      "typeName": "double",
+      "offset": 49,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRIVA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 57,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRIMC",
+      "type": 10,
+      "typeName": "double",
+      "offset": 65,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLROIP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 73,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRIMP4",
+      "type": 10,
+      "typeName": "double",
+      "offset": 81,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FAVLRNET",
+      "type": 10,
+      "typeName": "double",
+      "offset": 89,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

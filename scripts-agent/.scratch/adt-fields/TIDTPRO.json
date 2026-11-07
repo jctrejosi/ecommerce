@@ -1,6 +1,6 @@
 {
   "table": "TIDTPRO",
-  "source": "db/ADD_ANALITICA/TIDTPRO.ADT",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDTPRO.ADT",
   "bytes": 42730,
   "recordCount": 363,
   "recordLength": 110,

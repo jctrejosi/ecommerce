@@ -66,8 +66,15 @@ export class CustomersService {
 
     query.orderBy(desc(customers.createdAt));
 
-    if (filters?.limit) query.limit(filters.limit);
-    if (filters?.offset) query.offset(filters.offset);
+    // Sin límite explícito esta lista devuelve TODA la tabla de clientes (en
+    // producción son cientos de miles). Además del coste, el `inArray` de
+    // abajo construye un SQL con un fragmento por id y desborda la pila de
+    // drizzle (RangeError: Maximum call stack size exceeded). Se acota siempre.
+    const MAX_LIMIT = 500;
+    const DEFAULT_LIMIT = 100;
+    const limit = Math.min(Math.max(filters?.limit ?? DEFAULT_LIMIT, 1), MAX_LIMIT);
+    const offset = Math.max(filters?.offset ?? 0, 0);
+    query.limit(limit).offset(offset);
 
     const rows = await query;
 

@@ -8,7 +8,7 @@ reutilizando las convenciones que ya usa el resto del sistema.
 
 | Pieza | Dónde | Detalle |
 |---|---|---|
-| Fotos montadas | `db/images_products/` (gitignored) | se sirven en `/static/products/` |
+| Fotos montadas | `db/images_static/products/` (gitignored) | se sirven en `/static/products/` |
 | Nombre de archivo | p. ej. `7708177032222.JPEG` | `<código>.JPEG` (barcode; minúsc. `.jpeg` en algunos), 94.4 % son barcode |
 | Enlace a producto | tabla `media` + `product_images` | `media.path='/static/products/<file>'`, `checksum='local:tid:<file>'`, `provider='local'`; portada = `product_images(is_cover=true, position=0)` |
 | Asociación por código | `scripts-agent/import-tid-images.mjs` | cruza stem del archivo vs `barcode/sku/external_id/plu`, idempotente |
@@ -77,8 +77,20 @@ Notas de diseño:
 - Scorer de búsqueda: solape de tokens del nombre (35 %) + marca (15 %) +
   allowlist de dominios de retail CO (15 %) + base 0.35. Las keys van en
   `backend/.env.development.local` (los scripts ya cargan ese archivo).
-- Ritmo: 700 ms/req a Open*Facts (límite documentado ≈100 req/min), 300 ms a
+Ritmo: 700 ms/req a Open*Facts (límite documentado ≈100 req/min), 300 ms a
   buscadores. `--sleep=<factor>` para ser aún más conservador.
+
+  **Paralelización**: el rastreo se puede repartir en shards disjuntos por
+  `product_id`. Cada shard escribe su propio manifest:
+
+  ```bash
+  node scripts-agent/image-sourcing/find-image-candidates.mjs \
+    --active-only --shard=0/4 --dir=db/image-sourcing/shards/0
+  # … shards 1/4, 2/4, 3/4
+  node scripts-agent/image-sourcing/merge-shards.mjs   # fusiona en candidates.ndjson
+  ```
+
+  4 shards ≈ 72 req/min, por debajo del límite de Open*Facts.
 - Estimación de la corrida completa por barcode: ~13 k requests ≈ **2–3 h** en
   segundo plano. Con `--active-only` mucho menos.
 
@@ -93,13 +105,21 @@ Hit-rate sobre productos con barcode: ~14 %. Proyección: **~1.2 k imágenes
 por esta vía gratuita**; el resto necesita buscadores (cuota) o revisión
 manual — conviene activarlos por lotes, priorizando `--active-only`.
 
-### Fase 2 — Descarga a staging (pendiente)
+### Fase 2 — Descarga a staging ✅ (implementada)
 
-Script `download-candidates.mjs` (a escribir): lee el manifest, filtra
-`status=candidate` y `confidence>=--min`, y descarga a
-`db/image-staging/raw/<code>.<ext>` validando con `sharp` (≥ 600 px de lado,
-formato jpeg/png/webp), guardando `sha256` (dedupe y trazabilidad) en
-`downloads.ndjson`. **No toca `db/images_products/` ni la BD.**
+`download-candidates.mjs` — lee el manifest, filtra `status=candidate` y
+`confidence>=--min`, y descarga a `db/image-staging/raw/<code>.<ext>`
+validando con `sharp` (≥ 600 px de lado, formato jpeg/png/webp), guardando
+`sha256` en `downloads.ndjson`. **No toca `db/images_static/` ni la BD.**
+
+Los candidatos de Open*Facts suelen venir como miniatura `.400.jpg`; el script
+prueba automáticamente la variante `.full.jpg` (original) antes de aceptar.
+
+```bash
+node scripts-agent/image-sourcing/download-candidates.mjs --min-confidence=0.9
+node scripts-agent/image-sourcing/download-candidates.mjs --include-review
+node scripts-agent/image-sourcing/download-candidates.mjs --force --limit=50
+```
 
 ### Fase 3 — Limpieza de fondo (servicio aparte del usuario)
 
@@ -122,7 +142,7 @@ Script `finalize-images.mjs`:
 
 1. Normaliza a **1000×1000** (`fit: contain`, fondo blanco): JPEG calidad 88 si
    no hay alfa; PNG si el servicio entrega transparencia.
-2. Escribe `db/images_products/<code>.JPEG|png` (`<code>` = barcode > plu >
+2. Escribe `db/images_static/products/<code>.JPEG|png` (`<code>` = barcode > plu >
    external_id > id, ya resuelto en el manifest).
 3. Inserta en `media` siguiendo la convención exacta de `import-tid-images.mjs`:
 

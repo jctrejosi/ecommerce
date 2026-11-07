@@ -1,0 +1,169 @@
+{
+  "tabla": "CONMAG2",
+  "nombre_completo": "Formatos contables — conceptos",
+  "sistema": "FORTUNER / Advantage (ERP TID)",
+  "archivo_fuente": "C:\\ADD_FORTUNER\\PUBLIDATA.add\\CONMAG2.adt",
+  "descripcion": "Conceptos y montos que componen cada formato contable (FORMATO + CONCEPTO).",
+  "registros": null,
+  "clave_primaria": null,
+  "total_columnas": 13,
+  "generado": "2026-10-23",
+  "nota": "Diccionario generado desde la base real del ERP. Los significados son APROXIMADOS; 'confianza' (alta/media/baja) indica su fiabilidad y deben corregirse con el diccionario del sistema TID.",
+  "convenciones": {},
+  "relaciones": [],
+  "tipos_de_dato": {
+    "char": "Texto de longitud fija.",
+    "numeric(8B)": "Numero de coma flotante de 8 bytes (double).",
+    "int32": "Entero de 32 bits.",
+    "logical": "Booleano (T/F).",
+    "bin2": "Entero corto/binario de 2 bytes.",
+    "varchar": "Texto de longitud variable (campo ADT tipo varchar).",
+    "memo": "Texto largo (memo).",
+    "date/time": "Fecha/hora del motor."
+  },
+  "columnas": [
+    {
+      "idx": 0,
+      "columna": "FORMATO",
+      "tipo": "char",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 1,
+      "columna": "CONCEPTO",
+      "tipo": "char",
+      "bytes": 4,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 2,
+      "columna": "NOMCONCEP",
+      "tipo": "char",
+      "bytes": 40,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Nombre",
+      "confianza": "media"
+    },
+    {
+      "idx": 3,
+      "columna": "MONTO",
+      "tipo": "numeric(8B)",
+      "bytes": 8,
+      "decimales": 2,
+      "offset": null,
+      "nullable": true,
+      "significado": "Valor monetario",
+      "confianza": "alta"
+    },
+    {
+      "idx": 4,
+      "columna": "VALOR1",
+      "tipo": "logical",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 5,
+      "columna": "VALOR2",
+      "tipo": "logical",
+      "bytes": 1,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 6,
+      "columna": "COMBO1",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 7,
+      "columna": "COMBO2",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 8,
+      "columna": "COMBO3",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 9,
+      "columna": "COMBO4",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 10,
+      "columna": "COMBO5",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 11,
+      "columna": "COMBO6",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    },
+    {
+      "idx": 12,
+      "columna": "COMBO7",
+      "tipo": "char",
+      "bytes": 20,
+      "decimales": 0,
+      "offset": null,
+      "nullable": true,
+      "significado": "Sin identificar en esta revision",
+      "confianza": "baja"
+    }
+  ]
+}

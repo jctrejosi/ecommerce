@@ -73,3 +73,16 @@ src/lib/        utilidades (formato, queryClient)
 src/socket.ts   conexión al namespace /picking-events
 src/theme.ts    tema oscuro (paleta de la web picking)
 ```
+
+## Firma de release
+
+Los builds de release se firman con la identidad `ecommerce-jcti` (keystore
+`signing/ecommerce-jcti.jks`, alias `ecommerce-jcti`). Las credenciales viven en
+`signing/ecommerce-signing.properties`, ignorado por git. Huellas, respaldo y
+registro en Play: [`signing/README.md`](signing/README.md).
+
+```bash
+./build-apk.sh
+```
+
+Genera `dist/EcommercePicking-<version>.apk` firmado y verificado.

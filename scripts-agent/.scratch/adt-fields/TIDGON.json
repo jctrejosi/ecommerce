@@ -1,6 +1,6 @@
 {
   "table": "TIDGON",
-  "source": "db/ADD_ANALITICA/TIDGON.ADT",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDGON.ADT",
   "bytes": 3155,
   "recordCount": 15,
   "recordLength": 117,

@@ -1,0 +1,723 @@
+{
+  "table": "POSCLI",
+  "source": "db/ads/openads/data/poscli.adt",
+  "bytes": 194602406,
+  "recordCount": 146414,
+  "recordLength": 1329,
+  "headerLength": 18200,
+  "fieldCount": 89,
+  "fields": [
+    {
+      "name": "CODCLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 13,
+      "decimals": 0
+    },
+    {
+      "name": "NOMCLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 18,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAI",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 58,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CEDCLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 62,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "PROFESION1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 72,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "EMPRESA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 102,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CLACLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 132,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "DIRCLI1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 133,
+      "length": 60,
+      "decimals": 0
+    },
+    {
+      "name": "BARRIO1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 193,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "MASCOTA",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 223,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "TMASCOTA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 224,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "EMAIL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 244,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "TCARRO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 294,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "DIRCLI2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 295,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "CIUCLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 325,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "TELCLI1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 345,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "TELCELU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 355,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "TELCLI2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 367,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAN",
+      "type": 10,
+      "typeName": "double",
+      "offset": 377,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "ECIVIL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 385,
+      "length": 20,
+      "decimals": 0
+    },
+    {
+      "name": "HIJOS",
+      "type": 12,
+      "typeName": "bin2",
+      "offset": 405,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CONYUGE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 407,
+      "length": 40,
+      "decimals": 0
+    },
+    {
+      "name": "PROFESION",
+      "type": 4,
+      "typeName": "char",
+      "offset": 447,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "EMPRESAC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 477,
+      "length": 30,
+      "decimals": 0
+    },
+    {
+      "name": "TELEFC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 507,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "SUCURSAL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 517,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "TIPCLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 520,
+      "length": 15,
+      "decimals": 0
+    },
+    {
+      "name": "ZONACLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 535,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "PORCCLI",
+      "type": 10,
+      "typeName": "double",
+      "offset": 537,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "MARCA",
+      "type": 4,
+      "typeName": "char",
+      "offset": 545,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ACTICLI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 546,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "PUNTOS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 547,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CUPO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 555,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CONSUMO",
+      "type": 10,
+      "typeName": "double",
+      "offset": 563,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "BLOQUE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 571,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "NITEMPRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 572,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "SEXO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 584,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ULTPTOS",
+      "type": 11,
+      "typeName": "int32",
+      "offset": 585,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "ULTCANT",
+      "type": 10,
+      "typeName": "double",
+      "offset": 589,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "ULTDESC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 597,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "OPERCEL",
+      "type": 4,
+      "typeName": "char",
+      "offset": 647,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "MEMAIL",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 657,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VLRTOTAL",
+      "type": 10,
+      "typeName": "double",
+      "offset": 658,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAMOD",
+      "type": 10,
+      "typeName": "double",
+      "offset": 666,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "MEMPLE",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 674,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "REPE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 675,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "DCTOCUMPLE",
+      "type": 10,
+      "typeName": "double",
+      "offset": 676,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DCTOVALOR",
+      "type": 10,
+      "typeName": "double",
+      "offset": 684,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "DCTOFACTU",
+      "type": 4,
+      "typeName": "char",
+      "offset": 692,
+      "length": 12,
+      "decimals": 0
+    },
+    {
+      "name": "CLIVINO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 704,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "TICARRO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 705,
+      "length": 10,
+      "decimals": 0
+    },
+    {
+      "name": "CLUBVINO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 715,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER1",
+      "type": 4,
+      "typeName": "char",
+      "offset": 716,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "OBSER2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 816,
+      "length": 100,
+      "decimals": 0
+    },
+    {
+      "name": "VENCEFCH",
+      "type": 10,
+      "typeName": "double",
+      "offset": 916,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "INFOLEY",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 924,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ANON",
+      "type": 10,
+      "typeName": "double",
+      "offset": 925,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CLAWEB",
+      "type": 4,
+      "typeName": "char",
+      "offset": 933,
+      "length": 4,
+      "decimals": 0
+    },
+    {
+      "name": "CLACH",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 937,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "NEWWEB",
+      "type": 4,
+      "typeName": "char",
+      "offset": 938,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ORIGENW",
+      "type": 4,
+      "typeName": "char",
+      "offset": 939,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 940,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "NOMBRE2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 990,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "APELLIDO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1040,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "APELLIDO2",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1090,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "CODMASCO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1140,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CODVEHI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1142,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "CODBARRIO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1144,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "CODPROFE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1147,
+      "length": 3,
+      "decimals": 0
+    },
+    {
+      "name": "TVEHI",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1150,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "WEBFECHA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1200,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "FECHABAJA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1208,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTOSABAJA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1216,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTOSRBAJA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1224,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "PTOSPBAJA",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1232,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "TIPODOC",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1240,
+      "length": 2,
+      "decimals": 0
+    },
+    {
+      "name": "FECHAING",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1242,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "NOMMASCO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1250,
+      "length": 50,
+      "decimals": 0
+    },
+    {
+      "name": "INFOTEX",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1300,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "INFOELEC",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1301,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "INFOWAS",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1302,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CLUBAMAC",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1303,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CLUBPARRI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1304,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CLUBSALUD",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1305,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "CLUBMASCO",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1306,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "ACTUFAPP",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1307,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "CIUDAD",
+      "type": 4,
+      "typeName": "char",
+      "offset": 1315,
+      "length": 5,
+      "decimals": 0
+    },
+    {
+      "name": "BLOMOVI",
+      "type": 1,
+      "typeName": "logical",
+      "offset": 1320,
+      "length": 1,
+      "decimals": 0
+    },
+    {
+      "name": "VENCEPTS",
+      "type": 10,
+      "typeName": "double",
+      "offset": 1321,
+      "length": 8,
+      "decimals": 0
+    }
+  ]
+}

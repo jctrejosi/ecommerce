@@ -1,6 +1,6 @@
 {
   "table": "POSDANE",
-  "source": "db/ADD_ANALITICA/POSDANE.ADT",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/POSDANE.ADT",
   "bytes": 74915,
   "recordCount": 1647,
   "recordLength": 45,

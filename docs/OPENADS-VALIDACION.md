@@ -271,8 +271,9 @@ y el script los excluye a propósito (`WHERE status NOT IN ('cancelled','refunde
 por lo que quedan sin `FACONTROL` (correcto). Verificado en el ERP: `DOMDIA` con
 `FACONTROL LIKE 'DEMO-%'` = 85 filas; p. ej. pedido 502 → `FAVLRBRU 57310.91 +
 FAVLRIVA 10889.09 = 68200` (base de líneas) y `FAVARIOS 7900` → `FAVLRNET 76100`
-(= pago). Pendiente de confirmar con el ERP (§11 del plan): numeración
-`FAPEDIDO`, `FAESTADO`/`IFESTADO`, `FATIPODOM` y el tratamiento del envío.
+(= pago). Códigos cerrados después contra FORTUNER: numeración de 9 dígitos,
+`FAESTADO=0`, `IFESTADO` vacío (normal), `FATIPODOM=01` y envío en `FAVARIOS`
+(ver `docs/ESCRITURA-FORTUNER-READINESS.md`).
 
 ### 8.4 Entrada de clientes (`sync-customers.mjs`)
 

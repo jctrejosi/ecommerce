@@ -66,7 +66,7 @@ export class PaymentsController {
     const defaults = {
       efectivo: { enabled: true },
       wompi: { enabled: true, methods: { card: true, pse: true, nequi: true } },
-      breb: { enabled: true, key: '@davi3148853458', bank: 'Davivienda', qrImageUrl: '' },
+      breb: { enabled: true, key: '@davi3148853458', bank: 'Davivienda' },
     };
     if (!row) {
       return defaults;
@@ -86,8 +86,6 @@ export class PaymentsController {
         enabled: value?.breb?.enabled ?? true,
         key: value?.breb?.key ?? '@davi3148853458',
         bank: value?.breb?.bank ?? 'Davivienda',
-        qrImageUrl: value?.breb?.qrImageUrl ?? '',
-        qrImageMime: value?.breb?.qrImageMime ?? null,
       },
     };
   }

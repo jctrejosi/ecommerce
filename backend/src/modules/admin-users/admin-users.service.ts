@@ -5,7 +5,7 @@ import {
   NotFoundException,
   OnModuleInit,
 } from '@nestjs/common';
-import { and, asc, eq, inArray, isNull, ne, or } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import * as bcrypt from 'bcryptjs';
 import { DrizzleService } from '../../database/drizzle.service';
@@ -46,70 +46,126 @@ interface RoleRow {
   updatedAt: string;
 }
 
-/** Catálogo de permisos agrupado por interface (módulo). */
-const PERMISSION_CATALOG: {
+type PermissionEntry = {
   code: string;
   module: string;
   description: string;
-}[] = [
-  // ── Web admin (esta interface) ───────────────────────────────────────────
+};
+
+const CRUD_ACTIONS = [
+  { action: 'view', label: 'Ver' },
+  { action: 'create', label: 'Crear' },
+  { action: 'edit', label: 'Editar' },
+  { action: 'delete', label: 'Eliminar' },
+] as const;
+
+/** Genera los permisos CRUD (ver/crear/editar/eliminar) de un submódulo. */
+function buildCrudPermissions(
+  module: string,
+  submodules: Array<[key: string, label: string]>,
+): PermissionEntry[] {
+  const entries: PermissionEntry[] = [];
+  for (const [sub, label] of submodules) {
+    const group = `${module}:${sub}`;
+    for (const { action, label: actionLabel } of CRUD_ACTIONS) {
+      entries.push({
+        code: `${group}:${action}`,
+        module: group,
+        description: `${actionLabel} ${label.toLowerCase()}`,
+      });
+    }
+  }
+  return entries;
+}
+
+/** Catálogo de permisos agrupado por submódulo y acción. */
+const PERMISSION_CATALOG: PermissionEntry[] = [
+  // ── Dashboard ──
   {
     code: 'admin:dashboard:view',
-    module: 'admin',
+    module: 'Dashboard',
     description: 'Ver dashboard',
   },
+
+  // ── Catálogo (granular por submódulo) ──
+  ...buildCrudPermissions('admin:catalog', [
+    ['products', 'Productos'],
+    ['categories', 'Categorías'],
+    ['product-types', 'Tipos de producto'],
+    ['brands', 'Marcas'],
+    ['suppliers', 'Proveedores'],
+    ['branches', 'Sucursales'],
+  ]),
   {
-    code: 'admin:catalog:view',
-    module: 'admin',
-    description: 'Ver catálogo (productos, categorías, marcas, tipos)',
+    code: 'admin:catalog:inventory:view',
+    module: 'admin:catalog:inventory',
+    description: 'Ver inventario',
   },
   {
-    code: 'admin:catalog:manage',
-    module: 'admin',
-    description: 'Crear/editar/eliminar catálogo',
+    code: 'admin:catalog:inventory:edit',
+    module: 'admin:catalog:inventory',
+    description: 'Ajustar inventario',
   },
-  { code: 'admin:orders:view', module: 'admin', description: 'Ver pedidos' },
+  {
+    code: 'admin:catalog:filters:view',
+    module: 'admin:catalog:filters',
+    description: 'Ver filtros guardados',
+  },
+  {
+    code: 'admin:catalog:filters:manage',
+    module: 'admin:catalog:filters',
+    description: 'Gestionar filtros',
+  },
+
+  // ── Pedidos / Clientes / Promociones ──
+  { code: 'admin:orders:view', module: 'Pedidos', description: 'Ver pedidos' },
   {
     code: 'admin:orders:manage',
-    module: 'admin',
+    module: 'Pedidos',
     description: 'Gestionar pedidos',
   },
   {
     code: 'admin:customers:view',
-    module: 'admin',
+    module: 'Clientes',
     description: 'Ver clientes',
   },
   {
     code: 'admin:customers:manage',
-    module: 'admin',
+    module: 'Clientes',
     description: 'Gestionar clientes',
   },
   {
     code: 'admin:promotions:manage',
-    module: 'admin',
-    description: 'Gestionar promociones',
+    module: 'Promociones',
+    description: 'Gestionar promociones y cupones',
   },
+
+  // ── Contenido ──
   {
     code: 'admin:content:manage',
-    module: 'admin',
-    description: 'Gestionar contenido (banners, homepage)',
+    module: 'Contenido',
+    description:
+      'Gestionar contenido (banners, popups, newsletter, beneficios…)',
   },
+
+  // ── Configuración / Usuarios ──
   {
     code: 'admin:settings:manage',
-    module: 'admin',
-    description: 'Gestionar configuración',
+    module: 'Configuración',
+    description: 'Gestionar configuración y medios de pago',
   },
   {
     code: 'admin:users:view',
-    module: 'admin',
+    module: 'Usuarios',
     description: 'Ver usuarios y permisos',
   },
   {
     code: 'admin:users:manage',
-    module: 'admin',
+    module: 'Usuarios',
     description: 'Gestionar usuarios, roles y permisos',
   },
-  // ── Delivery admin ──────────────────────────────────────────────────────
+
+  // ── Delivery admin ──
   {
     code: 'delivery:dashboard:view',
     module: 'delivery',
@@ -135,7 +191,8 @@ const PERMISSION_CATALOG: {
     module: 'delivery',
     description: 'Asignar pedidos a repartidores',
   },
-  // ── Picking admin ───────────────────────────────────────────────────────
+
+  // ── Picking admin ──
   {
     code: 'picking:dashboard:view',
     module: 'picking',
@@ -163,6 +220,16 @@ const PERMISSION_CATALOG: {
   },
 ];
 
+const catalogCodes = () =>
+  PERMISSION_CATALOG.filter((p) => p.code.startsWith('admin:catalog:')).map(
+    (p) => p.code,
+  );
+
+const viewCodes = () =>
+  PERMISSION_CATALOG.filter((p) => p.code.endsWith(':view')).map(
+    (p) => p.code,
+  );
+
 /** Roles por defecto que se crean/actualizan de forma idempotente. */
 const DEFAULT_ROLES: {
   name: string;
@@ -171,30 +238,38 @@ const DEFAULT_ROLES: {
 }[] = [
   {
     name: 'Administrador',
-    description: 'Acceso a la interface web de administración.',
-    permissionCodes: PERMISSION_CATALOG.filter(
-      (p) => p.module === 'admin',
-    ).map((p) => p.code),
+    description: 'Acceso total al panel de administración.',
+    permissionCodes: PERMISSION_CATALOG.map((p) => p.code),
+  },
+  {
+    name: 'Administrador de catálogo',
+    description:
+      'Gestiona productos, categorías, marcas, tipos, proveedores y sucursales.',
+    permissionCodes: [...catalogCodes(), 'admin:dashboard:view'],
+  },
+  {
+    name: 'Editor de contenido',
+    description:
+      'Gestiona banners, popups, newsletter, beneficios y contenido de la tienda.',
+    permissionCodes: ['admin:content:manage', 'admin:dashboard:view'],
+  },
+  {
+    name: 'Consulta',
+    description: 'Solo lectura de las tres interfaces (usuario de consulta).',
+    permissionCodes: viewCodes(),
   },
   {
     name: 'Picking',
     description: 'Acceso a la administración de picking (app de picking).',
-    permissionCodes: PERMISSION_CATALOG.filter(
-      (p) => p.module === 'picking',
+    permissionCodes: PERMISSION_CATALOG.filter((p) =>
+      p.code.startsWith('picking:'),
     ).map((p) => p.code),
   },
   {
     name: 'Delivery',
     description: 'Acceso a la administración de delivery (app de reparto).',
-    permissionCodes: PERMISSION_CATALOG.filter(
-      (p) => p.module === 'delivery',
-    ).map((p) => p.code),
-  },
-  {
-    name: 'Consulta',
-    description: 'Solo lectura de las tres interfaces (usuario de consulta).',
     permissionCodes: PERMISSION_CATALOG.filter((p) =>
-      p.code.endsWith(':view'),
+      p.code.startsWith('delivery:'),
     ).map((p) => p.code),
   },
 ];
@@ -226,13 +301,30 @@ export class AdminUsersService implements OnModuleInit {
    * antiguo "Supervisor") se eliminan solo si no tienen usuarios asignados.
    */
   private async seedDefaults() {
-    const [anyPermission] = await this.db
+    // Upsert de los permisos del catálogo (crea los nuevos y refresca módulo y
+    // descripción de los existentes).
+    if (PERMISSION_CATALOG.length) {
+      await this.db
+        .insert(permissions)
+        .values(PERMISSION_CATALOG as any)
+        .onConflictDoUpdate({
+          target: permissions.code,
+          set: {
+            module: sql`excluded.module`,
+            description: sql`excluded.description`,
+          },
+        });
+    }
+
+    // Elimina permisos que ya no están en el catálogo (la FK a role_permissions
+    // es CASCADE, así que también se limpia el vínculo de cada rol).
+    const keepCodes = PERMISSION_CATALOG.map((p) => p.code);
+    const obsolete = await this.db
       .select({ id: permissions.id })
       .from(permissions)
-      .limit(1);
-
-    if (!anyPermission) {
-      await this.db.insert(permissions).values(PERMISSION_CATALOG);
+      .where(notInArray(permissions.code, keepCodes));
+    for (const row of obsolete) {
+      await this.db.delete(permissions).where(eq(permissions.id, row.id));
     }
 
     for (const def of DEFAULT_ROLES) {

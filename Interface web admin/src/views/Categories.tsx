@@ -18,6 +18,7 @@ import {
   catalogService,
   type CatalogProduct,
 } from "../services/catalog.service";
+import { useCan } from "../lib/auth-context";
 
 interface AdminCategory {
   id: number;
@@ -36,6 +37,28 @@ interface AdminCategory {
   productCount: number;
 }
 
+/**
+ * Orden de las categorías dentro de su nivel: primero por `display_order`
+ * explícito (si existe), luego por `code` en orden natural (V1, V2, …, V10,
+ * V11) y, por último, por nombre. Las categorías se reorganizaron codificando
+ * el orden en `code` (V1, V2, …), así que esto respeta ese orden.
+ */
+function compareCategories(a: AdminCategory, b: AdminCategory): number {
+  if ((a.displayOrder ?? 0) !== (b.displayOrder ?? 0)) {
+    return (a.displayOrder ?? 0) - (b.displayOrder ?? 0);
+  }
+  const ac = a.code ?? "";
+  const bc = b.code ?? "";
+  if (ac || bc) {
+    const cmp = ac.localeCompare(bc, undefined, {
+      numeric: true,
+      sensitivity: "base",
+    });
+    if (cmp !== 0) return cmp;
+  }
+  return a.name.localeCompare(b.name);
+}
+
 function CategoryRow({
   cat,
   depth = 0,
@@ -49,12 +72,15 @@ function CategoryRow({
   onDelete: (id: number) => void;
   onToggleActive: (id: number, isActive: boolean) => void;
 }) {
+  const canEdit = useCan("admin:catalog:categories:edit");
+  const canDelete = useCan("admin:catalog:categories:delete");
+
   return (
     <div className="divide-y divide-gray-50">
       <div
         className="flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 transition-colors group cursor-pointer"
         style={{ paddingLeft: depth * 24 + 16 }}
-        onClick={() => onEdit(cat)}
+        onClick={() => canEdit && onEdit(cat)}
       >
         <div
           className="text-gray-300 hover:text-gray-500 cursor-grab transition-colors"
@@ -89,38 +115,44 @@ function CategoryRow({
         <span className="text-xs text-gray-400 w-16 text-right font-medium">
           {cat.productCount} prod.
         </span>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleActive(cat.id, !cat.isActive);
-          }}
-          className={`w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
-            cat.isActive
-              ? "text-green-500 hover:bg-green-50"
-              : "text-gray-300 hover:bg-gray-100"
-          }`}
-          title={cat.isActive ? "Ocultar" : "Mostrar"}
-        >
-          {cat.isActive ? <Eye size={13} /> : <EyeOff size={13} />}
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(cat);
-          }}
-          className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-gray-100 text-gray-400 hover:text-gray-600"
-        >
-          <Edit size={13} />
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(cat.id);
-          }}
-          className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 text-gray-400 hover:text-red-500"
-        >
-          <Trash2 size={13} />
-        </button>
+        {canEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleActive(cat.id, !cat.isActive);
+            }}
+            className={`w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all ${
+              cat.isActive
+                ? "text-green-500 hover:bg-green-50"
+                : "text-gray-300 hover:bg-gray-100"
+            }`}
+            title={cat.isActive ? "Ocultar" : "Mostrar"}
+          >
+            {cat.isActive ? <Eye size={13} /> : <EyeOff size={13} />}
+          </button>
+        )}
+        {canEdit && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onEdit(cat);
+            }}
+            className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-gray-100 text-gray-400 hover:text-gray-600"
+          >
+            <Edit size={13} />
+          </button>
+        )}
+        {canDelete && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(cat.id);
+            }}
+            className="w-7 h-7 flex items-center justify-center rounded-lg opacity-0 group-hover:opacity-100 transition-all hover:bg-red-50 text-gray-400 hover:text-red-500"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -185,6 +217,11 @@ export default function Categories() {
   const [catTreeFilter, setCatTreeFilter] = useState<
     "todas" | "activas" | "ocultas"
   >("todas");
+
+  const canCreate = useCan("admin:catalog:categories:create");
+  const canEdit = useCan("admin:catalog:categories:edit");
+  const canDelete = useCan("admin:catalog:categories:delete");
+  const canSave = creating ? canCreate : canEdit;
 
   // Debounce tree search
   useEffect(() => {
@@ -567,12 +604,14 @@ export default function Categories() {
             Árbol jerárquico de categorías
           </p>
         </div>
-        <button
-          onClick={openNewCategory}
-          className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
-        >
-          <Plus size={14} /> Nueva categoría
-        </button>
+        {canCreate && (
+          <button
+            onClick={openNewCategory}
+            className="flex items-center gap-2 px-3 py-2 text-sm font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 rounded-xl transition-colors"
+          >
+            <Plus size={14} /> Nueva categoría
+          </button>
+        )}
       </div>
 
       {/* Category tree */}
@@ -652,7 +691,7 @@ export default function Categories() {
                 );
               }
               if (catTreeDebounced) {
-                return filtered.map((cat) => (
+                return [...filtered].sort(compareCategories).map((cat) => (
                   <CategoryRow
                     key={cat.id}
                     cat={cat}
@@ -668,9 +707,7 @@ export default function Categories() {
               ): any => {
                 const items = statusFiltered
                   .filter((c) => c.parentId === parentId)
-                  .sort((a: AdminCategory, b: AdminCategory) =>
-                    a.name.localeCompare(b.name),
-                  );
+                  .sort(compareCategories);
                 return items.flatMap((cat) => (
                   <div key={cat.id}>
                     <CategoryRow
@@ -929,29 +966,33 @@ export default function Categories() {
                   <p className="text-xs text-red-500">{saveError}</p>
                 )}
 
-                <button
-                  onClick={saveEdit}
-                  disabled={uploading}
-                  className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
-                >
-                  {uploading
-                    ? "Guardando..."
-                    : creating
-                      ? "Crear categoría"
-                      : "Guardar cambios"}
-                </button>
+                {canSave && (
+                  <button
+                    onClick={saveEdit}
+                    disabled={uploading}
+                    className="w-full py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-50"
+                  >
+                    {uploading
+                      ? "Guardando..."
+                      : creating
+                        ? "Crear categoría"
+                        : "Guardar cambios"}
+                  </button>
+                )}
               </div>
             )}
 
             {editTab === "products" && (
               <div className="px-5 py-4 space-y-4">
-                <button
-                  onClick={() => setShowAddProduct(true)}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
-                >
-                  <Plus size={14} />
-                  Añadir productos
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => setShowAddProduct(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                  >
+                    <Plus size={14} />
+                    Añadir productos
+                  </button>
+                )}
 
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
                   Productos ({catProducts.length})
@@ -983,13 +1024,15 @@ export default function Categories() {
                         <span className="text-xs text-gray-700 truncate">
                           {p.name}
                         </span>
-                        <button
-                          onClick={() => removeProduct(p.id)}
-                          className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                          title="Quitar de categoría"
-                        >
-                          <X size={12} />
-                        </button>
+                        {canEdit && (
+                          <button
+                            onClick={() => removeProduct(p.id)}
+                            className="w-6 h-6 rounded flex items-center justify-center hover:bg-red-50 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                            title="Quitar de categoría"
+                          >
+                            <X size={12} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1200,12 +1243,14 @@ export default function Categories() {
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={() => addProduct(replaceProduct.productId)}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
-                >
-                  Reemplazar
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={() => addProduct(replaceProduct.productId)}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors"
+                  >
+                    Reemplazar
+                  </button>
+                )}
               </div>
             </div>
           </div>
@@ -1337,13 +1382,15 @@ export default function Categories() {
                 >
                   Cancelar
                 </button>
-                <button
-                  onClick={assignProduct}
-                  disabled={!assignCategoryId}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-40"
-                >
-                  Asignar
-                </button>
+                {canEdit && (
+                  <button
+                    onClick={assignProduct}
+                    disabled={!assignCategoryId}
+                    className="flex-1 py-2.5 rounded-xl text-sm font-bold bg-amber-400 text-amber-900 hover:bg-amber-500 transition-colors disabled:opacity-40"
+                  >
+                    Asignar
+                  </button>
+                )}
               </div>
             </div>
           </div>

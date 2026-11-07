@@ -7,6 +7,7 @@ import {
   productVariants,
   branches,
 } from '../../../drizzle/schema';
+import { branchPriceSql } from '../../common/pricing/branch-price';
 
 @Injectable()
 export class InventoryService {
@@ -51,7 +52,7 @@ export class InventoryService {
         variantId: sql<number>`${productVariants.id}`,
         sku: productVariants.sku,
         barcode: productVariants.barcode,
-        price: productVariants.currentPrice,
+        price: branchPriceSql(sql`${branches.id}`),
         branchId: sql<number>`${branches.id}`,
         branchName: branches.name,
         stock: inventory.stock,
@@ -112,7 +113,7 @@ export class InventoryService {
         productName: products.name,
         variantId: sql<number>`${productVariants.id}`,
         sku: productVariants.sku,
-        price: productVariants.currentPrice,
+        price: branchPriceSql(sql`${branches.id}`),
         branchId: sql<number>`${branches.id}`,
         branchName: branches.name,
         stock: inventory.stock,

@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import {
@@ -34,6 +35,7 @@ import {
   productImages,
   productVariants,
   products,
+  prices,
   shipments,
   users,
 } from '../../../drizzle/schema';
@@ -44,9 +46,13 @@ import { WompiService } from '../payments/wompi.service';
 import { EpaycoService } from '../payments/epayco.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { PushService } from '../notifications/push.service';
+import { PickerQueueService } from '../picking/picker-queue.service';
 import { OrdersGateway } from './orders.gateway';
+import { PromotionEngineService } from '../promotions/promotion-engine.service';
+import { CouponsService } from '../coupons/coupons.service';
 import { toIsoTimestamp } from '../../utils/date-utils';
 import { parsePointText, calculateDistance } from '../../utils/geolocation';
+import { calculateOrderTotals, shippingCostFor } from './order-pricing';
 
 const OSRM_URL = process.env.OSRM_URL ?? 'http://localhost:5000';
 
@@ -68,6 +74,8 @@ export interface LiveRoute {
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly drizzleService: DrizzleService,
     private readonly wompiService: WompiService,
@@ -75,7 +83,10 @@ export class OrdersService {
     private readonly paymentVerification: PaymentVerificationService,
     private readonly notificationsService: NotificationsService,
     private readonly pushService: PushService,
+    private readonly pickerQueue: PickerQueueService,
     private readonly ordersGateway: OrdersGateway,
+    private readonly promotionEngine: PromotionEngineService,
+    private readonly couponsService: CouponsService,
   ) {}
 
   private get db() {
@@ -95,10 +106,11 @@ export class OrdersService {
       customerId,
       guestSessionId: null,
       customerEmail: customer.email,
-      customerName: [customer.firstName, customer.lastName]
-        .filter(Boolean)
-        .join(' ')
-        .trim() || null,
+      customerName:
+        [customer.firstName, customer.lastName]
+          .filter(Boolean)
+          .join(' ')
+          .trim() || null,
       customerPhone: customer.phone ?? null,
       saveAddress: true,
     });
@@ -193,7 +205,7 @@ export class OrdersService {
 
     this.validatePaymentDetails(dto);
 
-    const shippingCost = dto.shippingType === 'express' ? 9900 : 4900;
+    const shippingCost = shippingCostFor(dto.shippingType);
 
     const productIds = dto.items.map((item) => item.productId);
     const variants = await this.db
@@ -256,18 +268,55 @@ export class OrdersService {
     // lo tiene completo, la más cercana en general).
     const branch = await this.resolveOrderBranch(normalizedItems, dto.address);
 
-    const subtotal = normalizedItems.reduce(
-      (sum, item) => sum + item.subtotal,
-      0,
+    // El pedido se factura con el precio de la sucursal que lo atiende
+    // (modelo del ERP: un precio por INSUC). Si esa sucursal no tiene precio
+    // propio se conserva el primario de la variante.
+    await this.applyBranchPrices(normalizedItems, Number(branch.id));
+
+    const promotionEvaluation = await this.promotionEngine.evaluate(
+      normalizedItems.map((item) => ({
+        productId: item.productId,
+        productVariantId: item.productVariantId,
+        quantity: item.quantity,
+        unitPrice: item.unitPrice,
+      })),
+      Number(branch.id),
     );
-    const grandTotal = subtotal + shippingCost;
-    const amountInCents = grandTotal * 100;
+
+    const subtotal = promotionEvaluation.subtotal;
+    const promotionDiscount = promotionEvaluation.discountTotal;
+
+    // Cupón: se recalcula siempre en el servidor (descuento y/o saldo).
+    const couponPreview = dto.couponCode
+      ? await this.couponsService.previewForOrder(
+          dto.couponCode,
+          Math.max(0, subtotal - promotionDiscount),
+          customerId,
+        )
+      : null;
+
+    const couponDiscount = couponPreview?.discountAmount ?? 0;
+    const {
+      discountTotal,
+      totalBeforeCouponBalance,
+      couponBalanceApplied,
+      amountToCharge,
+      fullyPaidByCoupon,
+      grandTotal,
+      amountInCents,
+    } = calculateOrderTotals({
+      itemsSubtotal: subtotal,
+      promotionDiscount,
+      couponDiscount,
+      couponBalance: couponPreview?.balance ?? 0,
+      shippingType: dto.shippingType,
+    });
     const referenceCode = this.buildReferenceCode();
 
     const cardProvider = dto.paymentDetails?.card?.provider ?? 'epayco';
 
     const cardTransaction =
-      dto.paymentMethod === 'tarjeta'
+      dto.paymentMethod === 'tarjeta' && amountToCharge > 0
         ? cardProvider === 'wompi'
           ? await this.wompiService.createCardTransaction({
               amountInCents,
@@ -285,9 +334,9 @@ export class OrdersService {
           : await this.epaycoService.createCardCharge({
               tokenCard: dto.paymentDetails!.card!.cardToken,
               customerEmail,
-              amount: grandTotal,
+              amount: amountToCharge,
               tax: 0,
-              taxBase: grandTotal,
+              taxBase: amountToCharge,
               description: `Pedido ${referenceCode}`,
               invoice: referenceCode,
               installments: dto.paymentDetails!.card!.installments ?? 1,
@@ -307,20 +356,25 @@ export class OrdersService {
         : ['Aceptada', 'Aprobada', 'APPROVED', 'approved'].includes(
             String(cardTransaction?.status ?? cardTransaction?.respuesta ?? ''),
           );
-    const orderStatus =
-      dto.paymentMethod === 'efectivo'
+    // Un cupón que cubre todo el total deja el pedido pagado aunque el medio
+    // elegido sea efectivo (no hay nada que cobrar contra entrega).
+    const orderStatus = fullyPaidByCoupon
+      ? 'paid'
+      : dto.paymentMethod === 'efectivo'
         ? 'created'
         : isApprovedCardPayment
           ? 'paid'
           : 'payment_pending';
-    const paymentIntentStatus =
-      dto.paymentMethod === 'efectivo'
+    const paymentIntentStatus = fullyPaidByCoupon
+      ? 'authorized'
+      : dto.paymentMethod === 'efectivo'
         ? 'pending'
         : isApprovedCardPayment
           ? 'authorized'
           : 'pending';
-    const paymentStatus =
-      dto.paymentMethod === 'efectivo'
+    const paymentStatus = fullyPaidByCoupon
+      ? 'COMPLETED'
+      : dto.paymentMethod === 'efectivo'
         ? 'PENDING'
         : isApprovedCardPayment
           ? 'COMPLETED'
@@ -364,8 +418,10 @@ export class OrdersService {
           status: orderStatus,
           currencyCode: 'COP',
           subtotal: String(subtotal),
+          discountTotal: String(discountTotal),
           shippingCost: String(shippingCost),
           grandTotal: String(grandTotal),
+          couponId: couponPreview?.couponId ?? null,
           notes: dto.address.notes,
           customerName,
           customerPhone,
@@ -376,18 +432,34 @@ export class OrdersService {
       const orderId = Number(insertedOrders[0].id);
 
       await tx.insert(orderItems).values(
-        normalizedItems.map((item) => ({
-          orderId,
-          productVariantId: item.productVariantId,
-          productName: item.productName,
-          variantSku: item.variantSku,
-          quantity: item.quantity,
-          unitPriceNet: String(item.unitPrice),
-          unitPriceGross: String(item.unitPrice),
-          subtotal: String(item.subtotal),
-          total: String(item.subtotal),
-        })),
+        normalizedItems.map((item, index) => {
+          const discount = promotionEvaluation.items[index]?.discount ?? 0;
+          return {
+            orderId,
+            productVariantId: item.productVariantId,
+            productName: item.productName,
+            variantSku: item.variantSku,
+            quantity: item.quantity,
+            unitPriceNet: String(item.unitPrice),
+            unitPriceGross: String(item.unitPrice),
+            discountAmount: String(discount),
+            subtotal: String(item.subtotal),
+            total: String(Math.max(0, item.subtotal - discount)),
+          };
+        }),
       );
+
+      if (couponPreview) {
+        await this.couponsService.commitRedemption(tx, {
+          couponId: couponPreview.couponId,
+          orderId,
+          customerId,
+          guestSessionId,
+          discountAmount: couponDiscount,
+          balanceAmount: couponBalanceApplied,
+          createdBy: customerId,
+        });
+      }
 
       await tx.insert(shipments).values({
         orderId,
@@ -423,24 +495,52 @@ export class OrdersService {
             paymentDetails: this.buildPaymentResponse(dto),
             cardTransaction,
             brebTransaction,
+            coupon: couponPreview
+              ? {
+                  id: couponPreview.couponId,
+                  discount: couponDiscount,
+                  balanceApplied: couponBalanceApplied,
+                }
+              : null,
           },
           idempotencyKey: `checkout-${referenceCode}`,
         })
         .returning({ id: paymentIntents.id });
 
-      await tx.insert(payments).values({
-        orderId,
-        paymentIntentId: Number(insertedPaymentIntent[0].id),
-        providerTransactionId:
-          cardTransaction?.id?.toString() ??
-          cardTransaction?.ref_payco?.toString() ??
-          `pay_${referenceCode}`,
-        providerName: this.mapPaymentProvider(dto.paymentMethod),
-        amount: String(grandTotal),
-        currency: 'COP',
-        paymentMethod: this.mapPaymentMethod(dto.paymentMethod),
-        status: paymentStatus,
-      });
+      const paymentIntentId = Number(insertedPaymentIntent[0].id);
+
+      const paymentRows: Array<typeof payments.$inferInsert> = [];
+
+      if (couponBalanceApplied > 0 && couponPreview) {
+        paymentRows.push({
+          orderId,
+          paymentIntentId,
+          providerTransactionId: `coupon_${couponPreview.couponId}_${referenceCode}`,
+          providerName: 'coupon',
+          amount: String(couponBalanceApplied),
+          currency: 'COP',
+          paymentMethod: 'COUPON',
+          status: 'COMPLETED',
+        });
+      }
+
+      if (amountToCharge > 0 || paymentRows.length === 0) {
+        paymentRows.push({
+          orderId,
+          paymentIntentId,
+          providerTransactionId:
+            cardTransaction?.id?.toString() ??
+            cardTransaction?.ref_payco?.toString() ??
+            `pay_${referenceCode}`,
+          providerName: this.mapPaymentProvider(dto.paymentMethod),
+          amount: String(amountToCharge),
+          currency: 'COP',
+          paymentMethod: this.mapPaymentMethod(dto.paymentMethod),
+          status: paymentStatus,
+        });
+      }
+
+      await tx.insert(payments).values(paymentRows);
 
       await tx.insert(orderStatusHistory).values({
         orderId,
@@ -453,8 +553,13 @@ export class OrdersService {
         orderId,
         referenceCode: insertedOrders[0].referenceCode,
         subtotal,
+        discountTotal,
+        couponDiscount,
+        couponBalanceApplied,
+        amountToCharge,
         shippingCost,
         grandTotal,
+        appliedPromotions: promotionEvaluation.appliedPromotions,
         paymentMethod: dto.paymentMethod,
         shippingType: dto.shippingType,
         address: dto.address,
@@ -471,6 +576,17 @@ export class OrdersService {
       );
     }
 
+    // Despacho de cola: asigna el pedido al picker disponible de la sucursal que
+    // terminará antes y le avisa por push. Va ANTES de difundir el cambio por
+    // WebSocket para que, al refrescar, la app ya vea el pedido asignado.
+    try {
+      await this.pickerQueue.dispatchNewOrder(result.orderId);
+    } catch (err) {
+      this.logger.warn(
+        `No se pudo despachar el pedido ${result.referenceCode}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
     // El pedido acaba de entrar a la cola de alistamiento: se avisa por WebSocket
     // a los paneles y a los pickers móviles, que si no esperarían a su sondeo.
     this.ordersGateway.notifyOrderStatus(
@@ -478,19 +594,6 @@ export class OrdersService {
       this.mapOrderStatus(orderStatus),
       { customerId },
     );
-
-    // Push a los pickers: la app puede estar en segundo plano o cerrada. Es
-    // best-effort (si falla, el aviso en vivo por WebSocket sigue funcionando).
-    void this.pushService.sendToPickers({
-      title: 'Nuevo pedido 🛒',
-      body: `Pedido ${result.referenceCode} listo para alistar.`,
-      data: {
-        type: 'ORDER',
-        orderId: String(result.orderId),
-        referenceCode: result.referenceCode,
-      },
-      channelId: 'picking-alerts',
-    });
 
     // Notificar al cliente registrado (los invitados ven el código en pantalla)
     if (customerId != null) {
@@ -692,7 +795,9 @@ export class OrdersService {
       throw new BadRequestException('Escribe un mensaje.');
     }
     if (text.length > 2000) {
-      throw new BadRequestException('El mensaje no puede superar 2000 caracteres.');
+      throw new BadRequestException(
+        'El mensaje no puede superar 2000 caracteres.',
+      );
     }
 
     const order = await this.resolveOrderByCode(referenceCode);
@@ -713,7 +818,9 @@ export class OrdersService {
 
     // Push al repartidor asignado: la app puede estar en segundo plano o cerrada.
     // Best-effort; si no hay repartidor activo, no se manda nada.
-    void this.pushCustomerMessageToDriver(order.id, text).catch(() => undefined);
+    void this.pushCustomerMessageToDriver(order.id, text).catch(
+      () => undefined,
+    );
 
     return {
       id: String(row.id),
@@ -949,7 +1056,8 @@ export class OrdersService {
     }
 
     const cached = this.liveRouteCache.get(code);
-    if (cached && Date.now() - cached.at < LIVE_ROUTE_TTL_MS) return cached.data;
+    if (cached && Date.now() - cached.at < LIVE_ROUTE_TTL_MS)
+      return cached.data;
 
     const data = await this.computeLiveRoute(code);
     this.liveRouteCache.set(code, { at: Date.now(), data });
@@ -1009,7 +1117,11 @@ export class OrdersService {
       const res = await fetch(url);
       if (!res.ok) return null;
       const payload = (await res.json()) as {
-        routes?: Array<{ geometry?: string; distance?: number; duration?: number }>;
+        routes?: Array<{
+          geometry?: string;
+          distance?: number;
+          duration?: number;
+        }>;
       };
       const route = payload?.routes?.[0];
       if (!route?.geometry) return null;
@@ -1024,7 +1136,9 @@ export class OrdersService {
   }
 
   /** Parsea un punto postgis/EWKT ('POINT(lng lat)') si viene como texto. */
-  private parseDbPoint(value: string | null | undefined): { lat: number; lng: number } | null {
+  private parseDbPoint(
+    value: string | null | undefined,
+  ): { lat: number; lng: number } | null {
     return parsePointText(value);
   }
 
@@ -1271,6 +1385,61 @@ export class OrdersService {
   }
 
   /**
+   * Ajusta el precio unitario de los ítems al de la sucursal indicada.
+   * Sólo pisa el precio cuando la sucursal tiene una fila vigente en `prices`.
+   */
+  private async applyBranchPrices(
+    items: {
+      productVariantId: number;
+      quantity: number;
+      unitPrice: number;
+      subtotal: number;
+    }[],
+    branchId: number,
+  ): Promise<void> {
+    if (!items.length || !Number.isFinite(branchId)) return;
+
+    const rows = await this.db
+      .select({
+        variantId: prices.productVariantId,
+        price: prices.price,
+      })
+      .from(prices)
+      .where(
+        and(
+          inArray(
+            prices.productVariantId,
+            items.map((i) => i.productVariantId),
+          ),
+          eq(prices.branchId, branchId),
+          isNull(prices.endDate),
+        ),
+      )
+      .orderBy(desc(prices.startDate));
+
+    const priceByVariant = new Map<number, number>();
+    for (const row of rows) {
+      const variantId = Number(row.variantId);
+      if (!priceByVariant.has(variantId)) {
+        priceByVariant.set(variantId, Number(row.price));
+      }
+    }
+
+    for (const item of items) {
+      const branchPrice = priceByVariant.get(item.productVariantId);
+      if (
+        branchPrice == null ||
+        !Number.isFinite(branchPrice) ||
+        branchPrice <= 0
+      ) {
+        continue;
+      }
+      item.unitPrice = branchPrice;
+      item.subtotal = branchPrice * item.quantity;
+    }
+  }
+
+  /**
    * Elige la sucursal del pedido: la más cercana a la dirección de entrega que
    * tenga TODO el pedido con stock disponible (stock - reservado); si ninguna lo
    * tiene completo, la más cercana. Sin coordenadas de destino, cae a la
@@ -1514,37 +1683,37 @@ export class OrdersService {
       const pieces = prog?.pieces ?? 0;
       const scanned = prog?.scanned ?? 0;
       return {
-      id: row.referenceCode,
-      orderId: Number(row.id),
-      customer: row.customerName ?? row.customerEmail ?? 'Cliente',
-      phone: row.customerPhone ?? '',
-      address: [row.addressLine1, row.addressLine2, row.city]
-        .filter(Boolean)
-        .join(', '),
-      total: Number(row.grandTotal ?? 0),
-      payment: this.reverseMapPaymentMethod(row.paymentMethod),
-      status: this.mapOrderStatus(row.status),
-      itemsCount: itemCounts.get(Number(row.id)) ?? 0,
-      date: row.createdAt
-        ? new Date(row.createdAt).toISOString().split('T')[0]
-        : '',
-      time: row.createdAt
-        ? new Date(row.createdAt).toLocaleTimeString('es-CO', {
-            hour: '2-digit',
-            minute: '2-digit',
-          })
-        : '',
-      note: row.notes ?? undefined,
-      pickerName: row.pickerName ?? null,
-      driverName: row.driverName ?? null,
-      // Progreso y tiempos de alistamiento (picking)
-      pickedAt: row.pickedAt,
-      completedAt: row.completedAt,
-      totalPieces: pieces,
-      scannedPieces: scanned,
-      remainingPieces: Math.max(0, pieces - scanned),
-      remainingItems: prog?.remaining ?? 0,
-    };
+        id: row.referenceCode,
+        orderId: Number(row.id),
+        customer: row.customerName ?? row.customerEmail ?? 'Cliente',
+        phone: row.customerPhone ?? '',
+        address: [row.addressLine1, row.addressLine2, row.city]
+          .filter(Boolean)
+          .join(', '),
+        total: Number(row.grandTotal ?? 0),
+        payment: this.reverseMapPaymentMethod(row.paymentMethod),
+        status: this.mapOrderStatus(row.status),
+        itemsCount: itemCounts.get(Number(row.id)) ?? 0,
+        date: row.createdAt
+          ? new Date(row.createdAt).toISOString().split('T')[0]
+          : '',
+        time: row.createdAt
+          ? new Date(row.createdAt).toLocaleTimeString('es-CO', {
+              hour: '2-digit',
+              minute: '2-digit',
+            })
+          : '',
+        note: row.notes ?? undefined,
+        pickerName: row.pickerName ?? null,
+        driverName: row.driverName ?? null,
+        // Progreso y tiempos de alistamiento (picking)
+        pickedAt: row.pickedAt,
+        completedAt: row.completedAt,
+        totalPieces: pieces,
+        scannedPieces: scanned,
+        remainingPieces: Math.max(0, pieces - scanned),
+        remainingItems: prog?.remaining ?? 0,
+      };
     });
   }
 
@@ -1677,6 +1846,7 @@ export class OrdersService {
         status: orders.status,
         referenceCode: orders.referenceCode,
         customerId: orders.customerId,
+        couponId: orders.couponId,
       })
       .from(orders)
       .where(eq(orders.id, BigInt(orderId)))
@@ -1703,11 +1873,38 @@ export class OrdersService {
       });
     });
 
+    // Al cancelar, el saldo del cupón vuelve a quedar disponible (el descuento
+    // ya aplicado no se restaura: nunca fue saldo).
+    if (
+      dbStatus === 'cancelled' &&
+      existing.status !== 'cancelled' &&
+      existing.couponId
+    ) {
+      try {
+        await this.couponsService.reverseForOrder({
+          couponId: Number(existing.couponId),
+          orderId,
+          customerId: existing.customerId ? Number(existing.customerId) : null,
+          note: 'Reverso por cancelación del pedido',
+        });
+      } catch (error) {
+        this.logger.warn(
+          `No se pudo revertir el cupón del pedido ${existing.referenceCode}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      }
+    }
+
     // Emitir por WebSocket al cliente
     const displayStatus = this.mapOrderStatus(dbStatus);
-    this.ordersGateway.notifyOrderStatus(existing.referenceCode, displayStatus, {
-      customerId: existing.customerId,
-    });
+    this.ordersGateway.notifyOrderStatus(
+      existing.referenceCode,
+      displayStatus,
+      {
+        customerId: existing.customerId,
+      },
+    );
 
     // Notificar al cliente si el pago fue confirmado
     if (dbStatus === 'paid' && existing.customerId) {
@@ -1758,12 +1955,7 @@ export class OrdersService {
     const result = await this.db
       .update(orders)
       .set({ reviewedAt: new Date().toISOString() })
-      .where(
-        and(
-          eq(orders.id, BigInt(orderId)),
-          isNull(orders.reviewedAt),
-        ),
-      )
+      .where(and(eq(orders.id, BigInt(orderId)), isNull(orders.reviewedAt)))
       .returning({ id: orders.id });
 
     return { reviewed: result.length > 0 };

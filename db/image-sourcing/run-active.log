@@ -1,0 +1,4 @@
+◇ injected env (33) from backend/.env.development.local // tip: ⌘ suppress logs { quiet: true }
+Faltantes en db/products_without_image.json: 5294
+Proveedores: openfacts  ·  solo activos
+Ya en manifest: 124  ·  por procesar ahora: 5217

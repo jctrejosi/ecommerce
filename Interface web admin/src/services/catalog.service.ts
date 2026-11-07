@@ -68,6 +68,10 @@ export type ProductsQuery = {
   sort?: string;
   limit?: number;
   offset?: number;
+  /** Sucursal con la que se resuelve el precio (no filtra disponibilidad). */
+  priceBranchId?: number;
+  /** Sucursal: solo productos que la sucursal tiene disponibles. */
+  branchId?: number;
   uncategorized?: boolean;
 };
 
@@ -81,9 +85,30 @@ export const catalogService = {
     });
   },
 
-  async getProductsCount(): Promise<{ total: number }> {
+  async getProductsCount(branchId?: number): Promise<{ total: number }> {
+    const query = branchId ? `?branchId=${branchId}` : "";
     return fetchJson<{ total: number }>(
-      `${API_BASE_URL}/catalog/products/count`,
+      `${API_BASE_URL}/catalog/products/count${query}`,
+    );
+  },
+
+  /** Fija el precio del producto en una sucursal (modelo del ERP: INVRVENTA1 por INSUC). */
+  async setBranchPrice(
+    productId: number,
+    body: { branchId: number; price: number; comparePrice?: number | null },
+  ): Promise<{ ok: boolean; branchId: number; price: number }> {
+    return fetchJson(
+      `${API_BASE_URL}/admin/catalog/products/${productId}/branch-price`,
+      { method: "POST", body: JSON.stringify(body) },
+    );
+  },
+
+  /** Precios vigentes del producto en cada sucursal. */
+  async getBranchPrices(productId: number): Promise<
+    Array<{ branchId: number; price: number; comparePrice: number | null }>
+  > {
+    return fetchJson(
+      `${API_BASE_URL}/admin/catalog/products/${productId}/branch-prices`,
     );
   },
 
@@ -100,11 +125,11 @@ export const catalogService = {
   },
 
   async getBranches(): Promise<
-    { id: number; name: string; address: string }[]
+    { id: number; name: string; address: string; code?: string | null }[]
   > {
-    return fetchJson<{ id: number; name: string; address: string }[]>(
-      `${API_BASE_URL}/catalog/branches`,
-    );
+    return fetchJson<
+      { id: number; name: string; address: string; code?: string | null }[]
+    >(`${API_BASE_URL}/catalog/branches`);
   },
 
   // ── Admin Category CRUD ──

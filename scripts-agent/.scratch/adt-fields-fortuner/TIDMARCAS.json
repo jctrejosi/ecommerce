@@ -1,0 +1,27 @@
+{
+  "table": "TIDMARCAS",
+  "source": "scripts-agent/.scratch/adt-headers-fortuner/TIDMARCAS.adt",
+  "bytes": 203168,
+  "recordCount": 2176,
+  "recordLength": 93,
+  "headerLength": 800,
+  "fieldCount": 2,
+  "fields": [
+    {
+      "name": "MCODIGO",
+      "type": 4,
+      "typeName": "char",
+      "offset": 5,
+      "length": 8,
+      "decimals": 0
+    },
+    {
+      "name": "MNOMBRE",
+      "type": 4,
+      "typeName": "char",
+      "offset": 13,
+      "length": 80,
+      "decimals": 0
+    }
+  ]
+}

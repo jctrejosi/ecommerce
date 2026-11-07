@@ -9,8 +9,12 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { PermissionsGuard } from '../auth/guards/permissions.guard';
+import { RequirePermissions } from '../../common/decorators/permissions.decorator';
 import { BannersService } from './banners.service';
 import {
   CreateBannerDto,
@@ -22,6 +26,8 @@ import { media } from '../../../drizzle/schema';
 
 @ApiTags('Admin - Banners')
 @Controller('admin/banners')
+@UseGuards(JwtAuthGuard, PermissionsGuard)
+@RequirePermissions('admin:content:manage')
 export class AdminBannersController {
   constructor(
     private readonly bannersService: BannersService,

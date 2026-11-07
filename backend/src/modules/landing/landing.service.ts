@@ -18,6 +18,30 @@ import {
   sanitizeTheme,
   type ThemeConfig,
 } from './theme.config';
+import {
+  branchComparePriceSql,
+  branchPriceSql,
+} from '../../common/pricing/branch-price';
+
+/**
+ * Categorías raíz que se muestran en la sección "Nuestros productos" de la
+ * landing, en este orden. Se pueden sobreescribir con la setting
+ * `landing_categories` (array de códigos, p. ej. ["V2", "V9"]).
+ */
+const DEFAULT_LANDING_CATEGORY_CODES = [
+  'V2', // Carnes, Pollo y Pescado
+  'V9', // Cuidado del Bebé
+  'V7', // Lácteos y Refrigerados
+  'V1', // Electrodomésticos
+  'V10', // Mascotas
+  'V4', // Frutas y Verduras
+  'V11', // Limpieza
+  'V6', // Despensa
+  'V655', // Tecnología
+  'V594', // Hogar
+  'V8', // Vinos y Licores
+  'V12', // Cuidado Personal
+];
 
 @Injectable()
 export class LandingService {
@@ -139,9 +163,82 @@ export class LandingService {
     }));
   }
 
+  async getFeaturedCategoryCodes(): Promise<string[]> {
+    const row = await this.db
+      .select()
+      .from(settings)
+      .where(eq(settings.key, 'landing_categories'))
+      .limit(1);
+    const value = row.length ? (row[0].value as string[]) : null;
+    return Array.isArray(value) && value.length
+      ? value
+      : DEFAULT_LANDING_CATEGORY_CODES;
+  }
+
+  /**
+   * Categorías raíz para el carousel "Nuestros productos" de la landing.
+   * El `count` es el total de productos activos del subárbol completo.
+   */
+  async getFeaturedCategories() {
+    const selected = await this.getFeaturedCategoryCodes();
+
+    const roots = await this.db
+      .select({
+        id: categories.id,
+        code: categories.code,
+        name: categories.name,
+        slug: categories.slug,
+        imagePath: media.path,
+      })
+      .from(categories)
+      .leftJoin(media, eq(categories.imageMediaId, media.id))
+      .where(
+        and(
+          isNull(categories.parentId),
+          eq(categories.isActive, true),
+          isNull(categories.deletedAt),
+        ),
+      );
+
+    const counts = await this.drizzle.execute<{ root: string; count: string }>(`
+      WITH RECURSIVE tree AS (
+        SELECT id, id AS root FROM categories
+         WHERE parent_id IS NULL AND is_active AND deleted_at IS NULL
+        UNION ALL
+        SELECT c.id, t.root FROM categories c
+          JOIN tree t ON c.parent_id = t.id
+         WHERE c.is_active AND c.deleted_at IS NULL
+      )
+      SELECT t.root::text AS root, count(DISTINCT p.id) AS count
+        FROM tree t
+        JOIN product_categories pc ON pc.category_id = t.id
+        JOIN products p ON p.id = pc.product_id
+         AND p.is_active AND p.deleted_at IS NULL
+        JOIN product_variants pv ON pv.product_id = p.id
+         AND pv.is_active AND pv.deleted_at IS NULL
+       GROUP BY t.root
+    `);
+    const countByRoot = new Map(
+      counts.map((r) => [String(r.root), Number(r.count)]),
+    );
+
+    const byCode = new Map(roots.map((r) => [r.code, r]));
+    return selected
+      .map((code) => byCode.get(code))
+      .filter((r): r is NonNullable<typeof r> => !!r)
+      .map((r) => ({
+        id: Number(r.id),
+        code: r.code,
+        name: r.name,
+        slug: r.slug,
+        imagePath: r.imagePath,
+        count: countByRoot.get(String(r.id)) ?? 0,
+      }));
+  }
+
   // ── Daily Deals ──
 
-  private async resolveCarouselProducts(ids: number[]) {
+  private async resolveCarouselProducts(ids: number[], branchId?: number | null) {
     if (ids.length === 0) return [];
     const rows = await this.db
       .select({
@@ -149,8 +246,8 @@ export class LandingService {
         name: products.name,
         slug: products.slug,
         description: products.description,
-        price: productVariants.currentPrice,
-        originalPrice: productVariants.currentComparePrice,
+        price: branchPriceSql(branchId),
+        originalPrice: branchComparePriceSql(branchId),
         image: media.path,
         category: categories.name,
         plu: products.plu,
@@ -192,7 +289,7 @@ export class LandingService {
       .filter((x): x is Record<string, unknown> => !!x);
   }
 
-  async getDailyDeals() {
+  async getDailyDeals(branchId?: number | null) {
     const row = await this.db
       .select()
       .from(settings)
@@ -249,7 +346,7 @@ export class LandingService {
     const allIds = [
       ...new Set(carousels.flatMap((c) => c.products.map((p) => p.id))),
     ];
-    const resolved = await this.resolveCarouselProducts(allIds);
+    const resolved = await this.resolveCarouselProducts(allIds, branchId);
     const byId = new Map<number, Record<string, unknown>>(
       resolved.map((p: any) => [Number(p.id), p]),
     );
@@ -367,8 +464,10 @@ export class LandingService {
     return aS < bE && bS < aE;
   }
 
-  async getPublicDailyDeals() {
-    const { featuredItems, carousels, carousel } = await this.getDailyDeals();
+  async getPublicDailyDeals(branchId?: number | null) {
+    const { featuredItems, carousels, carousel } = await this.getDailyDeals(
+      branchId,
+    );
 
     const activeItems = featuredItems.filter((it: any) =>
       this.isScheduleActive(it.startAt, it.endAt),

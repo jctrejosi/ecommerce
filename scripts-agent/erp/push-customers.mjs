@@ -8,25 +8,23 @@
  * - Si ya lo tiene y sus datos cambiaron (hash): se **actualiza** en POSCLI.
  *
  * El ERP es el dueño del `CODCLI`; mientras se confirma su algoritmo (§11) se
- * genera con `ERP_NEW_CODE_PREFIX` + id. Escritura gateada: por defecto
- * **dry-run**; escribe sólo con `--apply`.
+ * genera con `newErpCode(id, 13)` (prefijo '9' + secuencia). Escritura gateada:
+ * por defecto **dry-run**; escribe sólo con `--apply`.
  *
  * Uso:
  *   node scripts-agent/erp/push-customers.mjs
  *   node scripts-agent/erp/push-customers.mjs --apply --limit=50
  */
 import { createErpClient, createPg } from './openads.mjs';
-import { s, args, log, sha1 } from './lib.mjs';
+import { s, args, log, sha1, clip, newErpCode } from './lib.mjs';
 
 const a = args();
 const APPLY = !!a.apply;
 const LIMIT = a.limit ? Number(a.limit) : 200;
-const PREFIX = process.env.ERP_NEW_CODE_PREFIX || 'DSI';
 const SUCURSAL = process.env.ERP_CUSTOMER_SUCURSAL || '01';
 const TIPODOC = process.env.ERP_CUSTOMER_TIPODOC || '13';
 
 const lit = (v) => `'${String(v ?? '').replace(/'/g, "''")}'`;
-const newCode = (id) => PREFIX + String(id).padStart(8, '0');
 
 const erp = createErpClient();
 const pg = createPg();
@@ -51,14 +49,14 @@ const snap = new Map(
 
 function fields(c) {
   return {
-    NOMCLI: [s(c.first_name), s(c.last_name)].filter(Boolean).join(' ').slice(0, 40),
-    NOMBRE: s(c.first_name) || '',
-    APELLIDO: s(c.last_name) || '',
-    CEDCLI: s(c.document_number) || '',
-    TIPODOC: s(c.document_type) || TIPODOC,
-    EMAIL: s(c.email) || '',
-    TELCELU: s(c.phone) || '',
-    SUCURSAL,
+    NOMCLI: clip([s(c.first_name), s(c.last_name)].filter(Boolean).join(' '), 40),
+    NOMBRE: clip(s(c.first_name) || '', 50),
+    APELLIDO: clip(s(c.last_name) || '', 50),
+    CEDCLI: clip(s(c.document_number) || '', 10),
+    TIPODOC: clip(s(c.document_type) || TIPODOC, 2),
+    EMAIL: clip(s(c.email) || '', 50),
+    TELCELU: clip(s(c.phone) || '', 12),
+    SUCURSAL: clip(SUCURSAL, 3),
     ORIGENW: 'W',
     BLOQUE: 'F',
   };
@@ -73,7 +71,7 @@ for (const c of rows) {
   const code = s(c.erp_customer_code);
 
   if (!code) {
-    const payload = { CODCLI: newCode(c.id), ...fields(c) };
+    const payload = { CODCLI: newErpCode(c.id, 13), ...fields(c) };
     if (!APPLY) {
       log(`   [dry] crear ${c.id} → ${payload.CODCLI} ${payload.EMAIL}`);
       created++;

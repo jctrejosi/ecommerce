@@ -115,7 +115,7 @@ El número de factura, prefijo, resolución DIAN y CUFE son del ERP/POS.
 | `document_type` | `TIPODOC` (2) | `13` = cédula en los datos vistos |
 | `phone` | `TELCELU` (12) / `TELCLI1` (10) | |
 | `email` | `EMAIL` (50) | |
-| dirección | `DIRCLI1` (60), `BARRIO1`, `CIUCLI` (20), `CIUDAD` (5, código DANE) | `POSDANE` tiene los códigos |
+| dirección | `DIRCLI1` (60), `BARRIO1`, `CIUCLI` (20), `CIUDAD` (5) | sin diccionario DANE confirmado; `POSDANE` no contiene ciudades |
 | — | `SUCURSAL` (3) | sucursal de la que es cliente |
 | — | `ORIGENW='W'`, `NEWWEB`, `CLAWEB` | marcas del canal web existente |
 
@@ -128,7 +128,7 @@ El número de factura, prefijo, resolución DIAN y CUFE son del ERP/POS.
 |---|---|---|
 | `FASUCUR` | char(3) | `branches.code` con cero a la izquierda (`"01"`,`"02"`,`"11"`) |
 | `FAFACTURA` | char(12) | **vacío al crear** (lo llena el ERP al facturar) |
-| `FAPEDIDO` | char(12) | nº de pedido ecommerce (ver §7) |
+| `FAPEDIDO` | char(12) | nº de pedido web de 9 dígitos (prefijo `9`) |
 | `FACODIGO` | char(13) | `POSCLI.CODCLI` del cliente |
 | `FANOMBRE` | char(45) | `orders.customer_name` |
 | `FADIREC` | char(60) | dirección de `customer_addresses` |
@@ -167,7 +167,7 @@ El número de factura, prefijo, resolución DIAN y CUFE son del ERP/POS.
 | `IFTPRO` | char(3) | tipo de producto TID |
 | `IFSUCUR` | char(3) | sucursal |
 | `IFFECHA` | int32 | `YYYYMMDD` |
-| `IFESTADO` | bin(2) | estado (por confirmar; en la copia `32768` domina) |
+| `IFESTADO` | bin(2) | vacío normal (0x8000 en disco) / `5` cancelada (cerrado con datos reales) |
 | `IFOBSER` | char(100) | observaciones |
 
 ### 4.4 Lo que **no** escribimos
@@ -492,15 +492,15 @@ Fuentes para poblarlos (¡ya las tenemos en la copia!):
 
 | Dominio | Tabla ERP | Notas |
 |---|---|---|
-| Medios de pago | **`POSPAGO`** (`SUCUR`,`CODIGO`,`NOMBRE`,`NOMBRE2`) | Trae `PERMIDSI` y **`VALIDAWEB`**: son los medios habilitados para nuestro canal |
+| Medios de pago | **`POSPAGO`** (`SUCUR`,`CODIGO`,`NOMBRE`,`NOMBRE2`) | Mapeo explícito en `erp_code_map`: `CASH→EF`, `CARD→TC`, transferencias→`TF`. `VALIDAWEB`/`PERMIDSI` se guardan en `meta` pero no filtran |
 | Tipo de factura | `FADDIA.FATIPO` | `FA` factura, `CO` cotización, `RE`, `AN` anulación, `IN` |
 | Estado de factura | `FADDIA.FAESTADO` | `1` vigente, `2` … |
 | Tipo de línea | `FADITE.IFTIPO` | `E`, `I`, `C`, `J`, `D` |
-| Tipo de domicilio | `FADOMITIPO` / `IFDOMITIPO` | `01`,`02`,`03`,`05`,`10`,`11`,`15` |
-| Estado de pedido/ítem de domicilio | `DOMDIA.FAESTADO` / `DOMITE.IFESTADO` | ver §10.8 (incluye `32768`) |
-| Impuestos | `TIDTIPOS` (`CLASE`,`TIPO`,`IMPUESTO`,`BASE`) | tarifa por clase |
+| Tipo de domicilio | `FADOMITIPO` / `IFDOMITIPO` | `01` domicilio (usado por el ecommerce) |
+| Estado de pedido/ítem de domicilio | `DOMDIA.FAESTADO` / `DOMITE.IFESTADO` | `0` pendiente, `5` cancelado, `9` facturado; línea vacía normal (0x8000 en disco) / `5` cancelada |
+| Impuestos | `TIDTIPOS` (`CLASE`,`TIPO`,`VALOR`) | sólo `CLASE='IM'`; `VALOR` es el porcentaje (`J=19`, `C=5`, `E=0`) |
 | Tipo de documento | `POSCLI.TIPODOC` | `13` = cédula en los datos vistos |
-| Ciudad | `POSDANE` (`CODIGO`,`NOMBRE`) | 1.647 códigos |
+| Ciudad | — | `DOMDIA.FACIUDAD` es texto libre de 12; `POSDANE` guarda EAN/nombres de producto, no ciudades |
 | Sucursal / bodega | `TIDSAL.INSUC`, `TIDBODE` | |
 | Marca / tipo / categoría | `TIDMARCAS`, `TIDTPRO`, `TIDCATE`/`TIDTAB` | ya mapeados en el catálogo |
 
@@ -550,8 +550,8 @@ Esa es la ventaja de separar “captura” de “contrato”.
 
 Con el ERP propio esto se resuelve en una sentada, pero hay que documentarlo:
 
-- `DOMDIA.FAESTADO`: `9` (50.758), `32768` (1.302), `5` (389), `0` (47).
-- `DOMITE.IFESTADO`: `32768` (239.361), `5` (1.250), `0` (10).
+- `DOMDIA.FAESTADO`: `9` facturado, `0` pendiente, `5` cancelado (confirmado con `FAOBSER`); vacío/`32768` = sin estado informado.
+- `DOMITE.IFESTADO`: vacío/`32768` = normal, `5` cancelada.
 - `FADDIA.FAESTADO`: `1` / `2`.
 - `POSCLI.FECHABAJA = 20240415` en 146.316 de 146.372 clientes (¿es una baja
   masiva real o un campo reutilizado?).
@@ -577,7 +577,7 @@ transacción** → marcar `FACONTROL` → responder `FAPEDIDO`.
       `erp_outbox`, `erp_sync_cursor`, `erp_dlq`.
 - [ ] Codecs (§10.4) y *projectors* idempotentes por entidad.
 - [ ] Endpoints `POST /erp/events` (lote) y `POST /erp/orders` (cola de salida).
-- [ ] Poblar `erp_code_map` desde `POSPAGO`, `TIDTIPOS`, `POSDANE`, `FADDIA`,…
+- [ ] Poblar `erp_code_map` desde `POSPAGO`, `TIDTIPOS`, `TIDBODE`, `TIDMARCAS`, `TIDTPRO` (`sync-codes.mjs`).
 - [ ] Conciliación diaria (conteos + hashes) y panel de estado.
 
 ### 10.10 Nota sobre “ADS en Linux”
