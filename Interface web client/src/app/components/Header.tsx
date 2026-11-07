@@ -21,7 +21,6 @@ import {
   Moon,
 } from "lucide-react";
 import { Logo } from "../Logo";
-import storeLogo from "../../assets/logo.png";
 import type { CartItem, CatalogCategory, Product } from "../types";
 import { catalogService } from "../../services/catalog.service";
 import { NotificationsDropdown } from "./NotificationsDropdown";
@@ -420,12 +419,6 @@ export function Header({
             onHome();
           }}
         >
-          <img
-            src={storeLogo}
-            alt="Mercaldas"
-            className="h-5 w-auto object-contain"
-          />
-          <span className="h-5 w-px bg-gray-300" aria-hidden="true" />
           <Logo
             dark={true}
             logoSrc={generalLogo?.url}
@@ -476,8 +469,6 @@ export function Header({
             onHome();
           }}
         >
-          <img src={storeLogo} alt="Mercaldas" className="h-7 w-auto object-contain" />
-          <span className="h-6 w-px bg-gray-300" aria-hidden="true" />
           <Logo
             dark={true}
             logoSrc={generalLogo?.url}
