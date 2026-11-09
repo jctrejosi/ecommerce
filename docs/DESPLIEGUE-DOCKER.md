@@ -3,6 +3,12 @@
 Proyecto compose **`ecommerce`**: cada parte del stack corre en su propio
 contenedor, con reinicio y healthcheck independientes.
 
+> Para **instalar requisitos** (Docker, Node, git), revisar las **credenciales
+> obligatorias de `docker/.env`**, configurar **Wompi** y **Google OAuth** y
+> compilar las **apps móviles**, usa
+> [DESPLIEGUE-DESDE-CERO.md](DESPLIEGUE-DESDE-CERO.md). Esta guía cubre DNS,
+> TLS, Cloudflare y la topología de red.
+
 | Contenedor | Escucha en | Expuesto a internet |
 |---|---|---|
 | `ecommerce_db` (PostGIS) | `127.0.0.1:5432` (solo host) | ❌ nunca |

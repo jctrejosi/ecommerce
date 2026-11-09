@@ -35,7 +35,9 @@ OSRM `5000`, PostgreSQL `5432`, backends de apps `8081`/`8082`.
 
 Arranque: `node dev.js` (instala dependencias faltantes, levanta PostgreSQL +
 servicios + apps Expo en segundo plano y libera la terminal). Producción en
-**contenedor** (el servidor): `node prod.js` (ver `docker/` y `docs/DESPLIEGUE-DOCKER.md`).
+**contenedor** (el servidor): `node prod.js` (ver
+[docker/](docker/README.md), [docs/DESPLIEGUE-DOCKER.md](docs/DESPLIEGUE-DOCKER.md)
+y [docs/DESPLIEGUE-DESDE-CERO.md](docs/DESPLIEGUE-DESDE-CERO.md)).
 Producción **bare-metal** (compila con npm/pnpm aquí): `node prod-local.js --build`.
 `dev.js --help` lista todos los comandos.
 

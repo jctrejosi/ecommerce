@@ -23,6 +23,9 @@ origen de Cloudflare). El proxy interno habla HTTP en `:8080` y el backend es el
 📖 Guía completa (DNS, TLS, firewall, Cloudflare, checklist):
 [`docs/DESPLIEGUE-DOCKER.md`](../docs/DESPLIEGUE-DOCKER.md).
 
+📦 Instalación desde cero (Docker/Node, `.env`, Wompi, Google OAuth y apps
+móviles): [`docs/DESPLIEGUE-DESDE-CERO.md`](../docs/DESPLIEGUE-DESDE-CERO.md).
+
 ## Rápido
 
 ```bash
