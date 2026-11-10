@@ -11,11 +11,13 @@
 #   Activar-Desarrollo.bat -Init                  fuerza instalar/compilar de nuevo
 #   Activar-Desarrollo.bat -Prod                  sirve compilados (requiere -Init)
 #   Activar-Desarrollo.bat -NoPersist             no guarda PATH/DOCKER_HOST del usuario
+#   Activar-Desarrollo.bat -DockerDesktopPath "C:\ruta\Docker Desktop.exe"  ruta manual
 [CmdletBinding()]
 param(
     [string]$Apps = 'client,admin,picking-admin,delivery-admin',
     [ValidateRange(30, 1800)][int]$TimeoutSeconds = 300,
     [ValidateRange(30, 900)][int]$DockerTimeoutSeconds = 180,
+    [string]$DockerDesktopPath = '',
     [switch]$NoPersist,
     [switch]$Check,
     [switch]$Init,
@@ -108,6 +110,52 @@ function Resolve-Node {
     return @{ Path = $node; Version = $version }
 }
 
+function Find-DockerDesktop([string]$Explicit) {
+    if ($Explicit) {
+        if (Test-Path -LiteralPath $Explicit) { return $Explicit }
+        return $null
+    }
+    $candidates = @(
+        'C:\Program Files\Docker\Docker\Docker Desktop.exe',
+        'C:\Program Files\Docker\Docker Desktop.exe',
+        'C:\Program Files (x86)\Docker\Docker\Docker Desktop.exe'
+    )
+    if ($env:LOCALAPPDATA) {
+        $candidates += (Join-Path $env:LOCALAPPDATA 'Docker\Docker Desktop.exe')
+        $candidates += (Join-Path $env:LOCALAPPDATA 'Programs\Docker\Docker Desktop.exe')
+    }
+    $hit = $candidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($hit) { return $hit }
+
+    # Si ya esta corriendo, su ruta es la respuesta.
+    $process = Get-Process -Name 'Docker Desktop' -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($process) {
+        try { if ($process.Path) { return $process.Path } } catch { }
+    }
+
+    # Instalacion en ruta no estandar: lo que declare el desinstalador.
+    $keys = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    $entry = Get-ItemProperty $keys -ErrorAction SilentlyContinue |
+        Where-Object { $_.DisplayName -like 'Docker Desktop*' -and $_.InstallLocation } |
+        Select-Object -First 1
+    if ($entry) {
+        $candidate = Join-Path $entry.InstallLocation 'Docker Desktop.exe'
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+
+    foreach ($root in @('C:\Program Files\Docker', 'C:\Program Files (x86)\Docker')) {
+        if (-not (Test-Path -LiteralPath $root)) { continue }
+        $found = Get-ChildItem -LiteralPath $root -Filter 'Docker Desktop.exe' -Recurse -Depth 3 -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($found) { return $found.FullName }
+    }
+    return $null
+}
+
 function Resolve-Docker {
     param(
         [switch]$StartIfNeeded = $true,
@@ -142,11 +190,18 @@ function Resolve-Docker {
     # Un DOCKER_HOST heredado que no responde impediria hablar con Docker Desktop.
     if ($env:DOCKER_HOST) { Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue }
 
-    $desktopCandidates = @('C:\Program Files\Docker\Docker\Docker Desktop.exe')
-    if ($env:LOCALAPPDATA) { $desktopCandidates += (Join-Path $env:LOCALAPPDATA 'Docker\Docker Desktop.exe') }
-    $desktop = $desktopCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    $desktop = Find-DockerDesktop $DockerDesktopPath
     if (-not $desktop) {
-        return @{ Ok = $false; Path = $cli; Detail = 'motor apagado y Docker Desktop no esta instalado' }
+        # Puede estar instalado por-usuario en el perfil de otra cuenta.
+        $elsewhere = $null
+        foreach ($profile in (Get-ChildItem 'C:\Users' -Directory -ErrorAction SilentlyContinue)) {
+            $candidate = Join-Path $profile.FullName 'AppData\Local\Docker\Docker Desktop.exe'
+            if (Test-Path -LiteralPath $candidate) { $elsewhere = $candidate; break }
+        }
+        if ($elsewhere) {
+            return @{ Ok = $false; Path = $cli; Detail = "Docker Desktop esta instalado en el perfil de otra cuenta: $elsewhere. Ejecute el lanzador con esa cuenta, instalele Docker Desktop a esta, o pase -DockerDesktopPath" }
+        }
+        return @{ Ok = $false; Path = $cli; Detail = 'motor apagado y no se encontro Docker Desktop (se reviso Program Files, LOCALAPPDATA y el registro); indique la ruta con -DockerDesktopPath' }
     }
     if (-not $StartIfNeeded) {
         return @{ Ok = $false; Path = $cli; Detail = 'Docker Desktop esta detenido' }
