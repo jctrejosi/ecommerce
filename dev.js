@@ -1000,6 +1000,35 @@ function restoreDatabaseIfNeeded({ force = false, explicit = false, source = nul
 }
 
 /**
+ * Sincroniza el esquema de la BD con `schema.ts` de forma ADITIVA e idempotente.
+ *
+ * NO usa `drizzle-kit push`: ese comando asume que posee todo el schema `public`
+ * y borra lo que no esté en schema.ts (tablas/columnas/secuencias del ERP que
+ * crean db/sql/19..27: `erp_*`, `orders.erp_sync_status`, etc.). Aquí solo se
+ * aplica `db/sql/sync-schema.sql`, que son `ADD COLUMN IF NOT EXISTS` / `CREATE
+ * ... IF NOT EXISTS` para el drift que rompe el backend (p. ej.
+ * `users.is_available`).
+ */
+function syncDbSchema() {
+  const file = path.join(ROOT, 'db', 'sql', 'sync-schema.sql');
+  if (!fs.existsSync(file)) return true;
+
+  const r = psql(fs.readFileSync(file, 'utf8'));
+  if (r.status !== 0) {
+    console.warn(
+      `${C.db}[db]${C.reset} ⚠️  No se pudo sincronizar el esquema (db/sql/sync-schema.sql): ${String(
+        r.stderr || '',
+      )
+        .trim()
+        .slice(0, 200)}`,
+    );
+    return false;
+  }
+  console.log(`${C.db}[db]${C.reset} ✅ esquema sincronizado (db/sql/sync-schema.sql)`);
+  return true;
+}
+
+/**
  * `node dev.js --restore-db[=<archivo>]`: deja la BD exactamente como el respaldo.
  * Destructivo a propósito (drop + create), igual que `restore.sh` de los
  * respaldos versionados. Devuelve el código de salida.
@@ -1037,7 +1066,11 @@ async function runRestoreDb(file = null) {
   console.log(
     `${C.db}[db]${C.reset} 📥 Aplicando ${backup.files.length} archivo(s), ${mb} MB...`,
   );
-  return restoreBackup(backup, { drop: true }) ? 0 : 1;
+  if (!restoreBackup(backup, { drop: true })) return 1;
+  // El respaldo restaurado puede ser más antiguo que schema.ts: aplica el drift
+  // aditivo (p. ej. users.is_available) para que el backend arranque.
+  syncDbSchema();
+  return 0;
 }
 
 /**
@@ -1131,13 +1164,16 @@ async function runMigrate() {
     console.error(`${C.db}[db]${C.reset} ✘ PostgreSQL no responde en :5432.`);
     return 1;
   }
-  return restoreDatabaseIfNeeded({
+  const restored = restoreDatabaseIfNeeded({
     force: FORCE,
     explicit: true,
     source: source.error ? null : source,
-  })
-    ? 0
-    : 1;
+  });
+  // Aunque la BD ya tuviera datos (restoreDatabaseIfNeeded no sobrescribe), el
+  // esquema puede estar desactualizado respecto a schema.ts: sincroniza el
+  // drift aditivo para que el backend arranque.
+  syncDbSchema();
+  return restored ? 0 : 1;
 }
 
 // ── Dependencias ───────────────────────────────────────────
@@ -2051,6 +2087,9 @@ async function main() {
     } else if (INIT) {
       // Primer arranque: monta el respaldo versionado en PostgreSQL (solo la BD).
       restoreDatabaseIfNeeded({ force: FORCE, explicit: true });
+      // El respaldo puede ser más antiguo que schema.ts: sincroniza el drift
+      // aditivo (p. ej. users.is_available) sin tocar las tablas del ERP.
+      syncDbSchema();
     } else {
       // La BD puede existir pero estar sin esquema (motor Docker nuevo, volumen
       // recreado o un clon que nunca corrió --init): el backend conecta y muere
@@ -2063,10 +2102,16 @@ async function main() {
           `${C.db}[db]${C.reset} 📭 La BD está sin esquema: se restaura el respaldo versionado...`,
         );
         restoreDatabaseIfNeeded({ force: FORCE });
+        syncDbSchema();
       } else {
+        // La BD ya tiene datos: no se restaura nada, pero el esquema puede
+        // estar desactualizado respecto a schema.ts (drift como
+        // users.is_available). Sincroniza solo lo aditivo para no romper el
+        // backend; la restauración/seed sigue siendo de --init o --migrate.
         console.log(
-          `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD (usa --init, o node dev.js --migrate).`,
+          `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD; solo se sincroniza el esquema aditivo (usa --init para instalar/compilar).`,
         );
+        syncDbSchema();
       }
     }
   }
