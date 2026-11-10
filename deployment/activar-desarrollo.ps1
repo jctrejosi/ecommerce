@@ -9,6 +9,8 @@
 #   Activar-Desarrollo.bat -Apps client,admin     elige aplicativos
 #   Activar-Desarrollo.bat -Stop                  detiene los servicios iniciados
 #   Activar-Desarrollo.bat -Init                  fuerza instalar/compilar de nuevo
+#   Activar-Desarrollo.bat -BackupDb              vuelca la BD a backups/ y sale
+#   Activar-Desarrollo.bat -RestoreDb             restaura la BD (drop + create) y arranca
 #   Activar-Desarrollo.bat -Prod                  sirve compilados (requiere -Init)
 #   Activar-Desarrollo.bat -NoPersist             no guarda PATH/DOCKER_HOST del usuario
 #   Activar-Desarrollo.bat -DockerDesktopPath "C:\ruta\Docker Desktop.exe"  ruta manual
@@ -22,7 +24,9 @@ param(
     [switch]$Check,
     [switch]$Init,
     [switch]$Prod,
-    [switch]$Stop
+    [switch]$Stop,
+    [switch]$BackupDb,
+    [switch]$RestoreDb
 )
 $ErrorActionPreference = 'Stop'
 if ($PSVersionTable.PSEdition -eq 'Desktop') {
@@ -338,6 +342,21 @@ try {
         throw "Docker no esta disponible: $($docker.Detail). Abra Docker Desktop, complete los avisos (licencia, WSL o login) y ejecute de nuevo este lanzador."
     }
     if (-not $NoPersist) { Save-DockerEnvironment $docker.Path }
+    if ($BackupDb) {
+        Write-Host 'Respaldando la base de datos (solo datos; sin imagenes)...'
+        Push-Location $root
+        try { & $node $devJs --backup-db; $code = $LASTEXITCODE } finally { Pop-Location }
+        exit $code
+    }
+    if ($RestoreDb) {
+        Write-Host 'Restaurando la base de datos desde el respaldo (drop + create)...'
+        Push-Location $root
+        try { & $node $devJs --restore-db; $code = $LASTEXITCODE } finally { Pop-Location }
+        if ($code -ne 0) {
+            Write-Host "La restauracion fallo (codigo $code). Revise la salida anterior." -ForegroundColor Red
+            exit $code
+        }
+    }
     if ($Prod -and -not $distOk) {
         throw 'El modo -Prod sirve compilados: ejecute antes este activador con -Init.'
     }
