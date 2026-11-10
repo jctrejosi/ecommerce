@@ -1,6 +1,7 @@
 # Activador de desarrollo del ecommerce.
 # Solo localhost: no publica dominios, no usa TLS ni el edge compartido.
 # Reutiliza `dev.js`, que instala dependencias, compila y levanta PostgreSQL.
+# Si Docker Desktop esta detenido, lo inicia y espera al motor (180 s por defecto).
 #
 # Uso (desde Activar-Desarrollo.bat o directamente):
 #   Activar-Desarrollo.bat                        arranca la tienda y los tres paneles
@@ -9,10 +10,13 @@
 #   Activar-Desarrollo.bat -Stop                  detiene los servicios iniciados
 #   Activar-Desarrollo.bat -Init                  fuerza instalar/compilar de nuevo
 #   Activar-Desarrollo.bat -Prod                  sirve compilados (requiere -Init)
+#   Activar-Desarrollo.bat -NoPersist             no guarda PATH/DOCKER_HOST del usuario
 [CmdletBinding()]
 param(
     [string]$Apps = 'client,admin,picking-admin,delivery-admin',
     [ValidateRange(30, 1800)][int]$TimeoutSeconds = 300,
+    [ValidateRange(30, 900)][int]$DockerTimeoutSeconds = 180,
+    [switch]$NoPersist,
     [switch]$Check,
     [switch]$Init,
     [switch]$Prod,
@@ -105,24 +109,99 @@ function Resolve-Node {
 }
 
 function Resolve-Docker {
+    param(
+        [switch]$StartIfNeeded = $true,
+        [int]$TimeoutSeconds = 180
+    )
+    # Docker Desktop instala su CLI en resources\bin; C:\DockerCLI es la
+    # instalacion previa del servidor (motor WSL sin Desktop).
+    $candidates = @(
+        'C:\Program Files\Docker\Docker\resources\bin\docker.exe',
+        'C:\DockerCLI\docker.exe'
+    )
+    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'Docker\Docker\resources\bin\docker.exe') }
     $command = Get-Command docker.exe -ErrorAction SilentlyContinue
-    if ($command) {
-        $cli = $command.Source
-    } elseif (Test-Path 'C:\DockerCLI\docker.exe') {
-        $cli = 'C:\DockerCLI\docker.exe'
-    } else {
-        return @{ Ok = $false; Path = $null }
+    if ($command) { $candidates = @($command.Source) + $candidates }
+    $cli = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
+    if (-not $cli) {
+        return @{ Ok = $false; Path = $null; Detail = 'no se encontro docker.exe (instale Docker Desktop)' }
     }
     $directory = Split-Path $cli -Parent
     if (($env:PATH -split ';') -notcontains $directory) { $env:PATH = "$directory;$env:PATH" }
-    $ok = Test-DockerEngine $cli
-    if (-not $ok -and -not $env:DOCKER_HOST) {
-        # En el VPS el motor vive dentro de WSL y expone la API solo en loopback.
+
+    if (Test-DockerEngine $cli) { return @{ Ok = $true; Path = $cli; Detail = 'motor en marcha' } }
+
+    # Motor WSL antiguo, expuesto solo en loopback (no necesita Docker Desktop).
+    if (Test-Tcp '127.0.0.1' 2375) {
         $env:DOCKER_HOST = 'tcp://127.0.0.1:2375'
-        $ok = Test-DockerEngine $cli
-        if (-not $ok) { Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue }
+        if (Test-DockerEngine $cli) {
+            return @{ Ok = $true; Path = $cli; Detail = 'motor WSL en 127.0.0.1:2375' }
+        }
+        Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
     }
-    return @{ Ok = $ok; Path = $cli }
+    # Un DOCKER_HOST heredado que no responde impediria hablar con Docker Desktop.
+    if ($env:DOCKER_HOST) { Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue }
+
+    $desktopCandidates = @('C:\Program Files\Docker\Docker\Docker Desktop.exe')
+    if ($env:LOCALAPPDATA) { $desktopCandidates += (Join-Path $env:LOCALAPPDATA 'Docker\Docker Desktop.exe') }
+    $desktop = $desktopCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if (-not $desktop) {
+        return @{ Ok = $false; Path = $cli; Detail = 'motor apagado y Docker Desktop no esta instalado' }
+    }
+    if (-not $StartIfNeeded) {
+        return @{ Ok = $false; Path = $cli; Detail = 'Docker Desktop esta detenido' }
+    }
+
+    if (Get-Process -Name 'Docker Desktop' -ErrorAction SilentlyContinue) {
+        Write-Host 'Docker Desktop esta iniciando: esperando al motor...'
+    } else {
+        Write-Host 'Docker Desktop esta detenido: iniciandolo (la primera vez puede tardar un minuto)...'
+        Start-Process -FilePath $desktop | Out-Null
+    }
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    while ((Get-Date) -lt $deadline) {
+        if (Test-DockerEngine $cli) {
+            return @{ Ok = $true; Path = $cli; Detail = 'Docker Desktop iniciado' }
+        }
+        Start-Sleep -Seconds 3
+    }
+    return @{ Ok = $false; Path = $cli; Detail = "Docker Desktop no respondio en $TimeoutSeconds s; revise la bandeja del sistema (licencia, login o aviso de WSL)" }
+}
+
+function Save-DockerEnvironment([string]$Cli) {
+    # Solo se guarda lo que hace falta para que `node dev.js` funcione en una
+    # ventana nueva: la carpeta del CLI y, si aplica, la API del motor WSL.
+    $changes = @()
+    try {
+        $directory = Split-Path $Cli -Parent
+        $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+        $entries = @()
+        if ($userPath) { $entries = @($userPath -split ';' | Where-Object { $_ }) }
+        if ($entries -notcontains $directory) {
+            [Environment]::SetEnvironmentVariable('Path', (($entries + $directory) -join ';'), 'User')
+            $changes += "PATH del usuario += $directory"
+        }
+
+        if ($env:DOCKER_HOST -eq 'tcp://127.0.0.1:2375') {
+            if ([Environment]::GetEnvironmentVariable('DOCKER_HOST', 'User') -ne $env:DOCKER_HOST) {
+                [Environment]::SetEnvironmentVariable('DOCKER_HOST', $env:DOCKER_HOST, 'User')
+                $changes += "DOCKER_HOST = $env:DOCKER_HOST"
+            }
+        } elseif ([Environment]::GetEnvironmentVariable('DOCKER_HOST', 'User') -eq 'tcp://127.0.0.1:2375') {
+            # Motor local (Docker Desktop): el DOCKER_HOST viejo solo estorba.
+            [Environment]::SetEnvironmentVariable('DOCKER_HOST', $null, 'User')
+            $changes += 'DOCKER_HOST del usuario eliminado (apuntaba al motor WSL viejo)'
+        }
+    } catch {
+        Write-Host "Aviso: no se pudo guardar la configuracion de Docker para el usuario: $($_.Exception.Message)" -ForegroundColor Yellow
+        return
+    }
+    if ($changes.Count) {
+        Write-Host 'Docker configurado para este usuario (aplica a ventanas nuevas):'
+        foreach ($change in $changes) { Write-Host "  $change" }
+    } else {
+        Write-Host 'Docker ya estaba configurado para este usuario.'
+    }
 }
 
 function Get-SelectedApps {
@@ -147,7 +226,7 @@ try {
     $node = $nodeInfo.Path
     $pnpm = Get-Command pnpm.cmd -ErrorAction SilentlyContinue
     $selected = Get-SelectedApps
-    $docker = Resolve-Docker
+    $docker = Resolve-Docker -StartIfNeeded:(-not ($Check -or $Stop)) -TimeoutSeconds $DockerTimeoutSeconds
 
     $distOk = Test-Path (Join-Path $root 'Interface web client\dist\index.html')
     $depsOk = (Test-Path (Join-Path $root 'backend\node_modules')) -and (Test-Path (Join-Path $root 'Interface web admin\node_modules'))
@@ -164,7 +243,7 @@ try {
         Write-Host "Proyecto   : $root"
         Write-Host "Node       : $($nodeInfo.Version)"
         Write-Host "pnpm       : $(if ($pnpm) { $pnpm.Source } else { 'no instalado (dev.js usara npm)' })"
-        Write-Host "Docker     : $(if ($docker.Ok) { "$($docker.Path) $env:DOCKER_HOST" } else { 'NO disponible' })"
+        Write-Host "Docker     : $(if ($docker.Ok) { "motor OK ($($docker.Detail))" } else { "NO disponible ($($docker.Detail))" })"
         Write-Host "Dependencias instaladas : $depsOk"
         Write-Host "Tienda compilada (dist) : $distOk"
         Write-Host 'Aplicativos y puertos:'
@@ -179,13 +258,29 @@ try {
     }
 
     if (-not $docker.Ok) {
-        throw 'Docker no responde. Arranque el motor (en el VPS: wsl -d Ubuntu -u root -- systemctl start docker) y reintente.'
+        throw "Docker no esta disponible: $($docker.Detail). Abra Docker Desktop, complete los avisos (licencia, WSL o login) y ejecute de nuevo este lanzador."
     }
+    if (-not $NoPersist) { Save-DockerEnvironment $docker.Path }
     if ($Prod -and -not $distOk) {
         throw 'El modo -Prod sirve compilados: ejecute antes este activador con -Init.'
     }
 
     $init = $Init -or -not $depsOk -or -not $distOk
+    # Motor nuevo (p. ej. Docker Desktop recien instalado): aun no existe la BD,
+    # asi que hay que crearla y montar el respaldo versionado.
+    $freshDb = $false
+    if ($docker.Ok) {
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            $names = & $docker.Path ps -a --filter 'name=ecommerce_postgres' --format '{{.Names}}' 2>$null
+        } finally { $ErrorActionPreference = $previous }
+        $freshDb = -not (@($names) -contains 'ecommerce_postgres')
+        if ($freshDb) {
+            $init = $true
+            Write-Host 'Motor Docker sin la base de datos del ecommerce: se crea y se restaura el respaldo.'
+        }
+    }
     $devArgs = @($devJs)
     if ($init) { $devArgs += '--init' }
     $devArgs += '--no-advantage'
