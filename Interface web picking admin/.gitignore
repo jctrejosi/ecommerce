@@ -2,7 +2,7 @@ node_modules/
 dist/
 build/
 .cache/
-.env*
+# `.env` se versiona a proposito (solo VITE_API_URL); .env.example sigue igual.
 .vite/
 *.tsbuildinfo
 *-debug.log*

@@ -8,9 +8,13 @@ __pycache__/
 /logs/
 
 # variables de entorno
-.env
-.env.*
-!.env.example
+# Los .env de DESARROLLO se versionan: el servidor Windows los necesita y el
+# repo es privado (los valores de pago/OAuth e infraestructura van vacios).
+# Quedan fuera la configuracion de PRODUCCION y las copias de seguridad locales,
+# que si llevan credenciales vivas.
+docker/.env
+docker/.env.bak*
+*.env.bak*
 .winrm/
 
 # backups de BD (volcados pesados): no versionar, salvo el respaldo canónico
