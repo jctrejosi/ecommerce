@@ -532,6 +532,24 @@ function openLog(name) {
   return { fd, logPath };
 }
 
+/**
+ * Últimas líneas no vacías del log de un servicio. Sirve para diagnosticar un
+ * arranque fallido sin abrir el archivo: en el servidor (por RDP) ese log es la
+ * única pista, y así el error completo sale en la misma terminal del lanzador.
+ * Devuelve null si el log todavía no existe.
+ */
+function tailLog(name, lines = 25) {
+  try {
+    const text = fs.readFileSync(path.join(LOGS_DIR, `${name}.log`), "utf8");
+    return text
+      .split(/\r?\n/)
+      .filter((line) => line.trim())
+      .slice(-lines);
+  } catch {
+    return null;
+  }
+}
+
 // ── Docker: CLI correcto y motor disponible ────────────────
 // En Windows el motor puede estar en Docker Desktop (una instancia por usuario)
 // o en un WSL antiguo con la API en loopback. Un `DOCKER_HOST` heredado que ya
@@ -1762,6 +1780,10 @@ async function main() {
     console.log(
       `ℹ️  Se montan los servicios ya instalados (primer arranque desde cero: node dev.js --init).\n`,
     );
+    // Los .env también hacen falta sin --init: el backend arranca con
+    // `dotenvx run -f .env.development.local` y, si el archivo no existe, muere
+    // antes de abrir el puerto. Solo se crean si faltan; nunca se sobrescriben.
+    if (MODE === "dev") ensureEnvFiles();
   }
 
   if (wantDb || wantOsrm || wantAdvantage) {
@@ -1779,9 +1801,22 @@ async function main() {
       // Primer arranque: monta el respaldo versionado en PostgreSQL (solo la BD).
       restoreDatabaseIfNeeded({ force: FORCE, explicit: true });
     } else {
-      console.log(
-        `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD (usa --init, o node dev.js --migrate).`,
-      );
+      // La BD puede existir pero estar sin esquema (motor Docker nuevo, volumen
+      // recreado o un clon que nunca corrió --init): el backend conecta y muere
+      // en la primera consulta. Se aplica la misma regla que --init: montar el
+      // respaldo versionado SOLO si no hay tabla `products` (nunca sobrescribe
+      // una BD con datos; para eso está --migrate --force).
+      const initialized = dbIsInitialized();
+      if (initialized === false) {
+        console.log(
+          `${C.db}[db]${C.reset} 📭 La BD está sin esquema: se restaura el respaldo versionado...`,
+        );
+        restoreDatabaseIfNeeded({ force: FORCE });
+      } else {
+        console.log(
+          `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD (usa --init, o node dev.js --migrate).`,
+        );
+      }
     }
   }
   if (!wantDb)
@@ -1850,6 +1885,22 @@ async function main() {
       console.warn(
         `${C.backend}[backend]${C.reset} ⚠️  No respondió en :${backendPort} — revisa logs/backend.log`,
       );
+      // Se muestra el final del log aquí mismo: es lo que explica la causa
+      // (BD sin esquema, .env ausente, error de compilación, credenciales...).
+      const tail = tailLog("backend", 30);
+      if (tail && tail.length) {
+        console.warn(
+          `${C.backend}[backend]${C.reset} ── últimas líneas de logs/backend.log ──`,
+        );
+        for (const line of tail) console.warn(`   ${line}`);
+        console.warn(
+          `${C.backend}[backend]${C.reset} ─────────────────────────────────────────`,
+        );
+      } else {
+        console.warn(
+          `${C.backend}[backend]${C.reset} (logs/backend.log no tiene contenido todavía)`,
+        );
+      }
     }
   }
 
