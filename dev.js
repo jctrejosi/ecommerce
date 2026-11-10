@@ -532,6 +532,118 @@ function openLog(name) {
   return { fd, logPath };
 }
 
+// ── Docker: CLI correcto y motor disponible ────────────────
+// En Windows el motor puede estar en Docker Desktop (una instancia por usuario)
+// o en un WSL antiguo con la API en loopback. Un `DOCKER_HOST` heredado que ya
+// no responde es la causa mas comun de "Docker no esta disponible", asi que se
+// descarta antes de rendirse: `node dev.js` debe funcionar sin lanzadores
+// externos.
+
+const DOCKER_DESKTOP_BIN = "C:\\Program Files\\Docker\\Docker\\resources\\bin";
+const DOCKER_DESKTOP_EXE = "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe";
+
+const fileExists = (p) => {
+  try {
+    return Boolean(p) && fs.existsSync(p);
+  } catch {
+    return false;
+  }
+};
+
+/** Carpetas con `docker.exe`, en orden de preferencia. */
+function dockerCliDirs() {
+  if (process.platform !== "win32") return [];
+  const dirs = [DOCKER_DESKTOP_BIN];
+  if (process.env.LOCALAPPDATA) {
+    dirs.push(path.join(process.env.LOCALAPPDATA, "Docker", "Docker", "resources", "bin"));
+  }
+  dirs.push("C:\\DockerCLI");
+  return dirs.filter((dir) => fileExists(path.join(dir, "docker.exe")));
+}
+
+/** Ejecutable de Docker Desktop, si esta instalado. */
+function dockerDesktopExe() {
+  if (process.platform !== "win32") return null;
+  const candidates = [DOCKER_DESKTOP_EXE];
+  if (process.env.LOCALAPPDATA) {
+    candidates.push(path.join(process.env.LOCALAPPDATA, "Docker", "Docker Desktop.exe"));
+  }
+  return candidates.find((exe) => fileExists(exe)) || null;
+}
+
+function dockerAnswers() {
+  const r = spawnSync("docker", ["info"], {
+    stdio: "ignore",
+    timeout: 25000,
+    windowsHide: true,
+  });
+  return r.status === 0;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let dockerReady = null;
+
+/**
+ * Deja `docker` utilizable en este proceso: prioriza el CLI de Docker Desktop,
+ * descarta un DOCKER_HOST que no responde y, en Windows, arranca Docker
+ * Desktop si hace falta. Devuelve true si el motor responde.
+ * `MERCALDAS_NO_DOCKER_AUTOSTART=1` evita arrancarlo automaticamente.
+ */
+async function ensureDocker({ timeoutMs = 120000 } = {}) {
+  if (dockerReady !== null) return dockerReady;
+  const note = (msg) => console.log(`${C.db}[docker]${C.reset} ${msg}`);
+
+  // 1) El CLI de Docker Desktop primero: el `docker.exe` viejo del PATH puede
+  //    apuntar a un endpoint que ya no existe.
+  const dirs = dockerCliDirs();
+  if (dirs.length) {
+    const current = (process.env.PATH || "").split(";").map((dir) => dir.trim().toLowerCase());
+    const missing = dirs.filter((dir) => !current.includes(dir.toLowerCase()));
+    if (missing.length) process.env.PATH = `${missing.join(";")};${process.env.PATH || ""}`;
+  }
+
+  if (dockerAnswers()) {
+    dockerReady = true;
+    return true;
+  }
+
+  // 2) DOCKER_HOST heredado que no responde: se descarta y se reintenta.
+  if (process.env.DOCKER_HOST) {
+    const broken = process.env.DOCKER_HOST;
+    delete process.env.DOCKER_HOST;
+    if (dockerAnswers()) {
+      note(`se descarto DOCKER_HOST=${broken} (no responde); se usa el motor local.`);
+      dockerReady = true;
+      return true;
+    }
+  }
+
+  // 3) Windows: arrancar Docker Desktop.
+  const exe = process.env.MERCALDAS_NO_DOCKER_AUTOSTART ? null : dockerDesktopExe();
+  if (exe) {
+    note("Docker Desktop no responde; iniciandolo (puede tardar un minuto)...");
+    try {
+      cp.spawn(exe, [], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+    } catch {
+      /* si no se puede lanzar, se informa abajo */
+    }
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await sleep(3000);
+      if (dockerAnswers()) {
+        note("✅ Docker Desktop listo");
+        dockerReady = true;
+        return true;
+      }
+    }
+    note("⚠️  Docker Desktop no respondio a tiempo; revise su ventana (licencia/login).");
+  }
+
+  dockerReady = false;
+  return false;
+}
+
 // ── Base de datos (Docker) ──────────────────────────────────
 
 /** Crea la red compartida si no existe (el compose la declara `external`). */
@@ -578,7 +690,11 @@ function startDatabase() {
     `${C.db}[db]${C.reset} ⚠️  No se pudo levantar PostgreSQL (detalle en logs/db.log).`,
   );
   console.warn(
-    `${C.db}[db]${C.reset} 💡 Docker no está disponible: arranca el daemon (sudo systemctl start docker o sudo service docker start) y, si hace falta, añade tu usuario al grupo docker (sudo usermod -aG docker $USER) y reinicia sesión.`,
+    `${C.db}[db]${C.reset} 💡 Docker no esta disponible: ${
+      process.platform === "win32"
+        ? "abra Docker Desktop y espere a que arranque el motor; si el CLI no esta en el PATH, agregue C:\\Program Files\\Docker\\Docker\\resources\\bin."
+        : "arranca el daemon (sudo systemctl start docker) y, si hace falta, anade tu usuario al grupo docker."
+    }`,
   );
   return false;
 }
@@ -755,6 +871,7 @@ async function runMigrate() {
   console.log(
     `${C.db}[db]${C.reset} 📦 Migrando la base de datos desde ${path.relative(ROOT, DB_BACKUP_DIR)}...`,
   );
+  await ensureDocker();
   startDatabase();
   const dbUp = await waitForPort(5432, 90000);
   if (!dbUp) {
@@ -1645,6 +1762,10 @@ async function main() {
     console.log(
       `ℹ️  Se montan los servicios ya instalados (primer arranque desde cero: node dev.js --init).\n`,
     );
+  }
+
+  if (wantDb || wantOsrm || wantAdvantage) {
+    await ensureDocker();
   }
 
   if (wantDb) {
