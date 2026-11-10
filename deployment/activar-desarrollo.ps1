@@ -395,7 +395,7 @@ try {
     # "el proyecto está arriba". La causa concreta la imprime dev.js encima.
     if (-not (Test-Tcp '127.0.0.1' 3000)) {
         Write-Host '  API (NestJS)             NO responde en http://localhost:3000' -ForegroundColor Yellow
-        Write-Host "  Causa en $logs\backend.log (dev.js muestra el final más arriba)." -ForegroundColor Yellow
+        Write-Host "  Causa en $logs\backend.log (dev.js muestra el final mas arriba)." -ForegroundColor Yellow
     } else {
         Write-Host ("  {0,-24} http://localhost:{1}" -f 'API (NestJS)', 3000)
     }
