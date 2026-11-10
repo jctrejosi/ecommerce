@@ -161,34 +161,50 @@ function Resolve-Docker {
         [switch]$StartIfNeeded = $true,
         [int]$TimeoutSeconds = 180
     )
-    # Docker Desktop instala su CLI en resources\bin; C:\DockerCLI es la
-    # instalacion previa del servidor (motor WSL sin Desktop).
-    $candidates = @(
-        'C:\Program Files\Docker\Docker\resources\bin\docker.exe',
-        'C:\DockerCLI\docker.exe'
-    )
-    if ($env:LOCALAPPDATA) { $candidates += (Join-Path $env:LOCALAPPDATA 'Docker\Docker\resources\bin\docker.exe') }
+    # Se prueban todos los CLI conocidos: el de Docker Desktop primero, luego el
+    # del PATH y por ultimo C:\DockerCLI (instalacion vieja). Cada uno puede
+    # apuntar a un endpoint distinto, asi que se elige el que responda.
+    $clis = @()
+    $desktopClis = @('C:\Program Files\Docker\Docker\resources\bin\docker.exe')
+    if ($env:LOCALAPPDATA) { $desktopClis += (Join-Path $env:LOCALAPPDATA 'Docker\Docker\resources\bin\docker.exe') }
+    foreach ($path in $desktopClis) { if ((Test-Path -LiteralPath $path) -and $clis -notcontains $path) { $clis += $path } }
     $command = Get-Command docker.exe -ErrorAction SilentlyContinue
-    if ($command) { $candidates = @($command.Source) + $candidates }
-    $cli = $candidates | Where-Object { $_ -and (Test-Path -LiteralPath $_) } | Select-Object -First 1
-    if (-not $cli) {
+    if ($command -and $clis -notcontains $command.Source) { $clis += $command.Source }
+    if ((Test-Path 'C:\DockerCLI\docker.exe') -and $clis -notcontains 'C:\DockerCLI\docker.exe') { $clis += 'C:\DockerCLI\docker.exe' }
+    if (-not $clis) {
         return @{ Ok = $false; Path = $null; Detail = 'no se encontro docker.exe (instale Docker Desktop)' }
     }
-    $directory = Split-Path $cli -Parent
-    if (($env:PATH -split ';') -notcontains $directory) { $env:PATH = "$directory;$env:PATH" }
+    foreach ($cliPath in $clis) {
+        $directory = Split-Path $cliPath -Parent
+        if (($env:PATH -split ';') -notcontains $directory) { $env:PATH = "$directory;$env:PATH" }
+    }
 
-    if (Test-DockerEngine $cli) { return @{ Ok = $true; Path = $cli; Detail = 'motor en marcha' } }
+    $probe = {
+        foreach ($cliPath in $clis) {
+            if (Test-DockerEngine $cliPath) { return $cliPath }
+        }
+        return $null
+    }
+
+    $cli = & $probe
+    if ($cli) { return @{ Ok = $true; Path = $cli; Detail = 'motor en marcha' } }
+
+    # Un DOCKER_HOST heredado que no responde impide hablar con cualquier motor.
+    if ($env:DOCKER_HOST) {
+        Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
+        $cli = & $probe
+        if ($cli) { return @{ Ok = $true; Path = $cli; Detail = 'motor en marcha (se descarto un DOCKER_HOST sin respuesta)' } }
+    }
 
     # Motor WSL antiguo, expuesto solo en loopback (no necesita Docker Desktop).
     if (Test-Tcp '127.0.0.1' 2375) {
         $env:DOCKER_HOST = 'tcp://127.0.0.1:2375'
-        if (Test-DockerEngine $cli) {
+        $cli = & $probe
+        if ($cli) {
             return @{ Ok = $true; Path = $cli; Detail = 'motor WSL en 127.0.0.1:2375' }
         }
         Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue
     }
-    # Un DOCKER_HOST heredado que no responde impediria hablar con Docker Desktop.
-    if ($env:DOCKER_HOST) { Remove-Item Env:DOCKER_HOST -ErrorAction SilentlyContinue }
 
     $desktop = Find-DockerDesktop $DockerDesktopPath
     if (-not $desktop) {
@@ -199,28 +215,32 @@ function Resolve-Docker {
             if (Test-Path -LiteralPath $candidate) { $elsewhere = $candidate; break }
         }
         if ($elsewhere) {
-            return @{ Ok = $false; Path = $cli; Detail = "Docker Desktop esta instalado en el perfil de otra cuenta: $elsewhere. Ejecute el lanzador con esa cuenta, instalele Docker Desktop a esta, o pase -DockerDesktopPath" }
+            return @{ Ok = $false; Path = $clis[0]; Detail = "Docker Desktop esta instalado en el perfil de otra cuenta: $elsewhere. Ejecute el lanzador con esa cuenta, instalele Docker Desktop a esta, o pase -DockerDesktopPath" }
         }
-        return @{ Ok = $false; Path = $cli; Detail = 'motor apagado y no se encontro Docker Desktop (se reviso Program Files, LOCALAPPDATA y el registro); indique la ruta con -DockerDesktopPath' }
+        return @{ Ok = $false; Path = $clis[0]; Detail = 'motor apagado y no se encontro Docker Desktop (se reviso Program Files, LOCALAPPDATA y el registro); indique la ruta con -DockerDesktopPath' }
     }
     if (-not $StartIfNeeded) {
-        return @{ Ok = $false; Path = $cli; Detail = 'Docker Desktop esta detenido' }
+        return @{ Ok = $false; Path = $clis[0]; Detail = 'Docker Desktop no responde para esta cuenta (puede estar detenido o abierto en otra sesion de Windows)' }
     }
 
-    if (Get-Process -Name 'Docker Desktop' -ErrorAction SilentlyContinue) {
-        Write-Host 'Docker Desktop esta iniciando: esperando al motor...'
-    } else {
-        Write-Host 'Docker Desktop esta detenido: iniciandolo (la primera vez puede tardar un minuto)...'
+    # Se lanza siempre: si ya esta abierto para ESTE usuario no pasa nada, y si
+    # esta abierto en la sesion de OTRA cuenta (cada usuario tiene su propia
+    # instancia) asi se inicia la de esta cuenta.
+    Write-Host 'Iniciando Docker Desktop para este usuario (puede tardar un minuto)...'
+    try {
         Start-Process -FilePath $desktop | Out-Null
+    } catch {
+        return @{ Ok = $false; Path = $clis[0]; Detail = "no se pudo iniciar Docker Desktop: $($_.Exception.Message)" }
     }
     $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
     while ((Get-Date) -lt $deadline) {
-        if (Test-DockerEngine $cli) {
+        $cli = & $probe
+        if ($cli) {
             return @{ Ok = $true; Path = $cli; Detail = 'Docker Desktop iniciado' }
         }
         Start-Sleep -Seconds 3
     }
-    return @{ Ok = $false; Path = $cli; Detail = "Docker Desktop no respondio en $TimeoutSeconds s; revise la bandeja del sistema (licencia, login o aviso de WSL)" }
+    return @{ Ok = $false; Path = $clis[0]; Detail = "Docker Desktop no respondio en $TimeoutSeconds s; revise la ventana (licencia/login) o pruebe -DockerTimeoutSeconds 300. Si usa el motor WSL viejo: wsl -d Ubuntu -u root -- systemctl start docker" }
 }
 
 function Save-DockerEnvironment([string]$Cli) {
@@ -237,15 +257,17 @@ function Save-DockerEnvironment([string]$Cli) {
             $changes += "PATH del usuario += $directory"
         }
 
-        if ($env:DOCKER_HOST -eq 'tcp://127.0.0.1:2375') {
-            if ([Environment]::GetEnvironmentVariable('DOCKER_HOST', 'User') -ne $env:DOCKER_HOST) {
+        $userHost = [Environment]::GetEnvironmentVariable('DOCKER_HOST', 'User')
+        if ($env:DOCKER_HOST) {
+            if ($userHost -ne $env:DOCKER_HOST) {
                 [Environment]::SetEnvironmentVariable('DOCKER_HOST', $env:DOCKER_HOST, 'User')
                 $changes += "DOCKER_HOST = $env:DOCKER_HOST"
             }
-        } elseif ([Environment]::GetEnvironmentVariable('DOCKER_HOST', 'User') -eq 'tcp://127.0.0.1:2375') {
-            # Motor local (Docker Desktop): el DOCKER_HOST viejo solo estorba.
+        } elseif ($userHost) {
+            # Motor local (Docker Desktop): cualquier DOCKER_HOST persistente
+            # solo estorba a `node dev.js` en ventanas nuevas.
             [Environment]::SetEnvironmentVariable('DOCKER_HOST', $null, 'User')
-            $changes += 'DOCKER_HOST del usuario eliminado (apuntaba al motor WSL viejo)'
+            $changes += "DOCKER_HOST del usuario eliminado ($userHost)"
         }
     } catch {
         Write-Host "Aviso: no se pudo guardar la configuracion de Docker para el usuario: $($_.Exception.Message)" -ForegroundColor Yellow
