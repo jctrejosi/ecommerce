@@ -17,8 +17,9 @@
  *                          #   Requiere builds previos (backend: npm run build,
  *                          #   webs: npm run build). Los logs quedan en logs/*.log.
  *   node dev.js --stop     # Detiene los servicios levantados por dev.js.
- *   node dev.js --migrate  # Restaura la BD desde db/backups/ecommerce y sale
- *                          #   (si ya tiene datos no la toca; con --force, sí).
+ *   node dev.js --migrate  # Restaura la BD (solo si no tiene esquema) y sale.
+ *   node dev.js --backup-db    # Vuelca la BD a backups/ecommerce_<fecha>.dump.
+ *   node dev.js --restore-db   # Deja la BD como el respaldo (drop + create) y sale.
  *   node dev.js --help     # Lista todos los comandos implementados.
  *
  * Logs: un archivo por servicio en logs/ (logs/<servicio>.log).
@@ -60,6 +61,9 @@ const OSRM_PORT = 5000;
 const DB_CONTAINER = "ecommerce_postgres";
 const DB_NAME = "ecommerce";
 const DB_BACKUP_DIR = path.join(ROOT, "db", "backups", "ecommerce");
+// Respaldos propios de esta instalación (`--backup-db`), solo la base: las
+// imágenes de `db/images_static/` no entran en el volcado.
+const BACKUPS_DIR = path.join(ROOT, "backups");
 
 // ── .env (sin dependencias) ─────────────────────────────────
 // `dev.js` debe poder correr antes de `--init` (cuando aún no hay node_modules),
@@ -133,6 +137,18 @@ const HELP = ARGS.includes("--help");
 // `--force`:   permite sobrescribir una BD que ya tiene datos (solo con --migrate).
 const MIGRATE = ARGS.includes("--migrate");
 const FORCE = ARGS.includes("--force");
+// `--backup-db`: vuelca la BD actual en `backups/<fecha>.dump` y termina.
+// `--restore-db[=<archivo>]`: deja la BD como ese respaldo (drop + create) y
+// termina. Sin valor toma el respaldo más reciente de `backups/`.
+const BACKUP_DB = ARGS.includes("--backup-db");
+const RESTORE_DB_ARG = ARGS.find(
+  (a) => a === "--restore-db" || a.startsWith("--restore-db="),
+);
+const RESTORE_DB = Boolean(RESTORE_DB_ARG);
+const RESTORE_DB_FILE =
+  RESTORE_DB_ARG && RESTORE_DB_ARG.includes("=")
+    ? RESTORE_DB_ARG.slice(RESTORE_DB_ARG.indexOf("=") + 1) || null
+    : null;
 // Las apps móviles (Expo) corren desacopladas por defecto: así la terminal queda
 // libre y se puede cerrar sin matar Metro. Con --fg se muestra el QR aquí mismo.
 const FG = ARGS.includes("--fg") || ARGS.includes("--foreground");
@@ -370,6 +386,8 @@ const NO_SELECTOR_FLAGS = new Set([
   "--stop",
   "--help",
   "--migrate",
+  "--backup-db",
+  "--restore-db",
   "--force",
   "--all",
   "--fg",
@@ -532,6 +550,136 @@ function openLog(name) {
   return { fd, logPath };
 }
 
+/**
+ * Últimas líneas no vacías del log de un servicio. Sirve para diagnosticar un
+ * arranque fallido sin abrir el archivo: en el servidor (por RDP) ese log es la
+ * única pista, y así el error completo sale en la misma terminal del lanzador.
+ * Devuelve null si el log todavía no existe.
+ */
+function tailLog(name, lines = 25) {
+  try {
+    const text = fs.readFileSync(path.join(LOGS_DIR, `${name}.log`), "utf8");
+    return text
+      .split(/\r?\n/)
+      .filter((line) => line.trim())
+      .slice(-lines);
+  } catch {
+    return null;
+  }
+}
+
+// ── Docker: CLI correcto y motor disponible ────────────────
+// En Windows el motor puede estar en Docker Desktop (una instancia por usuario)
+// o en un WSL antiguo con la API en loopback. Un `DOCKER_HOST` heredado que ya
+// no responde es la causa mas comun de "Docker no esta disponible", asi que se
+// descarta antes de rendirse: `node dev.js` debe funcionar sin lanzadores
+// externos.
+
+const DOCKER_DESKTOP_BIN = "C:\\Program Files\\Docker\\Docker\\resources\\bin";
+const DOCKER_DESKTOP_EXE = "C:\\Program Files\\Docker\\Docker\\Docker Desktop.exe";
+
+const fileExists = (p) => {
+  try {
+    return Boolean(p) && fs.existsSync(p);
+  } catch {
+    return false;
+  }
+};
+
+/** Carpetas con `docker.exe`, en orden de preferencia. */
+function dockerCliDirs() {
+  if (process.platform !== "win32") return [];
+  const dirs = [DOCKER_DESKTOP_BIN];
+  if (process.env.LOCALAPPDATA) {
+    dirs.push(path.join(process.env.LOCALAPPDATA, "Docker", "Docker", "resources", "bin"));
+  }
+  dirs.push("C:\\DockerCLI");
+  return dirs.filter((dir) => fileExists(path.join(dir, "docker.exe")));
+}
+
+/** Ejecutable de Docker Desktop, si esta instalado. */
+function dockerDesktopExe() {
+  if (process.platform !== "win32") return null;
+  const candidates = [DOCKER_DESKTOP_EXE];
+  if (process.env.LOCALAPPDATA) {
+    candidates.push(path.join(process.env.LOCALAPPDATA, "Docker", "Docker Desktop.exe"));
+  }
+  return candidates.find((exe) => fileExists(exe)) || null;
+}
+
+function dockerAnswers() {
+  const r = spawnSync("docker", ["info"], {
+    stdio: "ignore",
+    timeout: 25000,
+    windowsHide: true,
+  });
+  return r.status === 0;
+}
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+let dockerReady = null;
+
+/**
+ * Deja `docker` utilizable en este proceso: prioriza el CLI de Docker Desktop,
+ * descarta un DOCKER_HOST que no responde y, en Windows, arranca Docker
+ * Desktop si hace falta. Devuelve true si el motor responde.
+ * `MERCALDAS_NO_DOCKER_AUTOSTART=1` evita arrancarlo automaticamente.
+ */
+async function ensureDocker({ timeoutMs = 120000 } = {}) {
+  if (dockerReady !== null) return dockerReady;
+  const note = (msg) => console.log(`${C.db}[docker]${C.reset} ${msg}`);
+
+  // 1) El CLI de Docker Desktop primero: el `docker.exe` viejo del PATH puede
+  //    apuntar a un endpoint que ya no existe.
+  const dirs = dockerCliDirs();
+  if (dirs.length) {
+    const current = (process.env.PATH || "").split(";").map((dir) => dir.trim().toLowerCase());
+    const missing = dirs.filter((dir) => !current.includes(dir.toLowerCase()));
+    if (missing.length) process.env.PATH = `${missing.join(";")};${process.env.PATH || ""}`;
+  }
+
+  if (dockerAnswers()) {
+    dockerReady = true;
+    return true;
+  }
+
+  // 2) DOCKER_HOST heredado que no responde: se descarta y se reintenta.
+  if (process.env.DOCKER_HOST) {
+    const broken = process.env.DOCKER_HOST;
+    delete process.env.DOCKER_HOST;
+    if (dockerAnswers()) {
+      note(`se descarto DOCKER_HOST=${broken} (no responde); se usa el motor local.`);
+      dockerReady = true;
+      return true;
+    }
+  }
+
+  // 3) Windows: arrancar Docker Desktop.
+  const exe = process.env.MERCALDAS_NO_DOCKER_AUTOSTART ? null : dockerDesktopExe();
+  if (exe) {
+    note("Docker Desktop no responde; iniciandolo (puede tardar un minuto)...");
+    try {
+      cp.spawn(exe, [], { detached: true, stdio: "ignore", windowsHide: true }).unref();
+    } catch {
+      /* si no se puede lanzar, se informa abajo */
+    }
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      await sleep(3000);
+      if (dockerAnswers()) {
+        note("✅ Docker Desktop listo");
+        dockerReady = true;
+        return true;
+      }
+    }
+    note("⚠️  Docker Desktop no respondio a tiempo; revise su ventana (licencia/login).");
+  }
+
+  dockerReady = false;
+  return false;
+}
+
 // ── Base de datos (Docker) ──────────────────────────────────
 
 /** Crea la red compartida si no existe (el compose la declara `external`). */
@@ -578,35 +726,66 @@ function startDatabase() {
     `${C.db}[db]${C.reset} ⚠️  No se pudo levantar PostgreSQL (detalle en logs/db.log).`,
   );
   console.warn(
-    `${C.db}[db]${C.reset} 💡 Docker no está disponible: arranca el daemon (sudo systemctl start docker o sudo service docker start) y, si hace falta, añade tu usuario al grupo docker (sudo usermod -aG docker $USER) y reinicia sesión.`,
+    `${C.db}[db]${C.reset} 💡 Docker no esta disponible: ${
+      process.platform === "win32"
+        ? "abra Docker Desktop y espere a que arranque el motor; si el CLI no esta en el PATH, agregue C:\\Program Files\\Docker\\Docker\\resources\\bin."
+        : "arranca el daemon (sudo systemctl start docker) y, si hace falta, anade tu usuario al grupo docker."
+    }`,
   );
   return false;
 }
 
-// ── Restauración del respaldo versionado (db/backups/ecommerce) ──
-// Antes de la primera migración la BD local solo tiene las extensiones de
-// init.sql (PostGIS, citext, ...). Si no existe la tabla `products` se asume un
-// clon nuevo y se reensambla el respaldo (part-000, part-001, ...) para
-// restaurarlo con pg_restore. Si ya hay datos, no se toca (salvo --force).
+// ── Respaldos de la BD ──────────────────────────────────────
+// Un respaldo es SOLO la base (`pg_dump -Fc`): esquema + datos. Las imágenes de
+// producto viven en `db/images_static/` (varios GB) y quedan fuera a propósito;
+// se copian aparte si se necesitan.
 //
-// `node dev.js --migrate` lo hace explícito y devuelve código de salida.
+//   node dev.js --backup-db     → backups/ecommerce_<fecha>.dump (+ .sha256)
+//   node dev.js --restore-db    → deja la BD exactamente como el respaldo
+//                                 (drop + create + pg_restore) y termina
+//   node dev.js --migrate       → restaura solo si la BD no tiene esquema
+//
+// Origen: primero `backups/` (el respaldo propio, el más reciente); si está
+// vacío, el respaldo versionado `db/backups/ecommerce/backup_<fecha>/`.
 function dbIsInitialized() {
-  const r = spawnSync(
-    "docker",
-    [
-      "exec", DB_CONTAINER,
-      "psql", "-U", "postgres", "-d", DB_NAME,
-      "-tAc", "SELECT to_regclass('public.products') IS NOT NULL",
-    ],
-    { encoding: "utf8" },
-  );
+  const r = psql("SELECT to_regclass('public.products') IS NOT NULL", {
+    tuples: true,
+  });
   if (r.status !== 0) return null;
   return (r.stdout || "").trim() === "t";
 }
 
+/** Corre psql en el contenedor y devuelve { status, stdout, stderr }. */
+function psql(sql, { database = DB_NAME, tuples = false } = {}) {
+  const args = [
+    "exec", DB_CONTAINER,
+    "psql", "-U", "postgres", "-d", database,
+    "-v", "ON_ERROR_STOP=1",
+  ];
+  if (tuples) args.push("-tAc", sql);
+  else args.push("-c", sql);
+  return spawnSync("docker", args, { encoding: "utf8" });
+}
+
+/** Fecha local `YYYY-MM-DD_HHmm`, para nombrar los respaldos. */
+function backupStamp(date = new Date()) {
+  const p = (n) => String(n).padStart(2, "0");
+  return `${date.getFullYear()}-${p(date.getMonth() + 1)}-${p(date.getDate())}_${p(date.getHours())}${p(date.getMinutes())}`;
+}
+
+/** Respaldos propios en `backups/`, del más reciente al más antiguo. */
+function listLocalBackups() {
+  if (!fs.existsSync(BACKUPS_DIR)) return [];
+  return fs
+    .readdirSync(BACKUPS_DIR, { withFileTypes: true })
+    .filter((e) => e.isFile() && /\.dump$/i.test(e.name))
+    .map((e) => path.join(BACKUPS_DIR, e.name))
+    .sort((a, b) => path.basename(b).localeCompare(path.basename(a)));
+}
+
 /**
- * Directorio del respaldo a usar: el subdirectorio `backup_<fecha>` más
- * reciente dentro de db/backups/ecommerce/ (o la propia carpeta si todavía
+ * Directorio del respaldo versionado a usar: el subdirectorio `backup_<fecha>`
+ * más reciente dentro de db/backups/ecommerce/ (o la propia carpeta si todavía
  * tiene las partes sueltas — formato antiguo).
  */
 function resolveBackupDir() {
@@ -625,30 +804,175 @@ function resolveBackupDir() {
   return flat ? DB_BACKUP_DIR : null;
 }
 
-function loadBackup() {
+/**
+ * Respaldo que se va a usar. `explicit` es una ruta (``--restore-db=<ruta>``).
+ * Devuelve `{ label, dir, files }` o `{ error }`.
+ */
+function resolveBackupSource(explicit = null) {
+  if (explicit) {
+    const file = path.isAbsolute(explicit) ? explicit : path.join(ROOT, explicit);
+    if (!fs.existsSync(file)) return { error: `No existe el archivo ${explicit}.` };
+    return { label: path.relative(ROOT, file), dir: path.dirname(file), files: [file] };
+  }
+
+  const local = listLocalBackups();
+  if (local.length) {
+    const file = local[0];
+    return { label: path.relative(ROOT, file), dir: BACKUPS_DIR, files: [file] };
+  }
+
   const dir = resolveBackupDir();
-  if (!dir) return null;
+  if (!dir) {
+    return {
+      error: `No hay respaldos: ${path.relative(ROOT, BACKUPS_DIR)}/ está vacío y no hay ningún backup_<fecha> en ${path.relative(ROOT, DB_BACKUP_DIR)}/.`,
+    };
+  }
   const files = fs.readdirSync(dir);
   const single = files.includes("ecommerce.dump");
   const parts = files
     .filter((f) => /^ecommerce\.dump\.part-\d+$/.test(f))
     .sort();
-  if (!single && parts.length === 0) return null;
   const names = single ? ["ecommerce.dump"] : parts;
-  const buffer = Buffer.concat(
-    names.map((n) => fs.readFileSync(path.join(dir, n))),
-  );
-  return { dir, names, buffer };
+  if (!names.length) {
+    return { error: `No hay ecommerce.dump ni partes en ${path.relative(ROOT, dir)}/.` };
+  }
+  return {
+    label: path.relative(ROOT, dir),
+    dir,
+    files: names.map((n) => path.join(dir, n)),
+  };
 }
 
-function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
-  const backup = loadBackup();
-  if (!backup) {
-    if (explicit) {
-      console.warn(
-        `${C.db}[db]${C.reset} ⚠️  No hay respaldo en ${path.relative(ROOT, DB_BACKUP_DIR)} (falta un subdirectorio backup_<fecha> con las partes ecommerce.dump.part-*).`,
-      );
+/** Lee el respaldo (reensamblando partes si hace falta) y valida su sha256. */
+function loadBackup(source) {
+  const buffer = Buffer.concat(source.files.map((f) => fs.readFileSync(f)));
+  // El hash puede llamarse `ecommerce.dump.sha256` (formato versionado) o
+  // `<archivo>.sha256` (lo que escribe --backup-db).
+  const candidates = [
+    path.join(source.dir, "ecommerce.dump.sha256"),
+    ...source.files.map((f) => `${f}.sha256`),
+  ];
+  const shaFile = candidates.find((p) => fs.existsSync(p));
+  if (shaFile) {
+    const expected = fs.readFileSync(shaFile, "utf8").trim().split(/\s+/)[0];
+    const actual = crypto.createHash("sha256").update(buffer).digest("hex");
+    if (expected && expected !== actual) {
+      return {
+        error: `El respaldo no coincide con su hash (esperado ${expected.slice(0, 12)}…, obtenido ${actual.slice(0, 12)}…).`,
+      };
     }
+  }
+  return { ...source, buffer };
+}
+
+/**
+ * Copia el respaldo al contenedor y lo aplica con `pg_restore`. Se restaura
+ * desde archivo (no por stdin): es la vía más portable entre Linux/macOS/Windows
+ * y evita las tuberías binarias.
+ *
+ * `drop` borra y recrea la base antes de restaurar (``--restore-db``): así no
+ * quedan tablas ni columnas que el respaldo no tenga. Sin `drop` solo se limpian
+ * los objetos que trae el volcado (arranque en frío de un clon).
+ */
+function restoreBackup(backup, { drop = false } = {}) {
+  const hostTmp = path.join(LOGS_DIR, "ecommerce_restore.dump");
+  const relTmp = path.relative(ROOT, hostTmp).split(path.sep).join("/");
+  const containerTmp = "/tmp/ecommerce_restore.dump";
+  const { fd } = openLog("db");
+  let status = 1;
+  let failure = null;
+  try {
+    fs.writeFileSync(hostTmp, backup.buffer);
+
+    if (drop) {
+      // Las extensiones (PostGIS, citext, …) vienen dentro del propio volcado.
+      const del = psql(`DROP DATABASE IF EXISTS "${DB_NAME}" WITH (FORCE)`, {
+        database: "postgres",
+      });
+      if (del.status !== 0) {
+        status = del.status;
+        failure = (del.stderr || "").trim() || "no se pudo borrar la base";
+      } else {
+        const create = psql(`CREATE DATABASE "${DB_NAME}"`, { database: "postgres" });
+        if (create.status !== 0) {
+          status = create.status;
+          failure = (create.stderr || "").trim() || "no se pudo crear la base";
+        }
+      }
+    }
+
+    if (!failure) {
+      const cp = spawnSync("docker", ["cp", relTmp, `${DB_CONTAINER}:${containerTmp}`], {
+        cwd: ROOT,
+        stdio: ["ignore", fd, fd],
+        timeout: 120000,
+      });
+      if (cp.status === 0) {
+        const args = [
+          "exec", DB_CONTAINER,
+          "pg_restore", "-U", "postgres", "-d", DB_NAME,
+          "--no-owner", "--no-privileges",
+        ];
+        // En una base recién creada no hay nada que limpiar.
+        if (!drop) args.push("--clean", "--if-exists");
+        args.push(containerTmp);
+        const r = spawnSync("docker", args, {
+          stdio: ["ignore", fd, fd],
+          timeout: 900000,
+        });
+        status = r.status;
+        spawnSync("docker", ["exec", DB_CONTAINER, "rm", "-f", containerTmp], {
+          stdio: ["ignore", fd, fd],
+        });
+      } else {
+        status = cp.status;
+        failure = "no se pudo copiar el volcado al contenedor";
+      }
+    }
+  } finally {
+    fs.closeSync(fd);
+    fs.rmSync(hostTmp, { force: true });
+  }
+
+  if (status !== 0) {
+    console.warn(
+      `${C.db}[db]${C.reset} ⚠️  La restauración del respaldo falló (código ${status}; detalle en logs/db.log).` +
+        (failure ? ` ${failure}` : ""),
+    );
+    return false;
+  }
+
+  // Verificación: si las tablas clave quedaron vacías, algo salió mal.
+  console.log(`${C.db}[db]${C.reset} ✅ Respaldo restaurado — ${dbCounts()}`);
+  return true;
+}
+
+/** Conteos de las tablas clave, para comprobar que la restauración cargó datos. */
+function dbCounts() {
+  const r = psql(
+    "SELECT 'branches=' || (SELECT count(*) FROM branches)" +
+      " || ' products=' || (SELECT count(*) FROM products)" +
+      " || ' product_images=' || (SELECT count(*) FROM product_images)" +
+      " || ' customers=' || (SELECT count(*) FROM customers)",
+    { tuples: true },
+  );
+  const out = (r.stdout || "").trim();
+  return out || "(no se pudieron contar las tablas)";
+}
+
+/**
+ * Restaura el respaldo SOLO si la BD no tiene esquema (o con `--force`).
+ * Es el camino del arranque en frío (`--init` y primer `node dev.js`).
+ */
+function restoreDatabaseIfNeeded({ force = false, explicit = false, source = null } = {}) {
+  const src = source || resolveBackupSource();
+  if (src.error) {
+    if (explicit) console.warn(`${C.db}[db]${C.reset} ⚠️  ${src.error}`);
+    return false;
+  }
+  const backup = loadBackup(src);
+  if (backup.error) {
+    console.error(`${C.db}[db]${C.reset} ✘ ${backup.error} Se omite la restauración.`);
     return false;
   }
 
@@ -668,100 +992,188 @@ function restoreDatabaseIfNeeded({ force = false, explicit = false } = {}) {
     return true; // ya tiene datos: no se sobrescribe
   }
 
-  // Integridad: si existe el hash del volcado completo, se valida antes de restaurar.
-  const shaFile = path.join(backup.dir, "ecommerce.dump.sha256");
-  if (fs.existsSync(shaFile)) {
-    const expected = fs.readFileSync(shaFile, "utf8").trim();
-    const actual = crypto.createHash("sha256").update(backup.buffer).digest("hex");
-    if (expected && expected !== actual) {
-      console.error(
-        `${C.db}[db]${C.reset} ✘ El respaldo no coincide con su hash (esperado ${expected.slice(0, 12)}…, obtenido ${actual.slice(0, 12)}…). Se omite la restauración.`,
-      );
-      return false;
-    }
+  const mb = (backup.buffer.length / (1024 * 1024)).toFixed(1);
+  console.log(
+    `${C.db}[db]${C.reset} 📥 Restaurando ${backup.label} (${backup.files.length} archivo(s), ${mb} MB)...`,
+  );
+  return restoreBackup(backup);
+}
+
+/**
+ * Sincroniza el esquema de la BD con `schema.ts` de forma ADITIVA e idempotente.
+ *
+ * NO usa `drizzle-kit push`: ese comando asume que posee todo el schema `public`
+ * y borra lo que no esté en schema.ts (tablas/columnas/secuencias del ERP que
+ * crean db/sql/19..27: `erp_*`, `orders.erp_sync_status`, etc.). Aquí solo se
+ * aplica `db/sql/sync-schema.sql`, que son `ADD COLUMN IF NOT EXISTS` / `CREATE
+ * ... IF NOT EXISTS` para el drift que rompe el backend (p. ej.
+ * `users.is_available`).
+ */
+function syncDbSchema() {
+  const file = path.join(ROOT, 'db', 'sql', 'sync-schema.sql');
+  if (!fs.existsSync(file)) return true;
+
+  const r = psql(fs.readFileSync(file, 'utf8'));
+  if (r.status !== 0) {
+    console.warn(
+      `${C.db}[db]${C.reset} ⚠️  No se pudo sincronizar el esquema (db/sql/sync-schema.sql): ${String(
+        r.stderr || '',
+      )
+        .trim()
+        .slice(0, 200)}`,
+    );
+    return false;
+  }
+  console.log(`${C.db}[db]${C.reset} ✅ esquema sincronizado (db/sql/sync-schema.sql)`);
+  return true;
+}
+
+/**
+ * `node dev.js --restore-db[=<archivo>]`: deja la BD exactamente como el respaldo.
+ * Destructivo a propósito (drop + create), igual que `restore.sh` de los
+ * respaldos versionados. Devuelve el código de salida.
+ */
+async function runRestoreDb(file = null) {
+  const source = resolveBackupSource(file);
+  if (source.error) {
+    console.error(`${C.db}[db]${C.reset} ✘ ${source.error}`);
+    console.error(`${C.db}[db]${C.reset} 💡 Crea un respaldo con: node dev.js --backup-db`);
+    return 1;
+  }
+
+  console.log(`${C.db}[db]${C.reset} 📦 Restaurando la BD desde ${source.label}`);
+  console.log(
+    `${C.db}[db]${C.reset} ⚠️  La base "${DB_NAME}" se reemplaza por completo (drop + create).`,
+  );
+  console.log(
+    `${C.db}[db]${C.reset} ℹ️  Las imágenes de db/images_static/ no se tocan: no van dentro del respaldo.`,
+  );
+
+  await ensureDocker();
+  if (!startDatabase()) return 1;
+  if (!(await waitForPort(5432, 90000))) {
+    console.error(`${C.db}[db]${C.reset} ✘ PostgreSQL no responde en :5432.`);
+    return 1;
+  }
+
+  const backup = loadBackup(source);
+  if (backup.error) {
+    console.error(`${C.db}[db]${C.reset} ✘ ${backup.error}`);
+    return 1;
   }
 
   const mb = (backup.buffer.length / (1024 * 1024)).toFixed(1);
   console.log(
-    `${C.db}[db]${C.reset} 📥 Restaurando respaldo del ecommerce (${backup.names.length} archivo(s), ${mb} MB)...`,
+    `${C.db}[db]${C.reset} 📥 Aplicando ${backup.files.length} archivo(s), ${mb} MB...`,
   );
-
-  // Se reensambla a un temporal y se copia al contenedor con `docker cp`,
-  // restaurando desde archivo (no por stdin): es la vía más portable entre
-  // Linux/macOS/Windows (evita tuberías binarias y sus problemas en Windows).
-  const relTmp = "logs/ecommerce_restore.dump";
-  const hostTmp = path.join(ROOT, "logs", "ecommerce_restore.dump");
-  const containerTmp = "/tmp/ecommerce_restore.dump";
-  const { fd } = openLog("db");
-  let status = 1;
-  try {
-    fs.writeFileSync(hostTmp, backup.buffer);
-    const cp = spawnSync(
-      "docker",
-      ["cp", relTmp, `${DB_CONTAINER}:${containerTmp}`],
-      { cwd: ROOT, stdio: ["ignore", fd, fd], timeout: 120000 },
-    );
-    if (cp.status === 0) {
-      const r = spawnSync(
-        "docker",
-        [
-          "exec", DB_CONTAINER,
-          "pg_restore", "-U", "postgres", "-d", DB_NAME,
-          "--clean", "--if-exists", "--no-owner", "--no-privileges",
-          containerTmp,
-        ],
-        { stdio: ["ignore", fd, fd], timeout: 600000 },
-      );
-      status = r.status;
-      // Limpieza del temporal dentro del contenedor (best-effort).
-      spawnSync("docker", ["exec", DB_CONTAINER, "rm", "-f", containerTmp], {
-        stdio: ["ignore", fd, fd],
-      });
-    } else {
-      status = cp.status;
-    }
-  } finally {
-    fs.closeSync(fd);
-    fs.rmSync(hostTmp, { force: true });
-  }
-
-  if (status === 0) {
-    // Verificación: si las tablas clave quedaron vacías, algo salió mal.
-    const chk = spawnSync(
-      "docker",
-      [
-        "exec", DB_CONTAINER,
-        "psql", "-U", "postgres", "-d", DB_NAME, "-tAc",
-        "SELECT 'branches=' || count(*) FROM branches UNION ALL SELECT 'products=' || count(*) FROM products",
-      ],
-      { encoding: "utf8" },
-    );
-    const counts = (chk.stdout || "").trim().split("\n").filter(Boolean).join(" ");
-    console.log(`${C.db}[db]${C.reset} ✅ Respaldo restaurado${counts ? " — " + counts : ""}`);
-    return true;
-  } else {
-    console.warn(
-      `${C.db}[db]${C.reset} ⚠️  La restauración del respaldo falló (código ${status}; detalle en logs/db.log).`,
-    );
-    return false;
-  }
+  if (!restoreBackup(backup, { drop: true })) return 1;
+  // El respaldo restaurado puede ser más antiguo que schema.ts: aplica el drift
+  // aditivo (p. ej. users.is_available) para que el backend arranque.
+  syncDbSchema();
+  return 0;
 }
 
 /**
- * `node dev.js --migrate`: asegura PostgreSQL y restaura el respaldo versionado.
- * Devuelve el código de salida (0 = BD lista; 1 = no se pudo restaurar).
+ * `node dev.js --backup-db`: vuelca la BD actual (solo la base) en
+ * `backups/ecommerce_<fecha>.dump` + `.sha256`. Devuelve el código de salida.
+ */
+async function runBackupDb() {
+  await ensureDocker();
+  if (!startDatabase()) return 1;
+  if (!(await waitForPort(5432, 90000))) {
+    console.error(`${C.db}[db]${C.reset} ✘ PostgreSQL no responde en :5432.`);
+    return 1;
+  }
+
+  if (dbIsInitialized() !== true) {
+    console.error(
+      `${C.db}[db]${C.reset} ✘ La BD no tiene datos (falta la tabla products): no hay nada que respaldar.`,
+    );
+    console.error(`${C.db}[db]${C.reset} 💡 Restaura primero: node dev.js --restore-db`);
+    return 1;
+  }
+
+  fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+  const name = `ecommerce_${backupStamp()}.dump`;
+  const hostFile = path.join(BACKUPS_DIR, name);
+  const relFile = path.relative(ROOT, hostFile).split(path.sep).join("/");
+  const containerTmp = `/tmp/${name}`;
+
+  console.log(
+    `${C.db}[db]${C.reset} 💾 Volcando la base "${DB_NAME}" (solo datos; las imágenes de db/images_static/ no entran)...`,
+  );
+
+  const { fd } = openLog("db");
+  try {
+    const dump = spawnSync(
+      "docker",
+      [
+        "exec", DB_CONTAINER,
+        "pg_dump", "-U", "postgres", "-d", DB_NAME,
+        "-Fc", "-f", containerTmp,
+      ],
+      { stdio: ["ignore", fd, fd], timeout: 900000 },
+    );
+    if (dump.status !== 0) {
+      console.warn(
+        `${C.db}[db]${C.reset} ⚠️  pg_dump falló (código ${dump.status}; detalle en logs/db.log).`,
+      );
+      return 1;
+    }
+    const cp = spawnSync("docker", ["cp", `${DB_CONTAINER}:${containerTmp}`, relFile], {
+      cwd: ROOT,
+      stdio: ["ignore", fd, fd],
+      timeout: 300000,
+    });
+    if (cp.status !== 0) {
+      console.warn(
+        `${C.db}[db]${C.reset} ⚠️  No se pudo copiar el volcado al host (detalle en logs/db.log).`,
+      );
+      return 1;
+    }
+  } finally {
+    fs.closeSync(fd);
+    spawnSync("docker", ["exec", DB_CONTAINER, "rm", "-f", containerTmp], {
+      stdio: "ignore",
+    });
+  }
+
+  const buffer = fs.readFileSync(hostFile);
+  const hash = crypto.createHash("sha256").update(buffer).digest("hex");
+  fs.writeFileSync(`${hostFile}.sha256`, `${hash}\n`);
+
+  const mb = (buffer.length / (1024 * 1024)).toFixed(1);
+  console.log(`${C.db}[db]${C.reset} ✅ ${relFile} (${mb} MB)`);
+  console.log(`${C.db}[db]${C.reset}    ${dbCounts()}`);
+  console.log(`${C.db}[db]${C.reset} 💡 Restaurar: node dev.js --restore-db`);
+  return 0;
+}
+
+/**
+ * `node dev.js --migrate`: asegura PostgreSQL y restaura el respaldo SOLO si la
+ * BD no tiene esquema (o con --force). Devuelve el código de salida.
  */
 async function runMigrate() {
-  console.log(
-    `${C.db}[db]${C.reset} 📦 Migrando la base de datos desde ${path.relative(ROOT, DB_BACKUP_DIR)}...`,
-  );
-  startDatabase();
+  const source = resolveBackupSource();
+  const label = source.error ? "el respaldo versionado" : source.label;
+  console.log(`${C.db}[db]${C.reset} 📦 Migrando la base de datos desde ${label}...`);
+  await ensureDocker();
+  if (!startDatabase()) return 1;
   const dbUp = await waitForPort(5432, 90000);
   if (!dbUp) {
     console.error(`${C.db}[db]${C.reset} ✘ PostgreSQL no responde en :5432.`);
     return 1;
   }
-  return restoreDatabaseIfNeeded({ force: FORCE, explicit: true }) ? 0 : 1;
+  const restored = restoreDatabaseIfNeeded({
+    force: FORCE,
+    explicit: true,
+    source: source.error ? null : source,
+  });
+  // Aunque la BD ya tuviera datos (restoreDatabaseIfNeeded no sobrescribe), el
+  // esquema puede estar desactualizado respecto a schema.ts: sincroniza el
+  // drift aditivo para que el backend arranque.
+  syncDbSchema();
+  return restored ? 0 : 1;
 }
 
 // ── Dependencias ───────────────────────────────────────────
@@ -1476,9 +1888,11 @@ function printHelp() {
   out.push("  node dev.js --erp-sync          → deja la salida PG→ERP en bucle (requiere Advantage)");
   out.push("  node dev.js --erp-sync --erp-interval=15  → igual, cada 15 s (def. 30)");
   out.push("  node dev.js --stop              → detiene los servicios levantados por dev.js");
-  out.push("  node dev.js --migrate           → restaura la BD desde db/backups/ecommerce y sale");
-  out.push("  node dev.js --migrate --force   → ídem, sobrescribiendo una BD con datos");
-  out.push("  node dev.js --help              → esta ayuda");
+  out.push("  node dev.js --backup-db          → vuelca la BD a backups/ecommerce_<fecha>.dump");
+  out.push("  node dev.js --restore-db         → restaura la BD (drop + create) desde backups/ y sale");
+  out.push("  node dev.js --restore-db=<ruta>  → ídem, con un respaldo concreto");
+  out.push("  node dev.js --migrate            → restaura la BD solo si no tiene esquema (usa --force)");
+  out.push("  node dev.js --help               → esta ayuda");
   out.push("");
   out.push("APLICATIVOS (cada uno levanta sus dependencias, ver columna DEP)");
   const order = APP_ORDER;
@@ -1520,6 +1934,8 @@ function printHelp() {
   out.push("    Con ERP_ADV_EXTERNAL=1 no levanta Docker: usa OPENADS_URL ya existente.");
   out.push("    Detalle: db/ads/openads/README.md y docs/DESPLIEGUE-ERP-FORTUNER.md");
   out.push("  Respaldo versionado: db/backups/ecommerce (troceado) — restaurar: node dev.js --migrate");
+  out.push("  Respaldo propio: backups/ (--backup-db) — restaurar exacto: node dev.js --restore-db");
+  out.push("    Solo la base; las imágenes de db/images_static/ no entran en el volcado.");
   out.push("  Sync ERP (conector scripts-agent/erp): `node dev.js --erp-sync` deja corriendo la salida");
   out.push("    PG→ERP en bucle (push-customers/push-catalog/push-orders/reconcile cada 30 s). Ver docs/RUNBOOK-ERP.md");
   out.push("  Para detenerla:   cd db/docker && docker compose stop");
@@ -1533,6 +1949,8 @@ function printHelp() {
   out.push("  node dev.js --admin --picking-admin   → combina aplicativos");
   out.push("  node dev.js --prod --delivery-admin");
   out.push("  node dev.js --migrate            → clon nuevo: deja la BD lista desde el respaldo");
+  out.push("  node dev.js --backup-db          → crea backups/ecommerce_<fecha>.dump");
+  out.push("  node dev.js --restore-db         → restaura la BD exacta (drop + create)");
   out.push("");
   out.push("Notas: --client es alias de --web · logs en logs/<servicio>.log · PIDs en logs/.pids.json");
   out.push("       URL de red local (celular): se detecta sola; fuerza con LAN_IP=192.168.x.x");
@@ -1558,7 +1976,9 @@ function printCommands() {
   rows.push(["node dev.js --fg", "apps Expo con el QR en la terminal (bloquea)"]);
   rows.push(["node dev.js --stop", "detiene los servicios levantados por dev.js"]);
   rows.push(["node dev.js --init", "primer arranque: instala + compila + migra la BD (PostgreSQL)"]);
-  rows.push(["node dev.js --migrate", "restaura la BD desde db/backups/ecommerce"]);
+  rows.push(["node dev.js --migrate", "restaura la BD si no tiene esquema (o --force)"]);
+  rows.push(["node dev.js --backup-db", "vuelca la BD actual a backups/<fecha>.dump"]);
+  rows.push(["node dev.js --restore-db", "restaura la BD exacta (drop + create)"]);
   rows.push(["node dev.js --no-advantage", "no levantar la BD del ERP (OpenADS)"]);
   rows.push(["node dev.js --advantage", "solo PostgreSQL + Advantage/OpenADS + sync ERP"]);
   rows.push(["node dev.js --erp-sync", "deja la salida PG→ERP en bucle (requiere Advantage)"]);
@@ -1589,7 +2009,9 @@ async function main() {
     process.exit(1);
   }
   if (STOP) return stopAll();
-  // `--migrate`: tarea puntual (deja la BD restaurada) y salir.
+  // Tareas puntuales sobre la BD: se ejecutan y terminan (no levantan servicios).
+  if (BACKUP_DB) process.exit(await runBackupDb());
+  if (RESTORE_DB) process.exit(await runRestoreDb(RESTORE_DB_FILE));
   if (MIGRATE) process.exit(await runMigrate());
 
   fs.mkdirSync(LOGS_DIR, { recursive: true });
@@ -1645,6 +2067,14 @@ async function main() {
     console.log(
       `ℹ️  Se montan los servicios ya instalados (primer arranque desde cero: node dev.js --init).\n`,
     );
+    // Los .env también hacen falta sin --init: el backend arranca con
+    // `dotenvx run -f .env.development.local` y, si el archivo no existe, muere
+    // antes de abrir el puerto. Solo se crean si faltan; nunca se sobrescriben.
+    if (MODE === "dev") ensureEnvFiles();
+  }
+
+  if (wantDb || wantOsrm || wantAdvantage) {
+    await ensureDocker();
   }
 
   if (wantDb) {
@@ -1657,10 +2087,32 @@ async function main() {
     } else if (INIT) {
       // Primer arranque: monta el respaldo versionado en PostgreSQL (solo la BD).
       restoreDatabaseIfNeeded({ force: FORCE, explicit: true });
+      // El respaldo puede ser más antiguo que schema.ts: sincroniza el drift
+      // aditivo (p. ej. users.is_available) sin tocar las tablas del ERP.
+      syncDbSchema();
     } else {
-      console.log(
-        `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD (usa --init, o node dev.js --migrate).`,
-      );
+      // La BD puede existir pero estar sin esquema (motor Docker nuevo, volumen
+      // recreado o un clon que nunca corrió --init): el backend conecta y muere
+      // en la primera consulta. Se aplica la misma regla que --init: montar el
+      // respaldo versionado SOLO si no hay tabla `products` (nunca sobrescribe
+      // una BD con datos; para eso está --migrate --force).
+      const initialized = dbIsInitialized();
+      if (initialized === false) {
+        console.log(
+          `${C.db}[db]${C.reset} 📭 La BD está sin esquema: se restaura el respaldo versionado...`,
+        );
+        restoreDatabaseIfNeeded({ force: FORCE });
+        syncDbSchema();
+      } else {
+        // La BD ya tiene datos: no se restaura nada, pero el esquema puede
+        // estar desactualizado respecto a schema.ts (drift como
+        // users.is_available). Sincroniza solo lo aditivo para no romper el
+        // backend; la restauración/seed sigue siendo de --init o --migrate.
+        console.log(
+          `${C.db}[db]${C.reset} ℹ️  Sin --init no se migra la BD; solo se sincroniza el esquema aditivo (usa --init para instalar/compilar).`,
+        );
+        syncDbSchema();
+      }
     }
   }
   if (!wantDb)
@@ -1729,6 +2181,22 @@ async function main() {
       console.warn(
         `${C.backend}[backend]${C.reset} ⚠️  No respondió en :${backendPort} — revisa logs/backend.log`,
       );
+      // Se muestra el final del log aquí mismo: es lo que explica la causa
+      // (BD sin esquema, .env ausente, error de compilación, credenciales...).
+      const tail = tailLog("backend", 30);
+      if (tail && tail.length) {
+        console.warn(
+          `${C.backend}[backend]${C.reset} ── últimas líneas de logs/backend.log ──`,
+        );
+        for (const line of tail) console.warn(`   ${line}`);
+        console.warn(
+          `${C.backend}[backend]${C.reset} ─────────────────────────────────────────`,
+        );
+      } else {
+        console.warn(
+          `${C.backend}[backend]${C.reset} (logs/backend.log no tiene contenido todavía)`,
+        );
+      }
     }
   }
 

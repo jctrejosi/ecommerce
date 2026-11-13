@@ -1,7 +1,7 @@
 .venv/
 __pycache__/
 *.pyc
-.env
+# `.env` se versiona a proposito: es el de desarrollo (ver .gitignore raiz).
 
 # Pruebas
 .pytest_cache/
