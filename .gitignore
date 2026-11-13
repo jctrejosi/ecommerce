@@ -8,9 +8,20 @@ __pycache__/
 /logs/
 
 # variables de entorno
+# No se versiona NINGUN .env real (ni de desarrollo ni de produccion): solo los
+# .env.example de referencia, que no llevan credenciales. Cada entorno copia su
+# .env.example al archivo que corresponda y lo ajusta a mano:
+#   .env  .env.local  .env.development  .env.development.local
+#   .env.production  .env.production.local  ...
+# Si un .env real quedo en el indice, sacarlo con:
+#   git rm --cached <ruta>
 .env
 .env.*
+.env*.local
 !.env.example
+!**/.env.example
+docker/.env
+*.env.bak*
 .winrm/
 
 # backups de BD (volcados pesados): no versionar, salvo el respaldo canónico
