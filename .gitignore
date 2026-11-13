@@ -8,12 +8,19 @@ __pycache__/
 /logs/
 
 # variables de entorno
-# Los .env de DESARROLLO se versionan: el servidor Windows los necesita y el
-# repo es privado (los valores de pago/OAuth e infraestructura van vacios).
-# Quedan fuera la configuracion de PRODUCCION y las copias de seguridad locales,
-# que si llevan credenciales vivas.
+# No se versiona NINGUN .env real (ni de desarrollo ni de produccion): solo los
+# .env.example de referencia, que no llevan credenciales. Cada entorno copia su
+# .env.example al archivo que corresponda y lo ajusta a mano:
+#   .env  .env.local  .env.development  .env.development.local
+#   .env.production  .env.production.local  ...
+# Si un .env real quedo en el indice, sacarlo con:
+#   git rm --cached <ruta>
+.env
+.env.*
+.env*.local
+!.env.example
+!**/.env.example
 docker/.env
-docker/.env.bak*
 *.env.bak*
 .winrm/
 
